@@ -1,6 +1,10 @@
 import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
+import type { SheetRecord } from './sheetaction.ts';
 import type { SocialRoll } from '../engine/roll.ts';
+import type { Inventory } from '../items/types.ts';
+import { addItem, emptyInventory, equip } from '../items/types.ts';
+import { rations } from '../items/catalogue.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { derive } from '../session/sheet.ts';
 import type { PersonId, World } from '../world/types.ts';
@@ -22,6 +26,7 @@ export type PlayState = {
     maxHp: number;
     conditions: ActiveCondition[];
     coin: number;
+    inventory: Inventory;
   };
   /** The fight in progress, if any. A finished fight is discarded, not kept. */
   combat: CombatState | null;
@@ -51,6 +56,22 @@ export type WorldDelta = {
    * what shows up, because the difficulty curve is the whole progression.
    */
   startCombat?: boolean;
+  /**
+   * Drink it, eat it, apply it.
+   *
+   * The Director says WHICH item; the item says what it does. A model able to
+   * name a healing amount would heal for whatever the scene felt like.
+   */
+  useItem?: string;
+  /** Put something on. Must be equipment the player is carrying. */
+  equipItem?: string;
+  /**
+   * Catch your breath, or sleep properly.
+   *
+   * Rest is a supply economy rather than a free reset — see `rest.ts`, where
+   * the difficulty curve actually lives.
+   */
+  rest?: 'short' | 'long';
 };
 
 export type TurnRecord = {
@@ -76,15 +97,40 @@ export type TurnRecord = {
   combatActions?: CombatAction[];
 };
 
-export type PlayEvent = { kind: 'start' } | TurnRecord;
+export type PlayEvent = { kind: 'start' } | TurnRecord | SheetRecord;
 
 export function initialPlayState(world: World, sheet: CharacterSheet): PlayState {
-  const d = derive(sheet);
+  const inventory = startingInventory(sheet);
+  // One point in hand at level one, so the tree is something to engage with
+  // from the first screen rather than a picture of what might happen later.
+  sheet = { ...sheet, skillPoints: sheet.skillPoints ?? 1 };
+  const d = derive(sheet, inventory);
   return {
     world,
     sheet,
-    pc: { hp: d.maxHp, maxHp: d.maxHp, conditions: [], coin: 0 },
+    pc: { hp: d.maxHp, maxHp: d.maxHp, conditions: [], coin: 0, inventory },
     combat: null,
     ended: null,
   };
+}
+
+/**
+ * What you set out with.
+ *
+ * The background's keepsakes, plus food. Rations are not flavour: a short rest
+ * spends one, so a character who starts with none cannot use the only healing
+ * available outside town until the tower happens to drop some.
+ */
+export function startingInventory(sheet: CharacterSheet): Inventory {
+  let inventory = emptyInventory();
+  for (const item of sheet.background.startingGear) inventory = addItem(inventory, item);
+
+  const food = rations(3);
+  inventory = addItem(inventory, food.item, food.count);
+
+  // Wear anything that came with a slot on it.
+  for (const item of sheet.background.startingGear) {
+    if (item.kind === 'equipment' && item.slot) inventory = equip(inventory, item.id).inventory;
+  }
+  return inventory;
 }

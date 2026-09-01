@@ -1,7 +1,15 @@
 import { applyDrift } from '../character/drift.ts';
+import { bumpCounter } from '../character/persona.ts';
+import { awardTraits, COUNTERS } from './traits.ts';
+import type { Trait } from './traits.ts';
+import { TRAITS } from './traitbook.ts';
+import { applySheetAction } from './sheetaction.ts';
+import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
 import { readPlayerRegister } from '../llm/register.ts';
+import { findItem, equip } from '../items/types.ts';
 import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
+import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
 import { TRUST_MAX, TRUST_MIN } from '../world/types.ts';
@@ -85,6 +93,27 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     else delta.startCombat = true;
   }
 
+  if (proposed.useItem !== undefined) {
+    const item = findItem(state.pc.inventory, proposed.useItem);
+    if (!item) rejected.push(`useItem "${proposed.useItem}": you are not carrying that`);
+    else if (item.kind !== 'consumable' || !item.effect) rejected.push(`useItem "${item.name}": not something you can use up`);
+    else delta.useItem = proposed.useItem;
+  }
+
+  if (proposed.equipItem !== undefined) {
+    const item = findItem(state.pc.inventory, proposed.equipItem);
+    if (!item) rejected.push(`equipItem "${proposed.equipItem}": you are not carrying that`);
+    else if (item.kind !== 'equipment' || !item.slot) rejected.push(`equipItem "${item.name}": not something you can wear or wield`);
+    else delta.equipItem = proposed.equipItem;
+  }
+
+  if (proposed.rest !== undefined) {
+    const kind = proposed.rest === 'long' ? 'long' : 'short';
+    const check = canRest(state, kind);
+    if (!check.ok) rejected.push(`rest: ${check.reason}`);
+    else delta.rest = kind;
+  }
+
   if (proposed.timeSpent !== undefined) {
     const t = Math.max(0, Math.min(MAX_TIME_PER_TURN, Math.round(proposed.timeSpent || 0)));
     delta.timeSpent = t;
@@ -108,11 +137,14 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   let world: World = state.world;
   let turnAdvanced = false;
 
+  let discovered = false;
   if (delta.moveTo) {
+    const before = activeRegion(world)?.places.find((p) => p.id === delta.moveTo)?.discovered ?? true;
     const moved = moveWithinRegion(world, delta.moveTo);
     if (moved.kind === 'moved') {
       world = moved.world;
       turnAdvanced = true;
+      discovered = !before;
     }
   }
 
@@ -154,7 +186,39 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 
   if (!turnAdvanced) world = { ...world, turn: world.turn + 1 };
 
-  return { ...state, world };
+  let next: PlayState = { ...state, world };
+
+  // Somewhere you had never been. Counted here rather than in travel, because
+  // travel is also used for climbing, which has its own tally.
+  if (discovered) {
+    next = { ...next, sheet: { ...next.sheet, counters: bumpCounter(next.sheet.counters, COUNTERS.placesFound) } };
+  }
+
+  // Carrying and recovering. These run after the world has moved, so resting
+  // at a place you have just walked into is resolved where you now stand.
+  if (delta.equipItem) {
+    const equipped = equip(next.pc.inventory, delta.equipItem);
+    if (!equipped.error) next = { ...next, pc: { ...next.pc, inventory: equipped.inventory } };
+  }
+
+  if (delta.useItem) {
+    const used = useItem(next, delta.useItem);
+    if (!used.error) {
+      next = used.state;
+      next = { ...next, sheet: { ...next.sheet, counters: bumpCounter(next.sheet.counters, COUNTERS.itemsUsed) } };
+    }
+  }
+
+  if (delta.rest) {
+    const rested = takeRest(next, delta.rest);
+    if (!rested.error) {
+      next = rested.state;
+      const counter = delta.rest === 'long' ? COUNTERS.longRests : COUNTERS.shortRests;
+      next = { ...next, sheet: { ...next.sheet, counters: bumpCounter(next.sheet.counters, counter) } };
+    }
+  }
+
+  return next;
 }
 
 /**
@@ -196,6 +260,8 @@ export type TurnOutcome = {
   state: PlayState;
   /** Dispositions that actually shifted. Worth narrating; most turns have none. */
   shifts: AxisChange[];
+  /** Traits that came true this turn. Announced once, not every turn after. */
+  earned: Trait[];
 };
 
 export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
@@ -218,7 +284,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
     }
   }
 
-  if (moved.ended) return { state: moved, shifts: [] };
+  if (moved.ended) return { state: moved, shifts: [], earned: [] };
 
   const causes = causesFor(moved, record);
   const player = applyDrift(moved.sheet, causes.pc);
@@ -233,13 +299,24 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
     shifts = drifted.changed;
   }
 
-  return { state: { ...moved, world, sheet: { ...moved.sheet, ...player.persona } }, shifts };
+  // Traits are checked last, once everything that could have moved a counter,
+  // a score or a personality axis has already moved. Doing it inside the fold
+  // rather than in the live loop is what keeps a replayed session unlocking the
+  // same traits in the same order.
+  const drifted: PlayState = { ...moved, world, sheet: { ...moved.sheet, ...player.persona } };
+  const awarded = awardTraits(TRAITS, drifted.sheet, drifted.pc.inventory);
+
+  return { state: { ...drifted, sheet: awarded.sheet }, shifts, earned: awarded.earned };
 }
 
 export function foldPlay(initial: PlayState, events: readonly { kind: string }[]): PlayState {
   let state = initial;
   for (const event of events) {
+    // Panel actions are folded exactly like turns. A sheet change that lived
+    // only in memory would vanish on reload, which is the same trap the
+    // in-memory fight and the lossy snapshot both fell into.
     if (event.kind === 'turn') state = applyTurn(state, event as TurnRecord).state;
+    else if (event.kind === 'sheet') state = applySheetAction(state, (event as SheetRecord).action).state;
   }
   return state;
 }

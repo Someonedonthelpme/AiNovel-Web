@@ -4,6 +4,12 @@ import { buildEncounter, kindForFloor } from '../combat/encounter.ts';
 import { cellKey } from '../combat/grid.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
 import { bumpCounter } from '../character/persona.ts';
+import { addItem } from '../items/types.ts';
+import { rollCoin, rollLoot } from '../items/catalogue.ts';
+import type { Drop } from '../items/catalogue.ts';
+import { grantXp, hpAfterGrowth, xpForFight } from './progress.ts';
+import type { LevelUp } from './progress.ts';
+import { COUNTERS } from './traits.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import { toCombatant } from '../session/sheet.ts';
@@ -207,6 +213,11 @@ export type CombatOutcome = {
   victor: 'party' | 'foe' | 'draw' | null;
   /** Named foes put down, for the tallies traits will read. */
   killed: string[];
+  /** What the fight yielded, so the UI can say so. */
+  loot: Drop[];
+  coin: number;
+  xp: number;
+  levelled: LevelUp | null;
 };
 
 /**
@@ -217,7 +228,7 @@ export type CombatOutcome = {
  */
 export function concludeCombat(state: PlayState): CombatOutcome {
   const combat = state.combat;
-  if (!combat) return { state, victor: null, killed: [] };
+  if (!combat) return { state, victor: null, killed: [], loot: [], coin: 0, xp: 0, levelled: null };
 
   const pc = combat.combatants['pc'];
   const killed = Object.values(combat.combatants)
@@ -225,25 +236,60 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     .map((c) => c.name);
 
   let counters = state.sheet.counters;
-  for (const _ of killed) counters = bumpCounter(counters, 'kills');
-  if (combat.victor === 'party') counters = bumpCounter(counters, 'fights_won');
-  if (combat.victor === 'foe') counters = bumpCounter(counters, 'fights_lost');
+  for (const _ of killed) counters = bumpCounter(counters, COUNTERS.kills);
+  if (combat.victor === 'party') counters = bumpCounter(counters, COUNTERS.fightsWon);
+  if (combat.victor === 'foe') counters = bumpCounter(counters, COUNTERS.fightsLost);
+
+  const floor = activeRegion(state.world)?.floor ?? 0;
+  let sheet = { ...state.sheet, counters };
+  let inventory = state.pc.inventory;
+  let coin = state.pc.coin;
+  let loot: Drop[] = [];
+  let xp = 0;
+  let levelled: LevelUp | null = null;
+
+  // Only winning pays. Everything below is deterministic in the state, so a
+  // replayed log produces the same pack and the same level rather than a
+  // differently lucky one.
+  if (combat.victor === 'party') {
+    const rng = combatRng(state);
+    xp = xpForFight(floor, sheet.level, killed.length);
+    const granted = grantXp(sheet, xp);
+    sheet = granted.sheet;
+    levelled = granted.levelled;
+
+    loot = rollLoot(rng, floor);
+    for (const drop of loot) inventory = addItem(inventory, drop.item, drop.count);
+    coin += rollCoin(rng, floor);
+  }
+
+  // A level gained raises the ceiling without healing the wound you took
+  // getting there.
+  const previousMax = state.pc.maxHp;
+  const grown = hpAfterGrowth(sheet, inventory, pc ? Math.max(0, pc.hp) : state.pc.hp, previousMax);
 
   return {
     state: {
       ...state,
       combat: null,
-      sheet: { ...state.sheet, counters },
+      sheet,
       pc: {
         ...state.pc,
-        hp: pc ? Math.max(0, pc.hp) : state.pc.hp,
+        hp: combat.victor === 'foe' ? 0 : grown.hp,
+        maxHp: grown.maxHp,
         conditions: pc?.conditions ?? state.pc.conditions,
+        inventory,
+        coin,
       },
       // Losing is not an instant death: you go down, and the run is over.
       ended: combat.victor === 'foe' ? { reason: 'defeated' } : state.ended,
     },
     victor: combat.victor,
     killed,
+    loot,
+    coin: coin - state.pc.coin,
+    xp,
+    levelled,
   };
 }
 
