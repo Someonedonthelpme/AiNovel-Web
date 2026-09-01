@@ -2,7 +2,7 @@ import type { Provider } from '../llm/provider.ts';
 import { clampPersonality, neutralPersonality, restingMind } from '../character/persona.ts';
 import { repairRegion, repairVoice } from '../session/repair.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
-import { humanisePlaces } from './naming.ts';
+import { humanisePlaces, pruneDangling } from './naming.ts';
 import { dangerFor, peopleBudget, placeBudget, settlementBudget } from './budget.ts';
 import { rehydrationBrief } from './lod.ts';
 import { installRegion } from './travel.ts';
@@ -322,6 +322,14 @@ export async function generateFloor(
   // See `humanisePlaces`: generated ids leak into affordances and description,
   // and the Writer echoes whatever it is shown.
   region.places = humanisePlaces(region.places, people);
+
+  // ...and drop any action still pointing at somebody who was never created.
+  // "listen to storyteller1" cannot be repaired by substitution — there is no
+  // name — and an action naming a person who does not exist is worse than one
+  // fewer suggestion, because the player will try it.
+  const pruned = pruneDangling(region.places, people);
+  region.places = pruned.places;
+  if (pruned.dropped.length) repairs.push(`dropped actions naming nobody: ${pruned.dropped.join(', ')}`);
 
   const check = validateRegion(region, people);
   if (!check.ok) {

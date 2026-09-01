@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { displayNames, humanise, humanisePlaces } from './naming.ts';
+import { danglingTokens, displayNames, humanise, humanisePlaces, pruneDangling, tidyAffordances } from './naming.ts';
 import { person, place } from './fixtures.ts';
 import type { Person } from './types.ts';
 
@@ -73,4 +73,74 @@ test('a longer id containing a shorter one is not half-rewritten', () => {
   ];
   const names = displayNames(ps, {});
   assert.equal(humanise('climb south_gate_tower', names), 'climb Gate Tower');
+});
+
+/* -------------------------------------------------------------------------- */
+/* References to people who were never created                                 */
+/* -------------------------------------------------------------------------- */
+
+test('an action naming somebody who does not exist is dropped', () => {
+  // Observed: a suggestion chip reading "listen to storyteller1" for a person
+  // the model referenced but never defined. Substitution cannot repair it —
+  // there is no name — and the player will try the action.
+  const places = [
+    place('square', {
+      name: 'The Square',
+      affordances: ['listen to storyteller1', 'watch the crowd', 'buy fish from fisherman1'],
+    }),
+  ];
+  const cast = { fisherman1: person('fisherman1', { name: 'Finnian Grey' }) };
+
+  const pruned = pruneDangling(places, cast);
+  assert.deepEqual(pruned.places[0].affordances, ['watch the crowd', 'buy fish from fisherman1']);
+  assert.equal(pruned.dropped.length, 1);
+  assert.match(pruned.dropped[0], /storyteller1/);
+});
+
+test('ordinary prose is never mistaken for a dangling reference', () => {
+  const places = [place('dock', { affordances: ['mend the nets', 'watch the tide', 'talk to the harbour guard'] })];
+  const pruned = pruneDangling(places, {});
+  assert.equal(pruned.dropped.length, 0, 'plain English has no machine tokens in it');
+});
+
+test('only identifier-shaped tokens count as dangling', () => {
+  assert.deepEqual(danglingTokens('watch the crowd'), []);
+  assert.deepEqual(danglingTokens('listen to storyteller1'), ['storyteller1']);
+  assert.deepEqual(danglingTokens('search warehouse_south'), ['warehouse_south']);
+});
+
+test('a resolved reference survives the prune', () => {
+  // pruneDangling runs after humanisePlaces in the generators, but it must not
+  // drop an action whose id it can still account for.
+  const places = [place('shop', { affordances: ['ask elda_shopkeep about rope'] })];
+  const cast = { elda_shopkeep: person('elda_shopkeep', { name: 'Elda' }) };
+  assert.deepEqual(pruneDangling(places, cast).dropped, []);
+});
+
+test('two actions crammed into one string become two actions', () => {
+  // Observed as a single chip: `Observe Corvus repairing a boat", "Check
+  // Beryl's herb garden`. The model emitted two array elements as one, leaving
+  // the JSON quoting it meant to produce inside the text.
+  const crammed = ['Observe Corvus repairing a boat”, “Check Beryl’s herb garden', 'watch the tide'];
+  assert.deepEqual(tidyAffordances(crammed), [
+    'Observe Corvus repairing a boat',
+    'Check Beryl’s herb garden',
+    'watch the tide',
+  ]);
+});
+
+test('a well-formed action list is left exactly as it is', () => {
+  const clean = ['mend the nets', 'watch the tide'];
+  assert.deepEqual(tidyAffordances(clean), clean);
+});
+
+test('stray quotes are trimmed and duplicates collapse', () => {
+  assert.deepEqual(tidyAffordances(['"search the hold"', 'search the hold', '   ']), ['search the hold']);
+});
+
+test('a place with nothing to substitute still gets tidied', () => {
+  // humanisePlaces used to return early when there were no ids to replace,
+  // which skipped the repair entirely for worlds with plain place names.
+  const places = [place('hold', { affordances: ['open the crate”, “count the sacks'] })];
+  assert.deepEqual(humanisePlaces(places, {})[0].affordances, ['open the crate', 'count the sacks']);
 });

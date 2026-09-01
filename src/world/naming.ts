@@ -84,12 +84,82 @@ export function humanise(text: string, names: Map<string, string>): string {
 /** Every string on a place that a player can end up reading. */
 export function humanisePlaces(places: readonly Place[], people: Record<string, Person>): Place[] {
   const names = displayNames(places, people);
-  if (names.size === 0) return [...places];
 
   return places.map((place) => ({
     ...place,
     name: humanise(place.name, names),
     description: humanise(place.description, names),
-    affordances: place.affordances.map((a) => humanise(a, names)),
+    affordances: tidyAffordances(place.affordances.map((a) => humanise(a, names))),
   }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* References to things that were never created                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Tokens that look like an identifier rather than a word.
+ *
+ * The same shape `isMachineId` recognises, found loose inside prose. Anything
+ * matching this in player-facing text is a reference the generator meant to be
+ * resolved, so if it survives `humanise` it is pointing at something that does
+ * not exist.
+ */
+const MACHINE_TOKEN = /\b[a-z][a-z']*(?:_[a-z0-9']+|[0-9]+)[a-z0-9_']*\b/gi;
+
+/** Machine-shaped tokens left in a string once every known id was substituted. */
+export const danglingTokens = (text: string): string[] => [...new Set(text.match(MACHINE_TOKEN) ?? [])];
+
+export type Pruned = { places: Place[]; dropped: string[] };
+
+/**
+ * Remove affordances that point at somebody who was never created.
+ *
+ * Observed: a suggestion chip reading "listen to storyteller1" for a person the
+ * model referenced but never defined. `humanise` cannot repair it — there is no
+ * name to substitute — and an action naming a person who does not exist is
+ * worse than one fewer suggestion, because the player will try it.
+ *
+ * The whole affordance goes rather than just the token: "listen to" is not an
+ * action. Places are already required to keep at least one affordance by
+ * `validateRegion`, which reports it if this strips a place bare.
+ */
+export function pruneDangling(places: readonly Place[], people: Record<string, Person>): Pruned {
+  const known = displayNames(places, people);
+  const dropped: string[] = [];
+
+  const next = places.map((place) => {
+    const kept = place.affordances.filter((affordance) => {
+      const dangling = danglingTokens(affordance).filter((t) => !known.has(t.toLowerCase()));
+      if (dangling.length === 0) return true;
+      dropped.push(`${place.id}: "${affordance}"`);
+      return false;
+    });
+    return kept.length === place.affordances.length ? place : { ...place, affordances: kept };
+  });
+
+  return { places: next, dropped };
+}
+
+/**
+ * Unpick affordances the model joined into one string.
+ *
+ * Observed: a single chip reading `Observe Corvus repairing a boat", "Check
+ * Beryl's herb garden`. The model emitted two actions as one array element,
+ * leaving the JSON quoting it meant to produce embedded in the text. Smart
+ * quotes are included because the schema-constrained decoder produces those as
+ * often as straight ones.
+ *
+ * Splitting rather than discarding: both halves are perfectly good actions.
+ */
+export function tidyAffordances(affordances: readonly string[]): string[] {
+  const out: string[] = [];
+
+  for (const affordance of affordances) {
+    for (const part of affordance.split(/["“”]\s*,\s*["“”]/)) {
+      const trimmed = part.replace(/^["“”\s]+|["“”\s]+$/g, '').trim();
+      if (trimmed) out.push(trimmed);
+    }
+  }
+  return [...new Set(out)];
 }

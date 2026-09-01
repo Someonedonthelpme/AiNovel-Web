@@ -1,4 +1,5 @@
 import type { Rng } from '../engine/roll.ts';
+import type { Attack } from '../combat/types.ts';
 import type { Item } from './types.ts';
 
 /**
@@ -178,3 +179,61 @@ export function rollLoot(rng: Rng, floor: number): Drop[] {
 /** Coin from a won fight, scaled by depth. */
 export const rollCoin = (rng: Rng, floor: number): number =>
   Math.floor((2 + rng() * 6) * Math.max(1, floor));
+
+/* -------------------------------------------------------------------------- */
+/* Turning what the model named into something you can actually use            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Strip mechanical claims out of a generated description.
+ *
+ * The model writes "A short, sturdy spear. Range: 1. Damage: 1d6 + Strength
+ * modifier. Weight: 3 lbs." — numbers it invented, next to numbers the engine
+ * actually holds. When the two disagree the description is simply lying to the
+ * player, so the prose keeps the flavour and the item keeps the arithmetic.
+ */
+export function stripMechanics(description: string): string {
+  return description
+    .replace(/\b(damage|range|weight|capacity|armou?r class|ac|bonus)\s*:\s*[^.]*\.?/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * The weapon a character starts holding.
+ *
+ * Built from the attack the background ALREADY declares, so its numbers are the
+ * ones the combat engine was going to use anyway — no name-matching guesswork,
+ * and no chance of handing out a sword the model invented the statistics for.
+ *
+ * `flavour` lets the model's own description survive when it named the same
+ * thing in its starting gear, which is where the good prose lives.
+ */
+export function weaponFromAttack(attack: Attack, flavour?: { name: string; description: string }): Item {
+  return {
+    id: `weapon_start_${attack.id}`,
+    name: flavour?.name ?? attack.name,
+    description: flavour ? stripMechanics(flavour.description) : 'Yours, and familiar.',
+    kind: 'equipment',
+    slot: 'weapon',
+    attack,
+    stackable: false,
+    value: 25,
+    foundOn: 0,
+  };
+}
+
+/**
+ * Whether a named possession is the weapon the background already grants.
+ *
+ * Matched on a shared significant word, so "Short Spear" in the gear list and a
+ * "spear" attack are recognised as the same object rather than issued twice.
+ */
+export function namesTheSameThing(gearName: string, attackName: string): boolean {
+  const words = (text: string) =>
+    new Set(text.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3));
+
+  const gear = words(gearName);
+  for (const word of words(attackName)) if (gear.has(word)) return true;
+  return false;
+}

@@ -4,7 +4,7 @@ import type { SheetRecord } from './sheetaction.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import type { Inventory } from '../items/types.ts';
 import { addItem, emptyInventory, equip } from '../items/types.ts';
-import { rations } from '../items/catalogue.ts';
+import { namesTheSameThing, rations, weaponFromAttack } from '../items/catalogue.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { derive } from '../session/sheet.ts';
 import type { PersonId, World } from '../world/types.ts';
@@ -123,12 +123,38 @@ export function initialPlayState(world: World, sheet: CharacterSheet): PlayState
  */
 export function startingInventory(sheet: CharacterSheet): Inventory {
   let inventory = emptyInventory();
-  for (const item of sheet.background.startingGear) inventory = addItem(inventory, item);
+
+  /*
+   * The background declares an attack; that attack becomes a real weapon in the
+   * pack, wielded.
+   *
+   * Before this, a character carried an inert "Short Spear" whose description
+   * promised 1d6 damage while the actual attack came from somewhere the player
+   * could not see — the item wrote a cheque it could not cash. Building the
+   * weapon FROM the declared attack means its numbers are the ones combat was
+   * always going to use.
+   */
+  const [attack] = sheet.background.startingAttacks;
+  const named = attack
+    ? sheet.background.startingGear.find((g) => namesTheSameThing(g.name, attack.name))
+    : undefined;
+
+  for (const item of sheet.background.startingGear) {
+    // The one the model named is issued as the weapon below, not twice.
+    if (named && item.id === named.id) continue;
+    inventory = addItem(inventory, item);
+  }
+
+  if (attack) {
+    const weapon = weaponFromAttack(attack, named ? { name: named.name, description: named.description } : undefined);
+    inventory = addItem(inventory, weapon);
+    inventory = equip(inventory, weapon.id).inventory;
+  }
 
   const food = rations(3);
   inventory = addItem(inventory, food.item, food.count);
 
-  // Wear anything that came with a slot on it.
+  // Wear anything else that came with a slot on it.
   for (const item of sheet.background.startingGear) {
     if (item.kind === 'equipment' && item.slot) inventory = equip(inventory, item.id).inventory;
   }

@@ -1,7 +1,7 @@
 import type { Attack } from '../combat/types.ts';
 import type { Provider } from '../llm/provider.ts';
-import { keepsake } from '../items/catalogue.ts';
-import { humanisePlaces } from '../world/naming.ts';
+import { keepsake, stripMechanics } from '../items/catalogue.ts';
+import { humanisePlaces, pruneDangling } from '../world/naming.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
 import { validateRegion } from '../world/validate.ts';
@@ -117,7 +117,7 @@ export async function generateCharacter(provider: Provider, interview: Interview
       kind: asSkillKind(s.kind),
     })),
     // Flavour from the model, mechanics from the code: see `keepsake`.
-    startingGear: generated.background.startingGear.map((g) => keepsake(g.id, g.name, g.description)),
+    startingGear: generated.background.startingGear.map((g) => keepsake(g.id, g.name, stripMechanics(g.description))),
     startingAttacks: (generated.background.startingAttacks as Attack[]).length
       ? (generated.background.startingAttacks as Attack[])
       : [sword],
@@ -363,6 +363,14 @@ export async function generateGroundFloor(
   // "climb stair_tower", descriptions naming warehouse_south. Rewrite them once,
   // here, where both the places and the people are known.
   region.places = humanisePlaces(region.places, people);
+
+  // ...and drop any action still pointing at somebody who was never created.
+  // "listen to storyteller1" cannot be repaired by substitution — there is no
+  // name — and an action naming a person who does not exist is worse than one
+  // fewer suggestion, because the player will try it.
+  const pruned = pruneDangling(region.places, people);
+  region.places = pruned.places;
+  if (pruned.dropped.length) repairs.push(`dropped actions naming nobody: ${pruned.dropped.join(', ')}`);
 
   const check = validateRegion(region, people);
   if (!check.ok) {

@@ -5,7 +5,10 @@ import {
   equippedGrants, isEquipped, removeItem, unequip,
 } from './types.ts';
 import type { Item } from './types.ts';
-import { rations, weapon, armour } from './catalogue.ts';
+import { rations, weapon, armour, namesTheSameThing, stripMechanics, weaponFromAttack } from './catalogue.ts';
+import { sword } from '../combat/fixtures.ts';
+import { startingInventory } from '../play/state.ts';
+import { sheet } from '../session/fixtures.ts';
 import { mulberry32 } from '../engine/roll.ts';
 
 const ring: Item = {
@@ -89,4 +92,49 @@ test('deeper floors give better weapons, and the die never runs away', () => {
 test('loot carries the floor it came from, because Signets gate on it', () => {
   const found = weapon(mulberry32(5), 9);
   assert.equal(found.foundOn, 9);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Starting gear                                                               */
+/* -------------------------------------------------------------------------- */
+
+test('a description does not get to invent its own numbers', () => {
+  // The model writes "Damage: 1d6 + Strength modifier. Weight: 3 lbs." next to
+  // numbers the engine actually holds. When the two disagree, the description
+  // is lying to the player.
+  const cleaned = stripMechanics('A short, sturdy spear. Range: 1. Damage: 1d6 + Strength modifier. Weight: 3 lbs.');
+  assert.match(cleaned, /short, sturdy spear/);
+  assert.equal(/damage|weight|range/i.test(cleaned), false);
+});
+
+test('the starting weapon carries the attack the background declares', () => {
+  // Not name-matching guesswork: the numbers are the ones combat was always
+  // going to use.
+  const made = weaponFromAttack(sword);
+  assert.equal(made.kind, 'equipment');
+  assert.equal(made.slot, 'weapon');
+  assert.deepEqual(made.attack, sword);
+});
+
+test('the model keeps the prose, the engine keeps the arithmetic', () => {
+  const made = weaponFromAttack(sword, { name: 'Short Spear', description: 'Worn smooth. Damage: 4d12.' });
+  assert.equal(made.name, 'Short Spear');
+  assert.match(made.description, /Worn smooth/);
+  assert.equal(/4d12/.test(made.description), false, 'the invented damage does not survive');
+  assert.deepEqual(made.attack, sword, 'and the real attack is unchanged');
+});
+
+test('the same thing named twice is issued once', () => {
+  assert.equal(namesTheSameThing('Short Spear', 'spear'), true);
+  assert.equal(namesTheSameThing('Waterproof Satchel', 'spear'), false);
+  assert.equal(namesTheSameThing('a rope', 'shortsword'), false, 'short words do not count as a match');
+});
+
+test('a character starts with a weapon in hand, not a souvenir', () => {
+  // Regression: the pack held an inert "Short Spear" while the attack came from
+  // somewhere the player could not see.
+  const inv = startingInventory(sheet());
+  const wielded = equippedAttack(inv);
+  assert.ok(wielded, 'something should be equipped');
+  assert.equal(inv.stacks.filter((s) => s.item.slot === 'weapon').length, 1, 'and only one of it');
 });
