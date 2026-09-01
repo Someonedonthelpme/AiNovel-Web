@@ -305,17 +305,60 @@ input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
   display: inline-block;
 }
 
-/* Fixed height so the tree does not jump as you move across it. */
-.node-read {
-  min-height: 5.2rem;
-  padding: 0.6rem 0.75rem;
-  margin-top: 0.5rem;
+/*
+ * The tree.
+ *
+ * The reader used to be a fixed block of text under the tree, which meant your
+ * eye travelled from the node to the bottom of the modal and back. The card
+ * comes to the node instead, and there is nothing there when nothing is hovered.
+ */
+.tree-frame { position: relative; }
+
+.tree-svg {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-2);
+  /* Lighter at the centre, so the origin reads as the middle of something. */
+  background: radial-gradient(circle at 50% 50%, #191510 0%, #0e0c0a 70%);
 }
-.node-read p { margin: 0.3rem 0 0; font-size: 0.8rem; }
+
+.node { transition: opacity 0.12s ease; }
+.node.open { cursor: pointer; }
+.tree-svg:hover .node { opacity: 0.72; }
+.tree-svg .node:hover { opacity: 1; }
+
+.node-card {
+  position: absolute;
+  z-index: 2;
+  width: 15rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: rgba(18, 16, 14, 0.97);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.node-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.node-card strong { font-size: 0.92rem; line-height: 1.25; }
+
+.node-kind {
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.node-card p { margin: 0.25rem 0 0; font-size: 0.78rem; }
+.node-discipline { color: var(--ink-dim); font-size: 0.7rem !important; }
+.node-grant { color: var(--ink); }
 .teaches { color: var(--good); }
+.node-state { font-size: 0.7rem !important; letter-spacing: 0.06em; text-transform: uppercase; }
+.node-state.held { color: var(--amber); }
+.node-state.open { color: var(--ink-dim); }
 
 /* The purse sits with the pack, because coin is a thing you carry. */
 .purse { align-items: center; }

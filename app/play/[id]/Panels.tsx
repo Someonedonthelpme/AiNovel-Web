@@ -142,6 +142,53 @@ const DISCIPLINE: Record<string, { hue: string; label: string }> = {
 
 const hueOf = (archetype: string): string => DISCIPLINE[archetype]?.hue ?? '#9c8f7d';
 
+/** The SVG is drawn in a -4..104 box; this puts a node back on the wrapper in %. */
+const VIEW_MIN = -4;
+const VIEW_SPAN = 108;
+const asPercent = (n: number): number => ((n - VIEW_MIN) / VIEW_SPAN) * 100;
+
+type TreeNode = GameView['tree']['nodes'][number];
+
+/**
+ * What a node is, floating beside it.
+ *
+ * A fixed reader panel underneath meant the tree had a permanent block of text
+ * under it explaining itself, and your eye had to travel from the node to the
+ * bottom of the modal and back. The card comes to the node instead, and when
+ * nothing is hovered there is nothing there at all.
+ */
+function NodeCard({ node }: { node: TreeNode }) {
+  const hue = hueOf(node.archetype);
+  const left = asPercent(node.x);
+  const top = asPercent(node.y);
+
+  // Flip across the node when it would otherwise run off the edge.
+  const flipX = left > 62;
+  const flipY = top > 66;
+
+  return (
+    <div
+      className="node-card"
+      style={{
+        left: `${left}%`,
+        top: `${top}%`,
+        borderLeftColor: hue,
+        transform: `translate(${flipX ? 'calc(-100% - 1.1rem)' : '1.1rem'}, ${flipY ? '-100%' : '0'})`,
+      }}
+    >
+      <div className="node-card-head">
+        <strong style={{ color: hue }}>{node.name}</strong>
+        <span className="node-kind">{node.kind}</span>
+      </div>
+      <p className="node-discipline">{DISCIPLINE[node.archetype]?.label ?? node.archetype}</p>
+      <p className="node-grant">{node.description}</p>
+      {node.teaches && <p className="teaches">teaches {node.teaches}</p>}
+      {node.taken && <p className="node-state held">held</p>}
+      {!node.taken && node.reachable && <p className="node-state open">one point away</p>}
+    </div>
+  );
+}
+
 function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   const [hover, setHover] = useState<string | null>(null);
   const byId = new Map(view.tree.nodes.map((n) => [n.id, n]));
@@ -161,88 +208,110 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
         ))}
       </div>
 
-      <p className="muted" style={{ fontSize: '0.8rem', margin: '0.4rem 0' }}>
+      <p className="muted" style={{ fontSize: '0.8rem', margin: '0.4rem 0 0.6rem' }}>
         A point can only go somewhere touching what you already hold. {spent} spent.
         {view.character.skillPoints > 0 && (
           <span className="points"> {view.character.skillPoints} to spend.</span>
         )}
       </p>
 
-      <svg viewBox="-4 -4 108 108" style={{ width: '100%', height: 'auto', background: '#100e0c', borderRadius: 8 }}>
-        {view.tree.nodes.map((node) =>
-          node.connections
-            // Each edge once: both ends list it, so only draw the lower id.
-            .filter((to) => to > node.id)
-            .map((to) => {
-              const other = byId.get(to);
-              if (!other) return null;
-              const lit = node.taken && other.taken;
-              const crossing =
-                node.archetype !== other.archetype && node.id !== 'start' && other.id !== 'start';
-              return (
-                <line
-                  key={`${node.id}-${to}`}
-                  x1={node.x} y1={node.y} x2={other.x} y2={other.y}
-                  stroke={lit ? hueOf(node.archetype) : '#241f1a'}
-                  strokeWidth={lit ? 0.8 : 0.4}
-                  // A link between disciplines is the hybrid route; dashing it
-                  // makes the shape of the web readable at a glance.
-                  strokeDasharray={crossing ? '1.4 1.2' : undefined}
-                />
-              );
-            }),
-        )}
+      <div className="tree-frame">
+        <svg viewBox="-4 -4 108 108" className="tree-svg">
+          <defs>
+            {/* A held node glows in its own colour; one filter per discipline. */}
+            {view.tree.disciplines.map((id) => (
+              <radialGradient id={`glow-${id}`} key={id}>
+                <stop offset="0%" stopColor={hueOf(id)} stopOpacity={0.5} />
+                <stop offset="100%" stopColor={hueOf(id)} stopOpacity={0} />
+              </radialGradient>
+            ))}
+          </defs>
 
-        {view.tree.nodes.map((node) => {
-          const r = node.kind === 'keystone' ? 3.2 : node.kind === 'notable' ? 2.4 : 1.5;
-          // Reachable draws the route; affordable decides whether it can be
-          // clicked. Showing one without the other is what makes a tree legible.
-          const open = node.reachable && !busy && view.character.skillPoints > 0;
-          const hue = hueOf(node.archetype);
-          return (
-            <g key={node.id}>
-              {node.taken && node.kind !== 'minor' && (
-                <circle
-                  cx={node.x} cy={node.y} r={r + 1.4}
-                  fill="none" stroke={hue} strokeWidth={0.4} opacity={0.5}
-                />
-              )}
-              <circle
-                cx={node.x} cy={node.y} r={r}
-                fill={node.taken ? hue : node.reachable ? '#3a3025' : '#1c1815'}
-                stroke={node.taken || node.reachable ? hue : '#2b2620'}
-                strokeWidth={node.reachable && !node.taken ? 0.6 : 0.4}
-                style={open ? { cursor: 'pointer' } : undefined}
+          {view.tree.nodes.map((node) =>
+            node.connections
+              // Each edge once: both ends list it, so only draw the lower id.
+              .filter((to) => to > node.id)
+              .map((to) => {
+                const other = byId.get(to);
+                if (!other) return null;
+                const lit = node.taken && other.taken;
+                const live = node.taken !== other.taken && (node.reachable || other.reachable);
+                const crossing =
+                  node.archetype !== other.archetype && node.id !== 'start' && other.id !== 'start';
+                return (
+                  <line
+                    key={`${node.id}-${to}`}
+                    x1={node.x} y1={node.y} x2={other.x} y2={other.y}
+                    stroke={lit ? hueOf(node.archetype) : live ? '#4a3f31' : '#221e19'}
+                    strokeWidth={lit ? 0.75 : 0.38}
+                    strokeLinecap="round"
+                    // A link between disciplines is the hybrid route; dashing it
+                    // makes the shape of the web readable at a glance.
+                    strokeDasharray={crossing ? '1.4 1.3' : undefined}
+                  />
+                );
+              }),
+          )}
+
+          {view.tree.nodes.map((node) => {
+            const r = node.kind === 'keystone' ? 3 : node.kind === 'notable' ? 2.3 : 1.4;
+            // Reachable draws the route; affordable decides whether it can be
+            // clicked. Showing one without the other is what makes a tree legible.
+            const open = node.reachable && !busy && view.character.skillPoints > 0;
+            const hue = hueOf(node.archetype);
+            const lit = hover === node.id;
+
+            return (
+              <g
+                key={node.id}
+                className={open ? 'node open' : 'node'}
                 onMouseEnter={() => setHover(node.id)}
                 onMouseLeave={() => setHover(null)}
                 onClick={open ? () => act({ type: 'allocate', node: node.id }) : undefined}
               >
-                <title>{node.name} — {node.description}</title>
-              </circle>
-              {/* Keystones carry a mark, because they are the decisions. */}
-              {node.kind === 'keystone' && (
-                <circle cx={node.x} cy={node.y} r={0.9} fill={node.taken ? '#12100e' : hue} />
-              )}
-            </g>
-          );
-        })}
-      </svg>
+                {node.taken && (
+                  <circle cx={node.x} cy={node.y} r={r * 2.6} fill={`url(#glow-${node.archetype})`} />
+                )}
 
-      <div className="node-read">
-        {shown ? (
-          <>
-            <strong style={{ color: hueOf(shown.archetype) }}>{shown.name}</strong>{' '}
-            <span className="tag">{shown.kind}</span>
-            <span className="tag">{DISCIPLINE[shown.archetype]?.label ?? shown.archetype}</span>
-            <p className="muted">{shown.description}</p>
-            {shown.teaches && <p className="teaches">teaches {shown.teaches}</p>}
-          </>
-        ) : (
-          <p className="muted">
-            Hover a node to read it. Larger nodes are notables, which teach a skill;
-            ringed ones are keystones, which trade something away.
-          </p>
-        )}
+                {/* Keystones are diamonds. They are the decisions, and a
+                    decision should not look like a stat bump. */}
+                {node.kind === 'keystone' ? (
+                  <rect
+                    x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
+                    transform={`rotate(45 ${node.x} ${node.y})`}
+                    fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
+                    stroke={node.taken || node.reachable ? hue : '#2b2620'}
+                    strokeWidth={lit ? 0.8 : 0.5}
+                  />
+                ) : (
+                  <circle
+                    cx={node.x} cy={node.y} r={r}
+                    fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
+                    stroke={node.taken || node.reachable ? hue : '#2b2620'}
+                    strokeWidth={lit ? 0.8 : node.reachable && !node.taken ? 0.55 : 0.35}
+                  />
+                )}
+
+                {/* Notables carry a pip, so the ones that teach read at a glance. */}
+                {node.kind === 'notable' && (
+                  <circle cx={node.x} cy={node.y} r={0.7} fill={node.taken ? '#14110e' : hue} />
+                )}
+
+                {lit && (
+                  <circle
+                    cx={node.x} cy={node.y} r={r + 1.8}
+                    fill="none" stroke={hue} strokeWidth={0.35} opacity={0.9}
+                  />
+                )}
+
+                {/* A generous invisible target: the nodes are small on purpose. */}
+                <circle cx={node.x} cy={node.y} r={r + 1.6} fill="transparent" />
+              </g>
+            );
+          })}
+        </svg>
+
+        {shown && <NodeCard node={shown} />}
       </div>
     </div>
   );
