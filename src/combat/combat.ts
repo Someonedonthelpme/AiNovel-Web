@@ -1,0 +1,209 @@
+import type { Rng } from '../engine/roll.ts';
+import { d20 } from './dice.ts';
+import { effectiveSpeed, isIncapacitated, tickConditions } from './conditions.ts';
+import { cellKey, distance, hasLineOfSight, occupancyFor, reachableStops } from './grid.ts';
+import { resolveAttack, rollDeathSave } from './resolve.ts';
+import type { CombatEvent, CombatState, Combatant, Grid, Side, Vec } from './types.ts';
+import { abilityMod } from './types.ts';
+
+/**
+ * The encounter state machine.
+ *
+ * Every action returns a NEW state plus an `error` when the action was illegal,
+ * so an invalid proposal from the Director is rejected cleanly instead of
+ * corrupting the encounter. Nothing here consults a model.
+ */
+
+export type ActionResult = { state: CombatState; error: string | null };
+
+const ok = (state: CombatState): ActionResult => ({ state, error: null });
+const fail = (state: CombatState, error: string): ActionResult => ({ state, error });
+
+const log = (state: CombatState, ...events: CombatEvent[]): CombatState => ({
+  ...state,
+  log: [...state.log, ...events],
+});
+
+const put = (state: CombatState, c: Combatant): CombatState => ({
+  ...state,
+  combatants: { ...state.combatants, [c.id]: c },
+});
+
+export const currentActor = (state: CombatState): Combatant | null =>
+  state.combatants[state.order[state.turn]] ?? null;
+
+export const living = (state: CombatState, side: Side): Combatant[] =>
+  Object.values(state.combatants).filter((c) => c.side === side && !c.dead);
+
+/** A side is beaten when nobody on it is still up and fighting. */
+function standing(state: CombatState, side: Side): Combatant[] {
+  return living(state, side).filter((c) => !c.dying);
+}
+
+export function checkVictory(state: CombatState): Side | 'draw' | null {
+  const party = standing(state, 'party').length;
+  const foes = standing(state, 'foe').length;
+  if (party > 0 && foes === 0) return 'party';
+  if (foes > 0 && party === 0) return 'foe';
+  if (party === 0 && foes === 0) return 'draw';
+  return null;
+}
+
+function settleIfOver(state: CombatState): CombatState {
+  if (state.over) return state;
+  const victor = checkVictory(state);
+  if (!victor) return state;
+  return log({ ...state, over: true, victor }, { kind: 'combatEnd', victor });
+}
+
+/**
+ * Move the turn pointer to the next combatant who can actually act.
+ *
+ * Dead combatants are skipped outright; dying ones roll a death save and then
+ * lose their turn, which is where most of the drama in a fight comes from.
+ */
+function advanceToNextActor(rng: Rng, state: CombatState): CombatState {
+  let next = state;
+  // Bounded so a table of corpses can never spin forever.
+  const limit = state.order.length * 4 + 8;
+
+  for (let i = 0; i < limit; i++) {
+    next = settleIfOver(next);
+    if (next.over) return next;
+
+    const turn = next.turn + 1;
+    const wrapped = turn >= next.order.length;
+    next = {
+      ...next,
+      turn: wrapped ? 0 : turn,
+      round: wrapped ? next.round + 1 : next.round,
+    };
+    if (wrapped) next = log(next, { kind: 'roundStart', round: next.round });
+
+    const actor = currentActor(next);
+    if (!actor || actor.dead) continue;
+
+    if (actor.dying) {
+      const save = rollDeathSave(rng, actor);
+      next = log(put(next, save.actor), save.event);
+      continue;
+    }
+
+    if (isIncapacitated(actor)) {
+      // Conscious but unable to act still burns the turn.
+      next = log(put(next, tickConditions(actor)), { kind: 'turnStart', actor: actor.id });
+      continue;
+    }
+
+    return log(
+      { ...next, movementLeft: effectiveSpeed(actor), actionUsed: false },
+      { kind: 'turnStart', actor: actor.id },
+    );
+  }
+  return settleIfOver(next);
+}
+
+export function startCombat(rng: Rng, roster: Combatant[], grid: Grid): CombatState {
+  const rolled = roster.map((c) => ({ c, init: d20(rng, abilityMod(c.abilities.dex)).total }));
+
+  // Ties break on dexterity then id, so initiative order is fully deterministic.
+  rolled.sort(
+    (a, b) =>
+      b.init - a.init ||
+      abilityMod(b.c.abilities.dex) - abilityMod(a.c.abilities.dex) ||
+      a.c.id.localeCompare(b.c.id),
+  );
+
+  const combatants: Record<string, Combatant> = {};
+  for (const entry of rolled) combatants[entry.c.id] = entry.c;
+
+  const base: CombatState = {
+    round: 1,
+    turn: -1,
+    order: rolled.map((r) => r.c.id),
+    combatants,
+    grid,
+    movementLeft: 0,
+    actionUsed: false,
+    over: false,
+    victor: null,
+    log: [{ kind: 'roundStart', round: 1 }],
+  };
+
+  return advanceToNextActor(rng, base);
+}
+
+export function moveTo(state: CombatState, to: Vec): ActionResult {
+  if (state.over) return fail(state, 'combat is over');
+  const actor = currentActor(state);
+  if (!actor) return fail(state, 'no active combatant');
+
+  const occ = occupancyFor(Object.values(state.combatants), actor.side);
+  const stops = reachableStops(state.grid, actor.pos, state.movementLeft, occ);
+  const cost = stops.get(cellKey(to));
+  if (cost === undefined) {
+    return fail(state, `cannot reach ${cellKey(to)} with ${state.movementLeft} movement`);
+  }
+
+  const moved = put({ ...state, movementLeft: state.movementLeft - cost }, { ...actor, pos: to });
+  return ok(log(moved, { kind: 'move', actor: actor.id, from: actor.pos, to, cost }));
+}
+
+export function attack(rng: Rng, state: CombatState, targetId: string, attackId: string): ActionResult {
+  if (state.over) return fail(state, 'combat is over');
+  if (state.actionUsed) return fail(state, 'action already used this turn');
+
+  const actor = currentActor(state);
+  if (!actor) return fail(state, 'no active combatant');
+
+  const target = state.combatants[targetId];
+  if (!target) return fail(state, `no such target: ${targetId}`);
+  if (target.dead) return fail(state, `${targetId} is already dead`);
+  if (target.id === actor.id) return fail(state, 'cannot attack yourself');
+
+  const weapon = actor.attacks.find((a) => a.id === attackId);
+  if (!weapon) return fail(state, `${actor.id} has no attack "${attackId}"`);
+
+  const dist = distance(actor.pos, target.pos);
+  if (dist > weapon.range) return fail(state, `${targetId} is out of range (${dist} > ${weapon.range})`);
+  if (!hasLineOfSight(state.grid, actor.pos, target.pos)) {
+    return fail(state, `no line of sight to ${targetId}`);
+  }
+
+  const result = resolveAttack(rng, actor, target, attackId);
+  const next = log(put({ ...state, actionUsed: true }, result.target), result.event);
+  return ok(settleIfOver(next));
+}
+
+export function endTurn(rng: Rng, state: CombatState): ActionResult {
+  if (state.over) return fail(state, 'combat is over');
+  const actor = currentActor(state);
+  const ticked = actor ? put(state, tickConditions(actor)) : state;
+  return ok(advanceToNextActor(rng, ticked));
+}
+
+/** Squares the active combatant could legally stop on this turn. */
+export function movementOptions(state: CombatState): Vec[] {
+  const actor = currentActor(state);
+  if (!actor || state.over) return [];
+  const occ = occupancyFor(Object.values(state.combatants), actor.side);
+  return [...reachableStops(state.grid, actor.pos, state.movementLeft, occ).keys()].map((k) => {
+    const parts = k.split(',').map(Number);
+    return { x: parts[0], y: parts[1] };
+  });
+}
+
+/** Targets the active combatant could legally attack right now. */
+export function attackOptions(state: CombatState, attackId: string): Combatant[] {
+  const actor = currentActor(state);
+  if (!actor || state.over || state.actionUsed) return [];
+  const weapon = actor.attacks.find((a) => a.id === attackId);
+  if (!weapon) return [];
+  return Object.values(state.combatants).filter(
+    (t) =>
+      !t.dead &&
+      t.id !== actor.id &&
+      distance(actor.pos, t.pos) <= weapon.range &&
+      hasLineOfSight(state.grid, actor.pos, t.pos),
+  );
+}
