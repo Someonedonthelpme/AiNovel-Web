@@ -7,7 +7,7 @@ import {
   abilityPointsBetween, depthFactor, grantXp, spendAbilityPoint, xpForFight, xpForNewDepth, xpToNext,
 } from './progress.ts';
 import { allocate, allocationOf, canAllocate, totalGrant, visibleNodes } from './allocate.ts';
-import { ARCHETYPES, skillTreeFor } from './skilltree.ts';
+import { ARCHETYPES, MAX_DISCIPLINES, MIN_DISCIPLINES, skillTreeFor } from './skilltree.ts';
 import { activeSkills } from '../session/sheet.ts';
 import { awardTraits, COUNTERS, newlyEarned, progressOf, traitMet } from './traits.ts';
 import { TRAITS } from './traitbook.ts';
@@ -158,17 +158,93 @@ test('a hidden node does not exist until it is earned', () => {
   assert.ok(visibleNodes(tree, veteran).some((n) => n.kind === 'keystone'));
 });
 
-test('every discipline is on the tree, and each teaches two actives', () => {
-  // The first tree was eight anonymous spokes of "+1 str". A branch has to say
-  // what kind of character you are becoming, which means teaching something.
+test('a tree holds a subset, not every discipline there is', () => {
+  // What is missing is missing for good: a soldier cannot buy their way into
+  // black magic, because that branch was never printed on their tree.
   const tree = skillTreeFor(21, 'soldier', 'en');
-  const disciplines = new Set(tree.nodes.filter((n) => n.ring > 0).map((n) => n.archetype));
-  assert.equal(disciplines.size, ARCHETYPES.length, 'all eight disciplines present');
+  assert.ok(tree.disciplines.length >= MIN_DISCIPLINES);
+  assert.ok(tree.disciplines.length <= MAX_DISCIPLINES);
+  assert.ok(tree.disciplines.length < ARCHETYPES.length, 'a subset, not the lot');
+  assert.ok(tree.disciplines.includes(tree.home), 'and it always holds your own');
+});
 
-  for (const archetype of ARCHETYPES) {
-    const teaching = tree.nodes.filter((n) => n.archetype === archetype.id && n.teaches);
-    assert.equal(teaching.length, 2, `${archetype.id} should teach two skills`);
+test('different backgrounds get different trees, not the same map re-entered', () => {
+  const soldier = skillTreeFor(21, 'soldier', 'en', 'Soldier');
+  const scholar = skillTreeFor(21, 'scholar', 'en', 'Scholar of the Archive');
+
+  assert.notDeepEqual(soldier.disciplines, scholar.disciplines);
+  assert.notEqual(soldier.home, scholar.home);
+  assert.notDeepEqual(
+    soldier.nodes.map((n) => n.id).sort(),
+    scholar.nodes.map((n) => n.id).sort(),
+    'the shape differs too, not only the entry point',
+  );
+});
+
+test('the same character always gets the same tree back', () => {
+  // Chaos in the generator, determinism in the result: a reloaded session must
+  // show the tree the player has been spending points on.
+  const a = skillTreeFor(9, 'harbour_guard', 'en', 'Harbour Guard');
+  const b = skillTreeFor(9, 'harbour_guard', 'en', 'Harbour Guard');
+  assert.deepEqual(a.nodes, b.nodes);
+  assert.deepEqual(a.disciplines, b.disciplines);
+});
+
+test('every discipline on a tree teaches, and every node is reachable from the start', () => {
+  // A branch has to say what kind of character you are becoming, which means
+  // teaching something. And a node nothing connects to is a node nobody can buy.
+  for (const seed of [1, 7, 21, 55, 108]) {
+    const tree = skillTreeFor(seed, 'soldier', 'en');
+
+    for (const id of tree.disciplines) {
+      const teaching = tree.nodes.filter((n) => n.archetype === id && n.teaches);
+      assert.ok(teaching.length > 0, `seed ${seed}: ${id} teaches nothing`);
+    }
+
+    // Walk the graph. Islands are included: they are gated, not orphaned.
+    const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+    const seen = new Set<string>([tree.start]);
+    const queue = [tree.start];
+    while (queue.length) {
+      const here = byId.get(queue.shift()!);
+      for (const next of here?.connections ?? []) {
+        if (!seen.has(next) && byId.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    assert.equal(seen.size, tree.nodes.length, `seed ${seed}: ${tree.nodes.length - seen.size} orphaned nodes`);
   }
+});
+
+test('islands exist, and stay invisible until something opens them', () => {
+  // The dynamic half. A locked door you can see is a different thing from a
+  // place you do not know is there.
+  const state = playState();
+  const tree = skillTreeFor(4, 'soldier', 'en');
+  const island = tree.nodes.filter((n) => n.id.startsWith('isle'));
+  assert.ok(island.length > 0, 'the seed should have grown at least one');
+  assert.ok(island.every((n) => n.requires?.length), 'every island node is gated');
+
+  const early = visibleNodes(tree, ctxOf(state));
+  assert.equal(early.some((n) => n.id.startsWith('isle')), false, 'not drawn at all yet');
+
+  const veteran = {
+    ...ctxOf(state),
+    sheet: { ...state.sheet, level: 20 },
+    counters: { deepest_floor: 30, kills: 300, floors_climbed: 40 },
+  };
+  assert.ok(visibleNodes(tree, veteran).some((n) => n.id.startsWith('isle')), 'and there once earned');
+});
+
+test('branches vary in shape and length rather than marching in step', () => {
+  // A perfectly radial tree is a wheel, and a wheel has no decisions in it.
+  const tree = skillTreeFor(33, 'soldier', 'en');
+  const depths = tree.disciplines.map(
+    (id) => Math.max(...tree.nodes.filter((n) => n.archetype === id && n.ring < 9).map((n) => n.ring)),
+  );
+  assert.ok(new Set(depths).size > 1, `every branch ran to the same depth: ${depths.join(', ')}`);
 });
 
 test('taking a notable teaches its skill', () => {

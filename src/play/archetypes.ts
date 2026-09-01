@@ -18,7 +18,8 @@ import type { ActiveEffect, ActiveKind, ActiveSkill } from '../skills/active.ts'
 
 export type ArchetypeId =
   | 'sword' | 'bow' | 'guard' | 'wisdom'
-  | 'magic' | 'blackMagic' | 'guile' | 'survival';
+  | 'magic' | 'blackMagic' | 'guile' | 'survival'
+  | 'flame' | 'venom' | 'shadow' | 'song';
 
 type Bilingual = { en: string; th: string };
 
@@ -50,6 +51,11 @@ type SkillSpec = {
 
 const hinder = (condition: Condition, rounds: number): ActiveEffect => ({ kind: 'hinder', condition, rounds });
 const edge = (ability: Ability, bonus: number): ActiveEffect => ({ kind: 'edge', ability, bonus });
+const strike = (damage: number): ActiveEffect => ({ kind: 'strike', damage });
+const drain = (damage: number, heal: number): ActiveEffect => ({ kind: 'drain', damage, heal });
+const burst = (damage: number, radius: number): ActiveEffect => ({ kind: 'burst', damage, radius });
+const hex = (damage: number, condition: Condition, rounds: number): ActiveEffect =>
+  ({ kind: 'hex', damage, condition, rounds });
 
 export const ARCHETYPES: readonly Archetype[] = [
   {
@@ -316,6 +322,138 @@ export const ARCHETYPES: readonly Archetype[] = [
       },
     ],
   },
+  {
+    id: 'flame',
+    name: { en: 'The Kindling', th: 'วิถีไฟ' },
+    ability: 'int',
+    secondary: 'cha',
+    minors: [
+      { en: 'Tinder', th: 'เชื้อไฟ' },
+      { en: 'Draught', th: 'ลมเข้า' },
+      { en: 'Heat Haze', th: 'ไอร้อน' },
+      { en: 'Ash', th: 'ขี้เถ้า' },
+    ],
+    notables: [
+      { en: 'Catch and Spread', th: 'ติดแล้วลาม' },
+      { en: 'The Whole Room', th: 'ทั้งห้อง' },
+    ],
+    keystone: { en: 'It Does Not Choose', th: 'มันไม่เลือก' },
+    keystoneNote: {
+      en: 'Fire does not know which of you it was aimed at.',
+      th: 'ไฟไม่รู้ว่ามันถูกเล็งไปที่ใครในหมู่พวกคุณ',
+    },
+    teaches: [
+      {
+        name: { en: 'Flare', th: 'ลุกวาบ' },
+        description: { en: 'A short bright noise, and everything near it.', th: 'เสียงสว่างสั้น ๆ และทุกอย่างที่อยู่ใกล้' },
+        kind: 'combat', effect: burst(5, 1), range: 5, usesPerRest: 2,
+      },
+      {
+        name: { en: 'Conflagration', th: 'เพลิงลาม' },
+        description: { en: 'It gets away from you. That is the point.', th: 'มันจะเกินการควบคุม นั่นแหละคือจุดประสงค์' },
+        kind: 'combat', effect: burst(8, 2), range: 5, usesPerRest: 1,
+      },
+    ],
+  },
+  {
+    id: 'venom',
+    name: { en: 'The Slow Cup', th: 'วิถียาพิษ' },
+    ability: 'int',
+    secondary: 'dex',
+    minors: [
+      { en: 'Measures', th: 'การตวง' },
+      { en: 'A Steady Hand', th: 'มือนิ่ง' },
+      { en: 'Bitterness', th: 'ความขม' },
+      { en: 'Residue', th: 'ตะกอน' },
+    ],
+    notables: [
+      { en: 'What Keeps Working', th: 'สิ่งที่ออกฤทธิ์ต่อ' },
+      { en: 'The Long Dose', th: 'ปริมาณที่ค้างอยู่' },
+    ],
+    keystone: { en: 'Patience Is a Weapon', th: 'ความอดทนคืออาวุธ' },
+    keystoneNote: {
+      en: 'Nothing you do kills quickly, and almost everything kills.',
+      th: 'ไม่มีสิ่งใดที่คุณทำฆ่าได้เร็ว แต่เกือบทุกอย่างฆ่าได้',
+    },
+    teaches: [
+      {
+        name: { en: 'Coat the Blade', th: 'อาบคม' },
+        description: { en: 'It only has to break the skin.', th: 'แค่ให้เข้าเนื้อก็พอ' },
+        kind: 'combat', effect: hex(3, 'poisoned', 3), range: 1, usesPerRest: 2,
+      },
+      {
+        name: { en: 'Seizing Draught', th: 'ยาชัก' },
+        description: { en: 'They fold before they understand why.', th: 'เขาทรุดลงก่อนจะเข้าใจว่าทำไม' },
+        kind: 'combat', effect: hex(4, 'stunned', 1), range: 2, usesPerRest: 1,
+      },
+    ],
+  },
+  {
+    id: 'shadow',
+    name: { en: 'The Blind Side', th: 'วิถีเงา' },
+    ability: 'dex',
+    secondary: 'cha',
+    minors: [
+      { en: 'Soft Soles', th: 'ฝ่าเท้าเบา' },
+      { en: 'Held Breath', th: 'กลั้นหายใจ' },
+      { en: 'Angles', th: 'มุมอับ' },
+      { en: 'The Wait', th: 'การรอ' },
+    ],
+    notables: [
+      { en: 'Where They Are Not Looking', th: 'ที่ที่เขาไม่ได้มอง' },
+      { en: 'One Motion', th: 'จังหวะเดียว' },
+    ],
+    keystone: { en: 'Seen Once', th: 'เห็นครั้งเดียว' },
+    keystoneNote: {
+      en: 'Devastating from the dark, and there is not much of you in the light.',
+      th: 'ร้ายกาจเมื่ออยู่ในเงา และแทบไม่เหลืออะไรเมื่ออยู่กลางแสง',
+    },
+    teaches: [
+      {
+        name: { en: 'Quiet Cut', th: 'รอยเงียบ' },
+        description: { en: 'No swing. Just the result.', th: 'ไม่มีการเหวี่ยง มีแต่ผลลัพธ์' },
+        kind: 'combat', effect: strike(7), range: 1, usesPerRest: 2,
+      },
+      {
+        name: { en: 'Take the Wind', th: 'ชิงลมหายใจ' },
+        description: { en: 'You are steadier afterwards. They are not.', th: 'หลังจากนั้นคุณจะมั่นคงขึ้น ส่วนเขาไม่' },
+        kind: 'combat', effect: drain(6, 4), range: 1, usesPerRest: 2,
+      },
+    ],
+  },
+  {
+    id: 'song',
+    name: { en: 'The Carrying Voice', th: 'วิถีเสียง' },
+    ability: 'cha',
+    secondary: 'wis',
+    minors: [
+      { en: 'Pitch', th: 'ระดับเสียง' },
+      { en: 'Refrain', th: 'ท่อนซ้ำ' },
+      { en: 'Carrying', th: 'เสียงไปไกล' },
+      { en: 'The Old Songs', th: 'เพลงเก่า' },
+    ],
+    notables: [
+      { en: 'Something to March To', th: 'จังหวะให้เดินตาม' },
+      { en: 'A Room That Listens', th: 'ห้องที่ยอมฟัง' },
+    ],
+    keystone: { en: 'Everyone Remembers It', th: 'ทุกคนจำมันได้' },
+    keystoneNote: {
+      en: 'People do what you ask. They also remember exactly who asked.',
+      th: 'ผู้คนทำตามที่คุณขอ และก็จำได้แม่นว่าใครเป็นคนขอ',
+    },
+    teaches: [
+      {
+        name: { en: 'Marching Song', th: 'เพลงเดินทัพ' },
+        description: { en: 'Something to put your feet to.', th: 'บางอย่างให้ก้าวตาม' },
+        kind: 'combat', effect: { kind: 'mend', amount: 6 }, range: 0, usesPerRest: 2,
+      },
+      {
+        name: { en: 'A Room That Listens', th: 'ห้องที่ยอมฟัง' },
+        description: { en: 'They were going to argue. Now they are not.', th: 'เขากำลังจะเถียง ตอนนี้ไม่แล้ว' },
+        kind: 'social', effect: edge('cha', 3), range: 0, usesPerRest: 0,
+      },
+    ],
+  },
 ];
 
 /**
@@ -339,6 +477,10 @@ export function archetypeForBackground(backgroundId: string, name = ''): Archety
     [/guard|soldier|knight|warden|sentry|legion|marine/, 'guard'],
     [/thief|rogue|smuggl|trader|merchant|dock|courier|fence|spy/, 'guile'],
     [/sailor|farmer|labour|labor|miner|fisher|drover|porter|survivor/, 'survival'],
+    [/pyro|flame|fire|kindl|ember|smith/, 'flame'],
+    [/poison|venom|apothec|herbal|brewer|toxic/, 'venom'],
+    [/assassin|shadow|stealth|creep|burglar|cutpurse/, 'shadow'],
+    [/bard|singer|minstrel|herald|crier|poet|story/, 'song'],
     [/sword|blade|duel|mercenar|gladiat|swords/, 'sword'],
   ];
   for (const [pattern, archetype] of guesses) if (pattern.test(text)) return archetype;

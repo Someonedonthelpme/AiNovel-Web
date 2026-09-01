@@ -13,7 +13,7 @@ import { COUNTERS } from './traits.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import { activeSkills, toCombatant } from '../session/sheet.ts';
-import { isCombatUsable, needsTarget, resolveSkill, spendUse, usesLeft } from '../skills/active.ts';
+import { isCombatUsable, needsTarget, radiusOf, resolveSkill, spendUse, usesLeft } from '../skills/active.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 
@@ -231,12 +231,25 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
     else if (usesLeft(skill, state.pc.skillUses) <= 0) error = `${skill.name} is spent until you rest`;
     else {
       const self = next.combatants['pc'];
-      const target = action.target ? next.combatants[action.target] : null;
-      if (skill.effect.kind === 'hinder' && !target) error = `${skill.name} needs a target`;
+      const aim = action.target ? next.combatants[action.target] : null;
+
+      if (needsTarget(skill) && !aim) error = `${skill.name} needs a target`;
       else {
-        const outcome = resolveSkill(skill, self, target);
+        // A burst catches everything standing near whoever it lands on, so the
+        // target list is built from the board rather than from the action.
+        const spread = radiusOf(skill);
+        const targets = aim
+          ? spread > 0
+            ? Object.values(next.combatants).filter(
+                (c) => !c.dead && c.side !== self.side && distance(aim.pos, c.pos) <= spread,
+              )
+            : [aim]
+          : [];
+
+        const outcome = resolveSkill(skill, self, targets);
         const combatants: typeof next.combatants = { ...next.combatants, pc: outcome.actor };
-        if (outcome.target) combatants[outcome.target.id] = outcome.target;
+        for (const hit of outcome.affected) combatants[hit.id] = hit;
+
         // Using a skill is your action for the turn, like swinging is.
         next = endTurn(rng, { ...next, combatants }).state;
         spent = spendUse(spent, skill.id);

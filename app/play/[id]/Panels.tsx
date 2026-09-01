@@ -134,6 +134,10 @@ const DISCIPLINE: Record<string, { hue: string; label: string }> = {
   blackMagic: { hue: '#a4547f', label: 'the cost' },
   guile: { hue: '#c8a06a', label: 'the quiet word' },
   survival: { hue: '#8a9a6b', label: 'the long walk' },
+  flame: { hue: '#d97b41', label: 'kindling' },
+  venom: { hue: '#6fae8f', label: 'the slow cup' },
+  shadow: { hue: '#6a6f8c', label: 'the blind side' },
+  song: { hue: '#c47fa8', label: 'the carrying voice' },
 };
 
 const hueOf = (archetype: string): string => DISCIPLINE[archetype]?.hue ?? '#9c8f7d';
@@ -147,10 +151,12 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
   return (
     <div>
       <div className="legend">
-        {Object.entries(DISCIPLINE).map(([id, d]) => (
-          <span className="legend-item" key={id} style={{ opacity: view.tree.home === id ? 1 : 0.5 }}>
-            <i style={{ background: d.hue }} />
-            {d.label}{view.tree.home === id ? ' · yours' : ''}
+        {/* Only what this tree holds. Listing the rest would advertise branches
+            this character can never take. */}
+        {view.tree.disciplines.map((id) => (
+          <span className="legend-item" key={id} style={{ opacity: view.tree.home === id ? 1 : 0.6 }}>
+            <i style={{ background: hueOf(id) }} />
+            {DISCIPLINE[id]?.label ?? id}{view.tree.home === id ? ' · yours' : ''}
           </span>
         ))}
       </div>

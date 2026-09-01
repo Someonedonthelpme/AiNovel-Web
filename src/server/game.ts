@@ -132,6 +132,7 @@ export type GameView = {
   /** What the skills panel shows. Hidden nodes and Signets are absent, not greyed. */
   tree: {
     home: string;
+    disciplines: string[];
     nodes: {
       id: string; name: string; description: string; kind: string; archetype: string;
       x: number; y: number; connections: string[]; taken: boolean; reachable: boolean;
@@ -544,6 +545,7 @@ function treeViewOf(state: PlayState): GameView['tree'] {
 
   return {
     home: tree.home,
+    disciplines: tree.disciplines,
     nodes: visible.map((node) => ({
       id: node.id,
       name: node.name,
@@ -639,8 +641,14 @@ export async function actOnSheet(id: string, action: SheetAction): Promise<Sheet
 /** A skill's effect in a phrase, so the sidebar says what it actually does. */
 function describeEffect(skill: ActiveSkill): string {
   const e = skill.effect;
-  if (e.kind === 'hinder') return `leaves a foe ${e.condition} for ${e.rounds}`;
-  if (e.kind === 'mend') return `heals ${e.amount}`;
-  if (e.kind === 'rally') return `shakes off ${e.condition}`;
-  return `+${e.bonus} on ${e.ability} checks`;
+  switch (e.kind) {
+    case 'hinder': return `leaves a foe ${e.condition} for ${e.rounds}`;
+    case 'mend': return `heals ${e.amount}`;
+    case 'rally': return `shakes off ${e.condition}`;
+    case 'strike': return `${e.damage} damage, no roll to hit`;
+    case 'drain': return `${e.damage} damage, ${e.heal} back to you`;
+    case 'burst': return `${e.damage} to everything within ${e.radius}`;
+    case 'hex': return `${e.damage} damage and ${e.condition} for ${e.rounds}`;
+    case 'edge': return `+${e.bonus} on ${e.ability} checks`;
+  }
 }

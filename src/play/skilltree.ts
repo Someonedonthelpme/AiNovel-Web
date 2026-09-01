@@ -8,21 +8,30 @@ import type { TraitCondition } from './traits.ts';
 /**
  * The passive tree.
  *
- * Path of Exile-shaped: one large web, entered where your background puts you,
- * where a point may only be spent on a node ADJACENT to one you already hold.
- * Contiguity is the whole mechanic — a distant node means paying for the route,
- * so a build is the path you took rather than a shopping list.
+ * Path of Exile-shaped: a web entered where your background puts you, where a
+ * point may only be spent on a node ADJACENT to one you already hold.
+ * Contiguity is the whole mechanic — a distant node means paying for the
+ * route, so a build is the path you took rather than a shopping list.
  *
- * Eight DISCIPLINES radiate from the centre — sword, bow, shield, the long
- * look, figures, the cost, the quiet word, the long walk — and they are not
- * interchangeable spokes. Each leans on its own abilities, and each TEACHES two
+ * Twelve DISCIPLINES exist. Each leans on its own abilities and TEACHES two
  * active skills at its notables, so walking a branch changes what you can do
- * and not only what your numbers are. That was the thing missing: a tree of
- * nothing but "+1 str" says nothing about who you are becoming.
+ * and not only what your numbers are.
  *
- * The disciplines are authored; the LAYOUT is generated per seed, so no two
- * characters walk quite the same map. Cross-links between neighbours let a
- * build hybridise rather than committing to one spoke forever.
+ * THREE THINGS MAKE ONE CHARACTER'S TREE UNLIKE ANOTHER'S.
+ *
+ * It holds a SUBSET. A character gets their home discipline plus a handful
+ * drawn by seed, weighted towards ones that go with it — so a soldier and a
+ * scholar are not looking at the same map with a different door. What is not
+ * on your tree is not available at any price.
+ *
+ * Branches have SHAPES. A chain, a fork that splits into two arms, a wheel you
+ * can walk around either way, a spur hung with side-pockets. Depth varies too.
+ * A perfectly radial tree is a wheel, and a wheel has no decisions in it.
+ *
+ * And some clusters are ISLANDS — detached, unreachable, invisible, until
+ * something you do in play opens the bridge to them. That is the dynamic half:
+ * the tree grows as the character does, and it is where the Signet gates will
+ * eventually attach.
  */
 
 export const NODE_KINDS = ['minor', 'notable', 'keystone'] as const;
@@ -65,6 +74,8 @@ export type SkillTree = {
   start: string;
   /** Which discipline the character opens next to. */
   home: ArchetypeId;
+  /** The subset this character's tree holds. What is absent is absent for good. */
+  disciplines: ArchetypeId[];
   nodes: SkillNode[];
 };
 
@@ -74,13 +85,38 @@ export type Lang = 'th' | 'en';
 /* Shape                                                                       */
 /* -------------------------------------------------------------------------- */
 
-/** Six rings: two minors, a notable, a minor, a second notable, a keystone. */
-export const RINGS = 6;
-const NOTABLE_RINGS = new Set([3, 5]);
-const KEYSTONE_RING = 6;
+/** The deepest a branch can run. Individual branches stop short of this. */
+export const RINGS = 8;
 
-/** Where cross-links between neighbouring disciplines are allowed to form. */
-const CROSSING_RINGS = [2, 4];
+/** How many disciplines one character's tree holds, home included. */
+export const MIN_DISCIPLINES = 5;
+export const MAX_DISCIPLINES = 7;
+
+/**
+ * Which disciplines sit well together.
+ *
+ * Used to weight the draw, so a tree reads as a character rather than as a
+ * random handful: someone who works with figures is more likely to be offered
+ * fire and poison than the shield.
+ */
+const AFFINITY: Record<ArchetypeId, ArchetypeId[]> = {
+  sword: ['guard', 'shadow', 'survival'],
+  bow: ['shadow', 'wisdom', 'survival'],
+  guard: ['sword', 'survival', 'song'],
+  wisdom: ['magic', 'bow', 'song'],
+  magic: ['flame', 'venom', 'wisdom'],
+  blackMagic: ['venom', 'shadow', 'magic'],
+  guile: ['shadow', 'song', 'venom'],
+  survival: ['bow', 'guard', 'venom'],
+  flame: ['magic', 'blackMagic', 'sword'],
+  venom: ['magic', 'blackMagic', 'guile'],
+  shadow: ['guile', 'bow', 'blackMagic'],
+  song: ['guile', 'wisdom', 'guard'],
+};
+
+/** The shapes a branch can take. A tree of one shape is a wheel. */
+const SHAPES = ['chain', 'fork', 'wheel', 'spur'] as const;
+type Shape = (typeof SHAPES)[number];
 
 function hash(text: string): number {
   let h = 2166136261;
@@ -126,6 +162,11 @@ function keystoneTrade(archetype: Archetype): { grant: NodeGrant; cost: NodeGran
     case 'blackMagic': return { grant: { ability: { int: 2 }, damage: 2 }, cost: { maxHp: 8 } };
     case 'guile': return { grant: { ability: { cha: 2, dex: 1 } }, cost: { maxHp: 4 } };
     case 'survival': return { grant: { maxHp: 12, ability: { con: 1 } }, cost: { damage: 1 } };
+    // Fire does not know who it was aimed at: enormous reach, and you are in it.
+    case 'flame': return { grant: { damage: 3 }, cost: { maxHp: 6, ac: 1 } };
+    case 'venom': return { grant: { ability: { int: 1, dex: 1 }, damage: 1 }, cost: { attack: 1 } };
+    case 'shadow': return { grant: { damage: 3, attack: 1 }, cost: { maxHp: 8 } };
+    case 'song': return { grant: { ability: { cha: 2, wis: 1 }, maxHp: 4 }, cost: { damage: 1 } };
   }
 }
 
@@ -147,13 +188,230 @@ const describe = (grant: NodeGrant, cost: NodeGrant | undefined, language: Lang)
 /* Generation                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Pick the disciplines this character's tree actually contains.
+ *
+ * Home is guaranteed. The rest are drawn with affinity weighting, so the set
+ * hangs together — and because it is a SUBSET, what is missing is missing for
+ * good. A soldier cannot buy their way into black magic; that tree was never
+ * printed for them.
+ */
+function disciplinesFor(rng: () => number, home: ArchetypeId): Archetype[] {
+  const chosen = new Set<ArchetypeId>([home]);
+  const want = MIN_DISCIPLINES + Math.floor(rng() * (MAX_DISCIPLINES - MIN_DISCIPLINES + 1));
+
+  // Affinities of everything already in, tried first.
+  const pool = () => {
+    const near: ArchetypeId[] = [];
+    for (const id of chosen) for (const friend of AFFINITY[id]) if (!chosen.has(friend)) near.push(friend);
+    return near;
+  };
+
+  let guard = 0;
+  while (chosen.size < want && guard++ < 64) {
+    const near = pool();
+    if (near.length > 0 && rng() < 0.7) {
+      chosen.add(near[Math.floor(rng() * near.length)]);
+      continue;
+    }
+    const any = ARCHETYPES.filter((a) => !chosen.has(a.id));
+    if (any.length === 0) break;
+    chosen.add(any[Math.floor(rng() * any.length)].id);
+  }
+
+  // Home first, so it faces outward under the player's hand when the tree opens.
+  return [...chosen]
+    .map((id) => ARCHETYPES.find((a) => a.id === id)!)
+    .sort((a, b) => (a.id === home ? -1 : b.id === home ? 1 : 0));
+}
+
+type Placed = { node: SkillNode; ring: number };
+
+/**
+ * Lay one discipline out in whatever shape it drew.
+ *
+ * Every shape is a chain with something done to it — a fork splits, a wheel
+ * closes back on itself, a spur hangs pockets off the side. Kind is decided by
+ * position rather than by a fixed ring, so notables and keystones land at
+ * different depths on different branches.
+ */
+function growBranch(
+  rng: () => number,
+  archetype: Archetype,
+  shape: Shape,
+  angle: number,
+  language: Lang,
+  startId: string,
+): Placed[] {
+  const depth = 4 + Math.floor(rng() * 4);
+  const placed: Placed[] = [];
+  let taught = 0;
+
+  const at = (ring: number, spread: number): { x: number; y: number } => {
+    const radius = 6 + ring * 5.4;
+    const drift = spread + (rng() - 0.5) * 0.1;
+    return { x: 50 + Math.cos(angle + drift) * radius, y: 50 + Math.sin(angle + drift) * radius };
+  };
+
+  const make = (
+    suffix: string,
+    ring: number,
+    kind: NodeKind,
+    spread: number,
+    parents: string[],
+  ): SkillNode => {
+    const pos = at(ring, spread);
+    const node: SkillNode = {
+      id: `${archetype.id}_${suffix}`,
+      name: '',
+      description: '',
+      kind,
+      archetype: archetype.id,
+      ring,
+      x: pos.x,
+      y: pos.y,
+      connections: parents,
+      grant: {},
+    };
+
+    if (kind === 'keystone') {
+      const trade = keystoneTrade(archetype);
+      node.name = archetype.keystone[language];
+      node.description = archetype.keystoneNote[language];
+      node.grant = trade.grant;
+      node.cost = trade.cost;
+      node.requires = [{ kind: 'level', atLeast: 5 + Math.floor(rng() * 4) }];
+    } else if (kind === 'notable') {
+      const which = (taught === 0 ? 0 : 1) as 0 | 1;
+      node.name = archetype.notables[which][language];
+      node.grant = grantFor(archetype, kind, ring, rng());
+      node.teaches = skillFrom(archetype, which, language);
+      node.description = describe(node.grant, undefined, language);
+      taught += 1;
+    } else {
+      node.name = archetype.minors[Math.floor(rng() * archetype.minors.length)][language];
+      node.grant = grantFor(archetype, kind, ring, rng());
+      node.description = describe(node.grant, undefined, language);
+    }
+
+    placed.push({ node, ring });
+    return node;
+  };
+
+  // The spine every shape is built on.
+  let previous = startId;
+  const spine: SkillNode[] = [];
+  for (let ring = 1; ring <= depth; ring++) {
+    const last = ring === depth;
+    const middle = ring === Math.max(2, Math.floor(depth / 2));
+    const kind: NodeKind = last ? 'keystone' : middle ? 'notable' : 'minor';
+    const node = make(`r${ring}`, ring, kind, 0, [previous]);
+    spine.push(node);
+    previous = node.id;
+  }
+
+  if (shape === 'fork' && depth >= 4) {
+    // A second arm off the middle, ending in the discipline's other notable.
+    const from = spine[Math.floor(depth / 2) - 1];
+    let arm = from.id;
+    for (let i = 1; i <= 2; i++) {
+      const kind: NodeKind = i === 2 ? 'notable' : 'minor';
+      arm = make(`f${i}`, from.ring + i, kind, 0.42, [arm]).id;
+    }
+  }
+
+  if (shape === 'wheel' && depth >= 4) {
+    // A loop you can walk around either way, so the route in is a choice.
+    const anchor = spine[1];
+    const left = make('w1', anchor.ring + 1, 'minor', -0.34, [anchor.id]);
+    const right = make('w2', anchor.ring + 1, 'minor', 0.34, [anchor.id]);
+    const cap = make('w3', anchor.ring + 2, 'notable', 0, [left.id, right.id]);
+    void cap;
+  }
+
+  if (shape === 'spur') {
+    // Side-pockets: cheap detours that pay once and go nowhere.
+    for (let i = 0; i < 2; i++) {
+      const anchor = spine[1 + Math.floor(rng() * Math.max(1, spine.length - 2))];
+      make(`s${i}`, anchor.ring, 'minor', rng() < 0.5 ? -0.3 : 0.3, [anchor.id]);
+    }
+  }
+
+  return placed;
+}
+
+/**
+ * A cluster with no way in yet.
+ *
+ * Drawn nowhere near the spokes and connected by a single bridge whose
+ * requirement has to come true first. Until then `visibleNodes` omits the whole
+ * thing, so the player does not know it is there — which is the difference
+ * between a locked door and a secret.
+ */
+function growIsland(
+  rng: () => number,
+  archetype: Archetype,
+  index: number,
+  language: Lang,
+  bridgeTo: string,
+): SkillNode[] {
+  const angle = rng() * Math.PI * 2;
+  const radius = 41 + rng() * 6;
+  const cx = 50 + Math.cos(angle) * radius;
+  const cy = 50 + Math.sin(angle) * radius;
+
+  // What opens it. Different islands answer to different kinds of play.
+  const keys: TraitCondition[][] = [
+    [{ kind: 'counter', counter: 'deepest_floor', atLeast: 4 + index * 3 }],
+    [{ kind: 'counter', counter: 'kills', atLeast: 15 + index * 15 }],
+    [{ kind: 'level', atLeast: 5 + index * 2 }],
+    [{ kind: 'counter', counter: 'floors_climbed', atLeast: 6 + index * 4 }],
+  ];
+  const requires = keys[index % keys.length];
+
+  const nodes: SkillNode[] = [];
+  const gate: SkillNode = {
+    id: `isle${index}_gate`,
+    name: language === 'th' ? 'สะพาน' : 'The Crossing',
+    description: language === 'th' ? 'ทางที่เพิ่งเปิด' : 'A way across that was not there before.',
+    kind: 'minor',
+    archetype: archetype.id,
+    ring: 9,
+    x: cx,
+    y: cy,
+    connections: [bridgeTo],
+    grant: { maxHp: 2 },
+    requires,
+  };
+  nodes.push(gate);
+
+  const heart: SkillNode = {
+    id: `isle${index}_heart`,
+    name: archetype.notables[index % 2][language],
+    description: '',
+    kind: 'notable',
+    archetype: archetype.id,
+    ring: 10,
+    x: cx + Math.cos(angle) * 5,
+    y: cy + Math.sin(angle) * 5,
+    connections: [gate.id],
+    grant: grantFor(archetype, 'notable', 6, rng()),
+    teaches: skillFrom(archetype, (index % 2) as 0 | 1, language),
+    requires,
+  };
+  heart.description = describe(heart.grant, undefined, language);
+  nodes.push(heart);
+
+  return nodes;
+}
+
 export function skillTreeFor(
   seed: number,
   backgroundId: string,
   language: Lang = 'en',
   backgroundName = '',
 ): SkillTree {
-  const rng = mulberry32((seed ^ hash(backgroundId)) >>> 0);
+  const rng = mulberry32((seed ^ hash(backgroundId) ^ hash(backgroundName)) >>> 0);
   const home = archetypeForBackground(backgroundId, backgroundName);
   const nodes: SkillNode[] = [];
 
@@ -171,73 +429,67 @@ export function skillTreeFor(
   };
   nodes.push(start);
 
-  // The character's own discipline faces outward first, so the branch they were
-  // trained for is the one under their hand when the tree opens.
-  const ordered = [...ARCHETYPES].sort((a, b) => (a.id === home ? -1 : b.id === home ? 1 : 0));
+  const chosen = disciplinesFor(rng, home);
+  const shapes = new Map<ArchetypeId, Shape>();
 
-  ordered.forEach((archetype, index) => {
-    const angle = (index / ordered.length) * Math.PI * 2 - Math.PI / 2 + rng() * 0.12;
-    let previous = start.id;
-    let notablesPlaced = 0;
+  chosen.forEach((archetype, index) => {
+    // Angles are spread but not even — a perfectly regular fan reads as a wheel.
+    const base = (index / chosen.length) * Math.PI * 2 - Math.PI / 2;
+    const angle = base + (rng() - 0.5) * 0.5;
+    const shape = SHAPES[Math.floor(rng() * SHAPES.length)];
+    shapes.set(archetype.id, shape);
 
-    for (let ring = 1; ring <= RINGS; ring++) {
-      const kind: NodeKind = ring === KEYSTONE_RING ? 'keystone' : NOTABLE_RINGS.has(ring) ? 'notable' : 'minor';
-      const radius = ring * 7.6;
-      const wobble = (rng() - 0.5) * 0.14;
-
-      const node: SkillNode = {
-        id: nodeId(archetype.id, ring),
-        name: '',
-        description: '',
-        kind,
-        archetype: archetype.id,
-        ring,
-        x: 50 + Math.cos(angle + wobble) * radius,
-        y: 50 + Math.sin(angle + wobble) * radius,
-        connections: [previous],
-        grant: {},
-      };
-
-      if (kind === 'keystone') {
-        const trade = keystoneTrade(archetype);
-        node.name = archetype.keystone[language];
-        node.description = archetype.keystoneNote[language];
-        node.grant = trade.grant;
-        node.cost = trade.cost;
-        // The rim opens up as the character does — the tree grows with them.
-        node.requires = [{ kind: 'level', atLeast: 6 }];
-      } else if (kind === 'notable') {
-        const which = notablesPlaced === 0 ? 0 : 1;
-        node.name = archetype.notables[which][language];
-        node.grant = grantFor(archetype, kind, ring, rng());
-        node.teaches = skillFrom(archetype, which as 0 | 1, language);
-        node.description = describe(node.grant, undefined, language);
-        notablesPlaced += 1;
-      } else {
-        const minor = archetype.minors[Math.min(archetype.minors.length - 1, ring <= 2 ? ring - 1 : ring - 2)];
-        node.name = minor[language];
-        node.grant = grantFor(archetype, kind, ring, rng());
-        node.description = describe(node.grant, undefined, language);
-      }
-
+    for (const { node } of growBranch(rng, archetype, shape, angle, language, start.id)) {
       nodes.push(node);
-      previous = node.id;
     }
   });
 
-  // Cross-links, so the tree is a web rather than eight separate ladders. Two
-  // rings can bridge; whether a given pair does is down to the seed, which is
-  // what stops every character seeing the same shortcuts.
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  for (let index = 0; index < ordered.length; index++) {
-    const here = ordered[index];
-    const next = ordered[(index + 1) % ordered.length];
-    for (const ring of CROSSING_RINGS) {
-      if (rng() < 0.6) byId.get(nodeId(here.id, ring))?.connections.push(nodeId(next.id, ring));
+
+  // Bridges between branches, at whatever depths the seed picks. Some are long:
+  // a link to the branch two along, which is what stops the web looking woven.
+  for (let i = 0; i < chosen.length; i++) {
+    const bridges = Math.floor(rng() * 3);
+    for (let b = 0; b < bridges; b++) {
+      const hop = rng() < 0.75 ? 1 : 2;
+      const here = chosen[i];
+      const there = chosen[(i + hop) % chosen.length];
+      if (here.id === there.id) continue;
+
+      const from = nodes.filter((n) => n.archetype === here.id && n.ring >= 2 && n.ring <= 5);
+      const to = nodes.filter((n) => n.archetype === there.id && n.ring >= 2 && n.ring <= 5);
+      if (from.length === 0 || to.length === 0) continue;
+
+      const a = from[Math.floor(rng() * from.length)];
+      const z = to[Math.floor(rng() * to.length)];
+      if (!a.connections.includes(z.id)) byId.get(a.id)?.connections.push(z.id);
     }
   }
 
-  return { id: `tree_${backgroundId}`, start: start.id, home, nodes: linkBothWays([...byId.values()]) };
+  // Islands: one or two, hung off a branch tip, invisible until earned.
+  const islands = 1 + Math.floor(rng() * 2);
+  for (let i = 0; i < islands; i++) {
+    const host = chosen[Math.floor(rng() * chosen.length)];
+    const tips = nodes.filter((n) => n.archetype === host.id && n.ring >= 3);
+    if (tips.length === 0) continue;
+    const anchor = tips[Math.floor(rng() * tips.length)];
+
+    // Islands can belong to a discipline the tree does NOT otherwise hold —
+    // the reward for playing a certain way is a door into something else.
+    const foreign = ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)];
+    for (const node of growIsland(rng, foreign, i, language, anchor.id)) {
+      nodes.push(node);
+      byId.set(node.id, node);
+    }
+  }
+
+  return {
+    id: `tree_${backgroundId}`,
+    start: start.id,
+    home,
+    disciplines: chosen.map((a) => a.id),
+    nodes: linkBothWays([...byId.values()]),
+  };
 }
 
 /** Edges are undirected; the generator writes only one side. */

@@ -1,5 +1,6 @@
 import type { Ability, Combatant, Condition } from '../combat/types.ts';
 import { addCondition, removeCondition } from '../combat/conditions.ts';
+import { applyDamage } from '../combat/resolve.ts';
 import type { TraitCondition } from '../play/traits.ts';
 
 /**
@@ -37,7 +38,15 @@ export type ActiveEffect =
   /** Shake something off yourself. */
   | { kind: 'rally'; condition: Condition }
   /** Out of combat: a standing bonus on checks of one ability. */
-  | { kind: 'edge'; ability: Ability; bonus: number };
+  | { kind: 'edge'; ability: Ability; bonus: number }
+  /** Straight damage that does not roll to hit. Short range, few uses. */
+  | { kind: 'strike'; damage: number }
+  /** Damage that feeds you. The signature of anything that costs something. */
+  | { kind: 'drain'; damage: number; heal: number }
+  /** Everything within `radius` of the target. */
+  | { kind: 'burst'; damage: number; radius: number }
+  /** Damage AND a condition. The expensive combination. */
+  | { kind: 'hex'; damage: number; condition: Condition; rounds: number };
 
 export type ActiveSkill = {
   id: string;
@@ -65,7 +74,12 @@ export type ActiveSkill = {
 export const isCombatUsable = (skill: ActiveSkill): boolean => skill.effect.kind !== 'edge';
 
 /** Whether a skill needs somebody on the other end. */
-export const needsTarget = (skill: ActiveSkill): boolean => skill.effect.kind === 'hinder';
+export const needsTarget = (skill: ActiveSkill): boolean =>
+  ['hinder', 'strike', 'drain', 'burst', 'hex'].includes(skill.effect.kind);
+
+/** How far the effect spreads from whoever it lands on. */
+export const radiusOf = (skill: ActiveSkill): number =>
+  skill.effect.kind === 'burst' ? skill.effect.radius : 0;
 
 /* -------------------------------------------------------------------------- */
 /* Uses                                                                        */
@@ -91,7 +105,8 @@ export const refreshUses = (): SkillUses => ({});
 
 export type SkillOutcome = {
   actor: Combatant;
-  target: Combatant | null;
+  /** Everyone the effect touched, already updated. */
+  affected: Combatant[];
   /** A line for the fight log, in the same register as `notableEvents`. */
   note: string;
 };
@@ -101,38 +116,80 @@ export type SkillOutcome = {
  *
  * Pure, and deterministic: no dice here. A skill that sometimes failed would
  * need the same tier commitment the Director's checks use, and for a resource
- * you only get a few of per rest, "it just works" is the better bargain.
+ * you only get a few of per rest, "it just works" is the better bargain in
+ * exchange for the scarcity.
+ *
+ * Damage goes through the engine's own `applyDamage`, so dropping to nought,
+ * dying and death saves behave exactly as they do for a sword — a skill that
+ * killed somebody by a different route than an attack would be a second set of
+ * rules to keep in step.
  */
-export function resolveSkill(skill: ActiveSkill, actor: Combatant, target: Combatant | null): SkillOutcome {
+export function resolveSkill(skill: ActiveSkill, actor: Combatant, targets: readonly Combatant[]): SkillOutcome {
   const effect = skill.effect;
+  const first = targets[0] ?? null;
 
-  if (effect.kind === 'hinder' && target) {
-    return {
-      actor,
-      target: addCondition(target, effect.condition, effect.rounds),
-      note: `${actor.name} leaves ${target.name} ${effect.condition}`,
-    };
+  switch (effect.kind) {
+    case 'hinder':
+      return first
+        ? {
+            actor,
+            affected: [addCondition(first, effect.condition, effect.rounds)],
+            note: `${actor.name} leaves ${first.name} ${effect.condition}`,
+          }
+        : { actor, affected: [], note: `${actor.name} finds nothing to reach` };
+
+    case 'strike':
+      return first
+        ? {
+            actor,
+            affected: [applyDamage(first, effect.damage)],
+            note: `${actor.name} strikes ${first.name} for ${effect.damage}`,
+          }
+        : { actor, affected: [], note: `${actor.name} strikes nothing` };
+
+    case 'drain': {
+      if (!first) return { actor, affected: [], note: `${actor.name} draws on nothing` };
+      return {
+        actor: { ...actor, hp: Math.min(actor.maxHp, actor.hp + effect.heal) },
+        affected: [applyDamage(first, effect.damage)],
+        note: `${actor.name} takes ${effect.damage} out of ${first.name}, and keeps some of it`,
+      };
+    }
+
+    case 'burst':
+      return {
+        actor,
+        affected: targets.map((t) => applyDamage(t, effect.damage)),
+        note: `${actor.name} catches ${targets.length} of them for ${effect.damage}`,
+      };
+
+    case 'hex':
+      return first
+        ? {
+            actor,
+            affected: [addCondition(applyDamage(first, effect.damage), effect.condition, effect.rounds)],
+            note: `${actor.name} leaves ${first.name} hurt and ${effect.condition}`,
+          }
+        : { actor, affected: [], note: `${actor.name} finds nothing to curse` };
+
+    case 'mend':
+      return {
+        actor: { ...actor, hp: Math.min(actor.maxHp, actor.hp + effect.amount) },
+        affected: [],
+        note: `${actor.name} closes a wound`,
+      };
+
+    case 'rally':
+      return {
+        actor: removeCondition(actor, effect.condition),
+        affected: [],
+        note: `${actor.name} shakes off being ${effect.condition}`,
+      };
+
+    // An `edge` has no meaning inside a fight; it applies to checks outside one.
+    case 'edge':
+      return { actor, affected: [], note: `${actor.name} steadies` };
   }
-
-  if (effect.kind === 'mend') {
-    const healed = Math.min(actor.maxHp, actor.hp + effect.amount);
-    return {
-      actor: { ...actor, hp: healed },
-      target,
-      note: `${actor.name} closes a wound`,
-    };
-  }
-
-  if (effect.kind === 'rally') {
-    return {
-      actor: removeCondition(actor, effect.condition),
-      target,
-      note: `${actor.name} shakes off being ${effect.condition}`,
-    };
-  }
-
-  // An `edge` has no meaning inside a fight; it applies to checks outside one.
-  return { actor, target, note: `${actor.name} steadies` };
 }
 
 /**

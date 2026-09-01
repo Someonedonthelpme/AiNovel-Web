@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { hasCondition } from '../combat/conditions.ts';
 import { referencePc } from '../combat/statblock.ts';
-import { edgeFor, isCombatUsable, needsTarget, refreshUses, resolveSkill, spendUse, usesLeft } from './active.ts';
+import { edgeFor, isCombatUsable, needsTarget, radiusOf, refreshUses, resolveSkill, spendUse, usesLeft } from './active.ts';
 import type { ActiveSkill } from './active.ts';
 import { activate, isSkillBook, skillBook } from './book.ts';
 import { addItem } from '../items/types.ts';
@@ -29,22 +29,22 @@ const hinder: ActiveSkill = {
 test('a hindering skill puts the condition on the target, not the user', () => {
   const me = combatant();
   const them = combatant({ id: 'foe1', name: 'wolf' });
-  const out = resolveSkill(hinder, me, them);
+  const out = resolveSkill(hinder, me, [them]);
 
-  assert.equal(hasCondition(out.target!, 'prone'), true);
+  assert.equal(hasCondition(out.affected[0], 'prone'), true);
   assert.equal(hasCondition(out.actor, 'prone'), false);
 });
 
 test('mending closes a wound but never overfills', () => {
   const hurt = combatant({ hp: 2 });
   const mend: ActiveSkill = { ...hinder, id: 'sk_mend', effect: { kind: 'mend', amount: 999 } };
-  assert.equal(resolveSkill(mend, hurt, null).actor.hp, hurt.maxHp);
+  assert.equal(resolveSkill(mend, hurt, []).actor.hp, hurt.maxHp);
 });
 
 test('rallying clears a condition off yourself', () => {
   const down = { ...combatant(), conditions: [{ kind: 'prone' as const, roundsLeft: null }] };
   const rally: ActiveSkill = { ...hinder, id: 'sk_up', effect: { kind: 'rally', condition: 'prone' } };
-  assert.equal(hasCondition(resolveSkill(rally, down, null).actor, 'prone'), false);
+  assert.equal(hasCondition(resolveSkill(rally, down, []).actor, 'prone'), false);
 });
 
 test('an edge is not something you use in a fight', () => {
@@ -225,4 +225,79 @@ test('a skill reaches as far as the skill says, not as far as your weapon', () =
   const state = beginEncounter(withSkill(dangerous(), far));
   if (!awaitingPlayer(state)) return;
   assert.ok(optionsFor(state, far.id).length > 0, 'a long-reach skill works from where you stand');
+});
+
+/* -------------------------------------------------------------------------- */
+/* The wider effect vocabulary                                                 */
+/* -------------------------------------------------------------------------- */
+
+test('a strike deals damage through the engine, so dying still works', () => {
+  // Damage goes through applyDamage rather than subtracting hp directly: a
+  // skill that killed somebody by a different route than a sword would be a
+  // second set of rules to keep in step.
+  const me = combatant();
+  const them = combatant({ id: 'foe1', name: 'wolf', hp: 3, maxHp: 20 });
+  const strike: ActiveSkill = { ...hinder, id: 'sk_hit', effect: { kind: 'strike', damage: 9 } };
+
+  const out = resolveSkill(strike, me, [them]);
+  assert.equal(out.affected[0].hp, 0);
+  assert.ok(out.affected[0].dying || out.affected[0].dead, 'dropped, not silently at zero');
+});
+
+test('a drain hurts them and feeds you', () => {
+  const me = combatant({ hp: 5 });
+  const them = combatant({ id: 'foe1', name: 'wolf', hp: 20, maxHp: 20 });
+  const drain: ActiveSkill = { ...hinder, id: 'sk_drain', effect: { kind: 'drain', damage: 6, heal: 3 } };
+
+  const out = resolveSkill(drain, me, [them]);
+  assert.equal(out.affected[0].hp, 14);
+  assert.equal(out.actor.hp, 8);
+});
+
+test('a drain cannot overfill you either', () => {
+  const me = combatant({ hp: combatant().maxHp - 1 });
+  const them = combatant({ id: 'foe1', hp: 20, maxHp: 20 });
+  const drain: ActiveSkill = { ...hinder, id: 'sk_drain', effect: { kind: 'drain', damage: 6, heal: 99 } };
+  assert.equal(resolveSkill(drain, me, [them]).actor.hp, me.maxHp);
+});
+
+test('a burst catches everyone it was given', () => {
+  const me = combatant();
+  const pack = [
+    combatant({ id: 'f1', name: 'a', hp: 20, maxHp: 20 }),
+    combatant({ id: 'f2', name: 'b', hp: 20, maxHp: 20 }),
+    combatant({ id: 'f3', name: 'c', hp: 20, maxHp: 20 }),
+  ];
+  const burst: ActiveSkill = { ...hinder, id: 'sk_burst', effect: { kind: 'burst', damage: 5, radius: 2 } };
+
+  const out = resolveSkill(burst, me, pack);
+  assert.equal(out.affected.length, 3);
+  assert.ok(out.affected.every((c) => c.hp === 15));
+});
+
+test('a hex both hurts and sticks', () => {
+  const me = combatant();
+  const them = combatant({ id: 'foe1', name: 'wolf', hp: 20, maxHp: 20 });
+  const hex: ActiveSkill = {
+    ...hinder, id: 'sk_hex', effect: { kind: 'hex', damage: 4, condition: 'poisoned', rounds: 3 },
+  };
+
+  const out = resolveSkill(hex, me, [them]);
+  assert.equal(out.affected[0].hp, 16);
+  assert.equal(hasCondition(out.affected[0], 'poisoned'), true);
+});
+
+test('every effect that reaches out needs somebody to reach', () => {
+  const reaching = ['hinder', 'strike', 'drain', 'burst', 'hex'];
+  for (const kind of reaching) {
+    const skill = { ...hinder, effect: { ...hinder.effect, kind } } as ActiveSkill;
+    assert.equal(needsTarget(skill), true, `${kind} should need a target`);
+  }
+  assert.equal(needsTarget({ ...hinder, effect: { kind: 'mend', amount: 1 } }), false);
+});
+
+test('a burst is the only thing with a radius', () => {
+  const burst: ActiveSkill = { ...hinder, effect: { kind: 'burst', damage: 5, radius: 3 } };
+  assert.equal(radiusOf(burst), 3);
+  assert.equal(radiusOf(hinder), 0);
 });
