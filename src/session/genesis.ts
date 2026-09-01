@@ -1,5 +1,6 @@
 import type { Attack } from '../combat/types.ts';
 import type { Provider } from '../llm/provider.ts';
+import { keepsake } from '../items/catalogue.ts';
 import { humanisePlaces } from '../world/naming.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
@@ -115,7 +116,8 @@ export async function generateCharacter(provider: Provider, interview: Interview
       ability: asAbility(s.ability),
       kind: asSkillKind(s.kind),
     })),
-    startingGear: generated.background.startingGear,
+    // Flavour from the model, mechanics from the code: see `keepsake`.
+    startingGear: generated.background.startingGear.map((g) => keepsake(g.id, g.name, g.description)),
     startingAttacks: (generated.background.startingAttacks as Attack[]).length
       ? (generated.background.startingAttacks as Attack[])
       : [sword],

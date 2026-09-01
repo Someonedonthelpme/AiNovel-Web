@@ -22,7 +22,20 @@ import type { Person, Place } from './types.ts';
  * substituting those would turn "walk into the town" into "walk into the
  * Ashfall" — a worse bug than the one being fixed.
  */
-const isMachineId = (id: string): boolean => id.includes('_');
+const isMachineId = (id: string): boolean => id.includes('_') || /\d/.test(id);
+
+/**
+ * People are held to a looser rule than places.
+ *
+ * A place id collides with ordinary English constantly — `town`, `gate`,
+ * `market` — so only obviously machine-shaped ones are rewritten there. A
+ * person id names one specific individual, and generated ones like
+ * `guardcaptain` or `merchant1` read as machine tokens wherever they land. The
+ * cost of missing one is a player reading "talk to guardcaptain"; the cost of
+ * over-replacing is a proper name where a common noun belonged, which for
+ * person ids barely happens.
+ */
+const isPersonId = (id: string): boolean => id.length >= 4;
 
 /**
  * Case-insensitive literal replacement.
@@ -49,7 +62,7 @@ export function displayNames(places: readonly Place[], people: Record<string, Pe
   const names = new Map<string, string>();
   for (const place of places) if (isMachineId(place.id) && place.name.trim()) names.set(place.id, place.name);
   for (const person of Object.values(people)) {
-    if (isMachineId(person.id) && person.name.trim()) names.set(person.id, person.name);
+    if (isPersonId(person.id) && person.name.trim()) names.set(person.id, person.name);
   }
   return names;
 }

@@ -22,13 +22,23 @@ test('an id a player was never meant to read is replaced by the name', () => {
   assert.equal(humanise("the door of elda's_shop", names), 'the door of Elda’s Shop');
 });
 
+test('a generated person id never survives into prose', () => {
+  // Observed: suggestions read "talk to guardcaptain" and "buy fish from
+  // fisherman1". Person ids name one individual, so they are always rewritten
+  // — unlike place ids, which collide with ordinary English.
+  const cast = { guardcaptain: person('guardcaptain', { name: 'Captain Elara Vane' }), fisherman1: person('fisherman1', { name: 'Finnian Grey' }) };
+  const names = displayNames([], cast);
+  assert.equal(humanise('talk to guardcaptain', names), 'talk to Captain Elara Vane');
+  assert.equal(humanise('buy fish from fisherman1', names), 'buy fish from Finnian Grey');
+});
+
 test('a plain word that happens to be an id is left alone', () => {
   // Substituting these would turn "walk into the town" into "walk into the
   // Ashfall" — a worse sentence than the one being fixed.
   const names = displayNames(places(), people());
   assert.equal(humanise('walk into the town', names), 'walk into the town');
   assert.equal(names.has('town'), false);
-  assert.equal(names.has('rhys'), false, 'and a one-word person id likewise');
+  assert.equal(names.has('rhys'), true, 'but a person id is always rewritten');
 });
 
 test('people ids are rewritten too', () => {

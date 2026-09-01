@@ -1,5 +1,8 @@
 import type { Ability, Abilities, Attack, Combatant } from '../combat/types.ts';
 import { ABILITIES, abilityMod } from '../combat/types.ts';
+import type { Inventory } from '../items/types.ts';
+import { emptyInventory, equippedArmour, equippedAttack, equippedGrants } from '../items/types.ts';
+import type { Item } from '../items/types.ts';
 import type { Persona, Status } from '../character/persona.ts';
 import { emptyPersona, neutralPersonality, restingMind } from '../character/persona.ts';
 
@@ -27,7 +30,8 @@ export type Skill = {
   kind: SkillKind;
 };
 
-export type Item = { id: string; name: string; description: string };
+/** Re-exported so existing importers keep working; the type lives in items/. */
+export type { Item } from '../items/types.ts';
 
 export type Background = {
   id: string;
@@ -58,6 +62,39 @@ export type CharacterSheet = Persona & {
   traits: string[];
   level: number;
   hitDie: number;
+  /** Points put into scores on levelling. Separate from the point-buy base so
+   *  character creation can still be validated against its own budget. */
+  spentAbilities?: Partial<Abilities>;
+  /** Unspent points waiting to be assigned. */
+  abilityPoints?: number;
+  xp?: number;
+  /** Passive tree nodes taken, in the order they were taken. */
+  allocated?: string[];
+  skillPoints?: number;
+  /**
+   * What the allocated nodes add up to.
+   *
+   * A denormalisation, and a deliberate one: `derive` is called everywhere and
+   * regenerating the tree each time would be wasteful. It is only ever written
+   * alongside `allocated`, by `allocate`, so the two cannot drift.
+   */
+  treeBonuses?: {
+    ability: Partial<Abilities>;
+    maxHp: number;
+    ac: number;
+    attack: number;
+    damage: number;
+  };
+  /**
+   * What earned traits add up to.
+   *
+   * Aggregated for the same reason as `treeBonuses`, and for one more: the
+   * trait book lives in `play/`, which imports this module. Reading it from
+   * here would be a cycle.
+   */
+  traitBonuses?: Partial<Abilities>;
+  /** Signets claimed. Discovery is the hard part; holding one is just a list. */
+  signets?: string[];
 };
 
 /* -------------------------------------------------------------------------- */
@@ -112,11 +149,24 @@ export function defaultAbilities(): Abilities {
 /* Derived values                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Base scores plus whatever the background grants. */
-export function finalAbilities(sheet: CharacterSheet): Abilities {
+/**
+ * Base scores, plus the background, plus points spent on levelling, plus
+ * anything worn.
+ *
+ * Traits gate on the TOTAL, so everything that moves a score has to land here
+ * or a condition like "str 20+" would read a number the player never sees.
+ */
+export function finalAbilities(sheet: CharacterSheet, inventory?: Inventory): Abilities {
+  const worn = inventory ? equippedGrants(inventory) : {};
   const out = { ...sheet.baseAbilities };
   for (const ability of ABILITIES) {
-    out[ability] = out[ability] + (sheet.background.grantsStats[ability] ?? 0);
+    out[ability] =
+      out[ability]
+      + (sheet.background.grantsStats[ability] ?? 0)
+      + (sheet.spentAbilities?.[ability] ?? 0)
+      + (sheet.treeBonuses?.ability[ability] ?? 0)
+      + (sheet.traitBonuses?.[ability] ?? 0)
+      + (worn[ability] ?? 0);
   }
   return out;
 }
@@ -130,15 +180,18 @@ export function proficiencyFor(level: number): number {
  * the standard fixed-progression option, so a character is never crippled by
  * one unlucky roll.
  */
-export function maxHpFor(sheet: CharacterSheet): number {
-  const con = abilityMod(finalAbilities(sheet).con);
+export function maxHpFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  const con = abilityMod(finalAbilities(sheet, inventory).con);
   const perLevel = Math.floor(sheet.hitDie / 2) + 1;
   const level = Math.max(1, sheet.level);
-  return Math.max(1, sheet.hitDie + con + (level - 1) * (perLevel + con));
+  const fromTree = sheet.treeBonuses?.maxHp ?? 0;
+  return Math.max(1, sheet.hitDie + con + (level - 1) * (perLevel + con) + fromTree);
 }
 
-export function armourClassFor(sheet: CharacterSheet): number {
-  return 10 + abilityMod(finalAbilities(sheet).dex);
+/** Worn armour sets the base; without it you are as hard to hit as you are quick. */
+export function armourClassFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  const base = inventory ? equippedArmour(inventory) : null;
+  return (base ?? 10) + abilityMod(finalAbilities(sheet, inventory).dex) + (sheet.treeBonuses?.ac ?? 0);
 }
 
 export type DerivedSheet = {
@@ -150,11 +203,11 @@ export type DerivedSheet = {
   skills: Skill[];
 };
 
-export function derive(sheet: CharacterSheet): DerivedSheet {
+export function derive(sheet: CharacterSheet, inventory: Inventory = emptyInventory()): DerivedSheet {
   return {
-    abilities: finalAbilities(sheet),
-    maxHp: maxHpFor(sheet),
-    ac: armourClassFor(sheet),
+    abilities: finalAbilities(sheet, inventory),
+    maxHp: maxHpFor(sheet, inventory),
+    ac: armourClassFor(sheet, inventory),
     proficiency: proficiencyFor(sheet.level),
     speed: 6,
     skills: sheet.background.grantsSkills,
@@ -170,8 +223,11 @@ export function derive(sheet: CharacterSheet): DerivedSheet {
  * needs is derived here, so the two systems can never disagree about a
  * character's numbers.
  */
-export function toCombatant(sheet: CharacterSheet, id = 'pc'): Combatant {
-  const d = derive(sheet);
+export function toCombatant(sheet: CharacterSheet, id = 'pc', inventory: Inventory = emptyInventory()): Combatant {
+  const d = derive(sheet, inventory);
+  // A wielded weapon replaces the background's bare hands. Without this, loot
+  // could never change how a fight goes, which is most of the point of loot.
+  const wielded = equippedAttack(inventory);
   return {
     id,
     name: sheet.name,
@@ -185,7 +241,7 @@ export function toCombatant(sheet: CharacterSheet, id = 'pc'): Combatant {
     size: 'medium',
     pos: { x: 0, y: 0 },
     conditions: [],
-    attacks: sheet.background.startingAttacks,
+    attacks: wielded ? [wielded] : sheet.background.startingAttacks,
     dead: false,
     dying: false,
     deathSaves: { successes: 0, failures: 0 },
