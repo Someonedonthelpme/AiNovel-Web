@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameView } from '../../../src/server/game.ts';
 import type { SheetAction } from '../../../src/play/sheetaction.ts';
@@ -142,25 +142,45 @@ const DISCIPLINE: Record<string, { hue: string; label: string }> = {
 
 const hueOf = (archetype: string): string => DISCIPLINE[archetype]?.hue ?? '#9c8f7d';
 
-/** The SVG is drawn in a -4..104 box; this puts a node back on the wrapper in %. */
+/** The SVG is drawn in a -4..104 box; this puts a point back on the wrapper in %. */
 const VIEW_MIN = -4;
 const VIEW_SPAN = 108;
 const asPercent = (n: number): number => ((n - VIEW_MIN) / VIEW_SPAN) * 100;
 
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 4;
+
+/** A drag has to travel this far before it stops counting as a click. */
+const DRAG_SLOP = 1.2;
+
 type TreeNode = GameView['tree']['nodes'][number];
+type Offsets = Record<string, { dx: number; dy: number }>;
+type Camera = { x: number; y: number; zoom: number };
+
+const START_CAMERA: Camera = { x: 0, y: 0, zoom: 1 };
+
+/**
+ * Where a node actually sits, once the player has had their way with it.
+ *
+ * Generated position, plus any drag they applied, put through the camera.
+ */
+const placed = (node: TreeNode, offsets: Offsets, camera: Camera) => {
+  const off = offsets[node.id] ?? { dx: 0, dy: 0 };
+  return { x: node.x + off.dx, y: node.y + off.dy };
+};
 
 /**
  * What a node is, floating beside it.
  *
- * A fixed reader panel underneath meant the tree had a permanent block of text
- * under it explaining itself, and your eye had to travel from the node to the
- * bottom of the modal and back. The card comes to the node instead, and when
- * nothing is hovered there is nothing there at all.
+ * Positioned in wrapper percentages rather than SVG units, so it has to be put
+ * through the same camera the graph is — otherwise the card drifts away from
+ * its node the moment anything is panned or zoomed.
  */
-function NodeCard({ node }: { node: TreeNode }) {
+function NodeCard({ node, offsets, camera }: { node: TreeNode; offsets: Offsets; camera: Camera }) {
   const hue = hueOf(node.archetype);
-  const left = asPercent(node.x);
-  const top = asPercent(node.y);
+  const at = placed(node, offsets, camera);
+  const left = asPercent(at.x * camera.zoom + camera.x);
+  const top = asPercent(at.y * camera.zoom + camera.y);
 
   // Flip across the node when it would otherwise run off the edge.
   const flipX = left > 62;
@@ -170,8 +190,8 @@ function NodeCard({ node }: { node: TreeNode }) {
     <div
       className="node-card"
       style={{
-        left: `${left}%`,
-        top: `${top}%`,
+        left: `${Math.max(0, Math.min(100, left))}%`,
+        top: `${Math.max(0, Math.min(100, top))}%`,
         borderLeftColor: hue,
         transform: `translate(${flipX ? 'calc(-100% - 1.1rem)' : '1.1rem'}, ${flipY ? '-100%' : '0'})`,
       }}
@@ -189,11 +209,173 @@ function NodeCard({ node }: { node: TreeNode }) {
   );
 }
 
+/**
+ * The passive tree, with a camera over it.
+ *
+ * A sixty-node web in a fixed frame is a picture of a tree rather than
+ * something you can work with, so this one pans, zooms and lets nodes be
+ * dragged out of the way.
+ *
+ * Dragging a node changes only where it is DRAWN. Positions are generated from
+ * the seed and the graph is what matters — what connects to what — so a layout
+ * the player has rearranged is a viewing preference, not game state. It lives
+ * in localStorage beside the session id rather than in the event log, which is
+ * reserved for things that actually happened.
+ */
 function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   const [hover, setHover] = useState<string | null>(null);
+  const [camera, setCamera] = useState<Camera>(START_CAMERA);
+  const [offsets, setOffsets] = useState<Offsets>({});
+  const frame = useRef<HTMLDivElement>(null);
+
+  // What is being dragged, and whether it has moved far enough to stop being a
+  // click. Held in a ref: this changes on every pointermove and re-rendering
+  // sixty nodes for each one would crawl.
+  const drag = useRef<{ kind: 'pan' | 'node'; id?: string; x: number; y: number; moved: boolean } | null>(null);
+
+  const storageKey = `tree-layout:${view.id}`;
+  /**
+   * Nothing is written until the saved layout has been read back in.
+   *
+   * STATE rather than a ref, and that distinction is the whole bug it fixes.
+   * Both effects run on mount in declaration order, so with a ref the save
+   * fired on the same pass as the load — before React had re-rendered with the
+   * restored values — and wrote the DEFAULT camera straight over the saved one.
+   * A state flag forces a re-render in between, so the save sees what was
+   * loaded.
+   */
+  const [loaded, setLoaded] = useState(false);
+
+  // Restore whatever arrangement they left it in. Wrapped because a browser
+  // with site data blocked throws on access rather than returning null.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { camera?: Camera; offsets?: Offsets };
+      if (parsed.camera) setCamera(parsed.camera);
+      if (parsed.offsets) setOffsets(parsed.offsets);
+    } catch {
+      // A missing or unreadable layout is not worth telling anyone about.
+    } finally {
+      setLoaded(true);
+    }
+  }, [storageKey]);
+
+  /**
+   * Save whatever they have arranged.
+   *
+   * Driven by an effect rather than called from the pointer handlers, because
+   * a handler closes over the state as it was when the handler was created —
+   * saving from `pointerup` wrote the offsets from BEFORE the drag, so a
+   * rearranged tree came back in its old shape.
+   */
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify({ camera, offsets }));
+    } catch {
+      // Not being able to save a layout should never break the panel.
+    }
+  }, [loaded, storageKey, camera, offsets]);
+
+  /** Screen pixels to SVG units, which is what every position here is in. */
+  const toSvg = (dx: number, dy: number) => {
+    const rect = frame.current?.getBoundingClientRect();
+    const scale = rect && rect.width > 0 ? VIEW_SPAN / rect.width : 1;
+    return { x: dx * scale, y: dy * scale };
+  };
+
+  /**
+   * Keep receiving moves once the pointer leaves the element it started on.
+   *
+   * Guarded because `setPointerCapture` THROWS for a pointer id the browser
+   * does not consider active. An uncaught throw here would abort the handler
+   * before the drag was ever recorded, and the graph would simply refuse to
+   * move — capture is a convenience, not a precondition.
+   */
+  const capture = (element: Element, pointerId: number, take: boolean) => {
+    try {
+      if (take) element.setPointerCapture?.(pointerId);
+      else element.releasePointerCapture?.(pointerId);
+    } catch {
+      // Without capture a drag still works; it just ends early if the pointer
+      // leaves the frame, which `onPointerLeave` already handles.
+    }
+  };
+
+  function onPointerDown(event: React.PointerEvent, id?: string) {
+    if (busy) return;
+    capture(event.currentTarget as Element, event.pointerId, true);
+    drag.current = { kind: id ? 'node' : 'pan', id, x: event.clientX, y: event.clientY, moved: false };
+  }
+
+  function onPointerMove(event: React.PointerEvent) {
+    const current = drag.current;
+    if (!current) return;
+
+    const moved = toSvg(event.clientX - current.x, event.clientY - current.y);
+    if (Math.abs(moved.x) + Math.abs(moved.y) > DRAG_SLOP) current.moved = true;
+    if (!current.moved) return;
+
+    current.x = event.clientX;
+    current.y = event.clientY;
+
+    if (current.kind === 'pan') {
+      setCamera((c) => ({ ...c, x: c.x + moved.x, y: c.y + moved.y }));
+      return;
+    }
+
+    // A node drag is in graph units, so it has to be divided back out of the
+    // zoom — otherwise the node runs away from the cursor when zoomed in.
+    const id = current.id!;
+    setOffsets((o) => {
+      const previous = o[id] ?? { dx: 0, dy: 0 };
+      return { ...o, [id]: { dx: previous.dx + moved.x / camera.zoom, dy: previous.dy + moved.y / camera.zoom } };
+    });
+  }
+
+  function onPointerUp(event: React.PointerEvent, node?: TreeNode) {
+    const current = drag.current;
+    drag.current = null;
+    capture(event.currentTarget as Element, event.pointerId, false);
+
+    if (!current) return;
+    if (current.moved) return;
+
+    // It never moved, so it was a click.
+    if (node && node.reachable && !busy && view.character.skillPoints > 0) {
+      act({ type: 'allocate', node: node.id });
+    }
+  }
+
+  /** Zoom about the middle of the frame, so the tree does not slide away. */
+  function zoomBy(factor: number) {
+    setCamera((c) => {
+      const zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, c.zoom * factor));
+      const middle = VIEW_SPAN / 2 + VIEW_MIN;
+      return {
+        zoom,
+        x: middle - ((middle - c.x) / c.zoom) * zoom,
+        y: middle - ((middle - c.y) / c.zoom) * zoom,
+      };
+    });
+  }
+
+  function onWheel(event: React.WheelEvent) {
+    event.preventDefault();
+    zoomBy(event.deltaY < 0 ? 1.12 : 1 / 1.12);
+  }
+
+  function reset() {
+    setCamera(START_CAMERA);
+    setOffsets({});
+  }
+
   const byId = new Map(view.tree.nodes.map((n) => [n.id, n]));
   const shown = hover ? byId.get(hover) : null;
   const spent = view.tree.nodes.filter((n) => n.taken && n.id !== 'start').length;
+  const rearranged = Object.keys(offsets).length > 0 || camera.zoom !== 1 || camera.x !== 0 || camera.y !== 0;
 
   return (
     <div>
@@ -208,17 +390,33 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
         ))}
       </div>
 
-      <p className="muted" style={{ fontSize: '0.8rem', margin: '0.4rem 0 0.6rem' }}>
-        A point can only go somewhere touching what you already hold. {spent} spent.
-        {view.character.skillPoints > 0 && (
-          <span className="points"> {view.character.skillPoints} to spend.</span>
-        )}
-      </p>
+      <div className="tree-bar">
+        <span className="muted">
+          A point can only go somewhere touching what you already hold. {spent} spent.
+          {view.character.skillPoints > 0 && (
+            <span className="points"> {view.character.skillPoints} to spend.</span>
+          )}
+        </span>
+        <span className="chips">
+          <button className="mini" onClick={() => zoomBy(1 / 1.25)} disabled={camera.zoom <= ZOOM_MIN}>−</button>
+          <span className="zoom-read">{Math.round(camera.zoom * 100)}%</span>
+          <button className="mini" onClick={() => zoomBy(1.25)} disabled={camera.zoom >= ZOOM_MAX}>+</button>
+          <button className="mini" onClick={reset} disabled={!rearranged}>reset</button>
+        </span>
+      </div>
 
-      <div className="tree-frame">
-        <svg viewBox="-4 -4 108 108" className="tree-svg">
+      <div className="tree-frame" ref={frame}>
+        <svg
+          viewBox="-4 -4 108 108"
+          className={drag.current ? 'tree-svg dragging' : 'tree-svg'}
+          onPointerDown={(e) => onPointerDown(e)}
+          onPointerMove={onPointerMove}
+          onPointerUp={(e) => onPointerUp(e)}
+          onPointerLeave={(e) => onPointerUp(e)}
+          onWheel={onWheel}
+        >
           <defs>
-            {/* A held node glows in its own colour; one filter per discipline. */}
+            {/* A held node glows in its own colour; one gradient per discipline. */}
             {view.tree.disciplines.map((id) => (
               <radialGradient id={`glow-${id}`} key={id}>
                 <stop offset="0%" stopColor={hueOf(id)} stopOpacity={0.5} />
@@ -227,91 +425,100 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
             ))}
           </defs>
 
-          {view.tree.nodes.map((node) =>
-            node.connections
-              // Each edge once: both ends list it, so only draw the lower id.
-              .filter((to) => to > node.id)
-              .map((to) => {
-                const other = byId.get(to);
-                if (!other) return null;
-                const lit = node.taken && other.taken;
-                const live = node.taken !== other.taken && (node.reachable || other.reachable);
-                const crossing =
-                  node.archetype !== other.archetype && node.id !== 'start' && other.id !== 'start';
-                return (
-                  <line
-                    key={`${node.id}-${to}`}
-                    x1={node.x} y1={node.y} x2={other.x} y2={other.y}
-                    stroke={lit ? hueOf(node.archetype) : live ? '#4a3f31' : '#221e19'}
-                    strokeWidth={lit ? 0.75 : 0.38}
-                    strokeLinecap="round"
-                    // A link between disciplines is the hybrid route; dashing it
-                    // makes the shape of the web readable at a glance.
-                    strokeDasharray={crossing ? '1.4 1.3' : undefined}
-                  />
-                );
-              }),
-          )}
+          <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.zoom})`}>
+            {view.tree.nodes.map((node) =>
+              node.connections
+                // Each edge once: both ends list it, so only draw the lower id.
+                .filter((to) => to > node.id)
+                .map((to) => {
+                  const other = byId.get(to);
+                  if (!other) return null;
+                  const a = placed(node, offsets, camera);
+                  const b = placed(other, offsets, camera);
+                  const lit = node.taken && other.taken;
+                  const live = node.taken !== other.taken && (node.reachable || other.reachable);
+                  const crossing =
+                    node.archetype !== other.archetype && node.id !== 'start' && other.id !== 'start';
+                  return (
+                    <line
+                      key={`${node.id}-${to}`}
+                      x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                      stroke={lit ? hueOf(node.archetype) : live ? '#4a3f31' : '#221e19'}
+                      strokeWidth={lit ? 0.75 : 0.38}
+                      strokeLinecap="round"
+                      // A link between disciplines is the hybrid route; dashing
+                      // it makes the shape of the web readable at a glance.
+                      strokeDasharray={crossing ? '1.4 1.3' : undefined}
+                    />
+                  );
+                }),
+            )}
 
-          {view.tree.nodes.map((node) => {
-            const r = node.kind === 'keystone' ? 3 : node.kind === 'notable' ? 2.3 : 1.4;
-            // Reachable draws the route; affordable decides whether it can be
-            // clicked. Showing one without the other is what makes a tree legible.
-            const open = node.reachable && !busy && view.character.skillPoints > 0;
-            const hue = hueOf(node.archetype);
-            const lit = hover === node.id;
+            {view.tree.nodes.map((node) => {
+              const r = node.kind === 'keystone' ? 3 : node.kind === 'notable' ? 2.3 : 1.4;
+              // Reachable draws the route; affordable decides whether it can be
+              // clicked. Showing one without the other is what makes a tree legible.
+              const open = node.reachable && !busy && view.character.skillPoints > 0;
+              const hue = hueOf(node.archetype);
+              const lit = hover === node.id;
+              const at = placed(node, offsets, camera);
 
-            return (
-              <g
-                key={node.id}
-                className={open ? 'node open' : 'node'}
-                onMouseEnter={() => setHover(node.id)}
-                onMouseLeave={() => setHover(null)}
-                onClick={open ? () => act({ type: 'allocate', node: node.id }) : undefined}
-              >
-                {node.taken && (
-                  <circle cx={node.x} cy={node.y} r={r * 2.6} fill={`url(#glow-${node.archetype})`} />
-                )}
+              return (
+                <g
+                  key={node.id}
+                  className={open ? 'node open' : 'node'}
+                  onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e, node.id); }}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={(e) => { e.stopPropagation(); onPointerUp(e, node); }}
+                  onMouseEnter={() => setHover(node.id)}
+                  onMouseLeave={() => setHover(null)}
+                >
+                  {node.taken && (
+                    <circle cx={at.x} cy={at.y} r={r * 2.6} fill={`url(#glow-${node.archetype})`} />
+                  )}
 
-                {/* Keystones are diamonds. They are the decisions, and a
-                    decision should not look like a stat bump. */}
-                {node.kind === 'keystone' ? (
-                  <rect
-                    x={node.x - r} y={node.y - r} width={r * 2} height={r * 2}
-                    transform={`rotate(45 ${node.x} ${node.y})`}
-                    fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
-                    stroke={node.taken || node.reachable ? hue : '#2b2620'}
-                    strokeWidth={lit ? 0.8 : 0.5}
-                  />
-                ) : (
-                  <circle
-                    cx={node.x} cy={node.y} r={r}
-                    fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
-                    stroke={node.taken || node.reachable ? hue : '#2b2620'}
-                    strokeWidth={lit ? 0.8 : node.reachable && !node.taken ? 0.55 : 0.35}
-                  />
-                )}
+                  {/* Keystones are diamonds. They are the decisions, and a
+                      decision should not look like a stat bump. */}
+                  {node.kind === 'keystone' ? (
+                    <rect
+                      x={at.x - r} y={at.y - r} width={r * 2} height={r * 2}
+                      transform={`rotate(45 ${at.x} ${at.y})`}
+                      fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
+                      stroke={node.taken || node.reachable ? hue : '#2b2620'}
+                      strokeWidth={lit ? 0.8 : 0.5}
+                    />
+                  ) : (
+                    <circle
+                      cx={at.x} cy={at.y} r={r}
+                      fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
+                      stroke={node.taken || node.reachable ? hue : '#2b2620'}
+                      strokeWidth={lit ? 0.8 : node.reachable && !node.taken ? 0.55 : 0.35}
+                    />
+                  )}
 
-                {/* Notables carry a pip, so the ones that teach read at a glance. */}
-                {node.kind === 'notable' && (
-                  <circle cx={node.x} cy={node.y} r={0.7} fill={node.taken ? '#14110e' : hue} />
-                )}
+                  {/* Notables carry a pip, so the ones that teach read at a glance. */}
+                  {node.kind === 'notable' && (
+                    <circle cx={at.x} cy={at.y} r={0.7} fill={node.taken ? '#14110e' : hue} />
+                  )}
 
-                {lit && (
-                  <circle
-                    cx={node.x} cy={node.y} r={r + 1.8}
-                    fill="none" stroke={hue} strokeWidth={0.35} opacity={0.9}
-                  />
-                )}
+                  {lit && (
+                    <circle
+                      cx={at.x} cy={at.y} r={r + 1.8}
+                      fill="none" stroke={hue} strokeWidth={0.35} opacity={0.9}
+                    />
+                  )}
 
-                {/* A generous invisible target: the nodes are small on purpose. */}
-                <circle cx={node.x} cy={node.y} r={r + 1.6} fill="transparent" />
-              </g>
-            );
-          })}
+                  {/* A generous invisible target: the nodes are small on purpose. */}
+                  <circle cx={at.x} cy={at.y} r={r + 1.6} fill="transparent" />
+                </g>
+              );
+            })}
+          </g>
         </svg>
 
-        {shown && <NodeCard node={shown} />}
+        {shown && <NodeCard node={shown} offsets={offsets} camera={camera} />}
+
+        <p className="tree-hint muted">drag to move · wheel to zoom · drag a node to rearrange</p>
       </div>
     </div>
   );
