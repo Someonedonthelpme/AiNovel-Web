@@ -11,13 +11,21 @@
  * they are good for lives here.
  */
 
-export const LOCAL_BASE_URL = process.env.LOCAL_LLM_URL ?? 'http://192.168.0.108:1234/v1';
+import { config } from '../config.ts';
+
+export const LOCAL_BASE_URL: string = config.localLlmUrl;
 
 export const LOCAL_MODELS = {
   /** Fast and small. English classification and the dev harness only. */
   small: 'llama-3.2-3b-instruct-abliterated',
   /** Coherent Thai, ~37 tok/s. Structure generation and Thai classification. */
   large: 'huihui-qwen3.6-35b-a3b-claude-4.7-opus-abliterated-mtp',
+  /**
+   * The Writer. Measured 15/15 on Thai register adherence at ~1s per passage,
+   * against 8/15 for the 35B — see scripts/register-bench.ts. Fits entirely in
+   * 16 GB of VRAM, which is why it is both better and faster.
+   */
+  writer: 'typhoon2.1-gemma3-12b',
   /** English-only: Thai collapses to a single vector. See probeEmbeddingSeparation. */
   embedNomic: 'text-embedding-nomic-embed-text-v1.5',
   /** Multilingual, no input prefixes required. */
@@ -27,7 +35,7 @@ export const LOCAL_MODELS = {
 } as const;
 
 /** The embedder the app uses. Swap after verifying with scripts/compare-embedders.ts. */
-export const DEFAULT_EMBED_MODEL: string = process.env.LOCAL_EMBED_MODEL ?? LOCAL_MODELS.embedBgeM3;
+export const DEFAULT_EMBED_MODEL: string = config.embedModel;
 
 export type EmbedOptions = { model?: string; signal?: AbortSignal };
 

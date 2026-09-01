@@ -1,0 +1,236 @@
+import { describeMental, describePersonality } from '../character/persona.ts';
+import { ABILITIES } from '../combat/types.ts';
+import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
+import { CLASSES } from '../play/state.ts';
+import { activeRegion } from '../world/travel.ts';
+import type { Provider } from './provider.ts';
+import type { WriterBrief } from './redact.ts';
+
+/**
+ * The Director decides what happens; it never decides whether you succeed.
+ *
+ * The key move is the TIER COMMITMENT: when a check is called for, the Director
+ * writes the consequences of hitting, partially succeeding and missing — all
+ * three — before any dice are rolled. It cannot bias the outcome because it does
+ * not know which branch will fire, and it costs one call per turn rather than
+ * two.
+ *
+ * Everything is asked for in the flattest shape that still carries the meaning.
+ * A field the model does not have to produce is a field it cannot get wrong.
+ */
+
+const str = { type: 'string' } as const;
+
+const obj = (properties: Record<string, unknown>, required: string[]) => ({
+  type: 'object',
+  properties,
+  required,
+  additionalProperties: false,
+});
+
+/** Deliberately flat: sentinels instead of nullables, one trust target. */
+const deltaSchema = obj(
+  {
+    moveTo: str,
+    learnFacts: { type: 'array', items: str, maxItems: 3 },
+    trustPerson: str,
+    trustChange: { type: 'integer', minimum: -3, maximum: 3 },
+    timeSpent: { type: 'integer', minimum: 0, maximum: 3 },
+    revealExit: str,
+    /** Whether a fight breaks out. What shows up is decided by depth, not here. */
+    startCombat: { type: 'boolean' },
+  },
+  ['moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'timeSpent', 'revealExit', 'startCombat'],
+);
+
+const outcomeSchema = obj({ narrate: str, delta: deltaSchema }, ['narrate', 'delta']);
+
+export const DIRECTOR_SCHEMA = obj(
+  {
+    classification: { type: 'string', enum: [...CLASSES] },
+    addressedPerson: str,
+    check: obj(
+      {
+        required: { type: 'boolean' },
+        ability: { type: 'string', enum: [...ABILITIES] },
+        vsPerson: str,
+        onHit: outcomeSchema,
+        onPartial: outcomeSchema,
+        onMiss: outcomeSchema,
+      },
+      ['required', 'ability', 'vsPerson', 'onHit', 'onPartial', 'onMiss'],
+    ),
+    delta: deltaSchema,
+    brief: obj(
+      {
+        intent: str,
+        mustInclude: { type: 'array', items: str, maxItems: 3 },
+        mustNotMention: { type: 'array', items: str, maxItems: 3 },
+        tone: str,
+        length: { type: 'string', enum: ['short', 'medium'] },
+      },
+      ['intent', 'mustInclude', 'mustNotMention', 'tone', 'length'],
+    ),
+  },
+  ['classification', 'addressedPerson', 'check', 'delta', 'brief'],
+);
+
+export type FlatDelta = {
+  moveTo: string;
+  learnFacts: string[];
+  trustPerson: string;
+  trustChange: number;
+  timeSpent: number;
+  revealExit: string;
+  startCombat: boolean;
+};
+
+export type Outcome = { narrate: string; delta: FlatDelta };
+
+export type DirectorOutput = {
+  classification: Classification;
+  addressedPerson: string;
+  check: {
+    required: boolean;
+    ability: string;
+    vsPerson: string;
+    onHit: Outcome;
+    onPartial: Outcome;
+    onMiss: Outcome;
+  };
+  delta: FlatDelta;
+  brief: WriterBrief;
+};
+
+/**
+ * Words a model reaches for when it means "nothing here".
+ *
+ * The schema asks for an empty string, but models answer an optional field with
+ * "none" or "null" often enough that treating those literally produces a stream
+ * of refusals for a place called "none".
+ */
+const EMPTY_SENTINELS = new Set(['', 'none', 'null', 'nil', 'n/a', 'na', '-', 'nobody', 'no one', 'ไม่มี']);
+
+const meaningful = (value: string | undefined): string | null => {
+  const trimmed = (value ?? '').trim();
+  return trimmed && !EMPTY_SENTINELS.has(trimmed.toLowerCase()) ? trimmed : null;
+};
+
+/** Flat shape from the model back into the delta the engine validates. */
+export function toWorldDelta(flat: FlatDelta): WorldDelta {
+  const delta: WorldDelta = {};
+  const moveTo = meaningful(flat.moveTo);
+  const revealExit = meaningful(flat.revealExit);
+  const trustPerson = meaningful(flat.trustPerson);
+
+  if (moveTo) delta.moveTo = moveTo;
+  if (revealExit) delta.revealExit = revealExit;
+  if (flat.learnFacts?.length) {
+    const facts = flat.learnFacts.filter((f) => meaningful(f));
+    if (facts.length) delta.learnFacts = facts;
+  }
+  if (trustPerson && flat.trustChange) delta.trust = { [trustPerson]: flat.trustChange };
+  if (typeof flat.timeSpent === 'number') delta.timeSpent = flat.timeSpent;
+  if (flat.startCombat) delta.startCombat = true;
+  return delta;
+}
+
+/** Merge the unconditional delta with the one the dice selected. */
+export function mergeDeltas(base: WorldDelta, outcome: WorldDelta): WorldDelta {
+  const trust = { ...(base.trust ?? {}) };
+  for (const [id, change] of Object.entries(outcome.trust ?? {})) {
+    trust[id] = (trust[id] ?? 0) + change;
+  }
+  return {
+    moveTo: outcome.moveTo ?? base.moveTo,
+    revealExit: outcome.revealExit ?? base.revealExit,
+    learnFacts: [...(base.learnFacts ?? []), ...(outcome.learnFacts ?? [])],
+    trust: Object.keys(trust).length ? trust : undefined,
+    flags: { ...(base.flags ?? {}), ...(outcome.flags ?? {}) },
+    timeSpent: Math.max(base.timeSpent ?? 0, outcome.timeSpent ?? 0),
+    startCombat: base.startCombat || outcome.startCombat,
+  };
+}
+
+/**
+ * What the Director is allowed to see, rendered as text.
+ *
+ * The affordance list matters most: it is the anti-drift device. The Director
+ * chooses from what this place actually offers rather than inventing somewhere
+ * new, which is why a world with edges cannot wander.
+ */
+export function directorContext(state: PlayState, canonFacts: string[]): string {
+  const region = activeRegion(state.world);
+  const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  const exits = place?.connections ?? [];
+
+  const people = (place?.people ?? [])
+    .map((id) => state.world.people[id])
+    .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    .map((p) => {
+      const notes = [...describePersonality(p.personality), ...describeMental(p.mental)];
+      return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${p.trust}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
+    });
+
+  return [
+    `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0})`,
+    `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
+    `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
+    `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
+    people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',
+    canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
+    `Character: ${state.sheet.name}, ${state.sheet.background.name}. Traits: ${state.sheet.traits.join(', ') || '—'}`,
+    `Skills: ${state.sheet.background.grantsSkills.map((s) => s.name).join(', ') || '—'}`,
+  ].filter(Boolean).join('\n');
+}
+
+const SYSTEM = [
+  'You are the Director of a tower-climbing RPG. You decide what HAPPENS.',
+  'You never decide whether the player succeeds — dice do that, outside you.',
+  '',
+  'When the action is uncertain, set check.required to true and write the',
+  'consequences of ALL THREE outcomes: onHit, onPartial and onMiss. You are',
+  'committing to every branch before the dice are rolled, so write a real',
+  'failure, not a softer version of success. A miss must still move the scene.',
+  '',
+  'When nothing is at stake, set check.required to false and leave the three',
+  'outcomes empty.',
+  '',
+  'Set startCombat only when something actually attacks: a fight is a real risk',
+  'of death, not a way to add tension. What shows up is decided by the floor.',
+  '',
+  'moveTo must be one of the connected places, or empty. Never invent a place,',
+  'a person, or an exit that is not listed. trustPerson must be an id from the',
+  'people list. learnFacts are new truths the player just established.',
+  '',
+  'Classification: ADVANCES if this pushes toward what the player wants,',
+  'NEUTRAL if it is colour, DIVERGES if it wanders (allow it — it just costs',
+  'time), IMPOSSIBLE if the character could not do it (reframe it in-fiction,',
+  'never refuse out-of-fiction).',
+].join('\n');
+
+export async function runDirector(
+  provider: Provider,
+  state: PlayState,
+  input: string,
+  mode: Mode,
+  canonFacts: string[],
+): Promise<DirectorOutput> {
+  return provider.structured<DirectorOutput>({
+    schemaName: 'director_turn',
+    schema: DIRECTOR_SCHEMA,
+    temperature: 0.7,
+    messages: [
+      { role: 'system', content: SYSTEM },
+      {
+        role: 'user',
+        content: [
+          directorContext(state, canonFacts),
+          '',
+          `Mode: ${mode}`,
+          `Player: ${input}`,
+        ].join('\n'),
+      },
+    ],
+  });
+}

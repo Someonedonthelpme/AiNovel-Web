@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bandFor, readPlayerRegister, registerConsequence, registerFor } from './register.ts';
-import { npc } from '../worldgen/fixtures.ts';
+import type { NpcVoice } from '../world/types.ts';
+
+const speaker = (id: string, voice: Partial<NpcVoice>) => ({
+  id,
+  voice: { selfPronoun: '', underStress: '', addressBands: {}, particleBands: {}, tics: [], ...voice },
+});
 
 const bands = { '-3': 'คุณ', '0': 'คุณ', '2': 'เธอ', '4': 'ชื่อเล่น' };
 
@@ -19,8 +24,8 @@ test('trust below every band yields no address form', () => {
 });
 
 test('crossing a trust band changes the address form and the particle', () => {
-  const n = npc('doctor', {
-    voice: { selfPronoun: 'ดิฉัน', addressBands: bands, particleBands: { '-3': 'ค่ะ', '2': 'นะ' }, tics: [] },
+  const n = speaker('doctor', {
+    selfPronoun: 'ดิฉัน', addressBands: bands, particleBands: { '-3': 'ค่ะ', '2': 'นะ' },
   });
   const cold = registerFor(n, 0);
   const warm = registerFor(n, 2);
@@ -32,8 +37,8 @@ test('crossing a trust band changes the address form and the particle', () => {
 });
 
 test('two NPCs shift differently at the same trust, per their own sheets', () => {
-  const a = npc('a', { voice: { selfPronoun: 'ดิฉัน', addressBands: { '0': 'คุณ', '2': 'เธอ' }, particleBands: { '0': 'ค่ะ' }, tics: [] } });
-  const b = npc('b', { voice: { selfPronoun: 'ข้า', addressBands: { '0': 'เจ้า' }, particleBands: { '0': 'วะ' }, tics: [] } });
+  const a = speaker('a', { selfPronoun: 'ดิฉัน', addressBands: { '0': 'คุณ', '2': 'เธอ' }, particleBands: { '0': 'ค่ะ' } });
+  const b = speaker('b', { selfPronoun: 'ข้า', addressBands: { '0': 'เจ้า' }, particleBands: { '0': 'วะ' } });
   assert.notEqual(registerFor(a, 2).addressesPlayerAs, registerFor(b, 2).addressesPlayerAs);
   assert.notEqual(registerFor(a, 2).particle, registerFor(b, 2).particle);
 });

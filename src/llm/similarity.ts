@@ -1,10 +1,10 @@
-import type { ClueId } from '../engine/types.ts';
+import type { FactId } from '../world/types.ts';
 
 /**
- * Semantic matching over the clue graph.
+ * Semantic matching over established canon.
  *
  * A generated world creates two questions the engine has to answer on every
- * turn: "has the player already learned this?" and "which clue does this
+ * turn: "has the player already learned this?" and "which fact does this
  * utterance refer to?". Both are similarity lookups, and doing them locally
  * makes them free, instant and deterministic instead of another model call.
  *
@@ -26,41 +26,41 @@ export function cosine(a: readonly number[], b: readonly number[]): number {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
-export type ClueMatch = { clue: ClueId; score: number };
+export type FactMatch = { fact: FactId; score: number };
 
-export type ClueVectors = { clue: ClueId; vector: readonly number[] }[];
+export type FactVectors = { fact: FactId; vector: readonly number[] }[];
 
 /**
- * Rank clues by similarity to an utterance.
+ * Rank facts by similarity to an utterance.
  *
  * `threshold` is deliberately a caller decision: matching for "did the player
  * just learn this" wants to be strict, while "what are they asking about" can
  * be loose.
  */
-export function rankClues(query: readonly number[], vectors: ClueVectors, opts: { threshold?: number; limit?: number } = {}): ClueMatch[] {
+export function rankFacts(query: readonly number[], vectors: FactVectors, opts: { threshold?: number; limit?: number } = {}): FactMatch[] {
   const threshold = opts.threshold ?? 0;
   const limit = opts.limit ?? vectors.length;
   return vectors
-    .map((v) => ({ clue: v.clue, score: cosine(query, v.vector) }))
+    .map((v) => ({ fact: v.fact, score: cosine(query, v.vector) }))
     .filter((m) => m.score >= threshold)
-    .sort((a, b) => b.score - a.score || a.clue.localeCompare(b.clue))
+    .sort((a, b) => b.score - a.score || a.fact.localeCompare(b.fact))
     .slice(0, limit);
 }
 
 /** The single best match, or null when nothing clears the bar. */
-export function bestClue(query: readonly number[], vectors: ClueVectors, threshold: number): ClueMatch | null {
-  return rankClues(query, vectors, { threshold, limit: 1 })[0] ?? null;
+export function bestFact(query: readonly number[], vectors: FactVectors, threshold: number): FactMatch | null {
+  return rankFacts(query, vectors, { threshold, limit: 1 })[0] ?? null;
 }
 
 /**
- * Clues the player does not already know, ranked by relevance — what the
+ * Facts the player does not already know, ranked by relevance — what the
  * Director should be considering revealing this turn.
  */
 export function candidateReveals(
   query: readonly number[],
-  vectors: ClueVectors,
-  known: ReadonlySet<ClueId>,
+  vectors: FactVectors,
+  known: ReadonlySet<FactId>,
   opts: { threshold?: number; limit?: number } = {},
-): ClueMatch[] {
-  return rankClues(query, vectors.filter((v) => !known.has(v.clue)), opts);
+): FactMatch[] {
+  return rankFacts(query, vectors.filter((v) => !known.has(v.fact)), opts);
 }

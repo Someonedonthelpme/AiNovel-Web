@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bestClue, candidateReveals, cosine, rankClues } from './similarity.ts';
+import { bestFact, candidateReveals, cosine, rankFacts } from './similarity.ts';
 import { extractJson } from './local.ts';
 
 const v = (...xs: number[]) => xs;
@@ -21,37 +21,37 @@ test('cosine rejects mismatched dimensions instead of returning nonsense', () =>
 });
 
 const vectors = [
-  { clue: 'c1', vector: v(1, 0, 0) },
-  { clue: 'c2', vector: v(0, 1, 0) },
-  { clue: 'c3', vector: v(0.9, 0.1, 0) },
+  { fact: 'c1', vector: v(1, 0, 0) },
+  { fact: 'c2', vector: v(0, 1, 0) },
+  { fact: 'c3', vector: v(0.9, 0.1, 0) },
 ];
 
 test('ranking orders by similarity, best first', () => {
-  const r = rankClues(v(1, 0, 0), vectors);
-  assert.deepEqual(r.map((x) => x.clue), ['c1', 'c3', 'c2']);
+  const r = rankFacts(v(1, 0, 0), vectors);
+  assert.deepEqual(r.map((x) => x.fact), ['c1', 'c3', 'c2']);
 });
 
 test('the threshold excludes weak matches', () => {
-  const r = rankClues(v(1, 0, 0), vectors, { threshold: 0.5 });
-  assert.deepEqual(r.map((x) => x.clue), ['c1', 'c3']);
+  const r = rankFacts(v(1, 0, 0), vectors, { threshold: 0.5 });
+  assert.deepEqual(r.map((x) => x.fact), ['c1', 'c3']);
 });
 
-test('bestClue returns null when nothing clears the bar', () => {
-  assert.equal(bestClue(v(0, 0, 1), vectors, 0.5), null);
-  assert.equal(bestClue(v(1, 0, 0), vectors, 0.5)?.clue, 'c1');
+test('bestFact returns null when nothing clears the bar', () => {
+  assert.equal(bestFact(v(0, 0, 1), vectors, 0.5), null);
+  assert.equal(bestFact(v(1, 0, 0), vectors, 0.5)?.fact, 'c1');
 });
 
 test('ties break deterministically by id', () => {
   const tied = [
-    { clue: 'z', vector: v(1, 0) },
-    { clue: 'a', vector: v(1, 0) },
+    { fact: 'z', vector: v(1, 0) },
+    { fact: 'a', vector: v(1, 0) },
   ];
-  assert.deepEqual(rankClues(v(1, 0), tied).map((x) => x.clue), ['a', 'z']);
+  assert.deepEqual(rankFacts(v(1, 0), tied).map((x) => x.fact), ['a', 'z']);
 });
 
 test('candidate reveals exclude what the player already knows', () => {
   const r = candidateReveals(v(1, 0, 0), vectors, new Set(['c1']));
-  assert.deepEqual(r.map((x) => x.clue), ['c3', 'c2']);
+  assert.deepEqual(r.map((x) => x.fact), ['c3', 'c2']);
 });
 
 test('extractJson survives fenced output', () => {

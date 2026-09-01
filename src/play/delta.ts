@@ -1,0 +1,245 @@
+import { applyDrift } from '../character/drift.ts';
+import type { AxisChange, DriftCause } from '../character/drift.ts';
+import { readPlayerRegister } from '../llm/register.ts';
+import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
+import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
+import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
+import { TRUST_MAX, TRUST_MIN } from '../world/types.ts';
+import type { Fact, World } from '../world/types.ts';
+
+/**
+ * The trust boundary between the model and the world.
+ *
+ * The Director PROPOSES changes; this module decides which of them are legal and
+ * applies only those. An illegal move, an unknown person or a place that is not
+ * adjacent is refused with a reason rather than obeyed — and refusing one field
+ * never discards the rest of the turn.
+ */
+
+export type ValidatedDelta = { delta: WorldDelta; rejected: string[] };
+
+const MAX_TIME_PER_TURN = 3;
+const MAX_TRUST_SWING = 3;
+
+export function validateDelta(state: PlayState, proposed: WorldDelta): ValidatedDelta {
+  const rejected: string[] = [];
+  const delta: WorldDelta = {};
+  const region = activeRegion(state.world);
+
+  if (proposed.moveTo !== undefined) {
+    const reachable = exitsFrom(state.world);
+    if (proposed.moveTo === state.world.currentPlace) {
+      rejected.push(`moveTo "${proposed.moveTo}": already there`);
+    } else if (!reachable.includes(proposed.moveTo)) {
+      rejected.push(`moveTo "${proposed.moveTo}": not connected to "${state.world.currentPlace}"`);
+    } else {
+      delta.moveTo = proposed.moveTo;
+    }
+  }
+
+  if (proposed.trust) {
+    const trust: Record<string, number> = {};
+    for (const [id, change] of Object.entries(proposed.trust)) {
+      if (!state.world.people[id]) {
+        rejected.push(`trust "${id}": no such person`);
+        continue;
+      }
+      if (!Number.isFinite(change)) {
+        rejected.push(`trust "${id}": not a number`);
+        continue;
+      }
+      // One turn should not be able to swing a relationship end to end.
+      const clamped = Math.max(-MAX_TRUST_SWING, Math.min(MAX_TRUST_SWING, Math.round(change)));
+      if (clamped !== change) rejected.push(`trust "${id}": ${change} capped to ${clamped}`);
+      trust[id] = clamped;
+    }
+    if (Object.keys(trust).length) delta.trust = trust;
+  }
+
+  if (proposed.revealExit !== undefined) {
+    if (!region) {
+      rejected.push('revealExit: the current region is not loaded in full detail');
+    } else if (!region.places.some((p) => p.id === proposed.revealExit)) {
+      rejected.push(`revealExit "${proposed.revealExit}": no such place in this region`);
+    } else if (region.exit !== null && region.exit !== proposed.revealExit) {
+      // It REVEALS a way up; it does not move one. Letting this through relocated
+      // the staircase mid-play — the map went on pointing at the Tower Stair
+      // while the real exit had become the gate out of town, and the floor could
+      // not be climbed from anywhere the player was told to stand.
+      rejected.push(`revealExit "${proposed.revealExit}": the way up is already known`);
+    } else {
+      delta.revealExit = proposed.revealExit;
+    }
+  }
+
+  const facts = (proposed.learnFacts ?? []).map((f) => f.trim()).filter(Boolean);
+  if (facts.length) delta.learnFacts = facts;
+
+  if (proposed.flags && Object.keys(proposed.flags).length) delta.flags = { ...proposed.flags };
+
+  if (proposed.startCombat) {
+    const region = activeRegion(state.world);
+    if (!region) rejected.push('startCombat: the current region is not loaded in full detail');
+    else if (region.danger <= 0) rejected.push('startCombat: nothing hunts at ground level');
+    else if (state.combat && !state.combat.over) rejected.push('startCombat: a fight is already happening');
+    else delta.startCombat = true;
+  }
+
+  if (proposed.timeSpent !== undefined) {
+    const t = Math.max(0, Math.min(MAX_TIME_PER_TURN, Math.round(proposed.timeSpent || 0)));
+    delta.timeSpent = t;
+  }
+
+  return { delta, rejected };
+}
+
+const clampTrust = (n: number) => Math.max(TRUST_MIN, Math.min(TRUST_MAX, n));
+
+/**
+ * Apply an already-validated delta.
+ *
+ * Turn accounting lives here and nowhere else: `moveWithinRegion` advances the
+ * turn itself, so a turn without a move has to advance it explicitly. Every path
+ * through this function moves the clock exactly one turn.
+ */
+export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
+  if (state.ended) return state;
+
+  let world: World = state.world;
+  let turnAdvanced = false;
+
+  if (delta.moveTo) {
+    const moved = moveWithinRegion(world, delta.moveTo);
+    if (moved.kind === 'moved') {
+      world = moved.world;
+      turnAdvanced = true;
+    }
+  }
+
+  if (delta.trust) {
+    const people = { ...world.people };
+    for (const [id, change] of Object.entries(delta.trust)) {
+      const person = people[id];
+      if (!person) continue;
+      people[id] = { ...person, trust: clampTrust(person.trust + change), lastSeenTurn: world.turn };
+    }
+    world = { ...world, people };
+  }
+
+  if (delta.revealExit) {
+    const region = activeRegion(world);
+    if (region) {
+      world = {
+        ...world,
+        regions: { ...world.regions, [region.id]: { ...region, exit: delta.revealExit } },
+      };
+    }
+  }
+
+  if (delta.learnFacts?.length) {
+    const known = new Set(world.facts.map((f) => f.text));
+    const added: Fact[] = delta.learnFacts
+      .filter((text) => !known.has(text))
+      .map((text, i) => ({
+        id: `f${world.facts.length + i + 1}`,
+        text,
+        region: world.currentRegion,
+        people: [],
+        establishedAtTurn: world.turn,
+      }));
+    if (added.length) world = { ...world, facts: [...world.facts, ...added] };
+  }
+
+  if (delta.flags) world = { ...world, flags: { ...world.flags, ...delta.flags } };
+
+  if (!turnAdvanced) world = { ...world, turn: world.turn + 1 };
+
+  return { ...state, world };
+}
+
+/**
+ * What this turn did to the people in it.
+ *
+ * Derived from the record rather than passed in, so replaying a log produces
+ * exactly the same drift — if this lived only in `playTurn`, a resumed session
+ * would quietly lose every personality change that had ever happened.
+ */
+function causesFor(state: PlayState, record: TurnRecord): { npc: DriftCause[]; pc: DriftCause[] } {
+  const npc: DriftCause[] = [];
+  const pc: DriftCause[] = [];
+
+  if (record.roll) {
+    npc.push({ kind: 'check', tier: record.roll.tier });
+    pc.push({ kind: 'check', tier: record.roll.tier });
+  }
+
+  const trustChange = record.addressed ? record.delta.trust?.[record.addressed] ?? 0 : 0;
+  if (trustChange) npc.push({ kind: 'trust', change: trustChange });
+
+  if (record.addressed) {
+    // How the player chose to speak is itself an act, and a repeated one
+    // eventually changes how they are regarded.
+    npc.push({ kind: 'address', tone: readPlayerRegister(record.input).tone });
+  }
+
+  if (record.delta.timeSpent) pc.push({ kind: 'travel', cost: record.delta.timeSpent });
+
+  const region = state.world.regions[state.world.currentRegion];
+  if (region && region.detail === 'full' && region.danger > 0) {
+    pc.push({ kind: 'danger', level: region.danger });
+  }
+
+  return { npc, pc };
+}
+
+export type TurnOutcome = {
+  state: PlayState;
+  /** Dispositions that actually shifted. Worth narrating; most turns have none. */
+  shifts: AxisChange[];
+};
+
+export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
+  let moved = applyDelta(state, record.delta);
+
+  if (record.delta.startCombat) {
+    const fight = beginEncounter(moved);
+    if (record.combatActions) {
+      // REPLAY. The decisions are known, and every roll comes from state, so
+      // this reproduces the original encounter exactly.
+      let fighting = fight;
+      for (const action of record.combatActions) {
+        fighting = takeCombatAction(fighting, action).state;
+      }
+      moved = concludeCombat(fighting).state;
+    } else {
+      // LIVE. The fight is opened and left running; the caller drives it, and
+      // records the decisions onto this turn when it ends.
+      moved = fight;
+    }
+  }
+
+  if (moved.ended) return { state: moved, shifts: [] };
+
+  const causes = causesFor(moved, record);
+  const player = applyDrift(moved.sheet, causes.pc);
+
+  let world = moved.world;
+  let shifts: AxisChange[] = [];
+
+  const person = record.addressed ? world.people[record.addressed] : undefined;
+  if (person && causes.npc.length) {
+    const drifted = applyDrift(person, causes.npc);
+    world = { ...world, people: { ...world.people, [person.id]: { ...person, ...drifted.persona } } };
+    shifts = drifted.changed;
+  }
+
+  return { state: { ...moved, world, sheet: { ...moved.sheet, ...player.persona } }, shifts };
+}
+
+export function foldPlay(initial: PlayState, events: readonly { kind: string }[]): PlayState {
+  let state = initial;
+  for (const event of events) {
+    if (event.kind === 'turn') state = applyTurn(state, event as TurnRecord).state;
+  }
+  return state;
+}

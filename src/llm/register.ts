@@ -1,4 +1,5 @@
-import type { Npc, Status } from '../engine/types.ts';
+import type { MentalState, NpcVoice, Personality, Status } from '../character/persona.ts';
+import { registerTrust } from '../character/persona.ts';
 
 /**
  * The signature mechanic: the trust stat IS the language.
@@ -36,13 +37,30 @@ export function bandFor(trust: number, bands: Record<string, string>): string | 
   return best ? best.value : null;
 }
 
-export function registerFor(npc: Npc, trust: number): RegisterInstruction {
+/** Anything with a voice can be addressed — a Person, or a test double. */
+export type Speaker = { id: string; voice: NpcVoice };
+
+/**
+ * Register for someone whose disposition is known.
+ *
+ * A warm person opens up sooner than the bare trust number says; a cold one
+ * keeps you at arm's length longer; someone badly rattled retreats into
+ * formality. Reading the band through the persona is what makes personality
+ * something the player HEARS rather than a number on a sheet.
+ */
+export function registerForPerson(
+  who: Speaker & { trust: number; personality: Personality; mental: MentalState },
+): RegisterInstruction {
+  return registerFor(who, registerTrust(who.trust, who.personality, who.mental));
+}
+
+export function registerFor(who: Speaker, trust: number): RegisterInstruction {
   return {
-    npc: npc.id,
-    selfPronoun: npc.voice.selfPronoun,
-    addressesPlayerAs: bandFor(trust, npc.voice.addressBands) ?? '',
-    particle: bandFor(trust, npc.voice.particleBands) ?? '',
-    tics: npc.voice.tics,
+    npc: who.id,
+    selfPronoun: who.voice.selfPronoun,
+    addressesPlayerAs: bandFor(trust, who.voice.addressBands) ?? '',
+    particle: bandFor(trust, who.voice.particleBands) ?? '',
+    tics: who.voice.tics,
     trust,
   };
 }
@@ -190,4 +208,26 @@ export function checkRegister(
     forbiddenFound,
     isThai: thai,
   };
+}
+
+/** The forms a Thai speaker picks between. Used to detect band mixing. */
+const SELF_FORMS = ['ดิฉัน', 'กระผม', 'ผม', 'ฉัน', 'หนู', 'กู', 'ข้า'];
+const ADDRESS_FORMS = ['คุณ', 'ท่าน', 'เธอ', 'มึง', 'เจ้า'];
+
+/**
+ * Forms from OTHER bands, which must not appear alongside the required ones.
+ *
+ * Checking only that the right pronoun is present lets a model hedge — one
+ * character introducing herself with the polite female form and then switching
+ * to the male one two lines later. Mixing bands IS register drift, so the
+ * competing forms have to be banned explicitly.
+ *
+ * Particles are deliberately excluded: Thai stacks them naturally, and banning
+ * them produces false alarms.
+ */
+export function competingForms(want: { selfPronoun: string; addressesPlayerAs: string }): string[] {
+  return [
+    ...SELF_FORMS.filter((f) => f !== want.selfPronoun),
+    ...ADDRESS_FORMS.filter((f) => f !== want.addressesPlayerAs),
+  ];
 }

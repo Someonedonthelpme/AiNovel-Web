@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkRegister, containsForm, isThai } from './register.ts';
+import { checkRegister, competingForms, containsForm, isThai } from './register.ts';
 
 const want = { selfPronoun: 'ดิฉัน', addressesPlayerAs: 'คุณ', particle: 'ค่ะ' };
 
@@ -90,4 +90,28 @@ test('a banned form that is a substring of a required one is not a false positiv
   const r = checkRegister('ดิฉันไม่ทราบว่าคุณหมายถึงอะไรค่ะ', formal, ['ฉัน']);
   assert.deepEqual(r.forbiddenFound, [], 'the short pronoun only appears inside the long one');
   assert.equal(r.ok, true);
+});
+
+test('competing forms exclude the ones actually required', () => {
+  const forms = competingForms({ selfPronoun: 'ดิฉัน', addressesPlayerAs: 'คุณ' });
+  assert.equal(forms.includes('ดิฉัน'), false, 'the required self form is not banned');
+  assert.equal(forms.includes('คุณ'), false, 'nor the required address form');
+  assert.ok(forms.includes('ผม'), 'but the male form is');
+  assert.ok(forms.includes('เธอ'));
+});
+
+test('a speaker who switches gender mid-passage is caught', () => {
+  // Observed live: she introduces herself as ดิฉัน then switches to ผม.
+  const want = { selfPronoun: 'ดิฉัน', addressesPlayerAs: 'คุณ', particle: 'ค่ะ' };
+  const drifted = 'สวัสดีค่ะ ดิฉันศิรประภา คุณกำลังถามถึงน้องชายเหรอครับ ผมเคยเห็นเขา';
+  const r = checkRegister(drifted, want, competingForms(want));
+  assert.equal(r.usedSelfPronoun, true, 'the required form IS present');
+  assert.ok(r.forbiddenFound.includes('ผม'), 'but a competing one is too');
+  assert.equal(r.ok, false, 'mixing bands is drift, not compliance');
+});
+
+test('particles are not treated as competing, because Thai stacks them', () => {
+  const forms = competingForms({ selfPronoun: 'ฉัน', addressesPlayerAs: 'เธอ' });
+  assert.equal(forms.includes('ค่ะ'), false);
+  assert.equal(forms.includes('นะ'), false);
 });
