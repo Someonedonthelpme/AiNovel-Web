@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CombatView, GameView, TurnOutcomeView } from '../../../src/server/game.ts';
 import type { CombatAction } from '../../../src/play/combat.ts';
+import type { SheetAction } from '../../../src/play/sheetaction.ts';
+import { CharacterPanel, SkillsPanel } from './Panels.tsx';
 
 /** A signed −3..+3 axis, drawn from the centre so direction reads at a glance. */
 function AxisBar({ label, value }: { label: string; value: number }) {
@@ -165,6 +167,7 @@ export default function Game({ initial }: { initial: GameView }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [lastShifts, setLastShifts] = useState<string[]>([]);
+  const [panel, setPanel] = useState<null | 'character' | 'skills'>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -220,6 +223,34 @@ export default function Game({ initial }: { initial: GameView }) {
     }
   }
 
+  /**
+   * A panel action.
+   *
+   * Goes to the server and comes back as a whole view: the sheet is a fold of
+   * the log, so the browser must never patch its own copy.
+   */
+  async function actOnSheet(action: SheetAction) {
+    if (busy) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/sessions/${view.id}/sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'that did not work');
+      if (data.error) setNotice(data.error);
+      else if (data.note) setNotice(data.note);
+      setView(data.view);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function ascend() {
     if (busy) return;
     setBusy(true);
@@ -245,8 +276,15 @@ export default function Game({ initial }: { initial: GameView }) {
       <div className="game">
         {/* ---------------------------------------------------- the sheet */}
         <div className="col">
-          <section className="panel">
-            <p className="label">Character</p>
+          <section
+            className="panel opens"
+            onClick={() => setPanel('character')}
+            title="Inventory, experience and unspent points"
+          >
+            <p className="label">
+              Character
+              {c.abilityPoints > 0 && <span className="points"> · {c.abilityPoints} point{c.abilityPoints > 1 ? 's' : ''}</span>}
+            </p>
             <h3 style={{ margin: '0 0 0.1rem' }}>{c.name}</h3>
             <p className="muted" style={{ margin: '0 0 0.9rem', fontSize: '0.85rem' }}>
               {c.background} · level {c.level}
@@ -282,9 +320,12 @@ export default function Game({ initial }: { initial: GameView }) {
             <AxisBar label="morale" value={c.mental.morale} />
           </section>
 
-          {c.skills.length > 0 && (
-            <section className="panel">
-              <p className="label">Skills</p>
+          {(
+            <section className="panel opens" onClick={() => setPanel('skills')} title="Tree, traits and signets">
+              <p className="label">
+                Skills
+                {c.skillPoints > 0 && <span className="points"> · {c.skillPoints} to spend</span>}
+              </p>
               {c.skills.map((s) => (
                 <div key={s.name} style={{ marginBottom: '0.6rem' }}>
                   <strong style={{ fontSize: '0.9rem' }}>{s.name}</strong>{' '}
@@ -451,6 +492,12 @@ export default function Game({ initial }: { initial: GameView }) {
           </section>
         </div>
       </div>
+      {panel === 'character' && (
+        <CharacterPanel view={view} act={actOnSheet} busy={busy} onClose={() => setPanel(null)} />
+      )}
+      {panel === 'skills' && (
+        <SkillsPanel view={view} act={actOnSheet} busy={busy} onClose={() => setPanel(null)} />
+      )}
     </main>
   );
 }

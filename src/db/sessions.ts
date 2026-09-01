@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, gt, max, sql } from 'drizzle-orm';
+import { initialPlayState } from '../play/state.ts';
+import type { SheetRecord } from '../play/sheetaction.ts';
 import { foldPlay } from '../play/delta.ts';
 import type { PlayEvent, PlayState, TurnRecord } from '../play/state.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
@@ -50,7 +52,7 @@ export async function createSession(
  * gap-free — they ARE the replay order, and the primary key rejects a duplicate
  * rather than letting two writers silently interleave.
  */
-export async function appendTurn(sessionId: string, record: TurnRecord): Promise<number> {
+export async function appendTurn(sessionId: string, record: TurnRecord | SheetRecord): Promise<number> {
   const db = getDb();
   const inserted = await db
     .insert(events)
@@ -58,13 +60,16 @@ export async function appendTurn(sessionId: string, record: TurnRecord): Promise
       sessionId,
       seq: sql<number>`(SELECT COALESCE(MAX(e.seq), 0) + 1 FROM ${events} e WHERE e.session_id = ${sessionId})`,
       kind: record.kind,
-      payload: record,
+      payload: record as never,
     })
     .returning({ seq: events.seq });
 
   await db.update(sessions).set({ updatedAt: new Date() }).where(eq(sessions.id, sessionId));
   return inserted[0].seq;
 }
+
+/** Event kinds `foldPlay` knows how to apply. */
+const FOLDED_KINDS = new Set(['turn', 'sheet']);
 
 export async function loadEvents(sessionId: string, afterSeq = -1): Promise<PlayEvent[]> {
   const rows = await getDb()
@@ -73,7 +78,15 @@ export async function loadEvents(sessionId: string, afterSeq = -1): Promise<Play
     .where(and(eq(events.sessionId, sessionId), gt(events.seq, afterSeq)))
     .orderBy(events.seq);
 
-  return rows.filter((row) => row.kind === 'turn').map((row) => row.payload as PlayEvent);
+  // Everything the fold understands, and nothing else — the origin at seq 0 is
+  // the starting state, not something to replay over itself.
+  //
+  // This was `kind === 'turn'` alone, which wrote panel actions to the log and
+  // then silently dropped them on the way back: points spent and nodes taken
+  // vanished on reload. Adding an event kind means adding it here.
+  return rows
+    .filter((row) => FOLDED_KINDS.has(row.kind))
+    .map((row) => row.payload as PlayEvent);
 }
 
 /**
@@ -157,7 +170,7 @@ export async function loadSession(sessionId: string): Promise<LoadedSession | nu
     : {
         world: (origin.payload as { world: World }).world,
         sheet,
-        pc: initialPcBlock(sheet),
+        pc: initialPlayState((origin.payload as { world: World }).world, sheet).pc,
         // A fight is never persisted: it is resolved within the turn that
         // started it, and a half-finished one is not a thing to restore.
         combat: null,
@@ -173,14 +186,6 @@ export async function loadSession(sessionId: string): Promise<LoadedSession | nu
     .where(eq(events.sessionId, sessionId));
 
   return { state: foldPlay(start, replay), lastSeq: last?.seq ?? 0, replayed: replay.length };
-}
-
-/** Mirrors initialPlayState without importing it, to avoid a cycle. */
-function initialPcBlock(sheet: CharacterSheet): PlayState['pc'] {
-  const con = Math.floor((sheet.baseAbilities.con + (sheet.background.grantsStats.con ?? 0) - 10) / 2);
-  const perLevel = Math.floor(sheet.hitDie / 2) + 1;
-  const hp = Math.max(1, sheet.hitDie + con + (Math.max(1, sheet.level) - 1) * (perLevel + con));
-  return { hp, maxHp: hp, conditions: [], coin: 0 };
 }
 
 export async function listSessions(limit = 20): Promise<SessionSummary[]> {

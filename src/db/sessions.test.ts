@@ -11,6 +11,8 @@ import {
 import { applyDelta, foldPlay } from '../play/delta.ts';
 import { awaitingPlayer, beginEncounter, combatOptions, takeCombatAction } from '../play/combat.ts';
 import { playState } from '../play/fixtures.ts';
+import { sheetRecord } from '../play/sheetaction.ts';
+import { skillTreeFor } from '../play/skilltree.ts';
 import { groundFloor } from '../world/fixtures.ts';
 import type { CombatAction } from '../play/combat.ts';
 import type { PlayState, TurnRecord, WorldDelta } from '../play/state.ts';
@@ -169,6 +171,21 @@ test('a snapshot carries the whole fold, not just the world', { skip: needsDb },
   assert.deepEqual(cached?.state.ended, outcome.ended, 'a finished run stays finished across a reload');
   assert.deepEqual(cached?.state.sheet.counters, outcome.sheet.counters, 'counters survive the cache');
   assert.deepEqual(cached?.state, outcome, 'the cache agrees with the replay in full');
+});
+
+test('a panel action survives a reload', { skip: needsDb }, async () => {
+  // Regression: sheet events were written to the log and then filtered out on
+  // the way back, so a point spent or a node taken looked applied in the
+  // browser and was gone the moment the page reloaded.
+  const { id, base } = await newSession();
+  const tree = skillTreeFor(base.world.seed, base.sheet.background.id, base.sheet.language);
+  const firstStep = tree.nodes.find((n) => n.ring === 1)!;
+
+  await appendTurn(id, sheetRecord({ type: 'allocate', node: firstStep.id }));
+
+  const loaded = await loadSession(id);
+  assert.ok(loaded?.state.sheet.allocated?.includes(firstStep.id), 'the node should still be taken');
+  assert.equal(loaded?.state.sheet.skillPoints, (base.sheet.skillPoints ?? 0) - 1, 'and the point still spent');
 });
 
 test('loading from a snapshot replays only what came after it', { skip: needsDb }, async () => {

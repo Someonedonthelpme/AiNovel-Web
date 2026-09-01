@@ -39,8 +39,15 @@ const deltaSchema = obj(
     revealExit: str,
     /** Whether a fight breaks out. What shows up is decided by depth, not here. */
     startCombat: { type: 'boolean' },
+    /** WHICH item is used. What using it does is the item's business. */
+    useItem: str,
+    equipItem: str,
+    rest: { type: 'string', enum: ['none', 'short', 'long'] },
   },
-  ['moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'timeSpent', 'revealExit', 'startCombat'],
+  [
+    'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'timeSpent', 'revealExit',
+    'startCombat', 'useItem', 'equipItem', 'rest',
+  ],
 );
 
 const outcomeSchema = obj({ narrate: str, delta: deltaSchema }, ['narrate', 'delta']);
@@ -83,6 +90,9 @@ export type FlatDelta = {
   timeSpent: number;
   revealExit: string;
   startCombat: boolean;
+  useItem: string;
+  equipItem: string;
+  rest: string;
 };
 
 export type Outcome = { narrate: string; delta: FlatDelta };
@@ -132,6 +142,13 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   if (trustPerson && flat.trustChange) delta.trust = { [trustPerson]: flat.trustChange };
   if (typeof flat.timeSpent === 'number') delta.timeSpent = flat.timeSpent;
   if (flat.startCombat) delta.startCombat = true;
+
+  const useItem = meaningful(flat.useItem) ? flat.useItem : null;
+  const equipItem = meaningful(flat.equipItem) ? flat.equipItem : null;
+  if (useItem) delta.useItem = useItem;
+  if (equipItem) delta.equipItem = equipItem;
+  if (flat.rest === 'short' || flat.rest === 'long') delta.rest = flat.rest;
+
   return delta;
 }
 
@@ -149,6 +166,9 @@ export function mergeDeltas(base: WorldDelta, outcome: WorldDelta): WorldDelta {
     flags: { ...(base.flags ?? {}), ...(outcome.flags ?? {}) },
     timeSpent: Math.max(base.timeSpent ?? 0, outcome.timeSpent ?? 0),
     startCombat: base.startCombat || outcome.startCombat,
+    useItem: outcome.useItem ?? base.useItem,
+    equipItem: outcome.equipItem ?? base.equipItem,
+    rest: outcome.rest ?? base.rest,
   };
 }
 
@@ -163,6 +183,11 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
   const exits = place?.connections ?? [];
+
+  const pack = state.pc.inventory.stacks.map((stack) => {
+    const worn = Object.values(state.pc.inventory.equipped).includes(stack.item.id) ? ', worn' : '';
+    return `  - ${stack.item.id} "${stack.item.name}" x${stack.count} (${stack.item.kind}${worn})`;
+  });
 
   const people = (place?.people ?? [])
     .map((id) => state.world.people[id])
@@ -181,6 +206,11 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
     `Character: ${state.sheet.name}, ${state.sheet.background.name}. Traits: ${state.sheet.traits.join(', ') || '—'}`,
     `Skills: ${state.sheet.background.grantsSkills.map((s) => s.name).join(', ') || '—'}`,
+    `Health: ${state.pc.hp}/${state.pc.maxHp}`,
+    // The Director has to see the pack to name an item id at all. The WRITER
+    // still must not — that boundary is unchanged. This is the side of the wall
+    // that is allowed to know what the player is carrying.
+    pack.length ? `Carrying (the ONLY legal useItem/equipItem ids):\n${pack.join('\n')}` : 'Carrying: nothing',
   ].filter(Boolean).join('\n');
 }
 
@@ -198,6 +228,11 @@ const SYSTEM = [
   '',
   'Set startCombat only when something actually attacks: a fight is a real risk',
   'of death, not a way to add tension. What shows up is decided by the floor.',
+  '',
+  'useItem and equipItem take an item id from the pack listed below, and nothing',
+  'else. Say only WHICH item is used — never how much it heals or what it does;',
+  'the item decides that. Set rest to "short" when the player makes camp or',
+  'catches their breath, and "long" only when they sleep the night through.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson must be an id from the',

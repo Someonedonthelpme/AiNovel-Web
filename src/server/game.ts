@@ -8,6 +8,14 @@ import { mulberry32 } from '../engine/roll.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import { LOCAL_MODELS } from '../llm/local.ts';
 import { LocalProvider } from '../llm/localProvider.ts';
+import { allocationOf, canAllocate, visibleNodes } from '../play/allocate.ts';
+import { applySheetAction, contextOf, sheetRecord, treeFor } from '../play/sheetaction.ts';
+import type { SheetAction } from '../play/sheetaction.ts';
+import { progressOf } from '../play/traits.ts';
+import { xpToNext } from '../play/progress.ts';
+import { TRAITS } from '../play/traitbook.ts';
+import { visibleSignets } from '../play/signet.ts';
+import { signetsFor } from '../play/signetbook.ts';
 import { climb, exitStatus } from '../play/climb.ts';
 import {
   awaitingPlayer, combatOptions, concludeCombat, notableEvents, takeCombatAction,
@@ -107,7 +115,26 @@ export type GameView = {
     personality: Personality;
     mental: MentalState;
     voice: { selfPronoun: string; underStress: string };
+    xp: number;
+    xpToNext: number;
+    abilityPoints: number;
+    skillPoints: number;
+    coin: number;
   };
+  /** What the character panel shows. */
+  inventory: {
+    stacks: { id: string; name: string; description: string; kind: string; count: number; equipped: boolean; slot: string | null; usable: boolean; wearable: boolean }[];
+    equipped: Record<string, string>;
+  };
+  /** What the skills panel shows. Hidden nodes and Signets are absent, not greyed. */
+  tree: {
+    nodes: { id: string; name: string; description: string; kind: string; x: number; y: number; connections: string[]; taken: boolean; reachable: boolean }[];
+  };
+  traits: {
+    id: string; name: string; description: string; held: boolean;
+    progress: { label: string; have: number; need: number; met: boolean }[];
+  }[];
+  signets: { id: string; name: string; description: string; held: boolean; available: boolean; augments: string }[];
   region: { floor: number; name: string; biome: string; danger: number };
   place: { id: string; name: string; description: string; affordances: string[] };
   map: { nodes: MapNode[]; edges: { from: string; to: string }[] };
@@ -153,7 +180,7 @@ function combatViewOf(state: PlayState, log: string[]): CombatView | null {
 function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], combatLog: string[] = []): GameView {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
-  const d = derive(state.sheet);
+  const d = derive(state.sheet, state.pc.inventory);
   const here = new Set(place?.connections ?? []);
 
   const positions = new Map(region ? layoutRegion(region).map((p) => [p.id, p]) : []);
@@ -192,6 +219,11 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       personality: state.sheet.personality,
       mental: state.sheet.mental,
       voice: { selfPronoun: state.sheet.voice.selfPronoun, underStress: state.sheet.voice.underStress },
+      xp: state.sheet.xp ?? 0,
+      xpToNext: xpToNext(state.sheet.level),
+      abilityPoints: state.sheet.abilityPoints ?? 0,
+      skillPoints: state.sheet.skillPoints ?? 0,
+      coin: state.pc.coin,
     },
     region: {
       floor: region?.floor ?? 0,
@@ -217,6 +249,10 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
         disposition: describePersonality(p.personality),
         condition: describeMental(p.mental),
       })),
+    inventory: inventoryViewOf(state),
+    tree: treeViewOf(state),
+    traits: traitsViewOf(state),
+    signets: signetsViewOf(state),
     suggestions: suggestedActions(state),
     canClimb: exits.canClimb,
     canDescend: exits.canDescend,
@@ -440,3 +476,131 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
 
 /** Whether a fight is waiting on the player, e.g. after a page reload. */
 export const hasActiveFight = (id: string): boolean => fights.has(id);
+
+/* -------------------------------------------------------------------------- */
+/* The panels                                                                  */
+/* -------------------------------------------------------------------------- */
+
+function inventoryViewOf(state: PlayState): GameView['inventory'] {
+  const inv = state.pc.inventory;
+  const worn = new Set(Object.values(inv.equipped));
+
+  return {
+    stacks: inv.stacks.map((stack) => ({
+      id: stack.item.id,
+      name: stack.item.name,
+      description: stack.item.description,
+      kind: stack.item.kind,
+      count: stack.count,
+      equipped: worn.has(stack.item.id),
+      slot: stack.item.slot ?? null,
+      usable: stack.item.kind === 'consumable' && Boolean(stack.item.effect),
+      wearable: stack.item.kind === 'equipment' && Boolean(stack.item.slot),
+    })),
+    equipped: { ...inv.equipped } as Record<string, string>,
+  };
+}
+
+/**
+ * The tree as the player may see it.
+ *
+ * Hidden nodes are omitted entirely rather than greyed out — a node you cannot
+ * yet earn should not be a locked door you can count, it should be somewhere
+ * the map does not go.
+ */
+function treeViewOf(state: PlayState): GameView['tree'] {
+  const tree = treeFor(state);
+  const ctx = contextOf(state);
+  const allocation = allocationOf(state.sheet, tree);
+  const visible = visibleNodes(tree, ctx);
+  const shown = new Set(visible.map((n) => n.id));
+
+  return {
+    nodes: visible.map((node) => ({
+      id: node.id,
+      name: node.name,
+      description: node.description,
+      kind: node.kind,
+      x: node.x,
+      y: node.y,
+      // Edges to nodes that are not visible would draw lines into nothing.
+      connections: node.connections.filter((c) => shown.has(c)),
+      taken: allocation.taken.includes(node.id),
+      // Structure only. Whether a point is AFFORDABLE is a separate question,
+      // and conflating them made the whole tree look dead at level one instead
+      // of showing the routes out of the centre.
+      reachable: !allocation.taken.includes(node.id) && node.connections.some((c) => allocation.taken.includes(c)),
+    })),
+  };
+}
+
+function traitsViewOf(state: PlayState): GameView['traits'] {
+  const ctx = contextOf(state);
+  const held = new Set(state.sheet.traits);
+
+  return TRAITS.map((trait) => ({
+    id: trait.id,
+    name: trait.name,
+    description: trait.description,
+    held: held.has(trait.id),
+    progress: progressOf(trait, ctx).map((p) => ({ label: p.label, have: p.have, need: p.need, met: p.met })),
+  }));
+}
+
+/**
+ * Signets, filtered twice.
+ *
+ * First by provability — anything this tower could never grant is discarded
+ * before it can become a mystery with no answer — and then by what the player
+ * has actually discovered.
+ */
+function signetsViewOf(state: PlayState): GameView['signets'] {
+  const held = state.sheet.signets ?? [];
+  const catalogue = signetsFor(state).kept;
+  const world = { flags: state.world.flags, deepestFloor: state.world.deepestFloor };
+
+  return visibleSignets(catalogue, held, contextOf(state), world).map((v) => ({
+    id: v.signet.id,
+    name: v.signet.name,
+    description: v.signet.description,
+    held: v.held,
+    available: v.available,
+    augments: v.signet.augments.id,
+  }));
+}
+
+export type SheetActionView = { view: GameView; error: string | null; note: string | null };
+
+/**
+ * A panel action: spend a point, take a node, wear something, drink something.
+ *
+ * Appended to the log like any other event, so a reload replays it. No model
+ * call — equipping a helmet is bookkeeping, not a story beat.
+ */
+export async function actOnSheet(id: string, action: SheetAction): Promise<SheetActionView | null> {
+  await bootstrap();
+
+  // A fight in progress is the live state; acting against the stored one would
+  // silently discard the encounter.
+  const fight = fights.get(id);
+  if (fight) {
+    return {
+      view: viewOf(id, fight.state, await transcriptOf(id), fight.log),
+      error: 'not in the middle of a fight',
+      note: null,
+    };
+  }
+
+  const loaded = await loadSession(id);
+  if (!loaded) return null;
+
+  const result = applySheetAction(loaded.state, action);
+  if (result.error) {
+    return { view: viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, note: null };
+  }
+
+  const seq = await appendTurn(id, sheetRecord(action));
+  if (shouldSnapshot(seq)) await saveSnapshot(id, result.state);
+
+  return { view: viewOf(id, result.state, await transcriptOf(id)), error: null, note: result.note };
+}
