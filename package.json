@@ -16,7 +16,8 @@
     "play": "node --experimental-strip-types scripts/play.ts",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "fight": "node --experimental-strip-types scripts/fight.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
