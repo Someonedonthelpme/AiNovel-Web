@@ -1,3 +1,7 @@
+import type { Persona } from '../character/persona.ts';
+export type { NpcVoice, Persona, Status } from '../character/persona.ts';
+export { STATUSES } from '../character/persona.ts';
+import type { CharacterSheet } from '../session/sheet.ts';
 /**
  * The world model.
  *
@@ -50,6 +54,8 @@ export type Region = {
   entrance: PlaceId;
   /** The way up. Null until the player finds it. */
   exit: PlaceId | null;
+  /** What lives and hunts here. Names only; encounters take numbers from depth. */
+  creatures: string[];
 };
 
 /**
@@ -74,21 +80,47 @@ export type Gazetteer = {
 
 export type RegionRecord = Region | Gazetteer;
 
+/** Trust runs across these bounds; the bands in NpcVoice key off it. */
+export const TRUST_MIN = -3;
+export const TRUST_MAX = 4;
+
+/** How a companion is meant to behave. Whether they comply is another matter. */
+export const STANCES = ['hold', 'press', 'protect', 'free'] as const;
+export type Stance = (typeof STANCES)[number];
+
 /**
  * People outlive the places they came from. This registry is never compressed.
+ *
+ * Everyone carries a persona — voice, standing, disposition, state of mind and
+ * their own tally of what they have done. That is what makes talking to them
+ * mean something, and it is cheap enough for a whole town.
+ *
+ * A full character SHEET is tiered: only people who can fight or travel with
+ * you carry one, because abilities and hit dice are expensive to generate and
+ * pointless for a face in a market.
  */
-export type Person = {
+export type Person = Persona & {
   id: PersonId;
   name: string;
   homeRegion: RegionId;
-  /** Same scale as the combat-side relationship stat; drives Thai register. */
+  /** Read through the persona: warmth and stress shift the band actually used. */
   trust: number;
   /** One line, so a long-forgotten NPC can still be written in voice. */
   oneLine: string;
   tags: string[];
   alive: boolean;
   lastSeenTurn: number;
+  /** What they pursue off-screen. Optional: most people just live their lives. */
+  agenda?: string[];
+  agendaPace?: number;
+  /** Present only for people who can fight or be recruited. */
+  sheet?: CharacterSheet;
+  recruited?: boolean;
+  stance?: Stance;
 };
+
+/** Someone who can actually take the field. */
+export const isCombatReady = (person: Person): boolean => Boolean(person.sheet);
 
 /** An established truth about the world. Retrieved, never all included. */
 export type Fact = {
@@ -109,6 +141,8 @@ export type World = {
   currentPlace: PlaceId;
   deepestFloor: number;
   turn: number;
+  /** Arbitrary switches the Director can set: doors opened, favours owed. */
+  flags: Record<string, boolean>;
 };
 
 export const regionIdFor = (floor: number): RegionId => `floor-${floor}`;

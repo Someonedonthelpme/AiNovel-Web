@@ -22,6 +22,7 @@ const secondFloor = (): Region => ({
   ),
   entrance: 'arrival',
   exit: 'spire',
+  creatures: ['glass moth'],
 });
 
 test('exits list only the connections from where you stand', () => {

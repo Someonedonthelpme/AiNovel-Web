@@ -1,4 +1,5 @@
-import type { Person, Place, PlaceId, Region, World } from './types.ts';
+import { neutralPersonality, restingMind } from '../character/persona.ts';
+import type { NpcVoice, Person, Place, PlaceId, Region, World } from './types.ts';
 
 export function place(id: PlaceId, over: Partial<Place> = {}): Place {
   return {
@@ -27,6 +28,15 @@ export function link(places: Place[], edges: [PlaceId, PlaceId][]): Place[] {
   return [...byId.values()];
 }
 
+/** A plain polite Thai voice; override per person to differentiate them. */
+export const defaultVoice = (): NpcVoice => ({
+  selfPronoun: 'ดิฉัน',
+  underStress: 'ฉัน',
+  addressBands: { '-3': 'คุณ', '0': 'คุณ', '2': 'เธอ' },
+  particleBands: { '-3': 'ค่ะ', '2': 'นะ' },
+  tics: [],
+});
+
 export function person(id: string, over: Partial<Person> = {}): Person {
   return {
     id,
@@ -37,6 +47,12 @@ export function person(id: string, over: Partial<Person> = {}): Person {
     tags: [],
     alive: true,
     lastSeenTurn: 0,
+    voice: defaultVoice(),
+    status: 'peer',
+    personality: neutralPersonality(),
+    mental: restingMind(),
+    counters: {},
+    pressure: neutralPersonality(),
     ...over,
   };
 }
@@ -70,6 +86,7 @@ export function groundFloor(): Region {
     places,
     entrance: 'gate',
     exit: 'stair',
+    creatures: [],
   };
 }
 
@@ -100,6 +117,7 @@ export function firstFloor(): Region {
     places,
     entrance: 'landing',
     exit: 'rise',
+    creatures: ['grey wolf'],
   };
 }
 
@@ -119,6 +137,7 @@ export function world(over: Partial<World> = {}): World {
     currentPlace: 'gate',
     deepestFloor: 0,
     turn: 0,
+    flags: {},
     ...over,
   };
 }

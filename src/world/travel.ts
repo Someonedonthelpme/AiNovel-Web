@@ -52,8 +52,12 @@ export function moveWithinRegion(world: World, to: PlaceId): TravelResult {
   const target = region.places.find((p) => p.id === to);
   if (!target) return { kind: 'error', reason: `no such place: "${to}"` };
 
-  // Arriving reveals the place.
-  const places = region.places.map((p) => (p.id === to ? { ...p, discovered: true } : p));
+  // Arriving reveals the place — and so does having stood in the one you are
+  // leaving, which is what keeps a place you have walked through from being
+  // treated as a secret the moment you step out of it.
+  const places = region.places.map((p) =>
+    p.id === to || p.id === world.currentPlace ? { ...p, discovered: true } : p,
+  );
   return {
     kind: 'moved',
     world: {
