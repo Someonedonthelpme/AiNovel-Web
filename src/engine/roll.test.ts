@@ -12,7 +12,7 @@ test('tier boundaries sit exactly at 6/7/9/10', () => {
 });
 
 test('modifier is stat minus opposing stat', () => {
-  const r = roll(() => 0, { stat: 'nerve', statValue: 3, vs: { npc: 'doctor', stat: 'composure', value: 2 } });
+  const r = roll(() => 0, { ability: 'nerve', modifier: 3, vs: { id: 'doctor', ability: 'composure', modifier: 2 } });
   assert.deepEqual(r.dice, [1, 1]);
   assert.equal(r.modifier, 1);
   assert.equal(r.total, 3);
@@ -20,7 +20,7 @@ test('modifier is stat minus opposing stat', () => {
 });
 
 test('unopposed rolls use the stat alone', () => {
-  const r = roll(() => 0.999, { stat: 'observation', statValue: 2, vs: null });
+  const r = roll(() => 0.999, { ability: 'observation', modifier: 2, vs: null });
   assert.deepEqual(r.dice, [6, 6]);
   assert.equal(r.total, 14);
   assert.equal(r.tier, 'hit');
@@ -36,7 +36,7 @@ test('seeded rng replays identically', () => {
 test('dice stay within 1..6 across many rolls', () => {
   const rng = mulberry32(7);
   for (let i = 0; i < 2000; i++) {
-    const r = roll(rng, { stat: 'charm', statValue: 0, vs: null });
+    const r = roll(rng, { ability: 'charm', modifier: 0, vs: null });
     for (const d of r.dice) assert.ok(d >= 1 && d <= 6, `die out of range: ${d}`);
   }
 });
@@ -45,7 +45,7 @@ test('partial success is the modal outcome', () => {
   const rng = mulberry32(99);
   const counts = { miss: 0, partial: 0, hit: 0 };
   for (let i = 0; i < 20000; i++) {
-    counts[roll(rng, { stat: 'nerve', statValue: 1, vs: null }).tier]++;
+    counts[roll(rng, { ability: 'nerve', modifier: 1, vs: null }).tier]++;
   }
   assert.ok(counts.partial > counts.miss, `partial ${counts.partial} !> miss ${counts.miss}`);
   assert.ok(counts.partial > counts.hit, `partial ${counts.partial} !> hit ${counts.hit}`);

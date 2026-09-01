@@ -1,11 +1,18 @@
-import type { Bible, NpcId, RollResult, StatName, Tier } from './types.ts';
-
 /**
- * 2d6 + stat - opposing stat, three tiers.
+ * The social and exploration resolver: 2d6 + modifier, three tiers.
  *
- * The bell curve is the point: partial success is the modal outcome, which makes
- * fail-forward the default rather than something the narration has to remember.
+ * Combat uses d20 (see `src/combat/dice.ts`) because a fight is binary — you hit
+ * or you do not. Conversation is not: binary pass/fail makes dialogue flat,
+ * whereas "success at a cost" is what generates story. On 2d6 that middle
+ * outcome is also the MODAL one, so failing forward is the default rather than
+ * something the narration has to remember to do.
+ *
+ * Deliberately self-contained: the RNG type here is shared with the combat dice.
  */
+
+export const TIERS = ['miss', 'partial', 'hit'] as const;
+export type Tier = (typeof TIERS)[number];
+
 export function tierFor(total: number): Tier {
   if (total <= 6) return 'miss';
   if (total <= 9) return 'partial';
@@ -28,41 +35,40 @@ export function mulberry32(seed: number): Rng {
 
 const d6 = (rng: Rng): number => Math.floor(rng() * 6) + 1;
 
+export type SocialRoll = {
+  /** Which ability was leaned on, for narration. */
+  ability: string;
+  /** Who resisted, if anyone. */
+  vs: { id: string; ability: string } | null;
+  dice: [number, number];
+  modifier: number;
+  total: number;
+  tier: Tier;
+};
+
 /**
- * Resolution happens HERE, in code — never in the model. The Writer is handed the
- * tier as a fact it must narrate, which is the only reason failure is possible.
+ * Resolution happens HERE, in code — never in the model. The Writer is handed
+ * the tier as a fact it must narrate, which is the only reason failure is
+ * possible at all.
  */
 export function roll(
   rng: Rng,
   opts: {
-    stat: StatName;
-    statValue: number;
-    vs?: { npc: NpcId; stat: StatName; value: number } | null;
+    ability: string;
+    modifier: number;
+    vs?: { id: string; ability: string; modifier: number } | null;
   },
-): RollResult {
+): SocialRoll {
   const dice: [number, number] = [d6(rng), d6(rng)];
-  const opposing = opts.vs ? opts.vs.value : 0;
-  const modifier = opts.statValue - opposing;
+  const opposing = opts.vs ? opts.vs.modifier : 0;
+  const modifier = opts.modifier - opposing;
   const total = dice[0] + dice[1] + modifier;
   return {
-    stat: opts.stat,
-    vs: opts.vs ? { npc: opts.vs.npc, stat: opts.vs.stat } : null,
+    ability: opts.ability,
+    vs: opts.vs ? { id: opts.vs.id, ability: opts.vs.ability } : null,
     dice,
     modifier,
     total,
     tier: tierFor(total),
   };
-}
-
-/** Look up both sides of an opposed check from the frozen bible. */
-export function opposedFrom(
-  bible: Bible,
-  stat: StatName,
-  vs: { npc: NpcId; stat: StatName } | null,
-): { statValue: number; vs: { npc: NpcId; stat: StatName; value: number } | null } {
-  const statValue = bible.pc.stats[stat] ?? 0;
-  if (!vs) return { statValue, vs: null };
-  const npc = bible.cast.find((n) => n.id === vs.npc);
-  if (!npc) return { statValue, vs: null };
-  return { statValue, vs: { npc: vs.npc, stat: vs.stat, value: npc.stats[vs.stat] ?? 0 } };
 }
