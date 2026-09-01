@@ -48,6 +48,8 @@ export function CharacterPanel({ view, act, busy, onClose }: {
   return (
     <Modal title={c.name} onClose={onClose}>
       <div className="tabs">
+        {c.className && <span className="tag" style={{ color: 'var(--amber)' }}>{c.className}</span>}
+        {c.subclassName && <span className="tag">{c.subclassName}</span>}
         <span className="tag">level {c.level}</span>
         <span className="tag">{c.xp} / {c.xpToNext} xp</span>
         <span className="tag">{c.coin} coin</span>
@@ -375,14 +377,24 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
   const byId = new Map(view.tree.nodes.map((n) => [n.id, n]));
   const shown = hover ? byId.get(hover) : null;
   const spent = view.tree.nodes.filter((n) => n.taken && n.id !== 'start').length;
+  // Ordered so the character's own discipline stays first.
+  const shownDisciplines = [
+    ...view.tree.disciplines.filter((id) => view.tree.nodes.some((n) => n.archetype === id)),
+    ...[...new Set(view.tree.nodes.map((n) => n.archetype))].filter((id) => !view.tree.disciplines.includes(id)),
+  ];
   const rearranged = Object.keys(offsets).length > 0 || camera.zoom !== 1 || camera.x !== 0 || camera.y !== 0;
 
   return (
     <div>
       <div className="legend">
-        {/* Only what this tree holds. Listing the rest would advertise branches
-            this character can never take. */}
-        {view.tree.disciplines.map((id) => (
+        {/*
+          Built from what is actually DRAWN, not from the discipline list.
+          A revealed island can belong to a discipline the tree does not
+          otherwise hold — an Eldritch Knight has magic nodes on an otherwise
+          magic-less tree — and those want naming. Reading the visible nodes
+          also means a hidden island cannot leak its discipline into the key.
+        */}
+        {shownDisciplines.map((id) => (
           <span className="legend-item" key={id} style={{ opacity: view.tree.home === id ? 1 : 0.6 }}>
             <i style={{ background: hueOf(id) }} />
             {DISCIPLINE[id]?.label ?? id}{view.tree.home === id ? ' · yours' : ''}
@@ -589,6 +601,28 @@ export function SkillsPanel({ view, act, busy, onClose }: {
         <button className={tab === 'traits' ? 'tab on' : 'tab'} onClick={() => setTab('traits')}>traits</button>
         <button className={tab === 'signets' ? 'tab on' : 'tab'} onClick={() => setTab('signets')}>signets</button>
       </div>
+
+      {/* The one choice that reshapes the tree rather than filling it in. */}
+      {tab === 'tree' && view.character.subclassChoices.length > 0 && (
+        <div className="subclass-prompt">
+          <p>
+            <strong>Level {view.character.level}.</strong> Choose a path. It grants a skill outright and
+            opens a way into a discipline your class cannot otherwise reach — and it cannot be changed.
+          </p>
+          {view.character.subclassChoices.map((sub) => (
+            <div className="row" key={sub.id}>
+              <div>
+                <strong>{sub.name}</strong>
+                <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{sub.description}</p>
+                <span className="subclass-opens">opens {DISCIPLINE[sub.opens]?.label ?? sub.opens}</span>
+              </div>
+              <button className="mini" disabled={busy} onClick={() => act({ type: 'chooseSubclass', id: sub.id })}>
+                take it
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {tab === 'tree' && <SkillTree view={view} act={act} busy={busy} />}
       {tab === 'traits' && <TraitList view={view} />}

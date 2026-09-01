@@ -1,6 +1,7 @@
 import type { Attack } from '../combat/types.ts';
 import type { Provider } from '../llm/provider.ts';
 import { keepsake, stripMechanics } from '../items/catalogue.ts';
+import { classById } from '../character/classes.ts';
 import { humanisePlaces, pruneDangling } from '../world/naming.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
@@ -63,9 +64,13 @@ export async function generateCharacter(provider: Provider, interview: Interview
   if (!isComplete(interview)) throw new Error('the interview is not finished');
 
   const { language, draft } = interview;
+  const held = classById(draft.classId);
   const pinned = [
     draft.name ? `The character is named "${draft.name}".` : '',
     draft.backgroundName ? `Their background must be "${draft.backgroundName}".` : '',
+    // Naming the class makes the generated prose READ like one, while the
+    // numbers still come from code.
+    held ? `They are a ${held.name.en}: ${held.description.en} Write them as one.` : '',
     draft.traits?.length ? `They must have these traits: ${draft.traits.join(', ')}.` : '',
     draft.baseAbilities ? 'Ability scores are already fixed; propose anything and it will be ignored.' : '',
   ].filter(Boolean);
@@ -118,9 +123,13 @@ export async function generateCharacter(provider: Provider, interview: Interview
     })),
     // Flavour from the model, mechanics from the code: see `keepsake`.
     startingGear: generated.background.startingGear.map((g) => keepsake(g.id, g.name, stripMechanics(g.description))),
-    startingAttacks: (generated.background.startingAttacks as Attack[]).length
-      ? (generated.background.startingAttacks as Attack[])
-      : [sword],
+    // What they set out holding: the class's own weapon, or whatever the model
+    // proposed when no class was chosen.
+    startingAttacks: held
+      ? [held.startingAttack]
+      : (generated.background.startingAttacks as Attack[]).length
+        ? (generated.background.startingAttacks as Attack[])
+        : [sword],
     socialStanding:
       generated.background.socialStanding === 'superior' || generated.background.socialStanding === 'inferior'
         ? generated.background.socialStanding
@@ -134,7 +143,10 @@ export async function generateCharacter(provider: Provider, interview: Interview
     baseAbilities: abilities.value,
     traits: draft.traits ?? generated.traits,
     level: 1,
-    hitDie: [6, 8, 10, 12].includes(generated.hitDie) ? generated.hitDie : 8,
+    classId: held?.id,
+    // The class decides the die. Asking a model to pick one meant a scholar
+    // could roll d12 and a barbarian d6, and nothing downstream could tell.
+    hitDie: held ? held.hitDie : [6, 8, 10, 12].includes(generated.hitDie) ? generated.hitDie : 8,
     voice: repairVoice({
       selfPronoun: generated.voice.selfPronoun,
       underStress: generated.voice.underStress,

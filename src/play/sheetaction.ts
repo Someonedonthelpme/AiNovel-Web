@@ -9,6 +9,7 @@ import { awardTraits } from './traits.ts';
 import type { TraitContext } from './traits.ts';
 import { TRAITS } from './traitbook.ts';
 import { useItem } from './rest.ts';
+import { canChooseSubclass, subclassById, subclassSkill, SUBCLASS_LEVEL } from '../character/classes.ts';
 
 /**
  * Things the player does to their own sheet.
@@ -30,7 +31,9 @@ export type SheetAction =
   | { type: 'allocate'; node: string }
   | { type: 'equip'; item: string }
   | { type: 'unequip'; slot: Slot }
-  | { type: 'use'; item: string };
+  | { type: 'use'; item: string }
+  /** Taken once, at level three. It reshapes the tree by opening an island. */
+  | { type: 'chooseSubclass'; id: string };
 
 /** The log entry. Mirrors TurnRecord's shape so the fold can tell them apart. */
 export type SheetRecord = { kind: 'sheet'; action: SheetAction };
@@ -40,7 +43,10 @@ export const sheetRecord = (action: SheetAction): SheetRecord => ({ kind: 'sheet
 export type SheetResult = { state: PlayState; error: string | null; note: string | null };
 
 export const treeFor = (state: PlayState) =>
-  skillTreeFor(state.world.seed, state.sheet.background.id, state.sheet.language, state.sheet.background.name);
+  skillTreeFor(state.world.seed, state.sheet.background.id, state.sheet.language, state.sheet.background.name, {
+    classId: state.sheet.classId,
+    subclassId: state.sheet.subclassId,
+  });
 
 export const contextOf = (state: PlayState): TraitContext => ({
   sheet: state.sheet,
@@ -90,6 +96,33 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       const used = useItem(state, action.item);
       if (used.error) return { state, error: used.error, note: null };
       return settle(used.state, state, used.narration);
+    }
+
+    case 'chooseSubclass': {
+      const sheet = state.sheet;
+      if (!canChooseSubclass(sheet.level, sheet.classId, sheet.subclassId)) {
+        return {
+          state,
+          error: sheet.subclassId ? 'you have already chosen' : `not until level ${SUBCLASS_LEVEL}`,
+          note: null,
+        };
+      }
+
+      const sub = subclassById(sheet.classId, action.id);
+      if (!sub) return { state, error: 'no such path', note: null };
+
+      // The signature skill is granted outright; the island it opens appears
+      // because the tree is regenerated from the subclass id.
+      const taught = subclassSkill(sub, sheet.language);
+      const learned = (sheet.learned ?? []).some((s) => s.id === taught.id)
+        ? (sheet.learned ?? [])
+        : [...(sheet.learned ?? []), taught];
+
+      return settle(
+        { ...state, sheet: { ...sheet, subclassId: sub.id, learned } },
+        state,
+        `${sub.name[sheet.language]} — ${taught.name}`,
+      );
     }
   }
 }

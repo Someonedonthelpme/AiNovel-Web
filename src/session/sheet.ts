@@ -104,6 +104,17 @@ export type CharacterSheet = Persona & {
    * a thing that happened — it cannot be recomputed from anything else.
    */
   learned?: ActiveSkill[];
+  /**
+   * What the player chose to BE.
+   *
+   * Optional because every session made before classes existed has none, and
+   * those fall back to inferring a discipline from the background as they
+   * always did. The class carries the mechanics — hit die, starting attack,
+   * which disciplines the tree may hold — while the model keeps the flavour.
+   */
+  classId?: string;
+  /** Chosen at level 3. Opens an island into somewhere the class cannot go. */
+  subclassId?: string;
 };
 
 /* -------------------------------------------------------------------------- */

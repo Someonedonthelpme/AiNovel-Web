@@ -24,6 +24,8 @@ export type CharacterDraft = {
   baseAbilities?: Abilities;
   backgroundName?: string;
   traits?: string[];
+  /** The class picked on the creation page. Its mechanics outrank the model's. */
+  classId?: string;
 };
 
 export type Interview = {

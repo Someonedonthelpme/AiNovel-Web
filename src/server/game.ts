@@ -29,6 +29,7 @@ import { recordAnswer, setDraft, startInterview, STAGES } from '../session/inter
 import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
 import { activeSkills, derive } from '../session/sheet.ts';
+import { canChooseSubclass, classById, subclassById } from '../character/classes.ts';
 import { usesLeft } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
@@ -123,6 +124,10 @@ export type GameView = {
     abilityPoints: number;
     skillPoints: number;
     coin: number;
+    className: string | null;
+    subclassName: string | null;
+    /** Set once a subclass is available and unchosen — the panel prompts on it. */
+    subclassChoices: { id: string; name: string; description: string; opens: string }[];
   };
   /** What the character panel shows. */
   inventory: {
@@ -243,6 +248,18 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       abilityPoints: state.sheet.abilityPoints ?? 0,
       skillPoints: state.sheet.skillPoints ?? 0,
       coin: state.pc.coin,
+      className: classById(state.sheet.classId)?.name[state.world.language] ?? null,
+      subclassName: subclassById(state.sheet.classId, state.sheet.subclassId)?.name[state.world.language] ?? null,
+      // Offered only when it can actually be taken, so the panel never shows a
+      // choice that would be refused.
+      subclassChoices: canChooseSubclass(state.sheet.level, state.sheet.classId, state.sheet.subclassId)
+        ? (classById(state.sheet.classId)?.subclasses ?? []).map((sub) => ({
+            id: sub.id,
+            name: sub.name[state.world.language],
+            description: sub.description[state.world.language],
+            opens: sub.opens,
+          }))
+        : [],
     },
     region: {
       floor: region?.floor ?? 0,

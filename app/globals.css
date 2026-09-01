@@ -484,3 +484,59 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
 .field input:focus { outline: none; border-color: var(--amber-dim); }
 
 .buy { margin-top: 0.6rem; }
+
+/* -------------------------------------------------------------------------- */
+/* Choosing a class                                                           */
+/* -------------------------------------------------------------------------- */
+
+.class-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.6rem;
+}
+
+.class-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+.class-card:hover { border-color: var(--amber-dim); }
+.class-card.on { border-color: var(--amber); background: rgba(217, 164, 65, 0.07); }
+
+.class-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.class-die { color: var(--amber); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+
+.class-note {
+  color: var(--ink-dim);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  margin-bottom: 0.2rem;
+}
+
+.class-line { font-size: 0.7rem; letter-spacing: 0.02em; color: var(--ink-dim); }
+.class-core { color: var(--good); }
+/* What a class can never take is the interesting half, so it is not hidden. */
+.class-barred { color: var(--danger); opacity: 0.85; }
+
+/* -------------------------------------------------------------------------- */
+/* Choosing a path                                                            */
+/* -------------------------------------------------------------------------- */
+
+.subclass-prompt {
+  border: 1px solid var(--amber-dim);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.9rem;
+  background: rgba(217, 164, 65, 0.06);
+}
+.subclass-prompt > p { margin: 0 0 0.5rem; font-size: 0.82rem; }
+.subclass-opens { color: var(--good); font-size: 0.72rem; }

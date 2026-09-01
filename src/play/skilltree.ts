@@ -2,6 +2,8 @@ import type { Ability, Abilities } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { ARCHETYPES, archetypeForBackground, skillFrom } from './archetypes.ts';
+import { classById, subclassById } from '../character/classes.ts';
+import type { CharacterClass } from '../character/classes.ts';
 import type { Archetype, ArchetypeId } from './archetypes.ts';
 import type { TraitCondition } from './traits.ts';
 
@@ -196,14 +198,32 @@ const describe = (grant: NodeGrant, cost: NodeGrant | undefined, language: Lang)
  * good. A soldier cannot buy their way into black magic; that tree was never
  * printed for them.
  */
-function disciplinesFor(rng: () => number, home: ArchetypeId): Archetype[] {
-  const chosen = new Set<ArchetypeId>([home]);
+function disciplinesFor(rng: () => number, home: ArchetypeId, held: CharacterClass | null): Archetype[] {
+  /*
+   * The hard lock.
+   *
+   * A class does not merely favour some disciplines; it is shut out of others
+   * permanently, at any price. That is what makes an island worth finding —
+   * without it, every tree could eventually contain everything and a detached
+   * cluster would just be more nodes arriving late.
+   */
+  const barred = new Set<ArchetypeId>(held?.forbidden ?? []);
+  const allowed = (id: ArchetypeId) => !barred.has(id);
+
+  const chosen = new Set<ArchetypeId>();
+  if (held) for (const id of held.core) chosen.add(id);
+  chosen.add(home);
+
   const want = MIN_DISCIPLINES + Math.floor(rng() * (MAX_DISCIPLINES - MIN_DISCIPLINES + 1));
 
-  // Affinities of everything already in, tried first.
+  // The class's own leanings first, then the general affinities of whatever is
+  // already in — so the set reads as a character rather than a handful.
   const pool = () => {
     const near: ArchetypeId[] = [];
-    for (const id of chosen) for (const friend of AFFINITY[id]) if (!chosen.has(friend)) near.push(friend);
+    for (const friend of held?.affinity ?? []) if (!chosen.has(friend) && allowed(friend)) near.push(friend);
+    for (const id of chosen) {
+      for (const friend of AFFINITY[id]) if (!chosen.has(friend) && allowed(friend)) near.push(friend);
+    }
     return near;
   };
 
@@ -214,7 +234,7 @@ function disciplinesFor(rng: () => number, home: ArchetypeId): Archetype[] {
       chosen.add(near[Math.floor(rng() * near.length)]);
       continue;
     }
-    const any = ARCHETYPES.filter((a) => !chosen.has(a.id));
+    const any = ARCHETYPES.filter((a) => !chosen.has(a.id) && allowed(a.id));
     if (any.length === 0) break;
     chosen.add(any[Math.floor(rng() * any.length)].id);
   }
@@ -405,14 +425,35 @@ function growIsland(
   return nodes;
 }
 
+export type TreeOptions = {
+  language?: Lang;
+  backgroundName?: string;
+  /** What the player chose. Absent on every session made before classes existed. */
+  classId?: string;
+  /** Chosen at level 3. Opens one more island, into somewhere the class cannot go. */
+  subclassId?: string;
+};
+
 export function skillTreeFor(
   seed: number,
   backgroundId: string,
   language: Lang = 'en',
   backgroundName = '',
+  options: Pick<TreeOptions, 'classId' | 'subclassId'> = {},
 ): SkillTree {
-  const rng = mulberry32((seed ^ hash(backgroundId) ^ hash(backgroundName)) >>> 0);
-  const home = archetypeForBackground(backgroundId, backgroundName);
+  const held = classById(options.classId);
+  const chosenSub = subclassById(options.classId, options.subclassId);
+
+  const rng = mulberry32(
+    (seed ^ hash(backgroundId) ^ hash(backgroundName) ^ hash(options.classId ?? '')) >>> 0,
+  );
+
+  /*
+   * The class decides where the tree opens. Falling back to the background
+   * matcher keeps every session made before classes existed working exactly as
+   * it did — a stored tree must not rearrange itself under a save.
+   */
+  const home = held ? held.core[0] : archetypeForBackground(backgroundId, backgroundName);
   const nodes: SkillNode[] = [];
 
   const start: SkillNode = {
@@ -429,7 +470,7 @@ export function skillTreeFor(
   };
   nodes.push(start);
 
-  const chosen = disciplinesFor(rng, home);
+  const chosen = disciplinesFor(rng, home, held);
   const shapes = new Map<ArchetypeId, Shape>();
 
   chosen.forEach((archetype, index) => {
@@ -475,11 +516,38 @@ export function skillTreeFor(
     const anchor = tips[Math.floor(rng() * tips.length)];
 
     // Islands can belong to a discipline the tree does NOT otherwise hold —
-    // the reward for playing a certain way is a door into something else.
+    // the reward for playing a certain way is a door into something else, and
+    // for a class that is shut out of somewhere, it is the ONLY door.
     const foreign = ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)];
     for (const node of growIsland(rng, foreign, i, language, anchor.id)) {
       nodes.push(node);
       byId.set(node.id, node);
+    }
+  }
+
+  /*
+   * The subclass island.
+   *
+   * The deliberate version of the same idea: choosing a subclass at level three
+   * opens a way into a discipline the class is normally locked out of. It
+   * appears here rather than being gated by a condition, because an unchosen
+   * subclass simply generates nothing — which keeps the tree deterministic in
+   * `(seed, class, subclass)` and needs no new kind of requirement.
+   */
+  if (chosenSub) {
+    const anchors = nodes.filter((n) => n.ring >= 2 && n.ring < 9);
+    const anchor = anchors.length > 0 ? anchors[Math.floor(rng() * anchors.length)] : nodes[0];
+    const discipline = ARCHETYPES.find((a) => a.id === chosenSub.opens);
+
+    if (discipline && anchor) {
+      for (const node of growIsland(rng, discipline, islands, language, anchor.id)) {
+        // Already earned by taking the subclass, so it is drawn from the start
+        // rather than waiting on a tally.
+        const open: SkillNode = { ...node, id: `sub_${node.id}`, requires: undefined };
+        open.connections = node.connections.map((c) => (c.startsWith('isle') ? `sub_${c}` : c));
+        nodes.push(open);
+        byId.set(open.id, open);
+      }
     }
   }
 

@@ -21,7 +21,7 @@ export type ArchetypeId =
   | 'magic' | 'blackMagic' | 'guile' | 'survival'
   | 'flame' | 'venom' | 'shadow' | 'song';
 
-type Bilingual = { en: string; th: string };
+export type Bilingual = { en: string; th: string };
 
 export type Archetype = {
   id: ArchetypeId;
@@ -40,7 +40,7 @@ export type Archetype = {
   teaches: [SkillSpec, SkillSpec];
 };
 
-type SkillSpec = {
+export type SkillSpec = {
   name: Bilingual;
   description: Bilingual;
   kind: ActiveKind;

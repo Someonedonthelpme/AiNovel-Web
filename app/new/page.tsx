@@ -6,6 +6,7 @@ import type { Abilities } from '../../src/combat/types.ts';
 import {
   defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
 } from '../../src/session/sheet.ts';
+import { CLASSES } from '../../src/character/classes.ts';
 import { questionFor, STAGES } from '../../src/session/interview.ts';
 import type { Language } from '../../src/session/interview.ts';
 
@@ -32,6 +33,7 @@ export default function NewCharacter() {
   const [answers, setAnswers] = useState<Answers>({});
   const [step, setStep] = useState(0);
 
+  const [classId, setClassId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [background, setBackground] = useState('');
   const [abilities, setAbilities] = useState<Abilities>(defaultAbilities());
@@ -70,6 +72,7 @@ export default function NewCharacter() {
       if (name.trim()) draft.name = name.trim();
       if (background.trim()) draft.backgroundName = background.trim();
       if (handBuilt) draft.baseAbilities = abilities;
+      if (classId) draft.classId = classId;
 
       const response = await fetch('/api/sessions', {
         method: 'POST',
@@ -158,6 +161,51 @@ export default function NewCharacter() {
           {!answered && (
             <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>
               leave it blank and the model decides
+            </span>
+          )}
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------- the class */}
+      <section className="panel">
+        <p className="label">What are you</p>
+        <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
+          This decides your hit die, what you set out holding, and — the part that matters — which
+          disciplines your skill tree can ever hold. What a class is locked out of stays locked out;
+          the only way across is an island you find in play, or the path you choose at level 3.
+        </p>
+
+        <div className="class-grid">
+          {CLASSES.map((held) => {
+            const chosen = classId === held.id;
+            return (
+              <button
+                key={held.id}
+                className={chosen ? 'class-card on' : 'class-card'}
+                onClick={() => setClassId(chosen ? null : held.id)}
+              >
+                <span className="class-head">
+                  <strong>{held.name[language]}</strong>
+                  <span className="class-die">d{held.hitDie}</span>
+                </span>
+                <span className="class-note">{held.description[language]}</span>
+                <span className="class-line">
+                  <b>{held.primary}</b> · {held.secondary}
+                </span>
+                <span className="class-line class-core">opens: {held.core.join(', ')}</span>
+                <span className="class-line class-barred">never: {held.forbidden.join(', ')}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="chips" style={{ marginTop: '0.7rem' }}>
+          <button className={classId === null ? 'chip on' : 'chip'} onClick={() => setClassId(null)}>
+            let the story decide
+          </button>
+          {classId === null && (
+            <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>
+              a class is inferred from what you wrote above
             </span>
           )}
         </div>
