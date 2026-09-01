@@ -3,6 +3,9 @@ import { RATION_ID } from '../items/catalogue.ts';
 import { countOf, findItem, removeItem } from '../items/types.ts';
 import type { Inventory, ItemEffect } from '../items/types.ts';
 import { derive } from '../session/sheet.ts';
+import { refreshUses } from '../skills/active.ts';
+import { isSkillBook } from '../skills/book.ts';
+import { conditionMet } from './traits.ts';
 import { activeRegion, currentPlace } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 
@@ -77,7 +80,9 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
     return {
       state: {
         ...state,
-        pc: { ...state.pc, hp: Math.min(maxHp, before + healed), maxHp, inventory },
+        // Actives come back on any rest: that is what puts them on the same
+        // supply economy as healing, rather than on a timer.
+        pc: { ...state.pc, hp: Math.min(maxHp, before + healed), maxHp, inventory, skillUses: refreshUses() },
         sheet: { ...state.sheet, mental: easedShort(state.sheet.mental) },
         world: { ...state.world, turn: state.world.turn + SHORT_REST_TURNS },
       },
@@ -90,7 +95,7 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
   return {
     state: {
       ...state,
-      pc: { ...state.pc, hp: maxHp, maxHp, conditions: [] },
+      pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], skillUses: refreshUses() },
       sheet: { ...state.sheet, mental: { stress: 0, morale: state.sheet.mental.morale, fatigue: 0 } },
       world: { ...state.world, turn: state.world.turn + LONG_REST_TURNS },
     },
@@ -125,6 +130,28 @@ export function useItem(state: PlayState, itemId: string): UseResult {
   if (!item) return { state, narration: null, error: 'you are not carrying that' };
   if (item.kind !== 'consumable' || !item.effect) {
     return { state, narration: null, error: `${item.name} is not something you can use up` };
+  }
+
+  // Reading is using: the book is spent, the skill is kept.
+  if (isSkillBook(item)) {
+    const already = (state.sheet.learned ?? []).some((s) => s.id === item.teaches.id);
+    if (already) return { state, narration: null, error: 'you already know what is in it' };
+
+    const context = { sheet: state.sheet, inventory: state.pc.inventory, counters: state.sheet.counters, personality: state.sheet.personality };
+    const notReady = (item.teaches.requires ?? []).filter((c) => !conditionMet(c, context));
+    if (notReady.length) {
+      return { state, narration: null, error: 'you read it, and none of it makes sense yet' };
+    }
+
+    return {
+      state: {
+        ...state,
+        sheet: { ...state.sheet, learned: [...(state.sheet.learned ?? []), item.teaches] },
+        pc: { ...state.pc, inventory: removeItem(state.pc.inventory, itemId, 1) },
+      },
+      narration: `learned ${item.teaches.name}`,
+      error: null,
+    };
   }
 
   const applied = applyEffect(state, item.effect);

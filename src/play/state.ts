@@ -2,6 +2,7 @@ import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
 import type { SheetRecord } from './sheetaction.ts';
 import type { SocialRoll } from '../engine/roll.ts';
+import type { SkillUses } from '../skills/active.ts';
 import type { Inventory } from '../items/types.ts';
 import { addItem, emptyInventory, equip } from '../items/types.ts';
 import { namesTheSameThing, rations, weaponFromAttack } from '../items/catalogue.ts';
@@ -27,6 +28,8 @@ export type PlayState = {
     conditions: ActiveCondition[];
     coin: number;
     inventory: Inventory;
+    /** Uses spent since the last rest. Refreshed by resting, not by time. */
+    skillUses: SkillUses;
   };
   /** The fight in progress, if any. A finished fight is discarded, not kept. */
   combat: CombatState | null;
@@ -108,7 +111,7 @@ export function initialPlayState(world: World, sheet: CharacterSheet): PlayState
   return {
     world,
     sheet,
-    pc: { hp: d.maxHp, maxHp: d.maxHp, conditions: [], coin: 0, inventory },
+    pc: { hp: d.maxHp, maxHp: d.maxHp, conditions: [], coin: 0, inventory, skillUses: {} },
     combat: null,
     ended: null,
   };

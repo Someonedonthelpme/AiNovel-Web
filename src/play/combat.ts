@@ -1,7 +1,7 @@
 import { autoTurn } from '../combat/ai.ts';
 import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, startCombat } from '../combat/combat.ts';
 import { buildEncounter, kindForFloor } from '../combat/encounter.ts';
-import { cellKey } from '../combat/grid.ts';
+import { cellKey, distance, hasLineOfSight } from '../combat/grid.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { addItem } from '../items/types.ts';
@@ -12,7 +12,8 @@ import type { LevelUp } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
-import { toCombatant } from '../session/sheet.ts';
+import { activeSkills, toCombatant } from '../session/sheet.ts';
+import { isCombatUsable, needsTarget, resolveSkill, spendUse, usesLeft } from '../skills/active.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 
@@ -112,6 +113,8 @@ export function beginEncounter(state: PlayState): PlayState {
 export type CombatAction =
   | { kind: 'attack'; target: string; attack: string }
   | { kind: 'move'; to: Vec }
+  /** An active skill. `target` only when the skill needs one. */
+  | { kind: 'skill'; skill: string; target?: string }
   | { kind: 'end' };
 
 export type CombatOption = { action: CombatAction; label: string };
@@ -135,12 +138,47 @@ export function combatOptions(state: PlayState): CombatOption[] {
     }
   }
 
+  // Actives, and what they still have left. A skill with no uses is not offered
+  // rather than offered and refused — the option lists in this game have always
+  // been legal moves only.
+  for (const skill of activeSkills(state.sheet)) {
+    if (!isCombatUsable(skill) || usesLeft(skill, state.pc.skillUses) <= 0) continue;
+    const left = usesLeft(skill, state.pc.skillUses);
+
+    if (!needsTarget(skill)) {
+      options.push({ action: { kind: 'skill', skill: skill.id }, label: `${skill.name} (${left} left)` });
+      continue;
+    }
+    // A skill reaches as far as the SKILL says, not as far as whatever happens
+    // to be in your hand. Using the weapon's range meant a reach-1 skill was
+    // silently unusable to anyone carrying a sling, and unusable to everyone at
+    // the start of a fight, when nothing is adjacent yet.
+    for (const target of skillTargets(combat, actor, skill.range)) {
+      options.push({
+        action: { kind: 'skill', skill: skill.id, target: target.id },
+        label: `${skill.name} → ${target.name} (${left} left)`,
+      });
+    }
+  }
+
   for (const cell of movementOptions(combat)) {
     options.push({ action: { kind: 'move', to: cell }, label: `move to ${cell.x},${cell.y}` });
   }
 
   options.push({ action: { kind: 'end' }, label: 'end turn' });
   return options;
+}
+
+/** Everything a skill of this reach could be used on. */
+function skillTargets(combat: CombatState, actor: Combatant, range: number): Combatant[] {
+  return Object.values(combat.combatants).filter(
+    (t) =>
+      !t.dead
+      && t.id !== actor.id
+      && t.side !== actor.side
+      && distance(actor.pos, t.pos) <= Math.max(1, range)
+      && hasLineOfSight(combat.grid, actor.pos, t.pos),
+  );
 }
 
 /** Is it the player's move? */
@@ -174,6 +212,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
   const before = combat.log.length;
   let next: CombatState = combat;
   let error: string | null = null;
+  let spent = state.pc.skillUses;
 
   const rng = combatRng(state);
   if (action.kind === 'attack') {
@@ -185,6 +224,24 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
     const result = moveTo(next, action.to);
     error = result.error;
     next = result.state;
+  } else if (action.kind === 'skill') {
+    const skill = activeSkills(state.sheet).find((s) => s.id === action.skill);
+    if (!skill) error = 'you do not know that';
+    else if (!isCombatUsable(skill)) error = `${skill.name} is not something you use in a fight`;
+    else if (usesLeft(skill, state.pc.skillUses) <= 0) error = `${skill.name} is spent until you rest`;
+    else {
+      const self = next.combatants['pc'];
+      const target = action.target ? next.combatants[action.target] : null;
+      if (skill.effect.kind === 'hinder' && !target) error = `${skill.name} needs a target`;
+      else {
+        const outcome = resolveSkill(skill, self, target);
+        const combatants: typeof next.combatants = { ...next.combatants, pc: outcome.actor };
+        if (outcome.target) combatants[outcome.target.id] = outcome.target;
+        // Using a skill is your action for the turn, like swinging is.
+        next = endTurn(rng, { ...next, combatants }).state;
+        spent = spendUse(spent, skill.id);
+      }
+    }
   } else {
     next = endTurn(rng, next).state;
   }
@@ -198,7 +255,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
   }
 
   return {
-    state: { ...state, combat: next },
+    state: { ...state, combat: next, pc: { ...state.pc, skillUses: spent } },
     events: next.log.slice(before),
     error: null,
   };

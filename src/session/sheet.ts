@@ -2,7 +2,9 @@ import type { Ability, Abilities, Attack, Combatant } from '../combat/types.ts';
 import { ABILITIES, abilityMod } from '../combat/types.ts';
 import type { Inventory } from '../items/types.ts';
 import { emptyInventory, equippedArmour, equippedAttack, equippedGrants } from '../items/types.ts';
+import { activate } from '../skills/book.ts';
 import type { Item } from '../items/types.ts';
+import type { ActiveSkill } from '../skills/active.ts';
 import type { Persona, Status } from '../character/persona.ts';
 import { emptyPersona, neutralPersonality, restingMind } from '../character/persona.ts';
 
@@ -95,6 +97,13 @@ export type CharacterSheet = Persona & {
   traitBonuses?: Partial<Abilities>;
   /** Signets claimed. Discovery is the hard part; holding one is just a list. */
   signets?: string[];
+  /**
+   * Actives learned from books, on top of what the background taught.
+   *
+   * Stored on the sheet rather than derived, because a book read on floor 9 is
+   * a thing that happened — it cannot be recomputed from anything else.
+   */
+  learned?: ActiveSkill[];
 };
 
 /* -------------------------------------------------------------------------- */
@@ -202,6 +211,17 @@ export type DerivedSheet = {
   speed: number;
   skills: Skill[];
 };
+
+/**
+ * Every active skill a character can use.
+ *
+ * The background's are promoted from what the model named; the rest were read
+ * out of books. One list, because nothing downstream should care where a skill
+ * came from.
+ */
+export function activeSkills(sheet: CharacterSheet): ActiveSkill[] {
+  return [...sheet.background.grantsSkills.map(activate), ...(sheet.learned ?? [])];
+}
 
 export function derive(sheet: CharacterSheet, inventory: Inventory = emptyInventory()): DerivedSheet {
   return {

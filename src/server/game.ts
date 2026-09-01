@@ -27,7 +27,9 @@ import { playTurn, suggestedActions } from '../play/turn.ts';
 import { runGenesis } from '../session/genesis.ts';
 import { recordAnswer, startInterview, STAGES } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
-import { derive } from '../session/sheet.ts';
+import { activeSkills, derive } from '../session/sheet.ts';
+import { usesLeft } from '../skills/active.ts';
+import type { ActiveSkill } from '../skills/active.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -111,7 +113,7 @@ export type GameView = {
     ac: number;
     abilities: Record<string, number>;
     traits: string[];
-    skills: { name: string; kind: string; description: string }[];
+    skills: { name: string; kind: string; description: string; effect: string; usesLeft: number; usesPerRest: number }[];
     personality: Personality;
     mental: MentalState;
     voice: { selfPronoun: string; underStress: string };
@@ -215,7 +217,16 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       ac: d.ac,
       abilities: d.abilities,
       traits: state.sheet.traits,
-      skills: d.skills.map((s) => ({ name: s.name, kind: s.kind, description: s.description })),
+      // Actives, with what they do and what is left of them — a skill the
+      // player cannot see the cost of is one they will not plan around.
+      skills: activeSkills(state.sheet).map((s) => ({
+        name: s.name,
+        kind: s.kind,
+        description: s.description,
+        effect: describeEffect(s),
+        usesLeft: usesLeft(s, state.pc.skillUses),
+        usesPerRest: s.usesPerRest,
+      })),
       personality: state.sheet.personality,
       mental: state.sheet.mental,
       voice: { selfPronoun: state.sheet.voice.selfPronoun, underStress: state.sheet.voice.underStress },
@@ -603,4 +614,14 @@ export async function actOnSheet(id: string, action: SheetAction): Promise<Sheet
   if (shouldSnapshot(seq)) await saveSnapshot(id, result.state);
 
   return { view: viewOf(id, result.state, await transcriptOf(id)), error: null, note: result.note };
+}
+
+
+/** A skill's effect in a phrase, so the sidebar says what it actually does. */
+function describeEffect(skill: ActiveSkill): string {
+  const e = skill.effect;
+  if (e.kind === 'hinder') return `leaves a foe ${e.condition} for ${e.rounds}`;
+  if (e.kind === 'mend') return `heals ${e.amount}`;
+  if (e.kind === 'rally') return `shakes off ${e.condition}`;
+  return `+${e.bonus} on ${e.ability} checks`;
 }

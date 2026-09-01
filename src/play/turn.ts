@@ -1,4 +1,6 @@
 import { abilityMod } from '../combat/types.ts';
+import { edgeFor } from '../skills/active.ts';
+import { activeSkills } from '../session/sheet.ts';
 import type { Rng } from '../engine/roll.ts';
 import { roll } from '../engine/roll.ts';
 import { mergeDeltas, runDirector, toWorldDelta } from '../llm/director.ts';
@@ -111,11 +113,14 @@ export async function playTurn(
   let narrate: string | null = null;
 
   if (output.check?.required) {
-    const abilities = finalAbilities(state.sheet);
+    const abilities = finalAbilities(state.sheet, state.pc.inventory);
     const ability = output.check.ability as keyof typeof abilities;
+    // Social and utility skills finally pay here. "Read the Ground" is worth
+    // carrying because the Director asking for wisdom is when it applies.
+    const edge = edgeFor(activeSkills(state.sheet), ability);
     rolled = roll(deps.rng, {
       ability: output.check.ability,
-      modifier: abilityMod(abilities[ability] ?? 10),
+      modifier: abilityMod(abilities[ability] ?? 10) + edge,
       vs: output.check.vsPerson ? oppositionOf(state, output.check.vsPerson) : null,
     });
     const chosen = outcomeFor(output, rolled.tier);

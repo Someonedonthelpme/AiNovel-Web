@@ -330,7 +330,12 @@ export default function Game({ initial }: { initial: GameView }) {
                 <div key={s.name} style={{ marginBottom: '0.6rem' }}>
                   <strong style={{ fontSize: '0.9rem' }}>{s.name}</strong>{' '}
                   <span className="tag">{s.kind}</span>
-                  <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{s.description}</p>
+                  {s.usesPerRest > 0 && (
+                    <span className="tag" style={{ color: s.usesLeft > 0 ? 'var(--amber)' : 'var(--danger)' }}>
+                      {s.usesLeft}/{s.usesPerRest}
+                    </span>
+                  )}
+                  <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{s.effect}</p>
                 </div>
               ))}
             </section>

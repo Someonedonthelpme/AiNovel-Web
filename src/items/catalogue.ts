@@ -1,5 +1,6 @@
 import type { Rng } from '../engine/roll.ts';
 import type { Attack } from '../combat/types.ts';
+import { skillBook } from '../skills/book.ts';
 import type { Item } from './types.ts';
 
 /**
@@ -172,6 +173,8 @@ export function rollLoot(rng: Rng, floor: number): Drop[] {
   if (rng() < 0.16) drops.push({ item: weapon(rng, floor), count: 1 });
   if (rng() < 0.12) drops.push({ item: armour(rng, floor), count: 1 });
   if (rng() < 0.18) drops.push({ item: material(rng, floor), count: 1 });
+  // Uncommon on purpose: a book is a permanent new verb, not a consumable.
+  if (rng() < 0.09) drops.push({ item: skillBook(rng, floor), count: 1 });
 
   return drops;
 }
