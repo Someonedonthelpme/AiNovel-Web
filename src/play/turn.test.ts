@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
+import { hasDialogue } from '../llm/writer.ts';
 import { WriterLeakError, assertNoLeak, hiddenStrings, toWriterView } from '../llm/redact.ts';
 import { checkedOutput, directorOutput, emptyDelta, outcome, playState } from './fixtures.ts';
 import { outcomeFor, playTurn, suggestedActions } from './turn.ts';
@@ -11,7 +12,9 @@ const alwaysLow = () => 0;
 /** Every die shows its maximum: 2d6 = 12, a certain hit. */
 const alwaysHigh = () => 0.999;
 
-const COMPLIANT = 'ดิฉันไม่ทราบค่ะ คุณลองถามคนอื่นดูค่ะ';
+// Quoted, because a conversation turn now has to contain actual speech —
+// see `hasDialogue`. The register forms are unchanged.
+const COMPLIANT = '"ดิฉันไม่ทราบค่ะ คุณลองถามคนอื่นดูค่ะ"';
 
 const deps = (director: unknown, rng: () => number, writerText = [COMPLIANT]) => ({
   director: new FakeProvider({ structured: [director] }),
@@ -163,13 +166,39 @@ test('a view carrying a secret fails the assertion loudly', () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Conversations are dialogue, not paragraphs about dialogue                   */
+/* -------------------------------------------------------------------------- */
+
+test('a conversation narrated instead of spoken is written again', async () => {
+  // Left to itself the model writes a novelist's account of the exchange —
+  // "Warden Bex watched him impassively, her hand on the pommel" — which reads
+  // as a scene being described rather than somebody talking to you.
+  const narrated = 'ช่างตีเหล็กมองเขาอย่างเงียบ ๆ แล้วหันกลับไปทำงานต่อ';
+  const r = await playTurn(
+    deps(talkingTo('smith'), alwaysLow, [narrated, COMPLIANT]),
+    playState(), 'ask', 'conversation',
+  );
+  assert.equal(r.writer.regenerated, true, 'narration in a conversation earns one correction');
+  assert.equal(r.record.prose, COMPLIANT);
+});
+
+test('narration outside a conversation is left alone', () => {
+  // The guard binds to who is being spoken to. An exploration turn has nobody
+  // talking, and demanding speech from it would be the mirror of the bug that
+  // made NPCs narrate the world.
+  assert.equal(hasDialogue('เขาเดินผ่านประตูไป'), false);
+  assert.equal(hasDialogue('"ไปทางนั้น" เธอบอก'), true);
+  assert.equal(hasDialogue('“this way,” she said'), true);
+});
+
+/* -------------------------------------------------------------------------- */
 /* The register guard                                                          */
 /* -------------------------------------------------------------------------- */
 
 const talkingTo = (id: string) => directorOutput({ addressedPerson: id });
 
 test('prose that drifts out of register is regenerated once', async () => {
-  const drifted = 'ไม่รู้ ไปถามคนอื่น';
+  const drifted = '"ไม่รู้ ไปถามคนอื่น"';
   const r = await playTurn(
     deps(talkingTo('smith'), alwaysLow, [drifted, COMPLIANT]),
     playState(), 'ask', 'conversation',
