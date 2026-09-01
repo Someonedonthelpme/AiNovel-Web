@@ -318,19 +318,30 @@ export const ARCHETYPES: readonly Archetype[] = [
   },
 ];
 
-/** The discipline a background most resembles, for where its tree opens. */
-export function archetypeForBackground(backgroundId: string): ArchetypeId {
-  const id = backgroundId.toLowerCase();
+/**
+ * The discipline a background most resembles, for where its tree opens.
+ *
+ * Matched against the id AND the display name: ids are generated, so a
+ * "Lighthouse Keeper" can arrive as `bg_2` with everything meaningful in the
+ * name. Reading only the id sent them to the sword, which is the fallback for
+ * "no idea" rather than an answer.
+ *
+ * Order matters — the more specific patterns are tried first, since "warden of
+ * the archive" is a scholar and "harbour warden" is a guard.
+ */
+export function archetypeForBackground(backgroundId: string, name = ''): ArchetypeId {
+  const text = `${backgroundId} ${name}`.toLowerCase();
   const guesses: [RegExp, ArchetypeId][] = [
-    [/scholar|clerk|scribe|student|librar/, 'magic'],
-    [/witch|warlock|cult|heretic|necro/, 'blackMagic'],
-    [/hunt|ranger|scout|archer|poach/, 'bow'],
-    [/guard|soldier|knight|warden|watch/, 'guard'],
-    [/thief|rogue|smuggl|trader|merchant|dock/, 'guile'],
-    [/priest|monk|seer|oracle|healer/, 'wisdom'],
-    [/sailor|farmer|labour|labor|miner|fisher/, 'survival'],
+    [/witch|warlock|cult|heretic|necro|occult|blood/, 'blackMagic'],
+    [/scholar|clerk|scribe|student|librar|archiv|alchem|engineer/, 'magic'],
+    [/priest|monk|seer|oracle|healer|keeper|lighthouse|watchman|hermit/, 'wisdom'],
+    [/hunt|ranger|scout|archer|poach|trapper|fowler/, 'bow'],
+    [/guard|soldier|knight|warden|sentry|legion|marine/, 'guard'],
+    [/thief|rogue|smuggl|trader|merchant|dock|courier|fence|spy/, 'guile'],
+    [/sailor|farmer|labour|labor|miner|fisher|drover|porter|survivor/, 'survival'],
+    [/sword|blade|duel|mercenar|gladiat|swords/, 'sword'],
   ];
-  for (const [pattern, archetype] of guesses) if (pattern.test(id)) return archetype;
+  for (const [pattern, archetype] of guesses) if (pattern.test(text)) return archetype;
   return 'sword';
 }
 

@@ -25,7 +25,8 @@ import { initialPlayState } from '../play/state.ts';
 import type { Mode, PlayState, TurnRecord } from '../play/state.ts';
 import { playTurn, suggestedActions } from '../play/turn.ts';
 import { runGenesis } from '../session/genesis.ts';
-import { recordAnswer, startInterview, STAGES } from '../session/interview.ts';
+import { recordAnswer, setDraft, startInterview, STAGES } from '../session/interview.ts';
+import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
 import { activeSkills, derive } from '../session/sheet.ts';
 import { usesLeft } from '../skills/active.ts';
@@ -322,12 +323,21 @@ const ANSWERS: Record<string, Record<Language, string>> = {
 };
 
 /** Session Zero from a premise. Slow — one full generation pass. */
-export async function newGame(language: Language, answers?: Partial<Record<string, string>>): Promise<string> {
+export async function newGame(
+  language: Language,
+  answers?: Partial<Record<string, string>>,
+  draft?: CharacterDraft,
+): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
   for (const stage of STAGES) {
     interview = recordAnswer(interview, answers?.[stage] ?? ANSWERS[stage][language]).interview;
   }
+
+  // Anything the player pinned down by hand outranks what the model proposes —
+  // that is the whole contract of character creation. `runGenesis` already
+  // honours the draft; this is where the page's choices reach it.
+  if (draft && Object.keys(draft).length) interview = setDraft(interview, draft);
 
   const genesis = await runGenesis(provider(), interview, Date.now() % 2147483647);
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);

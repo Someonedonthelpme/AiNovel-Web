@@ -1,0 +1,251 @@
+'use client';
+
+import { useState } from 'react';
+import { ABILITIES } from '../../src/combat/types.ts';
+import type { Abilities } from '../../src/combat/types.ts';
+import {
+  defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
+} from '../../src/session/sheet.ts';
+import { questionFor, STAGES } from '../../src/session/interview.ts';
+import type { Language } from '../../src/session/interview.ts';
+
+/**
+ * Character creation.
+ *
+ * Session Zero was always meant to be a conversation rather than a form — the
+ * GM asks what kind of world, who you are, and what you want — and until now it
+ * ran with canned answers because there was no page to ask them on.
+ *
+ * The two promised routes both live here: answer in prose and let the model
+ * build the sheet, or pin down a name and a point-buy spread by hand. Anything
+ * set by hand outranks what the model proposes; that is the contract, and
+ * `runGenesis` already honours it.
+ */
+
+/** The three questions worth asking. `review` happens on the sheet itself. */
+const ASKED = STAGES.filter((s) => s !== 'review');
+
+type Answers = Partial<Record<string, string>>;
+
+export default function NewCharacter() {
+  const [language, setLanguage] = useState<Language>('en');
+  const [answers, setAnswers] = useState<Answers>({});
+  const [step, setStep] = useState(0);
+
+  const [name, setName] = useState('');
+  const [background, setBackground] = useState('');
+  const [abilities, setAbilities] = useState<Abilities>(defaultAbilities());
+  const [handBuilt, setHandBuilt] = useState(false);
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const spread = validateAbilities(abilities);
+  const left = POINT_BUY_BUDGET - spread.spent;
+
+  /**
+   * Whether a score can move that way at all.
+   *
+   * Used to DISABLE the button rather than only to refuse the click. The
+   * default spread costs exactly the budget, so without this the plus buttons
+   * all look live and none of them do anything — the player has to guess that
+   * something must come down before anything goes up.
+   */
+  function canAdjust(ability: keyof Abilities, by: number): boolean {
+    const score = abilities[ability] + by;
+    if (score < POINT_BUY_MIN || score > POINT_BUY_MAX) return false;
+    return validateAbilities({ ...abilities, [ability]: score }).spent <= POINT_BUY_BUDGET;
+  }
+
+  function adjust(ability: keyof Abilities, by: number) {
+    if (!canAdjust(ability, by)) return;
+    setAbilities({ ...abilities, [ability]: abilities[ability] + by });
+  }
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    try {
+      const draft: Record<string, unknown> = {};
+      if (name.trim()) draft.name = name.trim();
+      if (background.trim()) draft.backgroundName = background.trim();
+      if (handBuilt) draft.baseAbilities = abilities;
+
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language, answers, draft }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'generation failed');
+      window.location.href = `/play/${data.id}`;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  const stage = ASKED[step];
+  const answered = (answers[stage] ?? '').trim().length > 0;
+
+  if (busy) {
+    return (
+      <main className="shell narrow">
+        <h1 className="title">Session Zero</h1>
+        <div className="panel">
+          <p className="muted">
+            <span className="spinner">▚</span> Building a world and a character from what you said. This
+            takes a minute — a town, its people and their voices are being written from scratch.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="shell narrow">
+      <h1 className="title">Session Zero</h1>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Answer however you like. Anything you leave vague gets filled in; anything you pin down stays.
+      </p>
+
+      <section className="panel">
+        <p className="label">Language</p>
+        <div className="chips">
+          <button
+            className={language === 'en' ? 'chip on' : 'chip'}
+            onClick={() => setLanguage('en')}
+          >
+            English
+          </button>
+          <button
+            className={language === 'th' ? 'chip on' : 'chip'}
+            onClick={() => setLanguage('th')}
+          >
+            ไทย
+          </button>
+        </div>
+      </section>
+
+      {/* --------------------------------------------------- the interview */}
+      <section className="panel">
+        <div className="steps">
+          {ASKED.map((s, i) => (
+            <span key={s} className={i === step ? 'step on' : answers[s] ? 'step done' : 'step'}>
+              {s}
+            </span>
+          ))}
+        </div>
+
+        <p className="question">{questionFor(stage, language)}</p>
+        <textarea
+          className="answer"
+          rows={4}
+          value={answers[stage] ?? ''}
+          placeholder={language === 'th' ? 'พิมพ์คำตอบ…' : 'Say as much or as little as you like…'}
+          onChange={(e) => setAnswers({ ...answers, [stage]: e.target.value })}
+        />
+
+        <div className="chips" style={{ marginTop: '0.6rem' }}>
+          <button className="chip" disabled={step === 0} onClick={() => setStep(step - 1)}>back</button>
+          <button
+            className="chip"
+            disabled={step >= ASKED.length - 1}
+            onClick={() => setStep(step + 1)}
+          >
+            next
+          </button>
+          {!answered && (
+            <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>
+              leave it blank and the model decides
+            </span>
+          )}
+        </div>
+      </section>
+
+      {/* ------------------------------------------------ the hand-built half */}
+      <section className="panel">
+        <p className="label">By hand, if you want to</p>
+
+        <div className="field">
+          <label htmlFor="name">Name</label>
+          <input
+            id="name"
+            value={name}
+            placeholder={language === 'th' ? 'เว้นว่างให้ระบบตั้งให้' : 'leave blank to be named'}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="bg">Background</label>
+          <input
+            id="bg"
+            value={background}
+            placeholder="soldier, scholar, dock thief…"
+            onChange={(e) => setBackground(e.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="pb">Abilities</label>
+          <button
+            id="pb"
+            className={handBuilt ? 'chip on' : 'chip'}
+            onClick={() => setHandBuilt(!handBuilt)}
+          >
+            {handBuilt ? 'setting them myself' : 'let the model decide'}
+          </button>
+        </div>
+
+        {handBuilt && (
+          <div className="buy">
+            <p className="muted" style={{ fontSize: '0.8rem' }}>
+              {POINT_BUY_BUDGET} points. Scores run {POINT_BUY_MIN}–{POINT_BUY_MAX}, and the last few cost
+              more than the first.{' '}
+              <span className={left > 0 ? 'points' : 'muted'}>{left} left</span>
+              {left <= 0 && ' — lower one score to raise another.'}
+            </p>
+
+            {ABILITIES.map((ability) => (
+              <div className="row" key={ability}>
+                <div>
+                  <strong>{ability}</strong>{' '}
+                  <span className="muted">{abilities[ability]}</span>{' '}
+                  <span className="cond">costs {pointBuyCost(abilities[ability]) ?? '—'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button className="mini" disabled={!canAdjust(ability, -1)} onClick={() => adjust(ability, -1)}>
+                    −
+                  </button>
+                  <button
+                    className="mini"
+                    disabled={!canAdjust(ability, 1)}
+                    title={left <= 0 ? 'nothing left to spend — lower another score first' : undefined}
+                    onClick={() => adjust(ability, 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Leaving points unspent hands out a worse character than the rules allow. */}
+            {left > 0 && (
+              <p className="cond" style={{ marginTop: '0.5rem' }}>
+                {left} unspent — you can begin anyway, but nothing gives them back later.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+
+      {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
+
+      <div className="chips" style={{ marginTop: '1rem' }}>
+        <button onClick={create}>Begin</button>
+        <a className="chip" href="/">back to your runs</a>
+      </div>
+    </main>
+  );
+}

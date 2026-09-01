@@ -147,9 +147,14 @@ const describe = (grant: NodeGrant, cost: NodeGrant | undefined, language: Lang)
 /* Generation                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export function skillTreeFor(seed: number, backgroundId: string, language: Lang = 'en'): SkillTree {
+export function skillTreeFor(
+  seed: number,
+  backgroundId: string,
+  language: Lang = 'en',
+  backgroundName = '',
+): SkillTree {
   const rng = mulberry32((seed ^ hash(backgroundId)) >>> 0);
-  const home = archetypeForBackground(backgroundId);
+  const home = archetypeForBackground(backgroundId, backgroundName);
   const nodes: SkillNode[] = [];
 
   const start: SkillNode = {

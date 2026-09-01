@@ -15,6 +15,32 @@ export default function Home() {
   const [sessions, setSessions] = useState<Summary[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  /**
+   * Delete a run.
+   *
+   * The list is refetched rather than patched locally: the server is the one
+   * that knows what survived, and guessing here is how a UI ends up showing
+   * something that is not there.
+   */
+  async function remove(id: string) {
+    setDeleting(id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/sessions/${id}/delete`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'could not delete');
+      const refreshed = await fetch('/api/sessions').then((r) => r.json());
+      setSessions(Array.isArray(refreshed) ? refreshed : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(null);
+      setConfirming(null);
+    }
+  }
 
   useEffect(() => {
     fetch('/api/sessions')
@@ -57,8 +83,9 @@ export default function Home() {
           </p>
         ) : (
           <div className="chips">
-            <button onClick={() => begin('th')}>เริ่มเกมใหม่ (ไทย)</button>
-            <button onClick={() => begin('en')}>New game (English)</button>
+            <a className="primary" href="/new">Make a character</a>
+            <button className="chip" onClick={() => begin('en')}>Quick start (English)</button>
+            <button className="chip" onClick={() => begin('th')}>เริ่มเร็ว (ไทย)</button>
           </div>
         )}
         {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
@@ -70,17 +97,28 @@ export default function Home() {
 
       <div className="sessions">
         {sessions?.map((s) => (
-          <a key={s.id} href={`/play/${s.id}`} className="session">
-            <span>
+          <div key={s.id} className="session">
+            <a href={`/play/${s.id}`} className="session-body">
               <strong>{s.characterName || 'unnamed'}</strong>
               <span className="muted"> · {s.turns} turns · {s.language}</span>
               <br />
               <span className="dim" style={{ fontSize: '0.85rem' }}>{s.premise.slice(0, 120)}</span>
-            </span>
+            </a>
             <span className="muted" style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
               {new Date(s.updatedAt).toLocaleString()}
             </span>
-          </a>
+            {/* Two clicks, because a run is hours of play and there is no undo. */}
+            {confirming === s.id ? (
+              <span className="chips">
+                <button className="mini danger" disabled={deleting === s.id} onClick={() => remove(s.id)}>
+                  {deleting === s.id ? 'deleting…' : 'really delete'}
+                </button>
+                <button className="mini" onClick={() => setConfirming(null)}>keep</button>
+              </span>
+            ) : (
+              <button className="mini" onClick={() => setConfirming(s.id)}>delete</button>
+            )}
+          </div>
         ))}
       </div>
     </main>

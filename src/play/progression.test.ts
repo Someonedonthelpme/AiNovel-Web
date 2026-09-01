@@ -199,6 +199,14 @@ test('the tree opens next to the discipline the background trained for', () => {
   assert.equal(skillTreeFor(1, 'something_unheard_of').home, 'sword', 'and falls back rather than failing');
 });
 
+test('the display name is read too, since ids are generated', () => {
+  // Observed: a "Lighthouse Keeper" arrived with a meaningless id and was sent
+  // to the sword — the fallback for "no idea" rather than an answer.
+  assert.equal(skillTreeFor(1, 'bg_2', 'en', 'Lighthouse Keeper').home, 'wisdom');
+  assert.equal(skillTreeFor(1, 'bg_7', 'en', 'Blood Cultist').home, 'blackMagic');
+  assert.equal(skillTreeFor(1, 'bg_9', 'en', 'Fisher').home, 'survival');
+});
+
 test('the tree is a web, not eight separate ladders', () => {
   // Cross-links are what let a build hybridise instead of committing to one
   // spoke forever.

@@ -40,7 +40,7 @@ export const sheetRecord = (action: SheetAction): SheetRecord => ({ kind: 'sheet
 export type SheetResult = { state: PlayState; error: string | null; note: string | null };
 
 export const treeFor = (state: PlayState) =>
-  skillTreeFor(state.world.seed, state.sheet.background.id, state.sheet.language);
+  skillTreeFor(state.world.seed, state.sheet.background.id, state.sheet.language, state.sheet.background.name);
 
 export const contextOf = (state: PlayState): TraitContext => ({
   sheet: state.sheet,

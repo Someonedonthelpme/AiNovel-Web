@@ -324,3 +324,83 @@ input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
   font-size: 1.1rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Session list and character creation                                        */
+/* -------------------------------------------------------------------------- */
+
+/* The row is no longer one big link — the delete button lives inside it. */
+.session-body {
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.session-body:hover strong { color: var(--amber); }
+
+.mini.danger { color: var(--danger); border-color: var(--danger); }
+.mini.danger:hover:not(:disabled) { background: rgba(201, 100, 66, 0.12); }
+
+/* Creation is a reading page, not a dashboard: keep the measure short. */
+.shell.narrow { max-width: 46rem; }
+
+.title { margin: 0 0 0.2rem; font-size: 1.6rem; }
+
+a.primary,
+button.primary {
+  display: inline-block;
+  background: var(--amber);
+  color: #17140f;
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+a.primary:hover, button.primary:hover { filter: brightness(1.08); }
+
+.chip.on { color: var(--amber); border-color: var(--amber-dim); }
+
+.steps { display: flex; gap: 0.4rem; margin-bottom: 0.9rem; }
+.step {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 0.25rem;
+  flex: 1;
+}
+.step.on { color: var(--amber); border-bottom-color: var(--amber); }
+.step.done { color: var(--good); border-bottom-color: var(--good); }
+
+.question { font-size: 1.02rem; line-height: 1.5; margin: 0 0 0.7rem; }
+
+.answer {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+.answer:focus { outline: none; border-color: var(--amber-dim); }
+
+.field { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.6rem; }
+.field label { width: 6.5rem; font-size: 0.85rem; color: var(--ink-dim); }
+.field input {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  padding: 0.35rem 0.55rem;
+  font: inherit;
+}
+.field input:focus { outline: none; border-color: var(--amber-dim); }
+
+.buy { margin-top: 0.6rem; }

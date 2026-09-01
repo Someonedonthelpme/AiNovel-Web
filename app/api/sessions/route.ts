@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const language = body.language === 'th' ? 'th' : 'en';
   try {
-    return Response.json({ id: await newGame(language, body.answers) });
+    return Response.json({ id: await newGame(language, body.answers, body.draft) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
