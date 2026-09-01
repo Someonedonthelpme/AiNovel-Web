@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { repairAbilities, repairRegion } from './repair.ts';
+import { repairAbilities, repairRegion, repairVoice, repairVoiceForm } from './repair.ts';
 import { validateAbilities } from './sheet.ts';
 import { validateRegion } from '../world/validate.ts';
 import { groundFloor, place, world } from '../world/fixtures.ts';
@@ -150,4 +150,43 @@ test('repair is idempotent', () => {
   const twice = repairRegion(once.value);
   assert.deepEqual(twice.repairs, [], 'a repaired region needs no further repair');
   assert.deepEqual(twice.value, once.value);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Voice                                                                       */
+/* -------------------------------------------------------------------------- */
+
+test('a slash-joined pair is reduced to a single usable form', () => {
+  // Observed live: the generator answered "which particle?" with both genders,
+  // producing a string no prose could ever contain.
+  const r = repairVoiceForm('ครับ/ค่ะ');
+  assert.equal(r.value, 'ครับ');
+  assert.equal(r.repaired, true);
+});
+
+test('a single form is left alone', () => {
+  const r = repairVoiceForm('ค่ะ');
+  assert.equal(r.value, 'ค่ะ');
+  assert.equal(r.repaired, false);
+});
+
+test('other ways of offering alternatives are also reduced', () => {
+  assert.equal(repairVoiceForm('ผม, ฉัน').value, 'ผม');
+  assert.equal(repairVoiceForm('ผม or ฉัน').value, 'ผม');
+  assert.equal(repairVoiceForm('  ครับ  ').value, 'ครับ');
+});
+
+test('repairing a voice fixes every band and reports what it changed', () => {
+  const r = repairVoice({
+    selfPronoun: 'ผม/ดิฉัน',
+    underStress: 'กู',
+    addressBands: { '-3': 'คุณ', '2': 'เธอ/แก' },
+    particleBands: { '-3': 'ครับ/ค่ะ', '2': 'นะ' },
+    tics: [],
+  });
+  assert.equal(r.value.selfPronoun, 'ผม');
+  assert.equal(r.value.addressBands['2'], 'เธอ');
+  assert.equal(r.value.particleBands['-3'], 'ครับ');
+  assert.equal(r.value.particleBands['2'], 'นะ', 'untouched bands stay untouched');
+  assert.equal(r.repairs.length, 3);
 });

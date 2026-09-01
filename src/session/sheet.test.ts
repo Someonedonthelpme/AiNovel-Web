@@ -124,7 +124,7 @@ test('duplicate skill ids are rejected', () => {
 });
 
 test('a Thai character must have a self-pronoun, because register derives from it', () => {
-  const missing = thaiSheet({ voice: { selfPronoun: '', underStress: '' } });
+  const missing = thaiSheet({ voice: { selfPronoun: '', underStress: '', addressBands: {}, particleBands: {}, tics: [] } });
   assert.equal(validateSheet(missing).ok, false);
   assert.ok(validateSheet(missing).errors.some((e) => /self-pronoun/.test(e)));
   assert.equal(validateSheet(thaiSheet()).ok, true);

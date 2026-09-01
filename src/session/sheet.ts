@@ -1,6 +1,7 @@
 import type { Ability, Abilities, Attack, Combatant } from '../combat/types.ts';
 import { ABILITIES, abilityMod } from '../combat/types.ts';
-import type { Status } from '../engine/types.ts';
+import type { Persona, Status } from '../character/persona.ts';
+import { emptyPersona, neutralPersonality, restingMind } from '../character/persona.ts';
 
 /**
  * The character sheet, and the bridge from it into the combat engine.
@@ -42,7 +43,13 @@ export type Background = {
   socialStanding: Status;
 };
 
-export type CharacterSheet = {
+/**
+ * A full character sheet: a persona, plus everything needed to fight.
+ *
+ * The player character is no longer a special shape — this is the same sheet a
+ * recruitable NPC carries, which is what makes a companion possible at all.
+ */
+export type CharacterSheet = Persona & {
   name: string;
   language: 'th' | 'en';
   background: Background;
@@ -51,7 +58,6 @@ export type CharacterSheet = {
   traits: string[];
   level: number;
   hitDie: number;
-  voice: { selfPronoun: string; underStress: string };
 };
 
 /* -------------------------------------------------------------------------- */
@@ -214,6 +220,9 @@ export function validateSheet(sheet: CharacterSheet): SheetValidation {
   }
   if (sheet.language === 'th' && !sheet.voice.selfPronoun) {
     errors.push('a Thai character needs a self-pronoun; register is derived from it');
+  }
+  if (sheet.language === 'th' && !sheet.voice.underStress) {
+    warnings.push('no stressed pronoun: this character will sound the same when terrified');
   }
 
   return { ok: errors.length === 0, errors, warnings };

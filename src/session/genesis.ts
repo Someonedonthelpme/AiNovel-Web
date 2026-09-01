@@ -1,11 +1,13 @@
 import type { Attack } from '../combat/types.ts';
 import type { Provider } from '../llm/provider.ts';
+import { humanisePlaces } from '../world/naming.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
 import { validateRegion } from '../world/validate.ts';
 import type { Interview } from './interview.ts';
 import { isComplete, transcript } from './interview.ts';
-import { repairAbilities, repairRegion } from './repair.ts';
+import { clampPersonality, neutralPersonality, restingMind } from '../character/persona.ts';
+import { repairAbilities, repairRegion, repairVoice } from './repair.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { CHARACTER_SCHEMA, GROUND_FLOOR_SCHEMA } from './schema.ts';
 import type { Background, CharacterSheet, Skill, SkillKind } from './sheet.ts';
@@ -131,7 +133,20 @@ export async function generateCharacter(provider: Provider, interview: Interview
     traits: draft.traits ?? generated.traits,
     level: 1,
     hitDie: [6, 8, 10, 12].includes(generated.hitDie) ? generated.hitDie : 8,
-    voice: generated.voice,
+    voice: repairVoice({
+      selfPronoun: generated.voice.selfPronoun,
+      underStress: generated.voice.underStress,
+      // The player chooses how to address people turn by turn, so their own
+      // bands stay open rather than being fixed at generation.
+      addressBands: {},
+      particleBands: {},
+      tics: [],
+    }).value,
+    status: background.socialStanding,
+    personality: clampPersonality(generated.personality ?? {}),
+    mental: restingMind(),
+    counters: {},
+    pressure: neutralPersonality(),
   };
 
   const check = validateSheet(sheet);
@@ -151,9 +166,29 @@ export type WorldGenesis = {
   region: Region;
   people: Record<string, Person>;
   premise: string;
+  /** Where the player opens the game. Not necessarily the entrance. */
+  startPlace: string;
   repairs: string[];
   warnings: string[];
 };
+
+/**
+ * Where the game opens.
+ *
+ * The entrance is a gate, and gates are naturally deserted — which produced an
+ * opening turn with nobody to talk to, no affordances worth using, and no way to
+ * climb. The character LIVES in this town; they should begin in it, not in its
+ * doorway. The entrance still means "the way in from outside"; only the starting
+ * position changes.
+ */
+function chooseStartPlace(region: Region): string {
+  const lively = region.places.find((p) => p.kind === 'settlement' && p.people.length > 0);
+  if (lively) return lively.id;
+  const settlement = region.places.find((p) => p.kind === 'settlement');
+  if (settlement) return settlement.id;
+  const populated = region.places.find((p) => p.people.length > 0);
+  return populated?.id ?? region.entrance;
+}
 
 export async function generateGroundFloor(
   provider: Provider,
@@ -174,11 +209,26 @@ export async function generateGroundFloor(
           styleRule(language),
           'This is ONLY the ground-level town OUTSIDE the tower.',
           'Do not include any floor, hall or staircase inside the tower itself — just the stair that leads up to it.',
-          'Exactly one place must have kind "settlement".',
+          'Exactly one place must have kind "settlement". The player BEGINS there,',
+          'so it must be the liveliest place on the map: put most of the people in it,',
+          'and give it affordances worth spending a first turn on.',
           'One place is the way in from outside and one is the stair up into the tower; both have kind "gate".',
           'Every connection must be listed on BOTH places it joins.',
           'Affordances are concrete things a player can do there, not descriptions.',
           'Every id in a place\'s people list must be an id in the people array.',
+          'Each person needs a voice: selfPronoun is what they call themselves;',
+          'addressDistant and particleDistant are how they speak to a stranger;',
+          'addressWarm and particleWarm are how they speak once they trust someone.',
+          'The two pairs must differ - that shift is how the player hears trust change.',
+          'Every person needs a disposition, each from -3 to +3:',
+          '  warmth: cold and guarded (-3) to open and generous (+3)',
+          '  nerve: easily frightened (-3) to fearless (+3)',
+          '  discipline: impulsive (-3) to rigidly controlled (+3)',
+          '  candour: evasive and deceitful (-3) to blunt to a fault (+3)',
+          '  loyalty: would sell you out (-3) to would die for a friend (+3)',
+          'Make them differ from each other. A town of identical dispositions is a town of nobody.',
+          'underStress is what they call themselves when frightened or furious.',
+          'Each of these is ONE word. Never a pair, never a slash, never alternatives.',
         ].join('\n'),
       },
       {
@@ -196,7 +246,7 @@ export async function generateGroundFloor(
     ],
   });
 
-  const places: Place[] = generated.region.places.map((p) => ({
+  const rawPlaces: Place[] = generated.region.places.map((p) => ({
     id: p.id,
     name: p.name,
     kind: asPlaceKind(p.kind),
@@ -206,6 +256,8 @@ export async function generateGroundFloor(
     affordances: p.affordances,
     discovered: false,
   }));
+
+  const places = rawPlaces;
 
   // Everything the code can decide, the code decides.
   const draftRegion: Region = {
@@ -219,6 +271,8 @@ export async function generateGroundFloor(
     places,
     entrance: generated.region.entrance,
     exit: generated.region.exit,
+    // Ground level is a town: nothing hunts you here.
+    creatures: [],
   };
 
   const repaired = repairRegion(draftRegion);
@@ -234,6 +288,23 @@ export async function generateGroundFloor(
       tags: p.tags,
       alive: true,
       lastSeenTurn: 0,
+      status: p.status === 'superior' || p.status === 'inferior' ? p.status : 'peer',
+      // The model supplies the forms; the code decides which trust floors they
+      // sit at, so the banding is consistent across every generated person.
+      voice: repairVoice({
+        selfPronoun: p.selfPronoun,
+        underStress: p.underStress,
+        addressBands: { '-3': p.addressDistant, '2': p.addressWarm },
+        particleBands: { '-3': p.particleDistant, '2': p.particleWarm },
+        tics: [],
+      }).value,
+      personality: clampPersonality({
+        warmth: p.warmth, nerve: p.nerve, discipline: p.discipline,
+        candour: p.candour, loyalty: p.loyalty,
+      }),
+      mental: restingMind(),
+      counters: {},
+      pressure: neutralPersonality(),
     };
   }
 
@@ -269,6 +340,28 @@ export async function generateGroundFloor(
     }
   }
 
+  // The opening turn must have somebody in it. A generated town where everyone
+  // stands somewhere the player is not gives a first impression of a dead world.
+  const startPlace = chooseStartPlace(region);
+  const start = region.places.find((p) => p.id === startPlace);
+  const anyone = Object.keys(people)[0];
+  if (start && start.people.length === 0 && anyone) {
+    region.places = region.places.map((p) =>
+      p.id === startPlace ? { ...p, people: [anyone] } : p,
+    );
+    repairs.push(`nobody was at the starting place "${startPlace}"; placed "${anyone}" there`);
+  }
+
+  // You have obviously discovered the place you are standing in. Travel marks
+  // arrivals, but nothing marks the opening one — which left the first floor's
+  // start counted among the world's secrets.
+  region.places = region.places.map((p) => (p.id === startPlace ? { ...p, discovered: true } : p));
+
+  // The model writes ids into the parts a player reads — affordances like
+  // "climb stair_tower", descriptions naming warehouse_south. Rewrite them once,
+  // here, where both the places and the people are known.
+  region.places = humanisePlaces(region.places, people);
+
   const check = validateRegion(region, people);
   if (!check.ok) {
     throw new Error(`generated ground floor is unplayable: ${check.errors.map((e) => e.message).join('; ')}`);
@@ -278,6 +371,7 @@ export async function generateGroundFloor(
     region,
     people,
     premise: generated.premise,
+    startPlace,
     repairs,
     warnings: check.warnings.map((w) => w.message),
   };
@@ -310,9 +404,10 @@ export async function runGenesis(
     people: ground.people,
     facts: [],
     currentRegion: 'floor-0',
-    currentPlace: ground.region.entrance,
+    currentPlace: ground.startPlace,
     deepestFloor: 0,
     turn: 0,
+    flags: {},
   };
 
   return {

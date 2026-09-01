@@ -134,3 +134,47 @@ export function repairRegion(region: Region): Repair<Region> {
 
   return { value: { ...region, places, entrance, exit }, repairs };
 }
+
+/**
+ * A pronoun or particle must be a single form.
+ *
+ * Generators reliably answer "which particle?" with a pair like "A/B", covering
+ * both genders. That string can never appear in prose, so the register check can
+ * never pass. Splitting on the separator is safer than asking again.
+ */
+export function repairVoiceForm(raw: string): { value: string; repaired: boolean } {
+  const first = (raw ?? '').split(/[\/|,;]|\s+or\s+/)[0].trim();
+  return { value: first, repaired: first !== (raw ?? '').trim() };
+}
+
+export function repairVoice(voice: {
+  selfPronoun: string;
+  underStress: string;
+  addressBands: Record<string, string>;
+  particleBands: Record<string, string>;
+  tics: string[];
+}): Repair<typeof voice> {
+  const repairs: string[] = [];
+
+  const fix = (label: string, raw: string): string => {
+    const r = repairVoiceForm(raw);
+    if (r.repaired) repairs.push(`${label} "${raw}" reduced to "${r.value}"`);
+    return r.value;
+  };
+
+  const bands = (label: string, record: Record<string, string>) =>
+    Object.fromEntries(Object.entries(record).map(([k, v]) => [k, fix(`${label}[${k}]`, v)]));
+
+  return {
+    value: {
+      ...voice,
+      selfPronoun: fix('selfPronoun', voice.selfPronoun),
+      // Falls back to the calm form: sounding the same under pressure is better
+      // than having no pronoun at all.
+      underStress: fix('underStress', voice.underStress) || fix('selfPronoun', voice.selfPronoun),
+      addressBands: bands('address', voice.addressBands),
+      particleBands: bands('particle', voice.particleBands),
+    },
+    repairs,
+  };
+}

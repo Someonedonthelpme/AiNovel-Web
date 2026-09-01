@@ -1,5 +1,6 @@
 import { sword } from '../combat/fixtures.ts';
 import type { Abilities } from '../combat/types.ts';
+import { neutralPersonality, restingMind } from '../character/persona.ts';
 import type { Background, CharacterSheet, Skill } from './sheet.ts';
 import { defaultAbilities } from './sheet.ts';
 
@@ -51,13 +52,22 @@ export function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
     traits: ['blunt'],
     level: 1,
     hitDie: 10,
-    voice: { selfPronoun: 'I', underStress: 'I' },
+    voice: { selfPronoun: 'I', underStress: 'I', addressBands: {}, particleBands: {}, tics: [] },
+    status: 'peer',
+    personality: neutralPersonality(),
+    mental: restingMind(),
+    counters: {},
+    pressure: neutralPersonality(),
     ...over,
   };
 }
 
 export const thaiSheet = (over: Partial<CharacterSheet> = {}): CharacterSheet =>
-  sheet({ language: 'th', voice: { selfPronoun: 'ผม', underStress: 'กู' }, ...over });
+  sheet({
+    language: 'th',
+    voice: { selfPronoun: 'ผม', underStress: 'กู', addressBands: {}, particleBands: {}, tics: [] },
+    ...over,
+  });
 
 export const abilitiesOf = (over: Partial<Abilities> = {}): Abilities => ({
   ...defaultAbilities(),

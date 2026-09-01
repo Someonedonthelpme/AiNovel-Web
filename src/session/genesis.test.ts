@@ -20,6 +20,7 @@ const character = (over: Partial<GeneratedCharacter> = {}): GeneratedCharacter =
   traits: ['blunt', 'sleeps badly'],
   hitDie: 10,
   voice: { selfPronoun: 'I', underStress: 'I' },
+  personality: { warmth: 1, nerve: 2, discipline: 0, candour: 2, loyalty: 0 },
   baseAbilities: { str: 13, dex: 13, con: 13, int: 12, wis: 12, cha: 12 },
   background: {
     id: 'gate-guard',
@@ -54,7 +55,12 @@ const ground = (over: Partial<GeneratedGroundFloor> = {}): GeneratedGroundFloor 
     entrance: 'gate',
     exit: 'stair',
   },
-  people: [{ id: 'ora', name: 'Ora', oneLine: 'sells iron, trusts no one', tags: ['smith'], trust: 0 }],
+  people: [{
+    id: 'ora', name: 'Ora', oneLine: 'sells iron, trusts no one', tags: ['smith'], trust: 0,
+    status: 'peer', selfPronoun: 'I', underStress: 'I',
+    addressDistant: 'you', addressWarm: 'you', particleDistant: '', particleWarm: '',
+    warmth: -2, nerve: 1, discipline: 2, candour: 3, loyalty: 0,
+  }],
   ...over,
 });
 
@@ -73,7 +79,7 @@ test('Session Zero produces a valid character and a playable ground floor', asyn
   assert.equal(validateRegion(region, result.world.people).ok, true);
 
   assert.equal(result.world.currentRegion, 'floor-0');
-  assert.equal(result.world.currentPlace, 'gate', 'you start at the entrance');
+  assert.equal(result.world.currentPlace, 'square', 'you start in the town, not the gateway');
   assert.equal(result.world.seed, 42);
   assert.equal(result.premise, 'The tower opened again last winter.');
 });
@@ -194,4 +200,61 @@ test('an implausible hit die is replaced rather than failing the sheet', async (
   const { sheet } = await generateCharacter(provider(odd), completed());
   assert.equal(sheet.hitDie, 8);
   assert.equal(validateSheet(sheet).ok, true);
+});
+
+/* -------------------------------------------------------------------------- */
+/* The opening turn must not be empty                                          */
+/* -------------------------------------------------------------------------- */
+
+test('the game opens in the settlement, not standing in a gateway', async () => {
+  // A gate is deserted by nature. Opening there gave a first turn with nobody to
+  // talk to, nothing worth doing, and no way to climb.
+  const r = await runGenesis(provider(), completed());
+  const region = r.world.regions['floor-0'];
+  if (region.detail !== 'full') return assert.fail('expected a full region');
+
+  const start = region.places.find((p) => p.id === r.world.currentPlace);
+  assert.equal(start?.kind, 'settlement');
+  assert.notEqual(r.world.currentPlace, region.entrance);
+  assert.equal(region.entrance, 'gate', 'the way in from outside is unchanged');
+});
+
+test('somebody is always present on the opening turn', async () => {
+  const empty = ground();
+  // The model put everyone somewhere the player will not be.
+  empty.region.places = empty.region.places.map((p) => ({ ...p, people: [] }));
+
+  const sheet = (await generateCharacter(provider(), completed())).sheet;
+  const r = await generateGroundFloor(new FakeProvider({ structured: [empty] }), completed(), sheet);
+
+  const start = r.region.places.find((p) => p.id === r.startPlace);
+  assert.ok((start?.people.length ?? 0) > 0, 'the first turn would have had nobody in it');
+  assert.ok(r.repairs.some((m) => /starting place/.test(m)));
+});
+
+test('a town that already has people is left alone', async () => {
+  const sheet = (await generateCharacter(provider(), completed())).sheet;
+  const r = await generateGroundFloor(new FakeProvider({ structured: [ground()] }), completed(), sheet);
+  assert.equal(r.startPlace, 'square');
+  assert.deepEqual(r.region.places.find((p) => p.id === 'square')?.people, ['ora']);
+  assert.equal(r.repairs.some((m) => /starting place/.test(m)), false);
+});
+
+test('with no settlement at all, it falls back to wherever the people are', async () => {
+  const wild = ground();
+  wild.region.places = wild.region.places.map((p) =>
+    p.kind === 'settlement' ? { ...p, kind: 'landmark' } : p,
+  );
+
+  const sheet = (await generateCharacter(provider(), completed())).sheet;
+  const r = await generateGroundFloor(new FakeProvider({ structured: [wild] }), completed(), sheet);
+  const start = r.region.places.find((p) => p.id === r.startPlace);
+  assert.ok((start?.people.length ?? 0) > 0);
+});
+
+test('the model is told the settlement is where play begins', async () => {
+  const sheet = (await generateCharacter(provider(), completed())).sheet;
+  const p = new FakeProvider({ structured: [ground()] });
+  await generateGroundFloor(p, completed(), sheet);
+  assert.match(p.allSentText(), /player BEGINS there/);
 });

@@ -70,6 +70,16 @@ export const CHARACTER_SCHEMA = obj(
     traits: { type: 'array', items: str, minItems: 2, maxItems: 5 },
     hitDie: { type: 'integer', enum: [6, 8, 10, 12] },
     voice: obj({ selfPronoun: str, underStress: str }, ['selfPronoun', 'underStress']),
+    personality: obj(
+      {
+    warmth: { type: 'integer', minimum: -3, maximum: 3 },
+    nerve: { type: 'integer', minimum: -3, maximum: 3 },
+    discipline: { type: 'integer', minimum: -3, maximum: 3 },
+    candour: { type: 'integer', minimum: -3, maximum: 3 },
+    loyalty: { type: 'integer', minimum: -3, maximum: 3 },
+      },
+      ['warmth', 'nerve', 'discipline', 'candour', 'loyalty'],
+    ),
     baseAbilities: abilityScores,
     background: obj(
       {
@@ -88,7 +98,7 @@ export const CHARACTER_SCHEMA = obj(
       ['id', 'name', 'description', 'grantsStats', 'grantsSkills', 'startingGear', 'startingAttacks', 'socialStanding'],
     ),
   },
-  ['name', 'traits', 'hitDie', 'voice', 'baseAbilities', 'background'],
+  ['name', 'traits', 'hitDie', 'voice', 'personality', 'baseAbilities', 'background'],
 );
 
 const place = obj(
@@ -104,6 +114,11 @@ const place = obj(
   ['id', 'name', 'kind', 'description', 'connections', 'people', 'affordances'],
 );
 
+/**
+ * Voice is asked for as FLAT fields rather than nested trust bands: a model can
+ * pick five pronouns reliably, but reliably keying a record by trust floor is a
+ * different matter. `genesis.ts` assembles the bands.
+ */
 const personSchema = obj(
   {
     id: str,
@@ -111,8 +126,22 @@ const personSchema = obj(
     oneLine: str,
     tags: strArray,
     trust: { type: 'integer', minimum: -3, maximum: 4 },
+    status: { type: 'string', enum: ['superior', 'peer', 'inferior'] },
+    selfPronoun: str,
+    underStress: str,
+    addressDistant: str,
+    addressWarm: str,
+    particleDistant: str,
+    particleWarm: str,
+    warmth: { type: 'integer', minimum: -3, maximum: 3 },
+    nerve: { type: 'integer', minimum: -3, maximum: 3 },
+    discipline: { type: 'integer', minimum: -3, maximum: 3 },
+    candour: { type: 'integer', minimum: -3, maximum: 3 },
+    loyalty: { type: 'integer', minimum: -3, maximum: 3 },
   },
-  ['id', 'name', 'oneLine', 'tags', 'trust'],
+  ['id', 'name', 'oneLine', 'tags', 'trust', 'status', 'selfPronoun', 'underStress',
+   'addressDistant', 'addressWarm', 'particleDistant', 'particleWarm',
+   'warmth', 'nerve', 'discipline', 'candour', 'loyalty'],
 );
 
 export const GROUND_FLOOR_SCHEMA = obj(
@@ -143,6 +172,13 @@ export type GeneratedCharacter = {
   traits: string[];
   hitDie: number;
   voice: { selfPronoun: string; underStress: string };
+  personality: {
+    warmth: number;
+    nerve: number;
+    discipline: number;
+    candour: number;
+    loyalty: number;
+  };
   baseAbilities: Record<string, number>;
   background: {
     id: string;
@@ -174,5 +210,23 @@ export type GeneratedGroundFloor = {
     entrance: string;
     exit: string;
   };
-  people: { id: string; name: string; oneLine: string; tags: string[]; trust: number }[];
+  people: {
+    id: string;
+    name: string;
+    oneLine: string;
+    tags: string[];
+    trust: number;
+    status: string;
+    selfPronoun: string;
+    underStress: string;
+    addressDistant: string;
+    addressWarm: string;
+    particleDistant: string;
+    particleWarm: string;
+    warmth: number;
+    nerve: number;
+    discipline: number;
+    candour: number;
+    loyalty: number;
+  }[];
 };
