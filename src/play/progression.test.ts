@@ -7,7 +7,8 @@ import {
   abilityPointsBetween, depthFactor, grantXp, spendAbilityPoint, xpForFight, xpForNewDepth, xpToNext,
 } from './progress.ts';
 import { allocate, allocationOf, canAllocate, totalGrant, visibleNodes } from './allocate.ts';
-import { skillTreeFor } from './skilltree.ts';
+import { ARCHETYPES, skillTreeFor } from './skilltree.ts';
+import { activeSkills } from '../session/sheet.ts';
 import { awardTraits, COUNTERS, newlyEarned, progressOf, traitMet } from './traits.ts';
 import { TRAITS } from './traitbook.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
@@ -125,7 +126,7 @@ test('walking a route costs a point at every step', () => {
   const tree = treeOf(state);
   let sheet: CharacterSheet = { ...state.sheet, skillPoints: 3 };
 
-  const branch = tree.nodes.filter((n) => n.id.startsWith('b0r')).sort((a, b) => a.ring - b.ring);
+  const branch = tree.nodes.filter((n) => n.archetype === tree.home && n.ring > 0).sort((a, b) => a.ring - b.ring);
   for (const node of branch.slice(0, 3)) {
     const r = allocate(tree, { ...ctxOf(state), sheet }, node.id);
     assert.equal(r.error, null, `could not take ${node.id}`);
@@ -157,6 +158,57 @@ test('a hidden node does not exist until it is earned', () => {
   assert.ok(visibleNodes(tree, veteran).some((n) => n.kind === 'keystone'));
 });
 
+test('every discipline is on the tree, and each teaches two actives', () => {
+  // The first tree was eight anonymous spokes of "+1 str". A branch has to say
+  // what kind of character you are becoming, which means teaching something.
+  const tree = skillTreeFor(21, 'soldier', 'en');
+  const disciplines = new Set(tree.nodes.filter((n) => n.ring > 0).map((n) => n.archetype));
+  assert.equal(disciplines.size, ARCHETYPES.length, 'all eight disciplines present');
+
+  for (const archetype of ARCHETYPES) {
+    const teaching = tree.nodes.filter((n) => n.archetype === archetype.id && n.teaches);
+    assert.equal(teaching.length, 2, `${archetype.id} should teach two skills`);
+  }
+});
+
+test('taking a notable teaches its skill', () => {
+  // This is what was missing: the tree had no actives in it at all.
+  const state = playState();
+  const tree = treeOf(state);
+  const notable = tree.nodes.find((n) => n.teaches && n.archetype === tree.home)!;
+
+  // Walk out to it, paying for the route like anyone would.
+  const route = tree.nodes
+    .filter((n) => n.archetype === tree.home && n.ring > 0 && n.ring <= notable.ring)
+    .sort((a, b) => a.ring - b.ring);
+
+  let sheet: CharacterSheet = { ...state.sheet, skillPoints: route.length };
+  for (const node of route) sheet = allocate(tree, { ...ctxOf(state), sheet }, node.id).sheet;
+
+  assert.ok(
+    sheet.learned?.some((s) => s.id === notable.teaches!.id),
+    'the notable should have taught something usable',
+  );
+  assert.ok(activeSkills(sheet).some((s) => s.id === notable.teaches!.id));
+});
+
+test('the tree opens next to the discipline the background trained for', () => {
+  assert.equal(skillTreeFor(1, 'harbour_guard').home, 'guard');
+  assert.equal(skillTreeFor(1, 'scholar_of_the_archive').home, 'magic');
+  assert.equal(skillTreeFor(1, 'dock_thief').home, 'guile');
+  assert.equal(skillTreeFor(1, 'something_unheard_of').home, 'sword', 'and falls back rather than failing');
+});
+
+test('the tree is a web, not eight separate ladders', () => {
+  // Cross-links are what let a build hybridise instead of committing to one
+  // spoke forever.
+  const tree = skillTreeFor(5, 'soldier');
+  const crossings = tree.nodes.filter((n) =>
+    n.connections.some((c) => tree.nodes.find((o) => o.id === c)?.archetype !== n.archetype && c !== 'start'),
+  );
+  assert.ok(crossings.length > 0, 'some branches should touch');
+});
+
 test('a keystone gives with one hand and takes with the other', () => {
   const tree = skillTreeFor(11, 'soldier');
   const keystone = tree.nodes.find((n) => n.kind === 'keystone')!;
@@ -174,7 +226,7 @@ test('what the tree grants reaches the character', () => {
   const before = derive(state.sheet, state.pc.inventory);
 
   let sheet: CharacterSheet = { ...state.sheet, skillPoints: 4 };
-  const branch = tree.nodes.filter((n) => n.id.startsWith('b0r')).sort((a, b) => a.ring - b.ring);
+  const branch = tree.nodes.filter((n) => n.archetype === tree.home && n.ring > 0).sort((a, b) => a.ring - b.ring);
   for (const node of branch.slice(0, 3)) {
     sheet = allocate(tree, { ...ctxOf(state), sheet }, node.id).sheet;
   }

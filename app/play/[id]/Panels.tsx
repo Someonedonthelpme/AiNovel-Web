@@ -71,7 +71,11 @@ export function CharacterPanel({ view, act, busy, onClose }: {
       ))}
 
       <p className="label" style={{ marginTop: '1.2rem' }}>Carrying</p>
-      {view.inventory.stacks.length === 0 && <p className="muted">Nothing but what you stand in.</p>}
+      <div className="row purse">
+        <div><strong>coin</strong> <span className="muted">what you have on you</span></div>
+        <div className="coin">{c.coin}</div>
+      </div>
+      {view.inventory.stacks.length === 0 && <p className="muted">Nothing else but what you stand in.</p>}
       {view.inventory.stacks.map((item) => (
         <div className="row" key={item.id}>
           <div>
@@ -115,15 +119,44 @@ export function CharacterPanel({ view, act, busy, onClose }: {
  * not drawn at all — a node you cannot yet earn should not be a locked door you
  * can count and plan around.
  */
+/**
+ * A colour per discipline.
+ *
+ * Eight branches that all looked the same was the visual version of the problem
+ * the tree had mechanically — nothing about a route told you what it was.
+ */
+const DISCIPLINE: Record<string, { hue: string; label: string }> = {
+  sword: { hue: '#c96442', label: 'sword' },
+  bow: { hue: '#7fa76a', label: 'bow' },
+  guard: { hue: '#6f8fae', label: 'shield' },
+  wisdom: { hue: '#d9a441', label: 'the long look' },
+  magic: { hue: '#8a7fc4', label: 'figures' },
+  blackMagic: { hue: '#a4547f', label: 'the cost' },
+  guile: { hue: '#c8a06a', label: 'the quiet word' },
+  survival: { hue: '#8a9a6b', label: 'the long walk' },
+};
+
+const hueOf = (archetype: string): string => DISCIPLINE[archetype]?.hue ?? '#9c8f7d';
+
 function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   const [hover, setHover] = useState<string | null>(null);
   const byId = new Map(view.tree.nodes.map((n) => [n.id, n]));
   const shown = hover ? byId.get(hover) : null;
+  const spent = view.tree.nodes.filter((n) => n.taken && n.id !== 'start').length;
 
   return (
     <div>
-      <p className="muted" style={{ fontSize: '0.8rem' }}>
-        A point can only go somewhere touching what you already hold.
+      <div className="legend">
+        {Object.entries(DISCIPLINE).map(([id, d]) => (
+          <span className="legend-item" key={id} style={{ opacity: view.tree.home === id ? 1 : 0.5 }}>
+            <i style={{ background: d.hue }} />
+            {d.label}{view.tree.home === id ? ' · yours' : ''}
+          </span>
+        ))}
+      </div>
+
+      <p className="muted" style={{ fontSize: '0.8rem', margin: '0.4rem 0' }}>
+        A point can only go somewhere touching what you already hold. {spent} spent.
         {view.character.skillPoints > 0 && (
           <span className="points"> {view.character.skillPoints} to spend.</span>
         )}
@@ -138,43 +171,73 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
               const other = byId.get(to);
               if (!other) return null;
               const lit = node.taken && other.taken;
+              const crossing =
+                node.archetype !== other.archetype && node.id !== 'start' && other.id !== 'start';
               return (
                 <line
                   key={`${node.id}-${to}`}
                   x1={node.x} y1={node.y} x2={other.x} y2={other.y}
-                  stroke={lit ? '#7a5f27' : '#241f1a'}
-                  strokeWidth={lit ? 0.9 : 0.5}
+                  stroke={lit ? hueOf(node.archetype) : '#241f1a'}
+                  strokeWidth={lit ? 0.8 : 0.4}
+                  // A link between disciplines is the hybrid route; dashing it
+                  // makes the shape of the web readable at a glance.
+                  strokeDasharray={crossing ? '1.4 1.2' : undefined}
                 />
               );
             }),
         )}
 
         {view.tree.nodes.map((node) => {
-          const r = node.kind === 'keystone' ? 3.4 : node.kind === 'notable' ? 2.6 : 1.7;
+          const r = node.kind === 'keystone' ? 3.2 : node.kind === 'notable' ? 2.4 : 1.5;
           // Reachable draws the route; affordable decides whether it can be
           // clicked. Showing one without the other is what makes a tree legible.
           const open = node.reachable && !busy && view.character.skillPoints > 0;
+          const hue = hueOf(node.archetype);
           return (
-            <circle
-              key={node.id}
-              cx={node.x} cy={node.y} r={r}
-              fill={node.taken ? '#d9a441' : node.reachable ? '#3a3025' : '#1c1815'}
-              stroke={node.reachable && !node.taken ? '#7a5f27' : '#2b2620'}
-              strokeWidth={0.5}
-              style={open ? { cursor: 'pointer' } : undefined}
-              onMouseEnter={() => setHover(node.id)}
-              onMouseLeave={() => setHover(null)}
-              onClick={open ? () => act({ type: 'allocate', node: node.id }) : undefined}
-            >
-              <title>{node.name} — {node.description}</title>
-            </circle>
+            <g key={node.id}>
+              {node.taken && node.kind !== 'minor' && (
+                <circle
+                  cx={node.x} cy={node.y} r={r + 1.4}
+                  fill="none" stroke={hue} strokeWidth={0.4} opacity={0.5}
+                />
+              )}
+              <circle
+                cx={node.x} cy={node.y} r={r}
+                fill={node.taken ? hue : node.reachable ? '#3a3025' : '#1c1815'}
+                stroke={node.taken || node.reachable ? hue : '#2b2620'}
+                strokeWidth={node.reachable && !node.taken ? 0.6 : 0.4}
+                style={open ? { cursor: 'pointer' } : undefined}
+                onMouseEnter={() => setHover(node.id)}
+                onMouseLeave={() => setHover(null)}
+                onClick={open ? () => act({ type: 'allocate', node: node.id }) : undefined}
+              >
+                <title>{node.name} — {node.description}</title>
+              </circle>
+              {/* Keystones carry a mark, because they are the decisions. */}
+              {node.kind === 'keystone' && (
+                <circle cx={node.x} cy={node.y} r={0.9} fill={node.taken ? '#12100e' : hue} />
+              )}
+            </g>
           );
         })}
       </svg>
 
-      <p className="muted" style={{ fontSize: '0.8rem', minHeight: '2.4em' }}>
-        {shown ? <><strong>{shown.name}</strong> — {shown.description}</> : 'Hover a node to read it.'}
-      </p>
+      <div className="node-read">
+        {shown ? (
+          <>
+            <strong style={{ color: hueOf(shown.archetype) }}>{shown.name}</strong>{' '}
+            <span className="tag">{shown.kind}</span>
+            <span className="tag">{DISCIPLINE[shown.archetype]?.label ?? shown.archetype}</span>
+            <p className="muted">{shown.description}</p>
+            {shown.teaches && <p className="teaches">teaches {shown.teaches}</p>}
+          </>
+        ) : (
+          <p className="muted">
+            Hover a node to read it. Larger nodes are notables, which teach a skill;
+            ringed ones are keystones, which trade something away.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

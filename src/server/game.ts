@@ -130,7 +130,13 @@ export type GameView = {
   };
   /** What the skills panel shows. Hidden nodes and Signets are absent, not greyed. */
   tree: {
-    nodes: { id: string; name: string; description: string; kind: string; x: number; y: number; connections: string[]; taken: boolean; reachable: boolean }[];
+    home: string;
+    nodes: {
+      id: string; name: string; description: string; kind: string; archetype: string;
+      x: number; y: number; connections: string[]; taken: boolean; reachable: boolean;
+      /** Notables teach an active; the panel says so before you spend on it. */
+      teaches: string | null;
+    }[];
   };
   traits: {
     id: string; name: string; description: string; held: boolean;
@@ -527,11 +533,14 @@ function treeViewOf(state: PlayState): GameView['tree'] {
   const shown = new Set(visible.map((n) => n.id));
 
   return {
+    home: tree.home,
     nodes: visible.map((node) => ({
       id: node.id,
       name: node.name,
       description: node.description,
       kind: node.kind,
+      archetype: node.archetype,
+      teaches: node.teaches ? `${node.teaches.name} — ${describeEffect(node.teaches)}` : null,
       x: node.x,
       y: node.y,
       // Edges to nodes that are not visible would draw lines into nothing.

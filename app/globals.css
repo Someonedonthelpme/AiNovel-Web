@@ -284,3 +284,43 @@ input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
    trait panel is showing how far off you are. */
 .cond { font-size: 0.75rem; color: var(--ink-dim); }
 .cond.met { color: var(--good); }
+
+/* -------------------------------------------------------------------------- */
+/* The skill tree                                                             */
+/* -------------------------------------------------------------------------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  margin-bottom: 0.6rem;
+}
+.legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend-item i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Fixed height so the tree does not jump as you move across it. */
+.node-read {
+  min-height: 5.2rem;
+  padding: 0.6rem 0.75rem;
+  margin-top: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.node-read p { margin: 0.3rem 0 0; font-size: 0.8rem; }
+.teaches { color: var(--good); }
+
+/* The purse sits with the pack, because coin is a thing you carry. */
+.purse { align-items: center; }
+.coin {
+  color: var(--amber);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}

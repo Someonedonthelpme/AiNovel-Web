@@ -80,12 +80,19 @@ export function allocate(tree: SkillTree, ctx: TraitContext, nodeId: string): Al
   const taken = [...allocation.taken, nodeId];
   const node = tree.nodes.find((n) => n.id === nodeId) ?? null;
 
+  // A notable TEACHES. Folding it into `learned` here keeps every active in
+  // one list, so nothing downstream has to know whether a skill came from a
+  // background, a book, or a point spent on the tree.
+  const learned = [...(ctx.sheet.learned ?? [])];
+  if (node?.teaches && !learned.some((s) => s.id === node.teaches!.id)) learned.push(node.teaches);
+
   return {
     sheet: {
       ...ctx.sheet,
       allocated: taken,
       skillPoints: (ctx.sheet.skillPoints ?? 0) - 1,
       treeBonuses: totalGrant(tree, taken),
+      learned,
     },
     error: null,
     node,
