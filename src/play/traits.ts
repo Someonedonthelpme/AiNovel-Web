@@ -1,6 +1,7 @@
 import { counterOf } from '../character/persona.ts';
 import type { Axis, Counters, Personality } from '../character/persona.ts';
 import type { Ability } from '../combat/types.ts';
+import type { GraftSpec } from './graft.ts';
 import type { Inventory } from '../items/types.ts';
 import { countOf } from '../items/types.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
@@ -32,6 +33,14 @@ export type Trait = {
   requires: TraitCondition[];
   /** What it does. Passive, and resolved by code like everything else. */
   grants?: { ability?: Partial<Record<Ability, number>>; note?: string };
+  /**
+   * A branch this trait grows on the tree when it is earned.
+   *
+   * Not every trait has one — a tree that sprouted on every tally would be
+   * noise. The ones that do are the traits that mark a change in what you are
+   * capable of rather than merely what you have done.
+   */
+  opens?: GraftSpec;
 };
 
 /* -------------------------------------------------------------------------- */

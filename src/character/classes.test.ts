@@ -85,18 +85,43 @@ test('every subclass opens a way somewhere, and mostly somewhere barred', () => 
   }
 });
 
-test('choosing a subclass grows an island that was not there before', () => {
+test('choosing a subclass grows a branch that was not there before', () => {
   // The point of the whole feature: a choice that visibly reshapes the tree.
   const held = classById('fighter')!;
   const sub = held.subclasses[0];
 
-  const before = skillTreeFor(9, 'bg', 'en', '', { classId: held.id });
-  const after = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: sub.id });
+  const before = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, level: 3 });
+  const after = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: sub.id, level: 3 });
 
-  const grown = after.nodes.filter((n) => n.id.startsWith('sub_'));
-  assert.equal(before.nodes.some((n) => n.id.startsWith('sub_')), false);
+  const grown = after.nodes.filter((n) => n.grafted?.kind === 'subclass');
+  assert.equal(before.nodes.some((n) => n.grafted?.kind === 'subclass'), false);
   assert.ok(grown.length > 0, 'the subclass should have opened something');
-  assert.ok(grown.every((n) => n.archetype === sub.opens), `the island should be ${sub.opens}`);
+  assert.ok(grown.every((n) => n.archetype === sub.opens), `the branch should be ${sub.opens}`);
+});
+
+test('a subclass pays out again as the character grows', () => {
+  // Three stages rather than one parcel: a permanent choice should buy an arc.
+  const held = classById('fighter')!;
+  const sub = held.subclasses[0];
+  const at = (level: number) =>
+    skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: sub.id, level })
+      .nodes.filter((n) => n.grafted?.kind === 'subclass').length;
+
+  assert.equal(at(2), 0, 'nothing before the first stage');
+  assert.ok(at(3) > 0);
+  assert.ok(at(6) > at(3), 'the second stage deepens it');
+  assert.ok(at(10) > at(6), 'and so does the third');
+});
+
+test('the first subclass stage is a combination, not a walk', () => {
+  // The crossing only opens once several parts of your own tree line up, so an
+  // Eldritch Knight has to have genuinely walked the sword first.
+  const tree = skillTreeFor(9, 'bg', 'en', '', {
+    classId: 'fighter', subclassId: 'eldritch_knight', level: 3,
+  });
+  const head = tree.nodes.find((n) => n.grafted?.kind === 'subclass' && n.requiresAll?.length);
+  assert.ok(head, 'the first stage should need more than one held node');
+  assert.ok((head!.requiresAll ?? []).length >= 2);
 });
 
 test('the subclass island reaches somewhere the class could never go', () => {
@@ -104,27 +129,30 @@ test('the subclass island reaches somewhere the class could never go', () => {
   const knight = held.subclasses.find((s) => s.opens === 'magic')!;
   assert.ok(held.forbidden.includes('magic'), 'magic is barred to a fighter');
 
-  const tree = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: knight.id });
+  const tree = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: knight.id, level: 3 });
   assert.ok(
     tree.nodes.some((n) => n.archetype === 'magic'),
     'and the only route in is the subclass',
   );
 });
 
-test('a subclass island is open, not waiting on a tally', () => {
+test('a subclass branch is open, not waiting on a tally', () => {
   // It was earned by taking the subclass. Gating it again would mean choosing
   // one and seeing nothing happen.
-  const tree = skillTreeFor(9, 'bg', 'en', '', { classId: 'rogue', subclassId: 'poisoner' });
-  const island = tree.nodes.filter((n) => n.id.startsWith('sub_'));
-  assert.ok(island.length > 0);
-  assert.ok(island.every((n) => !n.requires?.length), 'no requirement left on it');
+  const tree = skillTreeFor(9, 'bg', 'en', '', { classId: 'rogue', subclassId: 'poisoner', level: 3 });
+  const branch = tree.nodes.filter((n) => n.grafted?.kind === 'subclass');
+  assert.ok(branch.length > 0);
+  assert.ok(branch.every((n) => !n.requires?.length), 'no requirement left on it');
 });
 
 test('nothing is orphaned once a subclass island is attached', () => {
   // The chaotic generator has to keep its promise: a node nothing connects to
   // is a node nobody can ever buy.
   for (const seed of SEEDS) {
-    const tree = skillTreeFor(seed, 'bg', 'en', '', { classId: 'warlock', subclassId: 'pact_voice' });
+    const tree = skillTreeFor(seed, 'bg', 'en', '', {
+      classId: 'warlock', subclassId: 'pact_voice', level: 10,
+      traits: ['butcher', 'veteran'], signets: ['signet_deep_current'],
+    });
     const byId = new Map(tree.nodes.map((n) => [n.id, n]));
     const seen = new Set<string>([tree.start]);
     const queue = [tree.start];
@@ -201,8 +229,8 @@ test('a session with no class behaves exactly as it did', () => {
 });
 
 test('the same class and subclass always give the same tree', () => {
-  const a = skillTreeFor(4, 'bg', 'en', '', { classId: 'bard', subclassId: 'skirmisher' });
-  const b = skillTreeFor(4, 'bg', 'en', '', { classId: 'bard', subclassId: 'skirmisher' });
+  const a = skillTreeFor(4, 'bg', 'en', '', { classId: 'bard', subclassId: 'skirmisher', level: 10 });
+  const b = skillTreeFor(4, 'bg', 'en', '', { classId: 'bard', subclassId: 'skirmisher', level: 10 });
   assert.deepEqual(a.nodes, b.nodes);
   assert.deepEqual(a.disciplines, b.disciplines);
 });

@@ -8,7 +8,7 @@ import { mulberry32 } from '../engine/roll.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import { LOCAL_MODELS } from '../llm/local.ts';
 import { LocalProvider } from '../llm/localProvider.ts';
-import { allocationOf, canAllocate, visibleNodes } from '../play/allocate.ts';
+import { allocationOf, canAllocate, entryOpen, visibleNodes } from '../play/allocate.ts';
 import { applySheetAction, contextOf, sheetRecord, treeFor } from '../play/sheetaction.ts';
 import type { SheetAction } from '../play/sheetaction.ts';
 import { progressOf } from '../play/traits.ts';
@@ -143,6 +143,12 @@ export type GameView = {
       x: number; y: number; connections: string[]; taken: boolean; reachable: boolean;
       /** Notables teach an active; the panel says so before you spend on it. */
       teaches: string | null;
+      /** Which system grew this branch, so the card can say why it is there. */
+      grafted: { kind: string; name: string } | null;
+      /** Needs nothing held — you read your way in rather than walking. */
+      freeStanding: boolean;
+      /** Opens only when ALL of these are held. */
+      requiresAll: string[];
     }[];
   };
   traits: {
@@ -570,6 +576,9 @@ function treeViewOf(state: PlayState): GameView['tree'] {
       kind: node.kind,
       archetype: node.archetype,
       teaches: node.teaches ? `${node.teaches.name} — ${describeEffect(node.teaches)}` : null,
+      grafted: node.grafted ? { kind: node.grafted.kind, name: node.grafted.name } : null,
+      freeStanding: Boolean(node.freeStanding),
+      requiresAll: node.requiresAll ?? [],
       x: node.x,
       y: node.y,
       // Edges to nodes that are not visible would draw lines into nothing.
@@ -578,7 +587,9 @@ function treeViewOf(state: PlayState): GameView['tree'] {
       // Structure only. Whether a point is AFFORDABLE is a separate question,
       // and conflating them made the whole tree look dead at level one instead
       // of showing the routes out of the centre.
-      reachable: !allocation.taken.includes(node.id) && node.connections.some((c) => allocation.taken.includes(c)),
+      // Mirrors the three entry rules, so the drawing agrees with what the
+      // engine will actually allow.
+      reachable: !allocation.taken.includes(node.id) && entryOpen(node, allocation),
     })),
   };
 }

@@ -2,6 +2,8 @@ import type { Ability, Condition } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import type { Item } from '../items/types.ts';
+import type { ArchetypeId } from '../play/archetypes.ts';
+import type { GraftSpec } from '../play/graft.ts';
 import type { Skill } from '../session/sheet.ts';
 import type { ActiveEffect, ActiveKind, ActiveSkill } from './active.ts';
 
@@ -97,7 +99,25 @@ const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
  * action rather than a special case, and the skill travels with the save
  * without needing a separate table.
  */
-export type SkillBook = Item & { teaches: ActiveSkill };
+export type SkillBook = Item & {
+  teaches: ActiveSkill;
+  /**
+   * The set of nodes reading it opens.
+   *
+   * Always PARALLEL: a book free-stands, because you did not walk to it — you
+   * read your way in, and the book was the entry price. It is the one thing on
+   * the tree contiguity has nothing to say about.
+   */
+  set: GraftSpec;
+  /**
+   * Another book that has to have been read first.
+   *
+   * What makes a shelf out of a pile. A chain this tower cannot actually supply
+   * is discarded before it ships — the same proof that keeps an unobtainable
+   * Signet out.
+   */
+  needsBook?: string;
+};
 
 export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en'): SkillBook {
   const titles = TITLES[language];
@@ -120,6 +140,9 @@ export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en')
     requires: floor >= 8 ? [{ kind: 'level', atLeast: Math.min(12, Math.floor(floor / 2)) }] : undefined,
   };
 
+  // Which discipline the set belongs to. Deeper books lean on the harder ones.
+  const family = ABILITY_TO_DISCIPLINE[ability];
+
   return {
     id: `book_${seed.toString(36)}`,
     name: title,
@@ -131,8 +154,24 @@ export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en')
     value: 60 + floor * 10,
     foundOn: floor,
     teaches: taught,
+    set: { archetype: family, entry: 'parallel', size: floor >= 10 ? 3 : 2 },
   };
 }
+
+/**
+ * Which discipline a book's set belongs to.
+ *
+ * Keyed off the ability it teaches, so a book about steadiness grows shield
+ * nodes and one about figures grows magic ones.
+ */
+const ABILITY_TO_DISCIPLINE: Record<Ability, ArchetypeId> = {
+  str: 'sword',
+  dex: 'bow',
+  con: 'survival',
+  int: 'magic',
+  wis: 'wisdom',
+  cha: 'song',
+};
 
 export const isSkillBook = (item: Item): item is SkillBook =>
   typeof (item as SkillBook).teaches === 'object' && (item as SkillBook).teaches !== null;

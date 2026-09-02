@@ -46,6 +46,12 @@ export const treeFor = (state: PlayState) =>
   skillTreeFor(state.world.seed, state.sheet.background.id, state.sheet.language, state.sheet.background.name, {
     classId: state.sheet.classId,
     subclassId: state.sheet.subclassId,
+    level: state.sheet.level,
+    // Everything the character earned rather than was given. Each may have
+    // grown a branch, and the tree is rebuilt from them every time.
+    traits: state.sheet.traits,
+    signets: state.sheet.signets,
+    books: (state.sheet.learned ?? []).filter((s) => s.id.startsWith('skill_book_')).map((s) => s.id),
   });
 
 export const contextOf = (state: PlayState): TraitContext => ({

@@ -205,6 +205,14 @@ function NodeCard({ node, offsets, camera }: { node: TreeNode; offsets: Offsets;
       <p className="node-discipline">{DISCIPLINE[node.archetype]?.label ?? node.archetype}</p>
       <p className="node-grant">{node.description}</p>
       {node.teaches && <p className="teaches">teaches {node.teaches}</p>}
+      {/* Why this branch exists at all. The old islands never said. */}
+      {node.grafted && <p className="node-from">grown from {node.grafted.name}</p>}
+      {node.freeStanding && !node.taken && (
+        <p className="node-entry">free-standing — needs nothing held</p>
+      )}
+      {node.requiresAll.length > 0 && !node.taken && (
+        <p className="node-entry">opens only when {node.requiresAll.length} parts of your tree meet</p>
+      )}
       {node.taken && <p className="node-state held">held</p>}
       {!node.taken && node.reachable && <p className="node-state open">one point away</p>}
     </div>
@@ -505,6 +513,14 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
                       fill={node.taken ? hue : node.reachable ? '#332b21' : '#1b1714'}
                       stroke={node.taken || node.reachable ? hue : '#2b2620'}
                       strokeWidth={lit ? 0.8 : node.reachable && !node.taken ? 0.55 : 0.35}
+                    />
+                  )}
+
+                  {/* A free-standing root is ringed square: you did not walk here. */}
+                  {node.freeStanding && (
+                    <rect
+                      x={at.x - r - 1.3} y={at.y - r - 1.3} width={(r + 1.3) * 2} height={(r + 1.3) * 2}
+                      fill="none" stroke={hue} strokeWidth={0.3} opacity={0.6} rx={0.6}
                     />
                   )}
 

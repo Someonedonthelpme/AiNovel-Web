@@ -6,6 +6,11 @@ import { classById, subclassById } from '../character/classes.ts';
 import type { CharacterClass } from '../character/classes.ts';
 import type { Archetype, ArchetypeId } from './archetypes.ts';
 import type { TraitCondition } from './traits.ts';
+import { graftFor } from './graft.ts';
+import type { GraftSource, GraftSpec } from './graft.ts';
+import { TRAITS } from './traitbook.ts';
+import { CANDIDATE_SIGNETS } from './signetbook.ts';
+import { stagesReached, SUBCLASS_STAGES } from '../character/classes.ts';
 
 /**
  * The passive tree.
@@ -69,6 +74,23 @@ export type SkillNode = {
    * the dynamic half of the tree, and where Signet gates attach.
    */
   requires?: TraitCondition[];
+  /**
+   * A COMBINATION entry: every one of these must be held before the node opens.
+   *
+   * Everywhere else a node needs any one neighbour, so this is the only thing
+   * on the tree you plan for rather than walk to.
+   */
+  requiresAll?: string[];
+  /**
+   * A PARALLEL entry: needs nothing held at all.
+   *
+   * The trait, Signet or book that grew this branch already paid the entry, so
+   * contiguity has nothing to say about it. You did not walk here; you read
+   * your way in.
+   */
+  freeStanding?: boolean;
+  /** Which system grew this branch, so the panel can say why it is there. */
+  grafted?: GraftSource;
 };
 
 export type SkillTree = {
@@ -430,8 +452,14 @@ export type TreeOptions = {
   backgroundName?: string;
   /** What the player chose. Absent on every session made before classes existed. */
   classId?: string;
-  /** Chosen at level 3. Opens one more island, into somewhere the class cannot go. */
+  /** Chosen at level 3, and paying out again at 6 and 10. */
   subclassId?: string;
+  /** Drives which subclass stages have grown. */
+  level?: number;
+  /** Traits earned, Signets claimed, books read — each may grow a branch. */
+  traits?: readonly string[];
+  signets?: readonly string[];
+  books?: readonly string[];
 };
 
 export function skillTreeFor(
@@ -439,7 +467,7 @@ export function skillTreeFor(
   backgroundId: string,
   language: Lang = 'en',
   backgroundName = '',
-  options: Pick<TreeOptions, 'classId' | 'subclassId'> = {},
+  options: Omit<TreeOptions, 'language' | 'backgroundName'> = {},
 ): SkillTree {
   const held = classById(options.classId);
   const chosenSub = subclassById(options.classId, options.subclassId);
@@ -525,30 +553,81 @@ export function skillTreeFor(
     }
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Grafts: everything the character earned rather than was given        */
+  /* ------------------------------------------------------------------ */
+
   /*
-   * The subclass island.
+   * Applied in a fixed order, each seeing every node placed before it — so a
+   * branch can anchor on an earlier branch and the tree grows outward in
+   * layers rather than sprouting disconnected tufts.
    *
-   * The deliberate version of the same idea: choosing a subclass at level three
-   * opens a way into a discipline the class is normally locked out of. It
-   * appears here rather than being gated by a condition, because an unchosen
-   * subclass simply generates nothing — which keeps the tree deterministic in
-   * `(seed, class, subclass)` and needs no new kind of requirement.
+   * Order is by source and id rather than by when it happened, because the
+   * tree has to come out the same on a reload however the log is folded.
+   */
+  const grown: SkillNode[] = [...nodes];
+  const attach = (id: string, spec: GraftSpec, source: GraftSource) => {
+    /*
+     * A graft may hang from anywhere already placed, including earlier grafts —
+     * which is what makes the tree grow in layers rather than sprouting tufts
+     * around the same old web.
+     *
+     * Earlier branches are offered PREFERENTIALLY. Left to an even draw they
+     * would almost never be chosen: forty-odd main-tree nodes against a
+     * handful of grafted ones means layering would be a rarity rather than the
+     * shape of the thing.
+     */
+    const placeable = grown.filter((n) => n.id !== start.id && !n.freeStanding);
+    const onGrafts = placeable.filter((n) => n.grafted);
+    const anchors = onGrafts.length > 0 && rng() < 0.55 ? onGrafts : placeable;
+    const drift = { x: 50 + (rng() - 0.5) * 70, y: 50 + (rng() - 0.5) * 70 };
+
+    for (const node of graftFor(rng, { id, spec, source, anchors, language, drift })) {
+      grown.push(node);
+      byId.set(node.id, node);
+      nodes.push(node);
+    }
+  };
+
+  for (const traitId of [...(options.traits ?? [])].sort()) {
+    const trait = TRAITS.find((t) => t.id === traitId);
+    if (trait?.opens) attach(`trait_${trait.id}`, trait.opens, { kind: 'trait', id: trait.id, name: trait.name });
+  }
+
+  for (const signetId of [...(options.signets ?? [])].sort()) {
+    const signet = CANDIDATE_SIGNETS.find((x) => x.id === signetId);
+    if (signet?.opens) {
+      attach(`signet_${signet.id}`, signet.opens, { kind: 'signet', id: signet.id, name: signet.name });
+    }
+  }
+
+  /*
+   * Subclass stages. Three payouts rather than one parcel, the first a
+   * COMBINATION — the crossing into a discipline the class is shut out of only
+   * opens once several parts of the character's own tree line up.
    */
   if (chosenSub) {
-    const anchors = nodes.filter((n) => n.ring >= 2 && n.ring < 9);
-    const anchor = anchors.length > 0 ? anchors[Math.floor(rng() * anchors.length)] : nodes[0];
-    const discipline = ARCHETYPES.find((a) => a.id === chosenSub.opens);
-
-    if (discipline && anchor) {
-      for (const node of growIsland(rng, discipline, islands, language, anchor.id)) {
-        // Already earned by taking the subclass, so it is drawn from the start
-        // rather than waiting on a tally.
-        const open: SkillNode = { ...node, id: `sub_${node.id}`, requires: undefined };
-        open.connections = node.connections.map((c) => (c.startsWith('isle') ? `sub_${c}` : c));
-        nodes.push(open);
-        byId.set(open.id, open);
-      }
+    const reached = stagesReached(options.level ?? 1);
+    for (let stage = 0; stage < reached; stage++) {
+      const shape = SUBCLASS_STAGES[stage];
+      attach(
+        `sub_${chosenSub.id}_${stage}`,
+        { archetype: chosenSub.opens, entry: shape.entry, size: shape.size, needs: shape.needs },
+        { kind: 'subclass', id: chosenSub.id, name: chosenSub.name[language] },
+      );
     }
+  }
+
+  /*
+   * Skill sets from books, last and always PARALLEL: you did not walk to a
+   * book, you read your way in, and the reading was the entry price.
+   */
+  for (const bookId of [...(options.books ?? [])].sort()) {
+    attach(
+      `book_${bookId}`,
+      { archetype: 'wisdom', entry: 'parallel', size: 2 },
+      { kind: 'book', id: bookId, name: bookId },
+    );
   }
 
   return {

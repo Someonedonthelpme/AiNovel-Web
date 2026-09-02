@@ -55,11 +55,31 @@ export function canAllocate(
   if (isTaken(allocation, nodeId)) return { ok: false, reason: 'you already have that' };
   if (!isVisible(node, ctx)) return { ok: false, reason: 'no such node' };
 
-  const reachable = node.connections.some((id) => isTaken(allocation, id));
-  if (!reachable) return { ok: false, reason: 'you have not reached that part of the tree yet' };
+  if (!entryOpen(node, allocation)) {
+    return {
+      ok: false,
+      reason: node.requiresAll?.length
+        ? 'that opens only when several parts of your tree meet'
+        : 'you have not reached that part of the tree yet',
+    };
+  }
 
   if ((ctx.sheet.skillPoints ?? 0) <= 0) return { ok: false, reason: 'you have no skill points to spend' };
   return { ok: true, reason: null };
+}
+
+/**
+ * The three ways into a node.
+ *
+ * PARALLEL needs nothing held — whatever grew the branch already paid for the
+ * way in. COMBINATION needs every listed node, which is the only case on the
+ * tree where "adjacent" is not enough. Everything else is ordinary contiguity:
+ * any one neighbour.
+ */
+export function entryOpen(node: SkillNode, allocation: Allocation): boolean {
+  if (node.freeStanding) return true;
+  if (node.requiresAll?.length) return node.requiresAll.every((id) => isTaken(allocation, id));
+  return node.connections.some((id) => isTaken(allocation, id));
 }
 
 export type AllocateResult = { sheet: CharacterSheet; error: string | null; node: SkillNode | null };

@@ -1,5 +1,6 @@
 import type { Ability } from '../combat/types.ts';
 import type { NodeGrant } from './skilltree.ts';
+import type { GraftSpec } from './graft.ts';
 import { conditionMet } from './traits.ts';
 import type { TraitCondition, TraitContext } from './traits.ts';
 
@@ -68,6 +69,13 @@ export type Signet = {
   discovery: Discovery;
   /** Where a hint could be dropped, for the hinted ones. */
   hint?: string;
+  /**
+   * A branch this Signet grows when it is claimed.
+   *
+   * A Signet used to top up something you already had. It can now also open
+   * somewhere new — which is the difference between an upgrade and a discovery.
+   */
+  opens?: GraftSpec;
 };
 
 /* -------------------------------------------------------------------------- */

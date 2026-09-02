@@ -1,6 +1,7 @@
 import type { Ability, Attack } from '../combat/types.ts';
 import type { ArchetypeId, Bilingual, SkillSpec } from '../play/archetypes.ts';
 import type { ActiveSkill } from '../skills/active.ts';
+import type { EntryRule } from '../play/graft.ts';
 
 /**
  * Classes.
@@ -36,6 +37,31 @@ export type Subclass = {
   /** The signature active it grants outright. */
   grants: SkillSpec;
 };
+
+/**
+ * What a subclass grows, and when.
+ *
+ * Three stages rather than one parcel: a permanent choice at level three should
+ * buy an arc, not a single payout that never speaks again.
+ *
+ * The first is a COMBINATION, which is the point of it. The crossing into a
+ * discipline your class is shut out of only opens once several parts of your
+ * own tree line up — so an Eldritch Knight has to have genuinely walked the
+ * sword before the figures will take. It bridges the two halves of a build
+ * instead of being bolted to the side of one.
+ *
+ * Later stages hang off the earlier ones, so the branch deepens where you have
+ * already been rather than sprouting somewhere new each time.
+ */
+export const SUBCLASS_STAGES: readonly { level: number; entry: EntryRule; size: number; needs?: number }[] = [
+  { level: 3, entry: 'combination', size: 3, needs: 2 },
+  { level: 6, entry: 'sequence', size: 4 },
+  { level: 10, entry: 'sequence', size: 5 },
+];
+
+/** The stages a character has actually reached. */
+export const stagesReached = (level: number): number =>
+  SUBCLASS_STAGES.filter((stage) => level >= stage.level).length;
 
 export type CharacterClass = {
   id: string;

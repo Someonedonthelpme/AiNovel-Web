@@ -78,6 +78,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     grant: { ability: { wis: 1 }, maxHp: 4 },
     discovery: 'hinted',
     hint: 'A trader mentions that the shards from the upper floors hum differently.',
+    opens: { archetype: 'magic', entry: 'combination', size: 5, needs: 2 },
   },
   {
     id: 'signet_ledger_hand',
@@ -94,6 +95,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     grant: { ability: { int: 1 } },
     discovery: 'hinted',
     hint: 'There is a ledger somewhere in town that nobody will talk about.',
+    opens: { archetype: 'venom', entry: 'sequence', size: 4 },
   },
   {
     id: 'signet_long_patience',
@@ -117,6 +119,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     },
     grant: { ability: { con: 1 }, maxHp: 3 },
     discovery: 'hidden',
+    opens: { archetype: 'survival', entry: 'parallel', size: 4 },
   },
   {
     id: 'signet_quiet_kill',
@@ -133,6 +136,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     },
     grant: { attack: 1, damage: 1 },
     discovery: 'hidden',
+    opens: { archetype: 'blackMagic', entry: 'combination', size: 5, needs: 3 },
   },
 ];
 

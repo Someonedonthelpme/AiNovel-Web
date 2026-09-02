@@ -540,3 +540,7 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
 }
 .subclass-prompt > p { margin: 0 0 0.5rem; font-size: 0.82rem; }
 .subclass-opens { color: var(--good); font-size: 0.72rem; }
+
+/* Where a branch came from, and how it is entered. */
+.node-from { color: var(--ink-dim); font-size: 0.7rem !important; font-style: italic; }
+.node-entry { color: var(--amber); font-size: 0.7rem !important; }

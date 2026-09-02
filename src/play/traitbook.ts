@@ -32,6 +32,8 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'ability', ability: 'str', atLeast: 16 },
     ],
     grants: { ability: { str: 1 } },
+    // Thirty dead and the strength to show it opens a road, not a door.
+    opens: { archetype: 'sword', entry: 'sequence', size: 4 },
   },
   {
     id: 'unbroken',
@@ -42,6 +44,7 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'ability', ability: 'con', atLeast: 15 },
     ],
     grants: { ability: { con: 1 } },
+    opens: { archetype: 'survival', entry: 'sequence', size: 3 },
   },
   {
     id: 'climber',
@@ -59,6 +62,8 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'ability', ability: 'wis', atLeast: 14 },
     ],
     grants: { ability: { wis: 1 } },
+    // Depth is its own teacher, and it does not need permission.
+    opens: { archetype: 'wisdom', entry: 'parallel', size: 3 },
   },
   {
     id: 'hard_camp',
@@ -79,6 +84,7 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'ability', ability: 'int', atLeast: 14 },
     ],
     grants: { ability: { int: 1 } },
+    opens: { archetype: 'venom', entry: 'sequence', size: 3 },
   },
   {
     id: 'cartographer',
@@ -96,6 +102,7 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'personality', axis: 'warmth', atLeast: 1 },
     ],
     grants: { ability: { cha: 1 } },
+    opens: { archetype: 'song', entry: 'parallel', size: 3 },
   },
   {
     id: 'cold_hand',
@@ -106,6 +113,8 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'personality', axis: 'warmth', atMost: -1 },
     ],
     grants: { note: 'Frightened people tell you things.' },
+    // What you became needs two parts of you to have agreed on it.
+    opens: { archetype: 'shadow', entry: 'combination', size: 4, needs: 2 },
   },
   {
     id: 'survivor',
@@ -126,5 +135,6 @@ export const TRAITS: readonly Trait[] = [
       { kind: 'counter', counter: COUNTERS.fightsWon, atLeast: 20 },
     ],
     grants: { ability: { str: 1, dex: 1 } },
+    opens: { archetype: 'guard', entry: 'combination', size: 5, needs: 3 },
   },
 ];
