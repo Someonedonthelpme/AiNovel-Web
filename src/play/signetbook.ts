@@ -2,7 +2,7 @@ import { RATION_ID } from '../items/catalogue.ts';
 import type { PlayState } from './state.ts';
 import type { Reachable, Signet } from './signet.ts';
 import { admissible } from './signet.ts';
-import { COUNTERS } from './traits.ts';
+import { COUNTERS, WRITTEN_COUNTERS } from './traits.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import { ARCHETYPES } from './archetypes.ts';
 import type { EntryRule } from './graft.ts';
@@ -58,7 +58,9 @@ export function reachableIn(_state: PlayState): Reachable {
     settableFlags: SETTABLE_FLAGS,
     maxAbility: MAX_ABILITY,
     maxLevel: MAX_LEVEL,
-    liveCounters: new Set(Object.values(COUNTERS)),
+    // Counters with a WRITER, not merely a name. A gate on a counter nothing
+    // increments is unsatisfiable, and the registry cannot tell the difference.
+    liveCounters: new Set(WRITTEN_COUNTERS),
   };
 }
 

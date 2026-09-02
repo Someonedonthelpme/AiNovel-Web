@@ -67,6 +67,34 @@ export const COUNTERS = {
   peopleMet: 'people_met',
 } as const;
 
+/**
+ * The counters something in the engine actually writes.
+ *
+ * Not the same claim as `COUNTERS`, and the difference has already cost us:
+ * `people_met` sat in the registry with nothing incrementing it, so the trait
+ * gating on it was unearnable in every world ever generated — and the Signet
+ * proof treated it as satisfiable, because a registry proves a NAME exists, not
+ * that anything moves it.
+ *
+ * This list is the claim that each one has a writer, and
+ * `counters.test.ts` makes the engine demonstrate every entry rather than
+ * taking the declaration on trust. Generation makes the distinction urgent: a
+ * themed trait drawing a dead counter would be silently unearnable, differently
+ * in every world.
+ */
+export const WRITTEN_COUNTERS: readonly string[] = [
+  COUNTERS.kills,
+  COUNTERS.fightsWon,
+  COUNTERS.fightsLost,
+  COUNTERS.floorsClimbed,
+  COUNTERS.deepestFloor,
+  COUNTERS.shortRests,
+  COUNTERS.longRests,
+  COUNTERS.itemsUsed,
+  COUNTERS.placesFound,
+  COUNTERS.peopleMet,
+];
+
 /* -------------------------------------------------------------------------- */
 /* Evaluating                                                                  */
 /* -------------------------------------------------------------------------- */

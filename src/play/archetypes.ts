@@ -1,5 +1,6 @@
 import type { Ability, Condition } from '../combat/types.ts';
 import type { ActiveEffect, ActiveKind, ActiveSkill } from '../skills/active.ts';
+import type { Grammar } from '../skills/compose.ts';
 
 /**
  * The disciplines the passive tree is built out of.
@@ -38,6 +39,14 @@ export type Archetype = {
   keystoneNote: Bilingual;
   /** The two actives this discipline teaches, at its notables. */
   teaches: [SkillSpec, SkillSpec];
+  /**
+   * What a GENERATED skill of this discipline may be built from.
+   *
+   * Balance is the easy half of generation; coherence is the hard one. Without
+   * this a composer will happily produce a bow that heals or a shield that sets
+   * a room on fire — legal, correctly priced, and belonging nowhere.
+   */
+  draws: Grammar;
 };
 
 export type SkillSpec = {
@@ -90,6 +99,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: hinder('stunned', 1), range: 1, usesPerRest: 1,
       },
     ],
+    draws: { payloads: ['strike', 'hinder', 'rally'], conditions: ['prone', 'stunned'], maxRange: 1 },
   },
   {
     id: 'bow',
@@ -123,6 +133,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: hinder('blinded', 2), range: 6, usesPerRest: 1,
       },
     ],
+    draws: { payloads: ['strike', 'hinder'], conditions: ['restrained', 'blinded', 'prone'], maxRange: 8 },
   },
   {
     id: 'guard',
@@ -156,6 +167,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: { kind: 'mend', amount: 8 }, range: 0, usesPerRest: 1,
       },
     ],
+    draws: { payloads: ['rally', 'mend', 'hinder'], conditions: ['prone', 'grappled'], maxRange: 1 },
   },
   {
     id: 'wisdom',
@@ -189,6 +201,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'utility', effect: edge('int', 2), range: 0, usesPerRest: 0,
       },
     ],
+    draws: { payloads: ['edge', 'hinder', 'rally'], conditions: ['blinded', 'prone'], maxRange: 3 },
   },
   {
     id: 'magic',
@@ -222,6 +235,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: { kind: 'mend', amount: 7 }, range: 0, usesPerRest: 2,
       },
     ],
+    draws: { payloads: ['hinder', 'mend', 'strike'], conditions: ['restrained', 'stunned'], maxRange: 5 },
   },
   {
     id: 'blackMagic',
@@ -255,6 +269,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: hinder('stunned', 1), range: 5, usesPerRest: 1,
       },
     ],
+    draws: { payloads: ['drain', 'hex', 'strike'], conditions: ['poisoned', 'stunned', 'blinded'], maxRange: 5 },
   },
   {
     id: 'guile',
@@ -288,6 +303,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'utility', effect: edge('dex', 2), range: 0, usesPerRest: 0,
       },
     ],
+    draws: { payloads: ['edge', 'hinder'], conditions: ['prone', 'blinded'], maxRange: 2 },
   },
   {
     id: 'survival',
@@ -321,6 +337,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'utility', effect: edge('con', 2), range: 0, usesPerRest: 0,
       },
     ],
+    draws: { payloads: ['mend', 'rally', 'edge'], conditions: ['prone', 'poisoned'], maxRange: 1 },
   },
   {
     id: 'flame',
@@ -354,6 +371,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: burst(8, 2), range: 5, usesPerRest: 1,
       },
     ],
+    draws: { payloads: ['burst', 'strike'], conditions: ['blinded'], maxRange: 6 },
   },
   {
     id: 'venom',
@@ -387,6 +405,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: hex(4, 'stunned', 1), range: 2, usesPerRest: 1,
       },
     ],
+    draws: { payloads: ['hex', 'hinder', 'drain'], conditions: ['poisoned', 'stunned'], maxRange: 3 },
   },
   {
     id: 'shadow',
@@ -420,6 +439,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'combat', effect: drain(6, 4), range: 1, usesPerRest: 2,
       },
     ],
+    draws: { payloads: ['strike', 'drain', 'hinder'], conditions: ['blinded', 'prone'], maxRange: 2 },
   },
   {
     id: 'song',
@@ -453,6 +473,7 @@ export const ARCHETYPES: readonly Archetype[] = [
         kind: 'social', effect: edge('cha', 3), range: 0, usesPerRest: 0,
       },
     ],
+    draws: { payloads: ['mend', 'edge', 'rally'], conditions: ['prone', 'stunned'], maxRange: 4 },
   },
 ];
 

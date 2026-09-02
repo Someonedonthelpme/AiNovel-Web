@@ -5,7 +5,9 @@ import type { Item } from '../items/types.ts';
 import type { ArchetypeId } from '../play/archetypes.ts';
 import type { GraftSpec } from '../play/graft.ts';
 import type { Skill } from '../session/sheet.ts';
-import type { ActiveEffect, ActiveKind, ActiveSkill } from './active.ts';
+import type { ActiveKind, ActiveSkill } from './active.ts';
+import { composeSkill, nameFor } from './compose.ts';
+import { ARCHETYPES } from '../play/archetypes.ts';
 
 /**
  * Where active skills come from.
@@ -39,21 +41,41 @@ const HINDRANCES: Condition[] = ['prone', 'restrained', 'blinded', 'stunned'];
  * on their feet; social and utility skills sharpen the ability they are named
  * for, which is what makes them worth having when the Director calls a check.
  */
-function effectFor(kind: ActiveKind, ability: Ability, seed: number): ActiveEffect {
+/**
+ * What a book at this depth is worth spending.
+ *
+ * Shallow books are poor and deep ones rich, which is what makes a floor
+ * eighteen find worth carrying home rather than being one more of the same.
+ */
+export const budgetForFloor = (floor: number): number => 4 + Math.max(0, floor) * 0.8;
+
+/**
+ * Build the skill a book teaches.
+ *
+ * Replaces a four-branch lookup that had two books on the same floor routinely
+ * teaching the same thing. Composition draws from the discipline's own grammar
+ * against a budget, so no two are alike and none is unbalanced.
+ */
+function composedFor(
+  kind: ActiveKind,
+  ability: Ability,
+  seed: number,
+  floor: number,
+  language: 'th' | 'en',
+): ActiveSkill {
   const rng = mulberry32(seed);
+  const archetype = ARCHETYPES.find((a) => a.id === ABILITY_TO_DISCIPLINE[ability]) ?? ARCHETYPES[0];
+  const effect = composeSkill(rng, {
+    id: `skill_book_${seed.toString(36)}`,
+    name: '',
+    description: '',
+    kind,
+    ability,
+    grammar: archetype.draws,
+    budget: budgetForFloor(floor),
+  });
 
-  if (kind === 'combat') {
-    const roll = rng();
-    if (roll < 0.55) {
-      // Stun is the strongest of these, so it is the rarest and shortest.
-      const condition = HINDRANCES[Math.floor(rng() * HINDRANCES.length)];
-      return { kind: 'hinder', condition, rounds: condition === 'stunned' ? 1 : 2 };
-    }
-    if (roll < 0.8) return { kind: 'mend', amount: 6 };
-    return { kind: 'rally', condition: 'prone' };
-  }
-
-  return { kind: 'edge', ability, bonus: 2 };
+  return { ...effect, name: nameFor(rng, effect.effect, language) };
 }
 
 /**
@@ -65,19 +87,16 @@ function effectFor(kind: ActiveKind, ability: Ability, seed: number): ActiveEffe
 export function activate(skill: Skill): ActiveSkill {
   const seed = hash(skill.id + skill.name);
   const kind = skill.kind as ActiveKind;
-  const effect = effectFor(kind, skill.ability, seed);
+
+  // The model keeps the naming, the composer supplies the mechanism — the same
+  // division as everywhere else. A background skill is a shallow budget.
+  const composed = composedFor(kind, skill.ability, seed, 1, 'en');
 
   return {
+    ...composed,
     id: skill.id,
     name: skill.name,
     description: skill.description,
-    kind,
-    ability: skill.ability,
-    effect,
-    range: effect.kind === 'hinder' ? 1 : 0,
-    // Combat skills are scarce; a passive edge is always on, so its count is
-    // irrelevant and simply never spent.
-    usesPerRest: kind === 'combat' ? 2 : 0,
   };
 }
 
@@ -196,14 +215,9 @@ export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en')
   const seed = Math.floor(rng() * 1e9);
 
   const taught: ActiveSkill = {
+    ...composedFor(kind, ability, seed, floor, language),
     id: `skill_book_${seed.toString(36)}`,
-    name: title,
     description: language === 'th' ? 'สิ่งที่ใครบางคนจดไว้ก่อนคุณ' : 'Someone worked this out before you did.',
-    kind,
-    ability,
-    effect: effectFor(kind, ability, seed),
-    range: 1,
-    usesPerRest: kind === 'combat' ? 2 : 0,
     // Deeper books ask more of the reader, which is what keeps an early find
     // from handing over a late-game skill.
     requires: floor >= 8 ? [{ kind: 'level', atLeast: Math.min(12, Math.floor(floor / 2)) }] : undefined,

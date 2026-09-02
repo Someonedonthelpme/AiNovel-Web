@@ -1,5 +1,6 @@
 import type { Rng } from '../engine/roll.ts';
-import { ARCHETYPES, skillFrom } from './archetypes.ts';
+import { ARCHETYPES } from './archetypes.ts';
+import { composeSkill, generatorFor, nameFor } from '../skills/compose.ts';
 import type { ArchetypeId } from './archetypes.ts';
 import type { NodeGrant, SkillNode } from './skilltree.ts';
 
@@ -60,6 +61,21 @@ export type GraftSource = {
 };
 
 const clampSize = (n: number): number => Math.max(GRAFT_MIN, Math.min(GRAFT_MAX, Math.round(n)));
+
+/**
+ * What a branch's notable has to spend.
+ *
+ * Bigger branches were harder to earn and harder to walk, and a subclass is a
+ * permanent choice rather than a tally crossed — so both buy more.
+ */
+const SOURCE_WORTH: Record<GraftSource['kind'], number> = {
+  trait: 1,
+  book: 1,
+  signet: 1.3,
+  subclass: 1.5,
+};
+
+const budgetFor = (source: GraftSource, size: number): number => (4 + size * 1.6) * SOURCE_WORTH[source.kind];
 
 /**
  * Power scales with size, not with depth.
@@ -172,7 +188,28 @@ export function graftFor(rng: Rng, input: GraftInput): SkillNode[] {
     };
 
     if (notable) {
-      node.teaches = skillFrom(archetype, Math.min(1, taught) as 0 | 1, language);
+      /*
+       * COMPOSED, not drawn from the discipline's authored pair.
+       *
+       * Two venom branches in one run used to teach the same two skills,
+       * because every notable of a discipline reached for the same two specs.
+       * Composing against a budget means each branch teaches its own thing —
+       * which is most of what this system was for.
+       *
+       * The seed is the node's own id, so a branch teaches the same skill on
+       * every reload rather than a differently lucky one.
+       */
+      const own = generatorFor(node.id);
+      const composed = composeSkill(own, {
+        id: `skill_${node.id}`,
+        name: '',
+        description: '',
+        kind: 'combat',
+        ability: archetype.ability,
+        grammar: archetype.draws,
+        budget: budgetFor(source, size),
+      });
+      node.teaches = { ...composed, name: nameFor(own, composed.effect, language) };
       taught += 1;
     }
 
