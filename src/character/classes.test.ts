@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canChooseSubclass, classById, CLASSES, subclassById, subclassSkill, SUBCLASS_LEVEL } from './classes.ts';
 import { ARCHETYPES } from '../play/archetypes.ts';
-import { skillTreeFor } from '../play/skilltree.ts';
+import { MAX_DISCIPLINES, skillTreeFor } from '../play/skilltree.ts';
 import { grownBy } from '../play/fixtures.ts';
 import { applySheetAction } from '../play/sheetaction.ts';
 import { activeSkills } from '../session/sheet.ts';
@@ -247,4 +247,73 @@ test('every class is coherent enough to build a character from', () => {
     assert.equal(classById(held.id)?.id, held.id);
     assert.ok(held.name.th.trim() && held.description.th.trim(), `${held.id} is not translated`);
   }
+});
+
+test('every subclass crosses into a discipline its class is shut out of', () => {
+  /*
+   * The whole promise of taking one, and it was "usually" rather than always:
+   * twelve of sixteen opened somewhere the class could already reach, and the
+   * Rogue's Poisoner opened `venom` — which was already in its own affinity, a
+   * crossing into a room it was standing in.
+   *
+   * Enforced now, because a subclass that opens nothing new is a level-three
+   * decision that buys a name.
+   */
+  for (const held of CLASSES) {
+    for (const sub of held.subclasses) {
+      assert.ok(
+        held.forbidden.includes(sub.opens),
+        `${held.id}/${sub.id} opens ${sub.opens}, which ${held.id} was never shut out of`,
+      );
+    }
+  }
+});
+
+test('a class does not point both its subclasses at the same door', () => {
+  // Two islands into one discipline would make the choice at level three a
+  // choice of flavour text.
+  for (const held of CLASSES) {
+    const opened = held.subclasses.map((s) => s.opens);
+    assert.equal(new Set(opened).size, opened.length, `${held.id} opens ${opened.join(' and ')}`);
+  }
+});
+
+test('shutting a class out never leaves it too little to grow a tree', () => {
+  // Several classes gained a forbidden entry to make their crossings real.
+  // Taken too far, that starves `disciplinesFor` of anything to choose from.
+  for (const held of CLASSES) {
+    const left = ARCHETYPES.length - held.forbidden.length;
+    assert.ok(left >= MAX_DISCIPLINES, `${held.id} leaves only ${left} for a subset of up to ${MAX_DISCIPLINES}`);
+  }
+});
+
+test('a book may teach what a class refuses, and the base tree still may not', () => {
+  /*
+   * Kept deliberately. A book is a thing FOUND in the tower, and a found thing
+   * teaching you what your training would not is the better version of the
+   * subclass idea — a Warlock who picks up a book on shield-work learns a
+   * little of it. The class says what you were trained in, not what the world
+   * is allowed to hand you.
+   *
+   * What must stay true is the other half: the base tree never generates a
+   * forbidden discipline on its own, so crossing is always something that
+   * happened to a character rather than something they rolled.
+   */
+  const warlock = classById('warlock')!;
+  const shut = warlock.forbidden[0];
+
+  const bare = skillTreeFor(11, 'bg', 'en', '', { classId: 'warlock' });
+  assert.equal(
+    bare.nodes.some((n) => warlock.forbidden.includes(n.archetype)), false,
+    'the base tree generated a discipline the class is shut out of',
+  );
+
+  const read = skillTreeFor(11, 'bg', 'en', '', {
+    classId: 'warlock',
+    books: [{ bookId: 'b1', name: 'On Holding Ground', set: { archetype: shut, entry: 'parallel', size: 3 } }],
+  });
+  assert.ok(
+    read.nodes.some((n) => n.archetype === shut && n.grafted?.kind === 'book'),
+    `a book on ${shut} taught a Warlock nothing`,
+  );
 });

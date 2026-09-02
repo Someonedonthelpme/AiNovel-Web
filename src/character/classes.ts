@@ -32,7 +32,15 @@ export type Subclass = {
   id: string;
   name: Bilingual;
   description: Bilingual;
-  /** The discipline its island belongs to — usually one the class is locked out of. */
+  /**
+   * The discipline its island belongs to. ALWAYS one the class is shut out of.
+   *
+   * This was "usually" and it meant it: twelve of sixteen subclasses opened
+   * somewhere the class could already reach, and one of them (the Rogue's)
+   * opened a discipline already in its own affinity — a crossing into a room
+   * it was standing in. The whole promise of a subclass is the crossing, so it
+   * is now enforced rather than intended, and `classes.test.ts` proves it.
+   */
   opens: ArchetypeId;
   /** The signature active it grants outright. */
   grants: SkillSpec;
@@ -74,7 +82,24 @@ export type CharacterClass = {
   core: ArchetypeId[];
   /** Drawn from first when filling the rest of the subset. */
   affinity: ArchetypeId[];
-  /** NEVER generated onto the tree. Only an island can bring these. */
+  /**
+   * Never GENERATED onto the tree. Two things can still bring one.
+   *
+   * A subclass island is the deliberate route: choosing one at level three is
+   * a permanent decision to cross into somewhere your class refuses to go, and
+   * every subclass now crosses — see `opens` below.
+   *
+   * A SKILL BOOK IS THE ACCIDENTAL ROUTE, and it is kept on purpose. A book is
+   * a thing found in the tower, and a found thing teaching you what your
+   * training would not is the better version of the same idea: a Warlock who
+   * picks up `On Holding Ground` learns a little of the shield-work nobody
+   * would have taught them. The class decides what you were TRAINED in, not
+   * what the world is allowed to hand you.
+   *
+   * What stays true either way: the base tree never generates one of these on
+   * its own, so crossing is always something that HAPPENED to a character
+   * rather than something they rolled.
+   */
   forbidden: ArchetypeId[];
   startingAttack: Attack;
   /** The armour base they set out in, or null for whatever they scrounge. */
@@ -146,15 +171,15 @@ export const CLASSES: readonly CharacterClass[] = [
       },
       {
         id: 'banner',
-        name: { en: 'Banner-Bearer', th: 'ผู้ถือธง' },
+        name: { en: 'Beacon-Bearer', th: 'ผู้ถือประทีป' },
         description: {
-          en: 'People follow you because you keep standing where you said you would.',
-          th: 'ผู้คนตามคุณเพราะคุณยังยืนอยู่ตรงที่บอกไว้',
+          en: 'You carry the light, so people follow you because they can see where you are.',
+          th: 'คุณถือแสงไว้ ผู้คนจึงตามคุณเพราะพวกเขาเห็นว่าคุณอยู่ตรงไหน',
         },
-        opens: 'song',
+        opens: 'flame',
         grants: {
           name: { en: 'Hold the Line', th: 'ยันแนวไว้' },
-          description: { en: 'Something to put your feet to.', th: 'บางอย่างให้ก้าวตาม' },
+          description: { en: 'Something lit to put your feet to.', th: 'แสงสักดวงให้ก้าวตาม' },
           kind: 'combat', effect: mend(7), range: 0, usesPerRest: 2,
         },
       },
@@ -180,10 +205,10 @@ export const CLASSES: readonly CharacterClass[] = [
         id: 'totem',
         name: { en: 'Totem Walker', th: 'ผู้เดินตามรอย' },
         description: {
-          en: 'You have started listening to the floor the way animals do.',
-          th: 'คุณเริ่มฟังพื้นแบบที่สัตว์ฟัง',
+          en: 'You have started listening to the floor the way animals do, and something has started answering.',
+          th: 'คุณเริ่มฟังพื้นแบบที่สัตว์ฟัง และมีบางอย่างเริ่มตอบกลับ',
         },
-        opens: 'wisdom',
+        opens: 'magic',
         grants: {
           name: { en: 'Read the Wind', th: 'อ่านลม' },
           description: { en: 'You know what is coming before it arrives.', th: 'คุณรู้ว่าอะไรกำลังมาก่อนที่มันจะถึง' },
@@ -194,10 +219,10 @@ export const CLASSES: readonly CharacterClass[] = [
         id: 'ash_eater',
         name: { en: 'Ash-Eater', th: 'ผู้กลืนเถ้า' },
         description: {
-          en: 'Whatever you burned to get this strong, you are still burning it.',
-          th: 'ไม่ว่าคุณเผาอะไรไปเพื่อให้แข็งแรงขนาดนี้ คุณก็ยังเผามันอยู่',
+          en: 'Whatever you ate the ashes of should have stayed burned, and you know it.',
+          th: 'ไม่ว่าคุณกลืนเถ้าของอะไรไป มันควรจะถูกเผาทิ้งไปแล้ว และคุณก็รู้',
         },
-        opens: 'flame',
+        opens: 'blackMagic',
         grants: {
           name: { en: 'Ash Breath', th: 'ลมหายใจเถ้า' },
           description: { en: 'Everything in front of you, and some of you.', th: 'ทุกอย่างที่อยู่ตรงหน้า และบางส่วนของคุณ' },
@@ -226,10 +251,10 @@ export const CLASSES: readonly CharacterClass[] = [
         id: 'deep_hunter',
         name: { en: 'Hunter of the Deep Floors', th: 'พรานชั้นลึก' },
         description: {
-          en: 'You have taken things apart to learn what makes them stop.',
-          th: 'คุณเคยชำแหละมันเพื่อเรียนรู้ว่าอะไรทำให้มันหยุด',
+          en: 'You went deep enough, often enough, that the deep things stopped being strangers.',
+          th: 'คุณลงไปลึกพอ และบ่อยพอ จนสิ่งที่อยู่ข้างล่างไม่ใช่คนแปลกหน้าอีกต่อไป',
         },
-        opens: 'venom',
+        opens: 'blackMagic',
         grants: {
           name: { en: 'Marked Quarry', th: 'เหยื่อที่ถูกหมาย' },
           description: { en: 'It only has to break the skin.', th: 'แค่ให้เข้าเนื้อก็พอ' },
@@ -240,10 +265,10 @@ export const CLASSES: readonly CharacterClass[] = [
         id: 'warden',
         name: { en: 'Warden of the Stair', th: 'ผู้เฝ้าบันได' },
         description: {
-          en: 'Somebody has to hold the way back down.',
-          th: 'ต้องมีใครสักคนกันทางลงไว้',
+          en: 'Somebody has to hold the way back down, and you do it by the light you set yourself.',
+          th: 'ต้องมีใครสักคนกันทางลงไว้ และคุณทำมันด้วยแสงไฟที่คุณจุดเอง',
         },
-        opens: 'guard',
+        opens: 'flame',
         grants: {
           name: { en: 'Set Against', th: 'ตั้งรับ' },
           description: { en: 'They come to you, on your terms.', th: 'ให้เขาเข้ามาหา ในเงื่อนไขของคุณ' },
@@ -264,18 +289,22 @@ export const CLASSES: readonly CharacterClass[] = [
     secondary: 'cha',
     core: ['shadow', 'guile'],
     affinity: ['bow', 'venom'],
-    forbidden: ['guard', 'flame'],
+    forbidden: ['guard', 'flame', 'song'],
     startingAttack: weapon('atk_longknife', 'long knife', 'dex', 6, 1, 'piercing'),
     startingArmour: 12,
     subclasses: [
       {
+        // Id kept as `poisoner` although it opens the fire now: `sheet.subclassId`
+        // stores it, so renaming the id would orphan every character who chose
+        // it. The instinct is the same one either way — something quiet left
+        // behind that does the work long after you have gone.
         id: 'poisoner',
-        name: { en: 'Poisoner', th: 'นักวางยา' },
+        name: { en: 'The Quiet Fire', th: 'ไฟเงียบ' },
         description: {
           en: 'Nothing you do kills quickly. Almost everything kills.',
           th: 'ไม่มีอะไรที่คุณทำฆ่าได้เร็ว แต่เกือบทุกอย่างฆ่าได้',
         },
-        opens: 'venom',
+        opens: 'flame',
         grants: {
           name: { en: 'The Slow Cup', th: 'ถ้วยช้า' },
           description: { en: 'They will not notice until the stairs.', th: 'เขาจะไม่รู้ตัวจนกว่าจะถึงบันได' },
@@ -310,7 +339,7 @@ export const CLASSES: readonly CharacterClass[] = [
     secondary: 'wis',
     core: ['magic', 'flame'],
     affinity: ['wisdom', 'venom'],
-    forbidden: ['sword', 'guard'],
+    forbidden: ['sword', 'guard', 'blackMagic'],
     startingAttack: weapon('atk_staff', 'walking staff', 'int', 6, 1, 'bludgeoning'),
     startingArmour: null,
     subclasses: [
@@ -356,7 +385,7 @@ export const CLASSES: readonly CharacterClass[] = [
     secondary: 'cha',
     core: ['blackMagic', 'venom'],
     affinity: ['magic', 'shadow'],
-    forbidden: ['guard', 'song'],
+    forbidden: ['guard', 'song', 'flame'],
     startingAttack: weapon('atk_ritual_knife', 'ritual knife', 'int', 6, 1, 'piercing'),
     startingArmour: null,
     subclasses: [
@@ -402,7 +431,7 @@ export const CLASSES: readonly CharacterClass[] = [
     secondary: 'cha',
     core: ['wisdom', 'song'],
     affinity: ['guard', 'magic'],
-    forbidden: ['shadow', 'blackMagic'],
+    forbidden: ['shadow', 'blackMagic', 'flame'],
     startingAttack: weapon('atk_censer', 'weighted censer', 'wis', 6, 1, 'bludgeoning'),
     startingArmour: 12,
     subclasses: [
@@ -448,7 +477,7 @@ export const CLASSES: readonly CharacterClass[] = [
     secondary: 'dex',
     core: ['song', 'guile'],
     affinity: ['wisdom', 'shadow'],
-    forbidden: ['guard', 'flame'],
+    forbidden: ['guard', 'flame', 'bow', 'magic'],
     startingAttack: weapon('atk_rapier', 'rapier', 'dex', 8, 1, 'piercing'),
     startingArmour: 12,
     subclasses: [
