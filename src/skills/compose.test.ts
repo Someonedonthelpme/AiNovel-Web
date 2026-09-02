@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { ARCHETYPES } from '../play/archetypes.ts';
 import { skillTreeFor } from '../play/skilltree.ts';
+import { grownBy } from '../play/fixtures.ts';
 import { composeSkill, generatorFor, nameFor, priceSkill } from './compose.ts';
 import type { Grammar } from './compose.ts';
 import { budgetForFloor, skillBook } from './book.ts';
@@ -198,10 +199,9 @@ test('two branches of the same discipline teach different skills', () => {
    * reach for the same authored pair, so two venom branches in one run taught
    * exactly the same two things.
    */
+  const grows = grownBy(11, { classId: 'warlock' });
   const tree = skillTreeFor(11, 'bg', 'en', '', {
-    classId: 'warlock',
-    traits: ['butcher', 'unbroken', 'apothecary', 'veteran'],
-    signets: ['signet_ledger_hand', 'signet_quiet_kill'],
+    classId: 'warlock', traits: grows.traits, signets: grows.signets.slice(0, 2),
   });
 
   const byDiscipline = new Map<string, Set<string>>();

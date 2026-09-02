@@ -1,23 +1,22 @@
-import { mulberry32 } from '../engine/roll.ts';
-import { ARCHETYPES } from './archetypes.ts';
-import type { ArchetypeId } from './archetypes.ts';
-import type { EntryRule } from './graft.ts';
-import type { Trait, TraitCondition } from './traits.ts';
+import { subclassById } from '../character/classes.ts';
+import { generateTraits } from './traitgen.ts';
+import type { TraitOrigin } from './traitgen.ts';
+import type { Trait } from './traits.ts';
 import { COUNTERS } from './traits.ts';
+import type { PlayState } from './state.ts';
 
 /**
- * The traits a character can grow into.
+ * The twelve authored traits.
  *
- * Authored rather than generated, unlike the passive tree. A trait is a
- * statement about who someone has become — "you have killed thirty things and
- * you are still steady" — and that reads as hollow when a generator assembles
- * it from parts. There are few enough of them to write by hand, and writing
- * them by hand is what lets each one mean something.
+ * No longer what a world offers — `traitsFor` generates that now. These are
+ * kept as the REFERENCE SET: the hand-written statements the generated ones
+ * are measured against, and what the tests compare a generated trait's shape
+ * to. Deleting them would leave nothing saying what a good one looks like.
  *
- * Every condition here must reference a counter something actually increments.
- * A trait gating on a tally nobody keeps can never be earned, and nothing in
- * the game would ever say so — which is why the counter names live in one
- * registry rather than as loose strings.
+ * Every condition here references a counter something actually increments. A
+ * trait gating on a tally nobody keeps can never be earned, and nothing in the
+ * game would ever say so — which is why the counter names live in one registry
+ * rather than as loose strings.
  */
 export const TRAITS: readonly Trait[] = [
   {
@@ -147,60 +146,60 @@ export const TRAITS: readonly Trait[] = [
 /* What THIS world asks of you                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** How many of the catalogue a single world offers. */
+/** How many of them a single world offers, before anything tops it up. */
 export const MIN_TRAITS = 8;
 export const MAX_TRAITS = 10;
 
-const ENTRIES: EntryRule[] = ['sequence', 'parallel', 'combination'];
+/**
+ * Everything about a character that leans the trait list one way.
+ *
+ * Read off the sheet rather than passed around loose, because EVERY CALLER MUST
+ * AGREE. The fold awards traits, the tree grows their branches and the panel
+ * lists their progress; if those three built different catalogues, a trait
+ * earned in the fold would have no branch on the tree and no line in the panel,
+ * and nothing would report the disagreement.
+ */
+export function traitOriginOf(state: PlayState): TraitOrigin {
+  return {
+    classId: state.sheet.classId,
+    subclassId: state.sheet.subclassId,
+    background: state.sheet.background?.name,
+    language: state.world.language,
+  };
+}
 
 /**
- * The traits a particular world offers, and what they ask.
+ * The traits a particular world offers this particular character.
  *
  * Everything else about a character is theirs — the tree, the disciplines the
  * class allows, the branches their choices grew. Traits were the last thing
  * identical in every run: the same twelve achievements, the same thresholds,
- * forever.
+ * forever. Scaling those thresholds by seed made it a template in a disguise.
  *
- * A world now offers a SUBSET, with its own thresholds and its own branches. A
- * tower that wants thirty kills of you is a different tower from one that wants
- * forty-five, and the branch either one grows is different again.
+ * They are built now, inside themes, by `traitgen`. A world draws widely and
+ * then the character TOPS IT UP — the class, the subclass, the world and the
+ * background each favour a theme and add traits exclusive to that run.
  *
- * Deterministic in the seed, because traits are evaluated inside the fold: a
- * replayed log has to earn the same traits at the same moments, and a catalogue
- * that shifted between loads would rewrite a character's history.
+ * Topping up rather than filtering is the safety property. `sheet.traits`
+ * stores ids, so a catalogue that could REMOVE an entry would orphan a trait
+ * already earned: its bonus would vanish and the branch it grew would fall off
+ * the tree mid-run. A list that only ever grows cannot.
+ *
+ * Deterministic in the seed and the origin, because traits are evaluated inside
+ * the fold: a replayed log has to earn the same traits at the same moments, and
+ * a catalogue that shifted between loads would rewrite a character's history.
  */
-export function traitsFor(seed: number): Trait[] {
-  const rng = mulberry32((seed ^ 0x7a17) >>> 0);
+export function traitsFor(seed: number, origin?: TraitOrigin): Trait[] {
+  // Drawn before the count, so the size of a world's list is its own business
+  // and not a side effect of which character walked in.
+  const count = MIN_TRAITS + (((seed ^ 0x7a17) >>> 3) % (MAX_TRAITS - MIN_TRAITS + 1));
 
-  // Thresholds move together, so a world reads as demanding or forgiving rather
-  // than as a scatter of unrelated numbers.
-  const demand = 0.75 + rng() * 0.75;
-  const scale = (n: number) => Math.max(1, Math.round(n * demand));
-
-  const want = MIN_TRAITS + Math.floor(rng() * (MAX_TRAITS - MIN_TRAITS + 1));
-  const pool = [...TRAITS];
-  const chosen: Trait[] = [];
-
-  while (chosen.length < want && pool.length > 0) {
-    chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
-  }
-
-  return chosen.map((trait) => {
-    const requires: TraitCondition[] = trait.requires.map((c) =>
-      c.kind === 'counter' ? { ...c, atLeast: scale(c.atLeast) } : c,
-    );
-
-    // A trait that grew a branch still does, but not always the same one — the
-    // discipline, the way in and the size are all this world's business.
-    const opens = trait.opens
-      ? {
-          archetype: ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)].id as ArchetypeId,
-          entry: ENTRIES[Math.floor(rng() * ENTRIES.length)],
-          size: 2 + Math.floor(rng() * 4),
-          needs: 2 + Math.floor(rng() * 2),
-        }
-      : undefined;
-
-    return { ...trait, requires, opens };
+  return generateTraits({
+    seed,
+    count,
+    origin,
+    // A subclass leans wherever its island points, so the discipline it opens
+    // comes along rather than being looked up a second time in traitgen.
+    subclassOpens: subclassById(origin?.classId, origin?.subclassId)?.opens,
   });
 }

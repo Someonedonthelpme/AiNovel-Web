@@ -13,7 +13,7 @@ import { applySheetAction, contextOf, sheetRecord, treeFor } from '../play/sheet
 import type { SheetAction } from '../play/sheetaction.ts';
 import { progressOf } from '../play/traits.ts';
 import { xpToNext } from '../play/progress.ts';
-import { traitsFor } from '../play/traitbook.ts';
+import { traitOriginOf, traitsFor } from '../play/traitbook.ts';
 import { visibleSignets } from '../play/signet.ts';
 import { signetsFor } from '../play/signetbook.ts';
 import { climb, exitStatus } from '../play/climb.ts';
@@ -600,7 +600,7 @@ function traitsViewOf(state: PlayState): GameView['traits'] {
 
   // Only what this world asks of you. Listing the rest would advertise
   // achievements this run does not contain.
-  return traitsFor(state.world.seed).map((trait) => ({
+  return traitsFor(state.world.seed, traitOriginOf(state)).map((trait) => ({
     id: trait.id,
     name: trait.name,
     description: trait.description,

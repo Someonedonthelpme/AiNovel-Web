@@ -6,6 +6,7 @@ import type { Allocation } from './allocate.ts';
 import { graftFor, GRAFT_MAX, GRAFT_MIN } from './graft.ts';
 import type { GraftSource, GraftSpec } from './graft.ts';
 import { skillTreeFor } from './skilltree.ts';
+import { grownBy, quietTraitsOf } from './fixtures.ts';
 import type { SkillNode } from './skilltree.ts';
 import { playState } from './fixtures.ts';
 import type { TraitContext } from './traits.ts';
@@ -69,7 +70,7 @@ test('the refusal says which kind of gate it is', () => {
   // "you have not reached that yet" and "several parts have to meet" are
   // different problems, and conflating them makes the tree feel broken.
   const tree = skillTreeFor(3, 'bg', 'en', '', {
-    classId: 'fighter', traits: ['cold_hand'],
+    classId: 'fighter', traits: grownBy(3, { classId: 'fighter' }).traits,
   });
   const combo = tree.nodes.find((n) => n.requiresAll?.length);
   if (!combo) return;
@@ -123,12 +124,16 @@ test('the same source always grows the same branch', () => {
 /* -------------------------------------------------------------------------- */
 
 test('earning things grows the tree', () => {
+  // Named from what this world actually offers rather than from the authored
+  // catalogue — that list stopped being what a run contains once traits and
+  // Signets were generated, and hardcoded ids would silently match nothing.
+  const grows = grownBy(7, { classId: 'rogue' }, 3);
+  const { traits } = grows;
+  const signets = grows.signets.slice(0, 1);
+  assert.ok(traits.length === 3 && signets.length === 1, 'this world grows nothing to test with');
+
   const bare = skillTreeFor(7, 'bg', 'en', '', { classId: 'rogue' });
-  const earned = skillTreeFor(7, 'bg', 'en', '', {
-    classId: 'rogue',
-    traits: ['butcher', 'deep_walker', 'cold_hand'],
-    signets: ['signet_ledger_hand'],
-  });
+  const earned = skillTreeFor(7, 'bg', 'en', '', { classId: 'rogue', traits, signets });
   assert.ok(earned.nodes.length > bare.nodes.length + 6, 'four sources should be visible');
 });
 
@@ -143,10 +148,11 @@ test('branches usually hang off other branches, not only the main tree', () => {
    */
   const seeds = [1, 3, 5, 7, 9, 12, 21, 33, 55, 77];
   const layeredIn = seeds.filter((seed) => {
+    const grows = grownBy(seed, { classId: 'warlock' });
     const tree = skillTreeFor(seed, 'bg', 'en', '', {
       classId: 'warlock',
-      traits: ['butcher', 'unbroken', 'apothecary', 'veteran'],
-      signets: ['signet_ledger_hand', 'signet_quiet_kill'],
+      traits: grows.traits,
+      signets: grows.signets.slice(0, 2),
     });
     const byId = new Map(tree.nodes.map((n) => [n.id, n]));
     return tree.nodes.some(
@@ -164,7 +170,9 @@ test('branches usually hang off other branches, not only the main tree', () => {
 test('a trait that opens nothing still just gives its bonus', () => {
   // Most traits do not grow branches. A tree that sprouted on every tally
   // would be noise.
-  const quiet = skillTreeFor(7, 'bg', 'en', '', { classId: 'rogue', traits: ['blooded', 'climber'] });
+  const quiet = skillTreeFor(7, 'bg', 'en', '', {
+    classId: 'rogue', traits: quietTraitsOf(7, { classId: 'rogue' }).slice(0, 2),
+  });
   const bare = skillTreeFor(7, 'bg', 'en', '', { classId: 'rogue' });
   assert.equal(quiet.nodes.length, bare.nodes.length);
 });
@@ -179,12 +187,12 @@ test('everything is reachable, counting free-standing branches as their own root
    * nobody could ever buy.
    */
   for (const seed of [1, 7, 21, 55, 108]) {
+    const sub = { classId: 'bard', subclassId: 'skirmisher' };
     const tree = skillTreeFor(seed, 'bg', 'en', '', {
-      classId: 'bard',
-      subclassId: 'skirmisher',
+      ...sub,
       level: 10,
-      traits: ['butcher', 'deep_walker', 'known_face', 'cold_hand', 'veteran'],
-      signets: ['signet_long_patience', 'signet_quiet_kill'],
+      traits: grownBy(seed, sub).traits,
+      signets: grownBy(seed, sub).signets.slice(0, 2),
       books: [
         { bookId: 'book_a', name: 'A Soldier’s Notes', set: { archetype: 'sword', entry: 'parallel', size: 2 } },
         { bookId: 'book_b', name: 'The Long Watch', set: { archetype: 'song', entry: 'parallel', size: 3 } },
@@ -215,12 +223,13 @@ test('a grown tree outgrows the points you will ever have', () => {
   // Deliberate. A tree you can finish is a tree that stops asking you
   // anything, and points arrive one a level while branches arrive with every
   // trait, Signet, book and subclass stage.
+  const everything = { classId: 'wizard', subclassId: 'abjurer' };
+  const grows = grownBy(4, everything, 8);
   const tree = skillTreeFor(4, 'bg', 'en', '', {
-    classId: 'wizard',
-    subclassId: 'abjurer',
+    ...everything,
     level: 20,
-    traits: ['butcher', 'deep_walker', 'apothecary', 'known_face', 'cold_hand', 'unbroken', 'veteran'],
-    signets: ['signet_deep_current', 'signet_ledger_hand', 'signet_long_patience', 'signet_quiet_kill'],
+    traits: grows.traits,
+    signets: grows.signets,
     books: [
       { bookId: 'book_a', name: 'One', set: { archetype: 'sword', entry: 'parallel', size: 2 } },
       { bookId: 'book_b', name: 'Two', set: { archetype: 'song', entry: 'parallel', size: 3 } },

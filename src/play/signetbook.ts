@@ -8,7 +8,7 @@ import { ARCHETYPES } from './archetypes.ts';
 import type { EntryRule } from './graft.ts';
 import type { Gate } from './signet.ts';
 import { GATEABLE_FLAGS, generateSignets } from './signetgen.ts';
-import { TRAITS, traitsFor } from './traitbook.ts';
+import { TRAITS, traitOriginOf, traitsFor } from './traitbook.ts';
 import type { Trait } from './traits.ts';
 
 /**
@@ -160,7 +160,7 @@ export function signetsFor(state: PlayState): { kept: Signet[]; discarded: { sig
   // This world's own Signets, then the proof. Varying the numbers is exactly
   // the sort of change that could quietly make a gate unsatisfiable, so the
   // walk matters more here than it did when they were authored.
-  const checked = admissible(candidateSignetsFor(state.world.seed, traitsFor(state.world.seed)), world);
+  const checked = admissible(candidateSignetsFor(state.world.seed, traitsFor(state.world.seed, traitOriginOf(state))), world);
   return {
     kept: checked.kept,
     discarded: checked.discarded.map((d) => ({ signet: d.signet, why: d.problems.map((p) => p.why) })),

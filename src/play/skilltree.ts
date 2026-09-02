@@ -9,7 +9,7 @@ import type { TraitCondition } from './traits.ts';
 import { graftFor } from './graft.ts';
 import type { GraftSource, GraftSpec } from './graft.ts';
 import { traitsFor } from './traitbook.ts';
-import { CANDIDATE_SIGNETS } from './signetbook.ts';
+import { candidateSignetsFor } from './signetbook.ts';
 import { stagesReached, SUBCLASS_STAGES } from '../character/classes.ts';
 import type { ReadBook } from '../session/sheet.ts';
 
@@ -591,13 +591,31 @@ export function skillTreeFor(
     }
   };
 
+  /*
+   * The SAME catalogue the fold awarded from. A tree that built its own would
+   * quietly fail to grow the branch of any trait the character's class,
+   * subclass or background topped the list up with — the trait would sit in
+   * the panel with a branch it had been promised and nowhere for it to be.
+   */
+  const catalogue = traitsFor(seed, {
+    classId: options.classId,
+    subclassId: options.subclassId,
+    background: backgroundName,
+    language,
+  });
+
   for (const traitId of [...(options.traits ?? [])].sort()) {
-    const trait = traitsFor(seed).find((t) => t.id === traitId);
+    const trait = catalogue.find((t) => t.id === traitId);
     if (trait?.opens) attach(`trait_${trait.id}`, trait.opens, { kind: 'trait', id: trait.id, name: trait.name });
   }
 
+  // This world's Signets, for the same reason as the traits above: the
+  // authored list stopped being what a world hides once they were generated,
+  // and a branch looked up in the wrong list simply never grows.
+  const hidden = candidateSignetsFor(seed, catalogue);
+
   for (const signetId of [...(options.signets ?? [])].sort()) {
-    const signet = CANDIDATE_SIGNETS.find((x) => x.id === signetId);
+    const signet = hidden.find((x) => x.id === signetId);
     if (signet?.opens) {
       attach(`signet_${signet.id}`, signet.opens, { kind: 'signet', id: signet.id, name: signet.name });
     }

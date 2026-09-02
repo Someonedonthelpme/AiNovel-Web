@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { canChooseSubclass, classById, CLASSES, subclassById, subclassSkill, SUBCLASS_LEVEL } from './classes.ts';
 import { ARCHETYPES } from '../play/archetypes.ts';
 import { skillTreeFor } from '../play/skilltree.ts';
+import { grownBy } from '../play/fixtures.ts';
 import { applySheetAction } from '../play/sheetaction.ts';
 import { activeSkills } from '../session/sheet.ts';
 import { playState } from '../play/fixtures.ts';
@@ -149,9 +150,10 @@ test('nothing is orphaned once a subclass island is attached', () => {
   // The chaotic generator has to keep its promise: a node nothing connects to
   // is a node nobody can ever buy.
   for (const seed of SEEDS) {
+    const who = { classId: 'warlock', subclassId: 'pact_voice' };
+    const grows = grownBy(seed, who, 2);
     const tree = skillTreeFor(seed, 'bg', 'en', '', {
-      classId: 'warlock', subclassId: 'pact_voice', level: 10,
-      traits: ['butcher', 'veteran'], signets: ['signet_deep_current'],
+      ...who, level: 10, traits: grows.traits, signets: grows.signets.slice(0, 1),
     });
     const byId = new Map(tree.nodes.map((n) => [n.id, n]));
     // Free-standing branches are unreachable from the origin BY DESIGN — that
