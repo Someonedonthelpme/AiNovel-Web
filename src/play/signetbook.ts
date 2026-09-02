@@ -3,6 +3,10 @@ import type { PlayState } from './state.ts';
 import type { Reachable, Signet } from './signet.ts';
 import { admissible } from './signet.ts';
 import { COUNTERS } from './traits.ts';
+import { mulberry32 } from '../engine/roll.ts';
+import { ARCHETYPES } from './archetypes.ts';
+import type { EntryRule } from './graft.ts';
+import type { Gate } from './signet.ts';
 
 /**
  * The Signets a world may contain, and the proof that it can contain them.
@@ -148,9 +152,65 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
  */
 export function signetsFor(state: PlayState): { kept: Signet[]; discarded: { signet: Signet; why: string[] }[] } {
   const world = reachableIn(state);
-  const checked = admissible(CANDIDATE_SIGNETS, world);
+  // This world's own Signets, then the proof. Varying the numbers is exactly
+  // the sort of change that could quietly make a gate unsatisfiable, so the
+  // walk matters more here than it did when they were authored.
+  const checked = admissible(candidateSignetsFor(state.world.seed), world);
   return {
     kept: checked.kept,
     discarded: checked.discarded.map((d) => ({ signet: d.signet, why: d.problems.map((p) => p.why) })),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* What THIS world hides                                                       */
+/* -------------------------------------------------------------------------- */
+
+const SIGNET_ENTRIES: EntryRule[] = ['sequence', 'parallel', 'combination'];
+
+/**
+ * The Signets a particular world may contain, varied by seed.
+ *
+ * The same reasoning as traits: four identical Signets in every run is the one
+ * part of progression that never surprises anybody twice. Depths, tallies and
+ * the branches they grow are all this world's own.
+ *
+ * The reachability proof still runs afterwards and still has the last word — a
+ * varied gate is no more allowed to be impossible than an authored one, and
+ * varying the numbers is exactly the sort of change that could quietly make one
+ * unsatisfiable.
+ */
+export function candidateSignetsFor(seed: number): Signet[] {
+  const rng = mulberry32((seed ^ 0x5169) >>> 0);
+  const demand = 0.8 + rng() * 0.6;
+  const scale = (n: number) => Math.max(1, Math.round(n * demand));
+
+  const varyGate = (gate: Gate): Gate => {
+    switch (gate.kind) {
+      case 'all':
+      case 'any':
+        return { ...gate, of: gate.of.map(varyGate) };
+      case 'itemFromDepth':
+        return { ...gate, minFloor: Math.min(TOWER_HORIZON, scale(gate.minFloor)) };
+      case 'condition':
+        return gate.condition.kind === 'counter'
+          ? { ...gate, condition: { ...gate.condition, atLeast: scale(gate.condition.atLeast) } }
+          : gate;
+      default:
+        return gate;
+    }
+  };
+
+  return CANDIDATE_SIGNETS.map((signet) => ({
+    ...signet,
+    gate: varyGate(signet.gate),
+    opens: signet.opens
+      ? {
+          archetype: ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)].id,
+          entry: SIGNET_ENTRIES[Math.floor(rng() * SIGNET_ENTRIES.length)],
+          size: 3 + Math.floor(rng() * 3),
+          needs: 2 + Math.floor(rng() * 2),
+        }
+      : undefined,
+  }));
 }

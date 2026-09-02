@@ -185,7 +185,10 @@ test('everything is reachable, counting free-standing branches as their own root
       level: 10,
       traits: ['butcher', 'deep_walker', 'known_face', 'cold_hand', 'veteran'],
       signets: ['signet_long_patience', 'signet_quiet_kill'],
-      books: ['book_a', 'book_b'],
+      books: [
+        { bookId: 'book_a', name: 'A Soldier’s Notes', set: { archetype: 'sword', entry: 'parallel', size: 2 } },
+        { bookId: 'book_b', name: 'The Long Watch', set: { archetype: 'song', entry: 'parallel', size: 3 } },
+      ],
     });
 
     const byId = new Map(tree.nodes.map((n) => [n.id, n]));
@@ -218,7 +221,11 @@ test('a grown tree outgrows the points you will ever have', () => {
     level: 20,
     traits: ['butcher', 'deep_walker', 'apothecary', 'known_face', 'cold_hand', 'unbroken', 'veteran'],
     signets: ['signet_deep_current', 'signet_ledger_hand', 'signet_long_patience', 'signet_quiet_kill'],
-    books: ['book_a', 'book_b', 'book_c'],
+    books: [
+      { bookId: 'book_a', name: 'One', set: { archetype: 'sword', entry: 'parallel', size: 2 } },
+      { bookId: 'book_b', name: 'Two', set: { archetype: 'song', entry: 'parallel', size: 3 } },
+      { bookId: 'book_c', name: 'Three', set: { archetype: 'venom', entry: 'parallel', size: 3 } },
+    ],
   });
 
   // A character at level 20 has roughly 20 points to their name.

@@ -1,6 +1,6 @@
 import type { Rng } from '../engine/roll.ts';
 import type { Attack } from '../combat/types.ts';
-import { skillBook } from '../skills/book.ts';
+import { chainedBook, CHAIN_LENGTH, provableChain, skillBook, volumeFloor } from '../skills/book.ts';
 import type { Item } from './types.ts';
 
 /**
@@ -15,6 +15,14 @@ import type { Item } from './types.ts';
 
 /** The supply a short rest burns. Deliberately one well-known id. */
 export const RATION_ID = 'rations';
+
+/**
+ * How deep the tower is willing to promise it goes.
+ *
+ * Mirrors `TOWER_HORIZON` in the Signet book. Kept here rather than imported to
+ * avoid a cycle, and pinned to it by test.
+ */
+export const TOWER_DEPTH = 30;
 
 export const rations = (count = 1): { item: Item; count: number } => ({
   item: {
@@ -173,8 +181,19 @@ export function rollLoot(rng: Rng, floor: number): Drop[] {
   if (rng() < 0.16) drops.push({ item: weapon(rng, floor), count: 1 });
   if (rng() < 0.12) drops.push({ item: armour(rng, floor), count: 1 });
   if (rng() < 0.18) drops.push({ item: material(rng, floor), count: 1 });
-  // Uncommon on purpose: a book is a permanent new verb, not a consumable.
-  if (rng() < 0.09) drops.push({ item: skillBook(rng, floor), count: 1 });
+  /*
+   * Uncommon on purpose: a book is a permanent new verb, not a consumable.
+   *
+   * Most are standalone; some belong to a series, and a series only drops when
+   * the whole of it is reachable in this tower — an unreadable volume three is
+   * a dead end the player can never diagnose.
+   */
+  if (rng() < 0.09) {
+    const series = Math.floor(rng() * 6);
+    const volume = Math.floor(rng() * CHAIN_LENGTH);
+    const chained = rng() < 0.45 && provableChain(series, TOWER_DEPTH) && volumeFloor(series, volume) <= floor;
+    drops.push({ item: chained ? chainedBook(rng, series, volume) : skillBook(rng, floor), count: 1 });
+  }
 
   return drops;
 }

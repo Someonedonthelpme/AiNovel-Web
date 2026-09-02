@@ -5,6 +5,7 @@ import { emptyInventory, equippedArmour, equippedAttack, equippedGrants } from '
 import { activate } from '../skills/book.ts';
 import type { Item } from '../items/types.ts';
 import type { ActiveSkill } from '../skills/active.ts';
+import type { GraftSpec } from '../play/graft.ts';
 import type { Persona, Status } from '../character/persona.ts';
 import { emptyPersona, neutralPersonality, restingMind } from '../character/persona.ts';
 
@@ -115,6 +116,22 @@ export type CharacterSheet = Persona & {
   classId?: string;
   /** Chosen at level 3. Opens an island into somewhere the class cannot go. */
   subclassId?: string;
+  /**
+   * Books read, in the order they were read.
+   *
+   * The shelf, not the pile. Each carries the set it grew, so the tree can be
+   * rebuilt from the sheet alone — and each records what had to be read first,
+   * because a chain is only a chain if the game remembers the order.
+   */
+  library?: ReadBook[];
+};
+
+/** One book, absorbed. */
+export type ReadBook = {
+  bookId: string;
+  name: string;
+  /** The branch reading it grew. Kept here so the tree needs no item lookup. */
+  set: GraftSpec;
 };
 
 /* -------------------------------------------------------------------------- */

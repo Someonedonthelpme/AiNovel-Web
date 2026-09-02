@@ -154,8 +154,11 @@ test('nothing is orphaned once a subclass island is attached', () => {
       traits: ['butcher', 'veteran'], signets: ['signet_deep_current'],
     });
     const byId = new Map(tree.nodes.map((n) => [n.id, n]));
-    const seen = new Set<string>([tree.start]);
-    const queue = [tree.start];
+    // Free-standing branches are unreachable from the origin BY DESIGN — that
+    // is what `parallel` means — so each is a root of its own.
+    const roots = [tree.start, ...tree.nodes.filter((n) => n.freeStanding).map((n) => n.id)];
+    const seen = new Set<string>(roots);
+    const queue = [...roots];
 
     while (queue.length) {
       const here = byId.get(queue.shift()!);

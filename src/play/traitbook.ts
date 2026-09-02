@@ -1,4 +1,8 @@
-import type { Trait } from './traits.ts';
+import { mulberry32 } from '../engine/roll.ts';
+import { ARCHETYPES } from './archetypes.ts';
+import type { ArchetypeId } from './archetypes.ts';
+import type { EntryRule } from './graft.ts';
+import type { Trait, TraitCondition } from './traits.ts';
 import { COUNTERS } from './traits.ts';
 
 /**
@@ -138,3 +142,65 @@ export const TRAITS: readonly Trait[] = [
     opens: { archetype: 'guard', entry: 'combination', size: 5, needs: 3 },
   },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* What THIS world asks of you                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** How many of the catalogue a single world offers. */
+export const MIN_TRAITS = 8;
+export const MAX_TRAITS = 10;
+
+const ENTRIES: EntryRule[] = ['sequence', 'parallel', 'combination'];
+
+/**
+ * The traits a particular world offers, and what they ask.
+ *
+ * Everything else about a character is theirs — the tree, the disciplines the
+ * class allows, the branches their choices grew. Traits were the last thing
+ * identical in every run: the same twelve achievements, the same thresholds,
+ * forever.
+ *
+ * A world now offers a SUBSET, with its own thresholds and its own branches. A
+ * tower that wants thirty kills of you is a different tower from one that wants
+ * forty-five, and the branch either one grows is different again.
+ *
+ * Deterministic in the seed, because traits are evaluated inside the fold: a
+ * replayed log has to earn the same traits at the same moments, and a catalogue
+ * that shifted between loads would rewrite a character's history.
+ */
+export function traitsFor(seed: number): Trait[] {
+  const rng = mulberry32((seed ^ 0x7a17) >>> 0);
+
+  // Thresholds move together, so a world reads as demanding or forgiving rather
+  // than as a scatter of unrelated numbers.
+  const demand = 0.75 + rng() * 0.75;
+  const scale = (n: number) => Math.max(1, Math.round(n * demand));
+
+  const want = MIN_TRAITS + Math.floor(rng() * (MAX_TRAITS - MIN_TRAITS + 1));
+  const pool = [...TRAITS];
+  const chosen: Trait[] = [];
+
+  while (chosen.length < want && pool.length > 0) {
+    chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  }
+
+  return chosen.map((trait) => {
+    const requires: TraitCondition[] = trait.requires.map((c) =>
+      c.kind === 'counter' ? { ...c, atLeast: scale(c.atLeast) } : c,
+    );
+
+    // A trait that grew a branch still does, but not always the same one — the
+    // discipline, the way in and the size are all this world's business.
+    const opens = trait.opens
+      ? {
+          archetype: ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)].id as ArchetypeId,
+          entry: ENTRIES[Math.floor(rng() * ENTRIES.length)],
+          size: 2 + Math.floor(rng() * 4),
+          needs: 2 + Math.floor(rng() * 2),
+        }
+      : undefined;
+
+    return { ...trait, requires, opens };
+  });
+}

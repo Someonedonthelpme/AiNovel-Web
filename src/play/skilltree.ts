@@ -8,9 +8,10 @@ import type { Archetype, ArchetypeId } from './archetypes.ts';
 import type { TraitCondition } from './traits.ts';
 import { graftFor } from './graft.ts';
 import type { GraftSource, GraftSpec } from './graft.ts';
-import { TRAITS } from './traitbook.ts';
+import { traitsFor } from './traitbook.ts';
 import { CANDIDATE_SIGNETS } from './signetbook.ts';
 import { stagesReached, SUBCLASS_STAGES } from '../character/classes.ts';
+import type { ReadBook } from '../session/sheet.ts';
 
 /**
  * The passive tree.
@@ -459,7 +460,8 @@ export type TreeOptions = {
   /** Traits earned, Signets claimed, books read — each may grow a branch. */
   traits?: readonly string[];
   signets?: readonly string[];
-  books?: readonly string[];
+  /** Books carry the branch they grow, so a sword book grows sword nodes. */
+  books?: readonly ReadBook[];
 };
 
 export function skillTreeFor(
@@ -590,7 +592,7 @@ export function skillTreeFor(
   };
 
   for (const traitId of [...(options.traits ?? [])].sort()) {
-    const trait = TRAITS.find((t) => t.id === traitId);
+    const trait = traitsFor(seed).find((t) => t.id === traitId);
     if (trait?.opens) attach(`trait_${trait.id}`, trait.opens, { kind: 'trait', id: trait.id, name: trait.name });
   }
 
@@ -622,12 +624,10 @@ export function skillTreeFor(
    * Skill sets from books, last and always PARALLEL: you did not walk to a
    * book, you read your way in, and the reading was the entry price.
    */
-  for (const bookId of [...(options.books ?? [])].sort()) {
-    attach(
-      `book_${bookId}`,
-      { archetype: 'wisdom', entry: 'parallel', size: 2 },
-      { kind: 'book', id: bookId, name: bookId },
-    );
+  for (const read of [...(options.books ?? [])].sort((a, b) => a.bookId.localeCompare(b.bookId))) {
+    // The book's OWN set, so a book about steadiness grows shield nodes rather
+    // than everything defaulting to the same discipline.
+    attach(`book_${read.bookId}`, read.set, { kind: 'book', id: read.bookId, name: read.name });
   }
 
   return {

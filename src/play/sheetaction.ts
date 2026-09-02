@@ -7,7 +7,7 @@ import { skillTreeFor } from './skilltree.ts';
 import type { PlayState } from './state.ts';
 import { awardTraits } from './traits.ts';
 import type { TraitContext } from './traits.ts';
-import { TRAITS } from './traitbook.ts';
+import { traitsFor } from './traitbook.ts';
 import { useItem } from './rest.ts';
 import { canChooseSubclass, subclassById, subclassSkill, SUBCLASS_LEVEL } from '../character/classes.ts';
 
@@ -51,7 +51,7 @@ export const treeFor = (state: PlayState) =>
     // grown a branch, and the tree is rebuilt from them every time.
     traits: state.sheet.traits,
     signets: state.sheet.signets,
-    books: (state.sheet.learned ?? []).filter((s) => s.id.startsWith('skill_book_')).map((s) => s.id),
+    books: state.sheet.library,
   });
 
 export const contextOf = (state: PlayState): TraitContext => ({
@@ -142,7 +142,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
  */
 function settle(next: PlayState, before: PlayState, note: string | null): SheetResult {
   const grown = hpAfterGrowth(next.sheet, next.pc.inventory, next.pc.hp, before.pc.maxHp);
-  const awarded = awardTraits(TRAITS, next.sheet, next.pc.inventory);
+  const awarded = awardTraits(traitsFor(next.world.seed), next.sheet, next.pc.inventory);
 
   return {
     state: {

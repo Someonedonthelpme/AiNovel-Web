@@ -2,7 +2,7 @@ import { applyDrift } from '../character/drift.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { awardTraits, COUNTERS } from './traits.ts';
 import type { Trait } from './traits.ts';
-import { TRAITS } from './traitbook.ts';
+import { traitsFor } from './traitbook.ts';
 import { applySheetAction } from './sheetaction.ts';
 import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
@@ -304,7 +304,9 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   // rather than in the live loop is what keeps a replayed session unlocking the
   // same traits in the same order.
   const drifted: PlayState = { ...moved, world, sheet: { ...moved.sheet, ...player.persona } };
-  const awarded = awardTraits(TRAITS, drifted.sheet, drifted.pc.inventory);
+  // This world's own traits, not the global catalogue — a replayed log has to
+  // earn the same ones at the same moments.
+  const awarded = awardTraits(traitsFor(drifted.world.seed), drifted.sheet, drifted.pc.inventory);
 
   return { state: { ...drifted, sheet: awarded.sheet }, shifts, earned: awarded.earned };
 }

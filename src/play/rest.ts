@@ -137,6 +137,15 @@ export function useItem(state: PlayState, itemId: string): UseResult {
     const already = (state.sheet.learned ?? []).some((s) => s.id === item.teaches.id);
     if (already) return { state, narration: null, error: 'you already know what is in it' };
 
+    /*
+     * A chain is only a chain if the order is enforced. Reading the second
+     * volume first should fail in a way that tells you a first volume exists —
+     * otherwise it reads as the book being broken.
+     */
+    if (item.needsBook && !(state.sheet.library ?? []).some((r) => r.bookId === item.needsBook)) {
+      return { state, narration: null, error: 'this follows on from something you have not read' };
+    }
+
     const context = { sheet: state.sheet, inventory: state.pc.inventory, counters: state.sheet.counters, personality: state.sheet.personality };
     const notReady = (item.teaches.requires ?? []).filter((c) => !conditionMet(c, context));
     if (notReady.length) {
@@ -146,7 +155,13 @@ export function useItem(state: PlayState, itemId: string): UseResult {
     return {
       state: {
         ...state,
-        sheet: { ...state.sheet, learned: [...(state.sheet.learned ?? []), item.teaches] },
+        sheet: {
+          ...state.sheet,
+          learned: [...(state.sheet.learned ?? []), item.teaches],
+          // Onto the shelf, with the branch it grows, so the tree can be built
+          // from the sheet without going back to the item.
+          library: [...(state.sheet.library ?? []), { bookId: item.id, name: item.name, set: item.set }],
+        },
         pc: { ...state.pc, inventory: removeItem(state.pc.inventory, itemId, 1) },
       },
       narration: `learned ${item.teaches.name}`,

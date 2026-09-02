@@ -119,6 +119,75 @@ export type SkillBook = Item & {
   needsBook?: string;
 };
 
+/**
+ * The volumes a tower prints, in order.
+ *
+ * A chain is only worth having if the earlier volumes can actually be found, so
+ * the whole series is derived from the world seed rather than rolled per drop.
+ * That is what lets `provableChain` say, before anything ships, whether volume
+ * three is reachable at all.
+ */
+export const CHAIN_LENGTH = 3;
+
+/** The floor a given volume of a series starts appearing on. */
+export const volumeFloor = (series: number, volume: number): number =>
+  1 + (series % 3) + volume * 4;
+
+/** A stable id for one volume, so the same series is the same series everywhere. */
+export const volumeId = (series: number, volume: number): string => `vol_${series}_${volume}`;
+
+/**
+ * Whether a series can actually be read to the end in this tower.
+ *
+ * The same failure the Signet walk exists to prevent: a book whose prerequisite
+ * never drops is a permanent dead end the player cannot diagnose — it simply
+ * refuses to open, forever, with no way to learn why.
+ */
+export function provableChain(series: number, maxFloor: number): boolean {
+  for (let volume = 0; volume < CHAIN_LENGTH; volume++) {
+    if (volumeFloor(series, volume) > maxFloor) return false;
+  }
+  return true;
+}
+
+/**
+ * A book that belongs to a series.
+ *
+ * Volume nought stands alone; every later volume needs the one before it, which
+ * is what turns a pile into a shelf.
+ */
+export function chainedBook(
+  _rng: Rng,
+  series: number,
+  volume: number,
+  language: 'th' | 'en' = 'en',
+): SkillBook {
+  const floor = volumeFloor(series, volume);
+
+  /*
+   * Each volume gets its OWN generator, keyed to the volume rather than to
+   * whatever state the caller's happened to be in.
+   *
+   * Sharing one made every volume of a series teach the same skill, so the
+   * second was refused as "you already know what is in it" — a chain of
+   * identical books, which is no chain at all.
+   */
+  const own = mulberry32(hash(volumeId(series, volume)));
+  const book = skillBook(own, floor, language);
+  const id = volumeId(series, volume);
+
+  return {
+    ...book,
+    id,
+    name: `${book.name} (${volume + 1})`,
+    // Pinned to the volume too, so two volumes can never collide.
+    teaches: { ...book.teaches, id: `skill_${id}` },
+    needsBook: volume > 0 ? volumeId(series, volume - 1) : undefined,
+    // A later volume is worth more, and asks more of the shelf below it.
+    set: { ...book.set, size: Math.min(5, book.set.size + volume) },
+  };
+}
+
 export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en'): SkillBook {
   const titles = TITLES[language];
   const title = titles[Math.floor(rng() * titles.length)];
