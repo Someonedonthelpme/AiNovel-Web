@@ -40,7 +40,9 @@ test('every shipped Signet can actually be obtained', () => {
     [],
     'these would be unobtainable and must be fixed or removed',
   );
-  assert.equal(checked.kept.length, CANDIDATE_SIGNETS.length);
+  // A count against the authored list means nothing now that the candidates are
+  // generated; what matters is that a world is never left with none.
+  assert.ok(checked.kept.length > 0, 'a world with no obtainable Signets has no third branch at all');
 });
 
 test('a gate demanding something the tower never drops is refused', () => {

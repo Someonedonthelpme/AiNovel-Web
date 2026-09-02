@@ -7,6 +7,9 @@ import { mulberry32 } from '../engine/roll.ts';
 import { ARCHETYPES } from './archetypes.ts';
 import type { EntryRule } from './graft.ts';
 import type { Gate } from './signet.ts';
+import { GATEABLE_FLAGS, generateSignets } from './signetgen.ts';
+import { TRAITS, traitsFor } from './traitbook.ts';
+import type { Trait } from './traits.ts';
 
 /**
  * The Signets a world may contain, and the proof that it can contain them.
@@ -32,10 +35,10 @@ export const DROPPABLE_FAMILIES = new Set(['mat_', 'draught_', 'weapon_', 'armou
  * The Director may set arbitrary flags, but a Signet may only gate on one that
  * something is actually known to produce — otherwise the gate is a wish.
  */
-export const SETTABLE_FLAGS = new Set([
-  'read_the_ledger',
-  'heard_the_bell',
-  'spared_someone',
+export const SETTABLE_FLAGS = new Set<string>([
+  ...GATEABLE_FLAGS,
+  // Hint flags are raised by the world when it drops a rumour. They are not
+  // gate terms, but a generated Signet's hint uses its own id.
   'hint_signet_deep_current',
   'hint_signet_ledger_hand',
 ]);
@@ -157,7 +160,7 @@ export function signetsFor(state: PlayState): { kept: Signet[]; discarded: { sig
   // This world's own Signets, then the proof. Varying the numbers is exactly
   // the sort of change that could quietly make a gate unsatisfiable, so the
   // walk matters more here than it did when they were authored.
-  const checked = admissible(candidateSignetsFor(state.world.seed), world);
+  const checked = admissible(candidateSignetsFor(state.world.seed, traitsFor(state.world.seed)), world);
   return {
     kept: checked.kept,
     discarded: checked.discarded.map((d) => ({ signet: d.signet, why: d.problems.map((p) => p.why) })),
@@ -182,7 +185,25 @@ const SIGNET_ENTRIES: EntryRule[] = ['sequence', 'parallel', 'combination'];
  * varying the numbers is exactly the sort of change that could quietly make one
  * unsatisfiable.
  */
-export function candidateSignetsFor(seed: number): Signet[] {
+/**
+ * The Signets a particular world may contain.
+ *
+ * Generated from themes now rather than scaled from four authored gates — see
+ * `signetgen.ts`. The authored four are kept below as the shapes the generator
+ * was written against, and as something to compare a generated gate with.
+ */
+export function candidateSignetsFor(seed: number, traits: readonly Trait[] = []): Signet[] {
+  return generateSignets({
+    seed,
+    horizon: TOWER_HORIZON,
+    maxAbility: MAX_ABILITY,
+    traits: traits.length > 0 ? traits : TRAITS,
+    language: 'en',
+  });
+}
+
+/** The earlier approach, kept for comparison and for the tests that pin it. */
+export function variedAuthoredSignets(seed: number): Signet[] {
   const rng = mulberry32((seed ^ 0x5169) >>> 0);
   const demand = 0.8 + rng() * 0.6;
   const scale = (n: number) => Math.max(1, Math.round(n * demand));
