@@ -217,9 +217,32 @@ input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
   border: 1px solid var(--line);
   border-radius: 12px;
   width: min(880px, 100%);
-  max-height: 88vh;
-  overflow-y: auto;
+  /*
+   * A real height, not a ceiling.
+   *
+   * With `max-height` the panel sized itself to its content, so `flex: 1` on
+   * the drawing had no spare room to claim and the tree came out a postage
+   * stamp. Claiming the height is what lets the tree have whatever is left.
+   */
+  height: min(88vh, 860px);
   padding: 1.4rem 1.5rem;
+  /*
+   * A column that never scrolls itself.
+   *
+   * The tree used to be a square the width of the modal — 880px tall before
+   * anything else — so the panel always overflowed. The head, tabs and legend
+   * keep their natural height; the drawing takes what is left.
+   */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Anything the modal holds that could grow forever scrolls inside itself. */
+.panel-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .modal-head {
@@ -312,7 +335,28 @@ input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
  * eye travelled from the node to the bottom of the modal and back. The card
  * comes to the node instead, and there is nothing there when nothing is hovered.
  */
-.tree-frame { position: relative; }
+.tree-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tree-frame {
+  /* Takes whatever the panel has left, and can shrink below its content. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Square, bounded by height, so the drawing never forces the panel taller. */
+.tree-stage {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 1;
+  max-width: 100%;
+}
 
 .tree-bar {
   display: flex;
@@ -346,8 +390,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--amber-dim); }
 }
 
 .tree-svg {
+  display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   border-radius: 10px;
   border: 1px solid var(--line);
   /* Lighter at the centre, so the origin reads as the middle of something. */

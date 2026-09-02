@@ -393,7 +393,10 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
   const rearranged = Object.keys(offsets).length > 0 || camera.zoom !== 1 || camera.x !== 0 || camera.y !== 0;
 
   return (
-    <div>
+    // A flex column of its own, so the frame inside it has somewhere to grow.
+    // As a plain div this wrapper sized to its content and the tree stayed a
+    // postage stamp however tall the panel got.
+    <div className="tree-tab">
       <div className="legend">
         {/*
           Built from what is actually DRAWN, not from the discipline list.
@@ -425,7 +428,13 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
         </span>
       </div>
 
-      <div className="tree-frame" ref={frame}>
+      <div className="tree-frame">
+        {/*
+          The stage is exactly the size of the drawing, and the card is
+          positioned inside it. Anchoring the card to the FRAME instead would
+          put it adrift the moment the frame is wider than the square viewBox.
+        */}
+        <div className="tree-stage" ref={frame}>
         <svg
           viewBox="-4 -4 108 108"
           className={drag.current ? 'tree-svg dragging' : 'tree-svg'}
@@ -547,6 +556,7 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
         {shown && <NodeCard node={shown} offsets={offsets} camera={camera} />}
 
         <p className="tree-hint muted">drag to move · wheel to zoom · drag a node to rearrange</p>
+        </div>
       </div>
     </div>
   );
@@ -555,7 +565,7 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
 /** Progress is shown per condition, because they do not average into anything. */
 function TraitList({ view }: { view: GameView }) {
   return (
-    <div>
+    <div className="panel-scroll">
       {view.traits.map((trait) => (
         <div className="row" key={trait.id}>
           <div>
@@ -588,7 +598,7 @@ function SignetList({ view }: { view: GameView }) {
   }
 
   return (
-    <div>
+    <div className="panel-scroll">
       {view.signets.map((s) => (
         <div className="row" key={s.id}>
           <div>
