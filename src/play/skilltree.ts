@@ -10,6 +10,7 @@ import { graftFor } from './graft.ts';
 import type { GraftSource, GraftSpec } from './graft.ts';
 import { traitsFor } from './traitbook.ts';
 import { candidateSignetsFor } from './signetbook.ts';
+import { EMERGENT_BRANCH_CAP, isEmergent } from './emergent.ts';
 import { stagesReached, SUBCLASS_STAGES } from '../character/classes.ts';
 import type { ReadBook } from '../session/sheet.ts';
 
@@ -604,9 +605,29 @@ export function skillTreeFor(
     language,
   });
 
+  /*
+   * THE CAP, and it is the one real risk in the whole generated design.
+   *
+   * Declared sources are bounded — a world offers a dozen traits, a character
+   * holds a handful of Signets, a class has three subclass stages. Emergent
+   * ones are not: a long run drives every counter, every shape that comes true
+   * mints a trait, and every trait would grow a branch. The tree sprawls into
+   * noise and a legible web stops being legible.
+   *
+   * So only the first few grow anything. Taken in EARN ORDER, which is why
+   * this reads the unsorted list — `sheet.traits` appends, so the order is the
+   * order they arrived, and it survives a replay. The sorted walk below is for
+   * a stable layout and would have thrown that away.
+   */
+  const grownEmergent = new Set(
+    (options.traits ?? []).filter(isEmergent).slice(0, EMERGENT_BRANCH_CAP),
+  );
+
   for (const traitId of [...(options.traits ?? [])].sort()) {
     const trait = catalogue.find((t) => t.id === traitId);
-    if (trait?.opens) attach(`trait_${trait.id}`, trait.opens, { kind: 'trait', id: trait.id, name: trait.name });
+    if (!trait?.opens) continue;
+    if (isEmergent(traitId) && !grownEmergent.has(traitId)) continue;
+    attach(`trait_${trait.id}`, trait.opens, { kind: 'trait', id: trait.id, name: trait.name });
   }
 
   // This world's Signets, for the same reason as the traits above: the

@@ -193,6 +193,16 @@ function unsatisfiableCondition(gate: Gate, condition: TraitCondition, world: Re
       // Every axis can be driven either way by play, so these are always
       // satisfiable in principle.
       return [];
+    case 'shape':
+      /*
+       * Refused outright, and not because shapes are unreachable — some are
+       * easy. The walk cannot PROVE a ratio: `reachableIn` knows which
+       * counters have writers, not what proportion two of them can be driven
+       * to. A gate it cannot prove is exactly the hidden-Signet-that-can-never-
+       * open failure this whole check exists to prevent, so it says no rather
+       * than guessing yes.
+       */
+      return [{ gate, why: `a shape ("${condition.shape}") cannot be proved reachable, so it may not gate a Signet` }];
   }
 }
 

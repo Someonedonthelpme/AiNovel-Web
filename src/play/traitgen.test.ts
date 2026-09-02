@@ -4,12 +4,22 @@ import { CLASSES } from '../character/classes.ts';
 import { favouredThemes, generateTraits, THEMES } from './traitgen.ts';
 import type { TraitOrigin } from './traitgen.ts';
 import { MAX_TRAITS, MIN_TRAITS, traitsFor } from './traitbook.ts';
+import { isEmergent } from './emergent.ts';
 import { WRITTEN_COUNTERS } from './traits.ts';
 import type { Trait } from './traits.ts';
 
 const SEEDS = [1, 3, 7, 21, 42, 108, 512, 2024, 31337];
 
 const en = (over: Partial<TraitOrigin> = {}): TraitOrigin => ({ language: 'en', ...over });
+
+/*
+ * The declared half. `traitsFor` returns both kinds, because they travel the
+ * same road once minted — but only these are drawn from themes, only these are
+ * topped up by the character, and only these can be shown as goals. The
+ * emergent ones have their own file and their own tests.
+ */
+const declared = (seed: number, origin?: TraitOrigin) =>
+  traitsFor(seed, origin).filter((t) => !isEmergent(t.id));
 
 /* -------------------------------------------------------------------------- */
 /* The property the whole top-up design rests on                               */
@@ -107,7 +117,7 @@ test('every condition in a trait comes from one theme', () => {
         : t.kind === 'personality' ? `personality:${t.axis}` : 'level')));
 
   for (const seed of SEEDS) {
-    for (const trait of traitsFor(seed, en({ classId: 'bard' }))) {
+    for (const trait of declared(seed, en({ classId: 'bard' }))) {
       const terms = describe(trait);
       assert.ok(
         themeTerms.some((set) => terms.every((t) => set.has(t))),
@@ -230,7 +240,7 @@ test('the same world offers the same person the same list', () => {
 
 test('a world offers a sensible number before anyone tops it up', () => {
   for (const seed of SEEDS) {
-    const bare = traitsFor(seed);
+    const bare = declared(seed);
     assert.ok(
       bare.length >= MIN_TRAITS && bare.length <= MAX_TRAITS,
       `seed ${seed} offered ${bare.length}`,
@@ -254,7 +264,9 @@ test('a trait is always earned by something you did', () => {
     for (const held of CLASSES) {
       for (const trait of traitsFor(seed, en({ classId: held.id }))) {
         assert.ok(
-          trait.requires.some((c) => c.kind === 'counter' || c.kind === 'level'),
+          // A shape counts: it is a relation between things you did, and is
+          // in fact the purest form of the claim.
+          trait.requires.some((c) => c.kind === 'counter' || c.kind === 'level' || c.kind === 'shape'),
           `${trait.id} (${trait.name}) is earned by existing: ${JSON.stringify(trait.requires)}`,
         );
       }

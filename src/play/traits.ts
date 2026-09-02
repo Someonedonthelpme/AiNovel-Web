@@ -23,7 +23,18 @@ export type TraitCondition =
   | { kind: 'counter'; counter: string; atLeast: number }
   | { kind: 'personality'; axis: Axis; atLeast?: number; atMost?: number }
   | { kind: 'level'; atLeast: number }
-  | { kind: 'carries'; item: string; atLeast: number };
+  | { kind: 'carries'; item: string; atLeast: number }
+  /**
+   * A SHAPE in the tallies rather than a threshold in one of them.
+   *
+   * This is what an emergent trait is made of. Every other condition is a
+   * goal — a number you can be shown and walk toward. A shape is a RATIO or an
+   * EXTREME, and it can only ever be a recognition: nothing can foreshadow
+   * "you have killed more people than you have spoken to", because the moment
+   * it could be displayed as a target it would stop being true of you and
+   * start being a thing you were aiming at.
+   */
+  | { kind: 'shape'; shape: string };
 
 export type Trait = {
   id: string;
@@ -96,6 +107,83 @@ export const WRITTEN_COUNTERS: readonly string[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
+/* Shapes: what the tallies say about you sideways                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A shape in the counters.
+ *
+ * Deliberately NOT a threshold. "Thirty kills" is a goal and belongs in the
+ * declared catalogue, where the panel can show progress toward it. These are
+ * relations — a ratio between two tallies, or one at an extreme while another
+ * sits at nothing — and they describe how somebody played rather than what
+ * they set out to do.
+ *
+ * Each carries a floor as well as its relation, because a ratio over small
+ * numbers is noise: two kills and no conversations is a Tuesday, not a
+ * character. The floor is what makes the recognition mean something.
+ *
+ * The predicates live here beside `conditionMet` rather than in the generator,
+ * so there is exactly one place that knows how a shape is TESTED. The
+ * generator's business is naming and dressing them.
+ */
+export type Shape = {
+  id: string;
+  /** True when the shape holds. `n` reads a counter; `level` is the character's. */
+  holds: (n: (counter: string) => number, level: number) => boolean;
+};
+
+export const SHAPES: readonly Shape[] = [
+  {
+    // Killed far more than you have talked to.
+    id: 'unspeaking',
+    holds: (n) => n(COUNTERS.kills) >= 15 && n(COUNTERS.kills) > n(COUNTERS.peopleMet) * 3,
+  },
+  {
+    // Deep into the tower without ever having slept properly.
+    id: 'sleepless',
+    holds: (n) => n(COUNTERS.deepestFloor) >= 5 && n(COUNTERS.longRests) === 0,
+  },
+  {
+    // Beaten repeatedly, and winning anyway.
+    id: 'stubborn',
+    holds: (n) => n(COUNTERS.fightsLost) >= 3 && n(COUNTERS.fightsWon) > n(COUNTERS.fightsLost) * 2,
+  },
+  {
+    // Losing more than winning, and still climbing.
+    id: 'ground_down',
+    holds: (n) => n(COUNTERS.fightsLost) >= 4 && n(COUNTERS.fightsLost) >= n(COUNTERS.fightsWon),
+  },
+  {
+    // Carrying everything and using none of it.
+    id: 'hoarder',
+    holds: (n) => n(COUNTERS.placesFound) >= 20 && n(COUNTERS.itemsUsed) * 5 <= n(COUNTERS.placesFound),
+  },
+  {
+    // Spending faster than you fight.
+    id: 'spendthrift',
+    holds: (n) => n(COUNTERS.itemsUsed) >= 25 && n(COUNTERS.itemsUsed) > n(COUNTERS.kills),
+  },
+  {
+    // Climbing faster than you rest.
+    id: 'headlong',
+    holds: (n) => n(COUNTERS.floorsClimbed) >= 8 && n(COUNTERS.floorsClimbed) > n(COUNTERS.shortRests),
+  },
+  {
+    // Known widely, and hardly killing at all.
+    id: 'unbloodied',
+    holds: (n) => n(COUNTERS.peopleMet) >= 12 && n(COUNTERS.kills) * 2 <= n(COUNTERS.peopleMet),
+  },
+  {
+    // Deep for how young you are.
+    id: 'out_of_depth',
+    holds: (n, level) => n(COUNTERS.deepestFloor) >= 6 && n(COUNTERS.deepestFloor) > level,
+  },
+];
+
+export const shapeById = (id: string): Shape | null => SHAPES.find((s) => s.id === id) ?? null;
+
+/* -------------------------------------------------------------------------- */
 /* Evaluating                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -122,6 +210,13 @@ export function conditionMet(condition: TraitCondition, ctx: TraitContext): bool
       return Math.max(1, ctx.sheet.level) >= condition.atLeast;
     case 'carries':
       return countOf(ctx.inventory, condition.item) >= condition.atLeast;
+    case 'shape': {
+      const shape = shapeById(condition.shape);
+      // An unknown shape is FALSE, not a crash. A save written before a shape
+      // existed must still fold, and a trait nobody can earn is better than a
+      // session that will not load.
+      return shape ? shape.holds((c) => counterOf(ctx.counters, c), Math.max(1, ctx.sheet.level)) : false;
+    }
   }
 }
 
@@ -148,6 +243,17 @@ export function progressOf(trait: Trait, ctx: TraitContext): ConditionProgress[]
         return { condition, met, have: ctx.personality[condition.axis], need: condition.atLeast ?? condition.atMost ?? 0, label: describeAxis(condition) };
       case 'level':
         return { condition, met, have: Math.max(1, ctx.sheet.level), need: condition.atLeast, label: `level ${condition.atLeast}` };
+      case 'shape':
+        /*
+         * No numbers, deliberately.
+         *
+         * A shape has no progress to show, and giving it one would destroy the
+         * thing it is. The moment "you have killed more than you have spoken
+         * to" appears in the panel as 18/24, it stops being a recognition of
+         * how somebody played and becomes a target they are aiming at — and
+         * the aiming is precisely what it claims they did not do.
+         */
+        return { condition, met, have: met ? 1 : 0, need: 1, label: '' };
       case 'carries':
         return { condition, met, have: countOf(ctx.inventory, condition.item), need: condition.atLeast, label: `carry ${condition.atLeast}` };
     }

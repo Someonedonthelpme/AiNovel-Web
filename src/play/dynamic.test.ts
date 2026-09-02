@@ -5,7 +5,8 @@ import { addItem } from '../items/types.ts';
 import { TOWER_DEPTH } from '../items/catalogue.ts';
 import { chainedBook, CHAIN_LENGTH, provableChain, volumeFloor, volumeId } from '../skills/book.ts';
 import { candidateSignetsFor, signetsFor, TOWER_HORIZON } from './signetbook.ts';
-import { MAX_TRAITS, MIN_TRAITS, TRAITS, traitsFor } from './traitbook.ts';
+import { MAX_TRAITS, MIN_TRAITS, traitsFor } from './traitbook.ts';
+import { isEmergent } from './emergent.ts';
 import { COUNTERS } from './traits.ts';
 import { counterOf } from '../character/persona.ts';
 import { applyTurn } from './delta.ts';
@@ -128,10 +129,14 @@ test('two worlds ask different things of you', () => {
 
 test('a world offers a subset, and always the same one', () => {
   for (const seed of [1, 7, 42, 108, 2024]) {
-    const world = traitsFor(seed);
+    // The DECLARED half. Emergent traits ride in the same list once minted,
+    // but a world does not offer a subset of those — it cannot decline to
+    // notice what somebody actually did.
+    const world = traitsFor(seed).filter((t) => !isEmergent(t.id));
     assert.ok(world.length >= MIN_TRAITS && world.length <= MAX_TRAITS);
-    assert.ok(world.length <= TRAITS.length);
-    assert.deepEqual(world, traitsFor(seed), 'a replayed log must earn the same traits');
+    // Both halves, because both are folded: a replayed log has to earn the
+    // same declared traits AND notice the same shapes at the same moments.
+    assert.deepEqual(traitsFor(seed), traitsFor(seed), 'a replayed log must earn the same traits');
   }
 });
 

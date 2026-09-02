@@ -14,6 +14,7 @@ import type { SheetAction } from '../play/sheetaction.ts';
 import { progressOf } from '../play/traits.ts';
 import { xpToNext } from '../play/progress.ts';
 import { traitOriginOf, traitsFor } from '../play/traitbook.ts';
+import { isEmergent } from '../play/emergent.ts';
 import { visibleSignets } from '../play/signet.ts';
 import { signetsFor } from '../play/signetbook.ts';
 import { climb, exitStatus } from '../play/climb.ts';
@@ -594,13 +595,26 @@ function treeViewOf(state: PlayState): GameView['tree'] {
   };
 }
 
-function traitsViewOf(state: PlayState): GameView['traits'] {
+export function traitsViewOf(state: PlayState): GameView['traits'] {
   const ctx = contextOf(state);
   const held = new Set(state.sheet.traits);
 
-  // Only what this world asks of you. Listing the rest would advertise
-  // achievements this run does not contain.
-  return traitsFor(state.world.seed, traitOriginOf(state)).map((trait) => ({
+  /*
+   * Only what this world asks of you, and only the goals.
+   *
+   * Two filters, for two different reasons. A trait from another world would
+   * advertise an achievement this run does not contain — that is the subset.
+   *
+   * An UNEARNED EMERGENT trait is worse, and it is the whole reason the split
+   * exists. "You have killed more things than you have spoken to" sitting in
+   * the panel as something to work toward turns a recognition into a target,
+   * and the aiming is precisely what the trait claims you did not do. So it
+   * appears only once it is already true. Held ones stay, because being told
+   * what you have become is the entire payoff.
+   */
+  return traitsFor(state.world.seed, traitOriginOf(state))
+    .filter((trait) => held.has(trait.id) || !isEmergent(trait.id))
+    .map((trait) => ({
     id: trait.id,
     name: trait.name,
     description: trait.description,

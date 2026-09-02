@@ -1,4 +1,5 @@
 import { subclassById } from '../character/classes.ts';
+import { emergentTraitsFor } from './emergent.ts';
 import { generateTraits } from './traitgen.ts';
 import type { TraitOrigin } from './traitgen.ts';
 import type { Trait } from './traits.ts';
@@ -194,7 +195,7 @@ export function traitsFor(seed: number, origin?: TraitOrigin): Trait[] {
   // and not a side effect of which character walked in.
   const count = MIN_TRAITS + (((seed ^ 0x7a17) >>> 3) % (MAX_TRAITS - MIN_TRAITS + 1));
 
-  return generateTraits({
+  const declared = generateTraits({
     seed,
     count,
     origin,
@@ -202,4 +203,19 @@ export function traitsFor(seed: number, origin?: TraitOrigin): Trait[] {
     // comes along rather than being looked up a second time in traitgen.
     subclassOpens: subclassById(origin?.classId, origin?.subclassId)?.opens,
   });
+
+  /*
+   * And the recognitions, appended.
+   *
+   * In the same list because they travel the same road — `awardTraits` mints
+   * them, `traitBonusesOf` totals them, the tree grows their branches. They
+   * differ only in what they are made of: a declared trait gates on a
+   * threshold you can be shown, an emergent one on a SHAPE that can only be
+   * noticed after the fact.
+   *
+   * Every world can mint every shape. A world offers a subset of the declared
+   * ones because a tower may ask different things of you; it cannot decline to
+   * notice what you actually did.
+   */
+  return [...declared, ...emergentTraitsFor(seed, origin?.language ?? 'en')];
 }
