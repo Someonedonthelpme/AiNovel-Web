@@ -5,6 +5,7 @@ import { attack, attackOptions, checkVictory, currentActor, endTurn, movementOpt
 import { addCondition } from './conditions.ts';
 import { cellKey } from './grid.ts';
 import { abilities, bow, combatant, d20Sequence, sword } from './fixtures.ts';
+import { canAct } from './tempo.ts';
 import type { CombatState, Combatant, Grid } from './types.ts';
 
 const open = (w = 12, h = 12): Grid => ({ width: w, height: h, walls: new Set() });
@@ -28,11 +29,11 @@ test('a higher initiative roll acts first regardless of id', () => {
   assert.equal(currentActor(s)?.id, 'orc');
 });
 
-test('the first actor starts with full movement and an unused action', () => {
+test('the first actor starts with full movement and a full tick budget', () => {
   const s = startCombat(d20Sequence(18, 3), [hero({ speed: 6 }), orc()], open());
   assert.equal(currentActor(s)?.id, 'hero');
   assert.equal(s.movementLeft, 6);
-  assert.equal(s.actionUsed, false);
+  assert.ok(canAct(currentActor(s)!), 'the first actor should be able to act');
   assert.equal(s.round, 1);
 });
 
@@ -55,7 +56,9 @@ test('an out-of-range attack is refused', () => {
   const s = startCombat(d20Sequence(18, 3), [hero({ attacks: [sword] }), orc({ pos: { x: 6, y: 0 } })], open());
   const r = attack(mulberry32(1), s, 'orc', 'sword');
   assert.match(r.error ?? '', /out of range/);
-  assert.equal(r.state.actionUsed, false);
+  // A refused attack costs nothing — the budget is only spent on a swing that
+  // actually happened.
+  assert.equal(r.state.combatants['hero'].ticks, s.combatants['hero'].ticks);
 });
 
 test('a wall blocks a ranged attack even within range', () => {
@@ -65,12 +68,43 @@ test('a wall blocks a ranged attack even within range', () => {
   assert.match(r.error ?? '', /line of sight/);
 });
 
-test('only one action per turn', () => {
+test('an ordinary combatant still gets exactly one action a turn', () => {
+  /*
+   * The baseline the whole tempo system is measured from. At AGI 10 a swing
+   * costs a full round, so nothing about the old one-action-per-turn feel
+   * changes for an average character — the budget only starts mattering once
+   * a stat is above or below the middle.
+   */
   const s = startCombat(d20Sequence(18, 3), [hero(), orc({ hp: 200 })], open());
   const first = attack(mulberry32(4), s, 'orc', 'sword');
   assert.equal(first.error, null);
   const second = attack(mulberry32(4), first.state, 'orc', 'sword');
-  assert.match(second.error ?? '', /already used/);
+  assert.match(second.error ?? '', /no time left/);
+});
+
+test('a quick combatant gets two, which is what AGI is for', () => {
+  // The payoff. "Faster" could not mean anything while everybody acted exactly
+  // once, which is why AGI had no job until the budget replaced the boolean.
+  const quick = hero({ abilities: abilities({ agi: 16 }) });
+  const s = startCombat(d20Sequence(18, 3), [quick, orc({ hp: 200 })], open());
+
+  const first = attack(mulberry32(4), s, 'orc', 'sword');
+  assert.equal(first.error, null, 'the first swing should land');
+  const second = attack(mulberry32(4), first.state, 'orc', 'sword');
+  assert.equal(second.error, null, 'a quick fighter should get a second swing');
+  const third = attack(mulberry32(4), second.state, 'orc', 'sword');
+  assert.match(third.error ?? '', /no time left/, 'but not a third');
+});
+
+test('a heavy action may overrun, and the next round pays for it', () => {
+  // What makes slow-and-heavy a build rather than a penalty: you commit, it
+  // lands, and then you stand there recovering.
+  const slow = hero({ abilities: abilities({ agi: 4 }), ticks: 2 });
+  const s = startCombat(d20Sequence(18, 3), [slow, orc({ hp: 200 })], open());
+
+  const swung = attack(mulberry32(4), s, 'orc', 'sword');
+  assert.equal(swung.error, null, 'a partial budget should still let the blow land');
+  assert.ok(swung.state.combatants['hero'].ticks < 0, 'and it should overrun into the next round');
 });
 
 test('you cannot attack yourself, a corpse, or a stranger', () => {

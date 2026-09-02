@@ -107,6 +107,14 @@ export type Combatant = {
   mana: number;
   maxMana: number;
   ac: number;
+  /**
+   * Tick budget for acting. Replaced the one-action-per-round boolean, which
+   * made AGI meaningless — "faster" cannot mean anything when everybody acts
+   * exactly once. May go NEGATIVE: a heavy action overruns into the round
+   * after it, which is what makes slow-and-heavy a build rather than a
+   * penalty. See tempo.ts.
+   */
+  ticks: number;
   /** Movement in squares per turn. */
   speed: number;
   proficiency: number;
@@ -215,7 +223,6 @@ export type CombatState = {
   grid: Grid;
   /** Movement squares remaining for the combatant whose turn it is. */
   movementLeft: number;
-  actionUsed: boolean;
   over: boolean;
   victor: Side | 'draw' | null;
   log: CombatEvent[];

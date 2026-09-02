@@ -26,6 +26,7 @@ export function combatant(id: string, over: Partial<Combatant> = {}): Combatant 
     maxStamina: 20,
     mana: 20,
     maxMana: 20,
+    ticks: 6,
     ac: 12,
     speed: 6,
     proficiency: 2,

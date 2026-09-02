@@ -14,7 +14,8 @@ import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import { activeSkills, toCombatant } from '../session/sheet.ts';
 import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
-import { canAfford, priceOfUse, spend } from '../skills/pools.ts';
+import { canAfford, costOf, priceOfUse, spend } from '../skills/pools.ts';
+import { canAct, castTicks, spendTicks } from '../combat/tempo.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 
@@ -238,6 +239,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
     const skill = activeSkills(state.sheet).find((s) => s.id === action.skill);
     if (!skill) error = 'you do not know that';
     else if (!isCombatUsable(skill)) error = `${skill.name} is not something you use in a fight`;
+    else if (!canAct(next.combatants['pc'])) error = 'no time left this round';
     else if (!canAfford(next.combatants['pc'], skill)) error = `you do not have the ${priceOfUse(skill).pool} for ${skill.name}`;
     else {
       const self = next.combatants['pc'];
@@ -257,14 +259,29 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
           : [];
 
         const outcome = resolveSkill(skill, self, targets);
-        // Paid for out of the pool the skill's STAT names, on the actor the
-        // skill just resolved through — so a drain heals and is paid for in
-        // the same step and neither can be lost.
-        const combatants: typeof next.combatants = { ...next.combatants, pc: spend(outcome.actor, skill) };
+        /*
+         * Paid for twice over, out of two different budgets: the POOL the
+         * skill's stat names, and the TICKS bringing it off takes. Both land
+         * on the actor the skill just resolved through, so a drain heals and
+         * is paid for in the same step and neither can be lost.
+         *
+         * DEX shortens the tick cost, which is that stat's third distinct job
+         * and the only reading of "reduces casting time" that means anything
+         * in an engine where a turn is a turn.
+         */
+        const paid = spendTicks(spend(outcome.actor, skill), castTicks(self, costOf(skill.effect)));
+        const combatants: typeof next.combatants = { ...next.combatants, pc: paid };
         for (const hit of outcome.affected) combatants[hit.id] = hit;
 
-        // Using a skill is your action for the turn, like swinging is.
-        next = endTurn(rng, { ...next, combatants }).state;
+        /*
+         * And the turn ends only when the budget is GONE, not because a skill
+         * was used. Attacking set a flag and left your movement alone while
+         * using a skill called `endTurn` outright — nobody decided that, it is
+         * just how the two paths came to be written, and it quietly cost you
+         * your movement every time you used a skill.
+         */
+        next = { ...next, combatants };
+        if (!canAct(paid)) next = endTurn(rng, next).state;
       }
     }
   } else {

@@ -5,6 +5,7 @@ import { cellKey, distance, hasLineOfSight, occupancyFor, reachableStops } from 
 import { resolveAttack, rollDeathSave } from './resolve.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Side, Vec } from './types.ts';
 import { abilityMod } from './types.ts';
+import { actionTicks, canAct, refillTicks, spendTicks } from './tempo.ts';
 
 /**
  * The encounter state machine.
@@ -95,8 +96,16 @@ function advanceToNextActor(rng: Rng, state: CombatState): CombatState {
       continue;
     }
 
+    /*
+     * A round hands out TICKS rather than clearing a boolean.
+     *
+     * `actionUsed` meant one action each for everybody, which made AGILITY
+     * meaningless — "faster" cannot mean anything when everyone acts exactly
+     * once. Refilled rather than assigned, so a heavy action that overran into
+     * this round is genuinely paid back.
+     */
     return log(
-      { ...next, movementLeft: effectiveSpeed(actor), actionUsed: false },
+      { ...put(next, refillTicks(actor)), movementLeft: effectiveSpeed(actor) },
       { kind: 'turnStart', actor: actor.id },
     );
   }
@@ -123,8 +132,16 @@ export function startCombat(rng: Rng, roster: Combatant[], grid: Grid): CombatSt
       a.c.id.localeCompare(b.c.id),
   );
 
+  /*
+   * Everybody enters a fight with an EMPTY tick budget.
+   *
+   * Not cosmetic: `advanceToNextActor` refills at the start of a turn, so
+   * carrying a full budget in would have the first actor refill to double and
+   * open the fight with two swings. Whatever a combatant was carrying around
+   * the tower is not a head start in the fight.
+   */
   const combatants: Record<string, Combatant> = {};
-  for (const entry of rolled) combatants[entry.c.id] = entry.c;
+  for (const entry of rolled) combatants[entry.c.id] = { ...entry.c, ticks: 0 };
 
   const base: CombatState = {
     round: 1,
@@ -133,7 +150,6 @@ export function startCombat(rng: Rng, roster: Combatant[], grid: Grid): CombatSt
     combatants,
     grid,
     movementLeft: 0,
-    actionUsed: false,
     over: false,
     victor: null,
     log: [{ kind: 'roundStart', round: 1 }],
@@ -160,10 +176,9 @@ export function moveTo(state: CombatState, to: Vec): ActionResult {
 
 export function attack(rng: Rng, state: CombatState, targetId: string, attackId: string): ActionResult {
   if (state.over) return fail(state, 'combat is over');
-  if (state.actionUsed) return fail(state, 'action already used this turn');
-
   const actor = currentActor(state);
   if (!actor) return fail(state, 'no active combatant');
+  if (!canAct(actor)) return fail(state, 'no time left this round');
 
   const target = state.combatants[targetId];
   if (!target) return fail(state, `no such target: ${targetId}`);
@@ -180,7 +195,13 @@ export function attack(rng: Rng, state: CombatState, targetId: string, attackId:
   }
 
   const result = resolveAttack(rng, actor, target, attackId);
-  const next = log(put({ ...state, actionUsed: true }, result.target), result.event);
+  /*
+   * Spending happens on the ATTACKER and landing on the target, so both go into
+   * the same put. A heavy swing may take the budget negative — that is the
+   * overrun, and it is what makes slow-and-heavy a build rather than a penalty.
+   */
+  const spent = spendTicks(result.attacker ?? actor, actionTicks(actor));
+  const next = log(put(put({ ...state }, spent), result.target), result.event);
   return ok(settleIfOver(next));
 }
 
@@ -205,7 +226,7 @@ export function movementOptions(state: CombatState): Vec[] {
 /** Targets the active combatant could legally attack right now. */
 export function attackOptions(state: CombatState, attackId: string): Combatant[] {
   const actor = currentActor(state);
-  if (!actor || state.over || state.actionUsed) return [];
+  if (!actor || state.over || !canAct(actor)) return [];
   const weapon = actor.attacks.find((a) => a.id === attackId);
   if (!weapon) return [];
   return Object.values(state.combatants).filter(

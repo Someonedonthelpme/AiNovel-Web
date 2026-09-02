@@ -8,6 +8,7 @@ import { STAT_GRAMMAR } from './statgrammar.ts';
 import { composeSkill } from './compose.ts';
 import { budgetForFloor } from './book.ts';
 import { mulberry32 } from '../engine/roll.ts';
+import { actionTicks, castTicks, MIN_ACTION_TICKS, refillTicks, TURN_LENGTH } from '../combat/tempo.ts';
 import { maxManaFor, maxStaminaFor } from '../session/sheet.ts';
 import { sheet } from '../session/fixtures.ts';
 
@@ -158,4 +159,42 @@ test('a ceiling never falls below one, however worn out', () => {
   });
   assert.ok(maxStaminaFor(wrecked) >= 1);
   assert.ok(maxManaFor(wrecked) >= 1);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Tempo: what bringing a skill off takes out of the round                     */
+/* -------------------------------------------------------------------------- */
+
+test('dexterity shortens a cast, which is what that stat was missing', () => {
+  /*
+   * "Reduces magic casting time" only means something once a cast HAS a
+   * length. Read as ticks rather than seconds, it finally lands in an engine
+   * where a turn is a turn — and it is DEX's third distinct job, alongside
+   * hitting and keeping damage consistent.
+   */
+  const steady = { ...combatant('a'), abilities: abilities({ dex: 10 }) };
+  const deft = { ...combatant('a'), abilities: abilities({ dex: 18 }) };
+
+  assert.ok(castTicks(deft, 8) < castTicks(steady, 8), 'a deft caster should be quicker');
+  assert.ok(castTicks(deft, 8) >= MIN_ACTION_TICKS, 'but nothing is ever instant');
+});
+
+test('agility shortens a swing, so a quick fighter acts more often', () => {
+  const slow = { ...combatant('a'), abilities: abilities({ agi: 8 }) };
+  const quick = { ...combatant('a'), abilities: abilities({ agi: 18 }) };
+
+  assert.ok(actionTicks(quick) < actionTicks(slow));
+  assert.equal(actionTicks({ ...combatant('a'), abilities: abilities({ agi: 10 }) }), TURN_LENGTH,
+    'an average combatant spends a whole round on one action, which is the old baseline');
+});
+
+test('a round refills the budget and pays back an overrun', () => {
+  const overran = { ...combatant('a'), ticks: -3 };
+  assert.equal(refillTicks(overran).ticks, TURN_LENGTH - 3, 'the overrun should come out of the next round');
+});
+
+test('nobody banks more than one spare round', () => {
+  // Otherwise a patient combatant opens a fight with four swings.
+  const hoarding = { ...combatant('a'), ticks: TURN_LENGTH * 5 };
+  assert.equal(refillTicks(hoarding).ticks, TURN_LENGTH * 2);
 });

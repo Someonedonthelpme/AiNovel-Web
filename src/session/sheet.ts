@@ -382,6 +382,7 @@ export function toCombatant(sheet: CharacterSheet, id = 'pc', inventory: Invento
     maxStamina: d.maxStamina,
     mana: d.maxMana,
     maxMana: d.maxMana,
+    ticks: 6,
     ac: d.ac,
     speed: d.speed,
     proficiency: d.proficiency,
