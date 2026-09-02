@@ -30,7 +30,7 @@ import { recordAnswer, setDraft, startInterview, STAGES } from '../session/inter
 import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
 import { activeSkills, derive } from '../session/sheet.ts';
-import { canChooseSubclass, classById, subclassById } from '../character/classes.ts';
+import { canChooseSubclassOf, classOf, subclassOf } from '../character/classes.ts';
 import { usesLeft } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
@@ -43,7 +43,7 @@ import { activeRegion } from '../world/travel.ts';
  * script drives, so the two surfaces cannot drift apart in behaviour.
  */
 
-const provider = () => new LocalProvider(LOCAL_MODELS.writer);
+export const provider = () => new LocalProvider(LOCAL_MODELS.writer);
 
 /* -------------------------------------------------------------------------- */
 /* The shape the browser receives                                              */
@@ -255,12 +255,12 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       abilityPoints: state.sheet.abilityPoints ?? 0,
       skillPoints: state.sheet.skillPoints ?? 0,
       coin: state.pc.coin,
-      className: classById(state.sheet.classId)?.name[state.world.language] ?? null,
-      subclassName: subclassById(state.sheet.classId, state.sheet.subclassId)?.name[state.world.language] ?? null,
+      className: classOf(state.sheet)?.name[state.world.language] ?? null,
+      subclassName: subclassOf(state.sheet)?.name[state.world.language] ?? null,
       // Offered only when it can actually be taken, so the panel never shows a
       // choice that would be refused.
-      subclassChoices: canChooseSubclass(state.sheet.level, state.sheet.classId, state.sheet.subclassId)
-        ? (classById(state.sheet.classId)?.subclasses ?? []).map((sub) => ({
+      subclassChoices: canChooseSubclassOf(state.sheet.level, state.sheet)
+        ? (classOf(state.sheet)?.subclasses ?? []).map((sub) => ({
             id: sub.id,
             name: sub.name[state.world.language],
             description: sub.description[state.world.language],
@@ -352,6 +352,7 @@ export async function newGame(
   language: Language,
   answers?: Partial<Record<string, string>>,
   draft?: CharacterDraft,
+  seed?: number,
 ): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
@@ -364,7 +365,15 @@ export async function newGame(
   // honours the draft; this is where the page's choices reach it.
   if (draft && Object.keys(draft).length) interview = setDraft(interview, draft);
 
-  const genesis = await runGenesis(provider(), interview, Date.now() % 2147483647);
+  /*
+   * The seed comes from the creation page now, not from the clock.
+   *
+   * It has to: the class roster the player picked from was generated FROM this
+   * seed, so drawing a different one here would hand them a world whose
+   * classes are not the ones they were shown. The seed IS the world, and
+   * deciding it at the last moment was always arbitrary.
+   */
+  const genesis = await runGenesis(provider(), interview, seed ?? Date.now() % 2147483647);
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);
   await saveSnapshot(id, initialPlayState(genesis.world, genesis.sheet));
   return id;

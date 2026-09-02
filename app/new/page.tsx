@@ -6,7 +6,7 @@ import type { Abilities } from '../../src/combat/types.ts';
 import {
   defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
 } from '../../src/session/sheet.ts';
-import { CLASSES } from '../../src/character/classes.ts';
+import type { CharacterClass } from '../../src/character/classes.ts';
 import { questionFor, STAGES } from '../../src/session/interview.ts';
 import type { Language } from '../../src/session/interview.ts';
 
@@ -32,6 +32,19 @@ export default function NewCharacter() {
   const [language, setLanguage] = useState<Language>('en');
   const [answers, setAnswers] = useState<Answers>({});
   const [step, setStep] = useState(0);
+
+  /*
+   * The run's seed, drawn HERE rather than at genesis.
+   *
+   * It has to be: the class roster below is generated from it, so the world
+   * the player ends up in must be the one whose classes they were shown. It
+   * travels with the submission and `runGenesis` uses it verbatim.
+   */
+  const [seed] = useState(() => Math.floor(Math.random() * 2147483647));
+
+  const [roster, setRoster] = useState<CharacterClass[] | null>(null);
+  const [rosterFor, setRosterFor] = useState<string | null>(null);
+  const [rosterBusy, setRosterBusy] = useState(false);
 
   const [classId, setClassId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -72,12 +85,18 @@ export default function NewCharacter() {
       if (name.trim()) draft.name = name.trim();
       if (background.trim()) draft.backgroundName = background.trim();
       if (handBuilt) draft.baseAbilities = abilities;
-      if (classId) draft.classId = classId;
+      if (classId) {
+        draft.classId = classId;
+        // The resolved class travels too. A generated one is in no global
+        // list, so the id alone would resolve to nothing on the server.
+        const chosen = roster?.find((c) => c.id === classId);
+        if (chosen) draft.classSpec = chosen;
+      }
 
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, answers, draft }),
+        body: JSON.stringify({ language, answers, draft, seed }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'generation failed');
@@ -85,6 +104,36 @@ export default function NewCharacter() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
+    }
+  }
+
+  const world = (answers.world ?? '').trim();
+
+  /**
+   * Fetch the roster this world offers.
+   *
+   * Deliberately NOT an effect on every keystroke — it is a model call, and
+   * firing one per character typed would be both slow and rude. The player
+   * asks for it, and asks again if they change their mind about the world.
+   */
+  async function loadRoster() {
+    setRosterBusy(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/classes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seed, world, language }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'could not read this world');
+      setRoster(data.classes ?? []);
+      setRosterFor(world);
+      setClassId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRosterBusy(false);
     }
   }
 
@@ -172,11 +221,39 @@ export default function NewCharacter() {
         <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
           This decides your hit die, what you set out holding, and — the part that matters — which
           disciplines your skill tree can ever hold. What a class is locked out of stays locked out;
-          the only way across is an island you find in play, or the path you choose at level 3.
+          the only way across is a path you choose at level 3, or a book you find in the tower.
+        </p>
+        <p className="muted" style={{ fontSize: '0.8rem' }}>
+          These belong to the world you just described, and to no other. Say what kind of world it
+          is first, then read what people become in it.
         </p>
 
+        {roster === null ? (
+          <div className="chips">
+            <button className="chip" onClick={loadRoster} disabled={rosterBusy || world.length === 0}>
+              {rosterBusy ? 'reading the world…' : 'see what people become here'}
+            </button>
+            {world.length === 0 && (
+              <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>
+                answer the first question and this fills in
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="chips" style={{ marginBottom: '0.6rem' }}>
+            <button className="chip" onClick={loadRoster} disabled={rosterBusy}>
+              {rosterBusy ? 'reading the world…' : 'draw a different set'}
+            </button>
+            {rosterFor !== world && (
+              <span className="muted" style={{ fontSize: '0.78rem', alignSelf: 'center' }}>
+                the world changed — these are from the old one
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="class-grid">
-          {CLASSES.map((held) => {
+          {(roster ?? []).map((held) => {
             const chosen = classId === held.id;
             return (
               <button

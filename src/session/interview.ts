@@ -1,4 +1,5 @@
 import type { Abilities } from '../combat/types.ts';
+import type { CharacterClass } from '../character/classes.ts';
 
 /**
  * Session Zero as a GM interview rather than a form.
@@ -26,6 +27,13 @@ export type CharacterDraft = {
   traits?: string[];
   /** The class picked on the creation page. Its mechanics outrank the model's. */
   classId?: string;
+  /**
+   * The resolved class, when it came from this world's generated roster.
+   *
+   * Carried rather than looked up, because a generated class is in no global
+   * list — see `classSpec` on the sheet. The id alone would resolve to nothing.
+   */
+  classSpec?: CharacterClass;
 };
 
 export type Interview = {

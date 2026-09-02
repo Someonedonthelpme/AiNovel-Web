@@ -6,6 +6,7 @@ import { activate } from '../skills/book.ts';
 import type { Item } from '../items/types.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import type { GraftSpec } from '../play/graft.ts';
+import type { CharacterClass } from '../character/classes.ts';
 import type { Persona, Status } from '../character/persona.ts';
 import { emptyPersona, neutralPersonality, restingMind } from '../character/persona.ts';
 
@@ -114,7 +115,22 @@ export type CharacterSheet = Persona & {
    * which disciplines the tree may hold — while the model keeps the flavour.
    */
   classId?: string;
-  /** Chosen at level 3. Opens an island into somewhere the class cannot go. */
+  /**
+   * THE RESOLVED CLASS, carried rather than looked up.
+   *
+   * Classes are generated per world now, so `classId` alone no longer names
+   * anything globally — resolving it would mean regenerating that world's
+   * roster everywhere the class is needed, and any change to the generator
+   * would silently rewrite what a character IS mid-run. Worse, it would orphan
+   * them outright the way an id pointing at a vanished trait does.
+   *
+   * So the class a character chose travels WITH them, exactly like `learned`
+   * books and for the same reason: it is a thing that happened, not a thing to
+   * recompute. Absent on every session made before generated classes, and
+   * those fall back to looking `classId` up among the authored eight.
+   */
+  classSpec?: CharacterClass;
+  /** Chosen at level 3. Opens an island — out of the class, or deeper into it. */
   subclassId?: string;
   /**
    * Books read, in the order they were read.

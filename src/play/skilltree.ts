@@ -2,7 +2,7 @@ import type { Ability, Abilities } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { ARCHETYPES, archetypeForBackground, skillFrom } from './archetypes.ts';
-import { classById, subclassById } from '../character/classes.ts';
+import { classOf, subclassOf } from '../character/classes.ts';
 import type { CharacterClass } from '../character/classes.ts';
 import type { Archetype, ArchetypeId } from './archetypes.ts';
 import type { TraitCondition } from './traits.ts';
@@ -454,6 +454,8 @@ export type TreeOptions = {
   backgroundName?: string;
   /** What the player chose. Absent on every session made before classes existed. */
   classId?: string;
+  /** The resolved class, for generated rosters that no global list contains. */
+  classSpec?: CharacterClass;
   /** Chosen at level 3, and paying out again at 6 and 10. */
   subclassId?: string;
   /** Drives which subclass stages have grown. */
@@ -472,8 +474,11 @@ export function skillTreeFor(
   backgroundName = '',
   options: Omit<TreeOptions, 'language' | 'backgroundName'> = {},
 ): SkillTree {
-  const held = classById(options.classId);
-  const chosenSub = subclassById(options.classId, options.subclassId);
+  // The carried spec first. A generated class is not in any global list, so
+  // resolving by id alone would silently hand a generated character the wrong
+  // tree — or no tree at all.
+  const held = classOf(options);
+  const chosenSub = subclassOf(options);
 
   const rng = mulberry32(
     (seed ^ hash(backgroundId) ^ hash(backgroundName) ^ hash(options.classId ?? '')) >>> 0,

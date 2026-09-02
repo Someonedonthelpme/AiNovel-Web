@@ -9,7 +9,7 @@ import { awardTraits } from './traits.ts';
 import type { TraitContext } from './traits.ts';
 import { traitOriginOf, traitsFor } from './traitbook.ts';
 import { useItem } from './rest.ts';
-import { canChooseSubclass, subclassById, subclassSkill, SUBCLASS_LEVEL } from '../character/classes.ts';
+import { canChooseSubclassOf, subclassOf, subclassSkill, SUBCLASS_LEVEL } from '../character/classes.ts';
 
 /**
  * Things the player does to their own sheet.
@@ -106,7 +106,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
 
     case 'chooseSubclass': {
       const sheet = state.sheet;
-      if (!canChooseSubclass(sheet.level, sheet.classId, sheet.subclassId)) {
+      if (!canChooseSubclassOf(sheet.level, sheet)) {
         return {
           state,
           error: sheet.subclassId ? 'you have already chosen' : `not until level ${SUBCLASS_LEVEL}`,
@@ -114,7 +114,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
         };
       }
 
-      const sub = subclassById(sheet.classId, action.id);
+      const sub = subclassOf({ ...sheet, subclassId: action.id });
       if (!sub) return { state, error: 'no such path', note: null };
 
       // The signature skill is granted outright; the island it opens appears

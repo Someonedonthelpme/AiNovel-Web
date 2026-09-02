@@ -249,24 +249,39 @@ test('every class is coherent enough to build a character from', () => {
   }
 });
 
-test('every subclass crosses into a discipline its class is shut out of', () => {
+test('a subclass goes where its route says it goes', () => {
   /*
-   * The whole promise of taking one, and it was "usually" rather than always:
-   * twelve of sixteen opened somewhere the class could already reach, and the
-   * Rogue's Poisoner opened `venom` — which was already in its own affinity, a
-   * crossing into a room it was standing in.
+   * Crossings were "usually" rather than always: twelve of sixteen opened
+   * somewhere the class could already reach, and the Rogue's Poisoner opened
+   * `venom` — already in its own affinity, a crossing into a room it was
+   * standing in.
    *
-   * Enforced now, because a subclass that opens nothing new is a level-three
-   * decision that buys a name.
+   * Enforced per route now. A crossing that opens nothing new is a level-three
+   * decision that buys a name; a deepening that opens something the class was
+   * shut out of is a crossing wearing the wrong label.
    */
   for (const held of CLASSES) {
     for (const sub of held.subclasses) {
-      assert.ok(
-        held.forbidden.includes(sub.opens),
-        `${held.id}/${sub.id} opens ${sub.opens}, which ${held.id} was never shut out of`,
-      );
+      if (sub.route === 'cross') {
+        assert.ok(
+          held.forbidden.includes(sub.opens),
+          `${held.id}/${sub.id} crosses to ${sub.opens}, which ${held.id} was never shut out of`,
+        );
+      } else {
+        assert.ok(
+          held.core.includes(sub.opens) || held.affinity.includes(sub.opens),
+          `${held.id}/${sub.id} deepens ${sub.opens}, which is not something ${held.id} already is`,
+        );
+      }
     }
   }
+});
+
+test('the authored eight are all crossings, and that is the flaw generation fixes', () => {
+  // Kept as a statement of what the shipped catalogue is, so the generated
+  // rosters can be compared against it rather than to nothing.
+  const routes = new Set(CLASSES.flatMap((c) => c.subclasses.map((s) => s.route)));
+  assert.deepEqual([...routes], ['cross'], 'the authored set grew a deepening without anyone deciding to');
 });
 
 test('a class does not point both its subclasses at the same door', () => {

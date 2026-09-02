@@ -1,5 +1,6 @@
 import type { Ability, Attack } from '../combat/types.ts';
 import type { ArchetypeId, Bilingual, SkillSpec } from '../play/archetypes.ts';
+import type { SubclassRoute } from './classgen.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import type { EntryRule } from '../play/graft.ts';
 
@@ -33,13 +34,28 @@ export type Subclass = {
   name: Bilingual;
   description: Bilingual;
   /**
-   * The discipline its island belongs to. ALWAYS one the class is shut out of.
+   * Which kind of road this is.
+   *
+   * `cross` opens a discipline the class is shut out of — a door OUT. `deepen`
+   * opens one it was built on — more of what it already is.
+   *
+   * The authored sixteen are all crossings, which is exactly the flaw: level
+   * three was a choice of WHICH door rather than a choice at all. Generated
+   * classes grow both, so the decision is specialise or broaden.
+   */
+  route: SubclassRoute;
+  /**
+   * The discipline its island belongs to.
+   *
+   * For a `cross`, ALWAYS one the class is shut out of.
    *
    * This was "usually" and it meant it: twelve of sixteen subclasses opened
    * somewhere the class could already reach, and one of them (the Rogue's)
    * opened a discipline already in its own affinity — a crossing into a room
    * it was standing in. The whole promise of a subclass is the crossing, so it
    * is now enforced rather than intended, and `classes.test.ts` proves it.
+   *
+   * For a `deepen`, always one already in `core` or `affinity`.
    */
   opens: ArchetypeId;
   /** The signature active it grants outright. */
@@ -162,6 +178,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You learned to read the figures. Nobody in the barracks knows.',
           th: 'คุณเรียนอ่านอักขระมา ไม่มีใครในค่ายรู้',
         },
+        route: 'cross',
         opens: 'magic',
         grants: {
           name: { en: 'Warded Blade', th: 'ดาบคุ้มกัน' },
@@ -176,6 +193,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You carry the light, so people follow you because they can see where you are.',
           th: 'คุณถือแสงไว้ ผู้คนจึงตามคุณเพราะพวกเขาเห็นว่าคุณอยู่ตรงไหน',
         },
+        route: 'cross',
         opens: 'flame',
         grants: {
           name: { en: 'Hold the Line', th: 'ยันแนวไว้' },
@@ -208,6 +226,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You have started listening to the floor the way animals do, and something has started answering.',
           th: 'คุณเริ่มฟังพื้นแบบที่สัตว์ฟัง และมีบางอย่างเริ่มตอบกลับ',
         },
+        route: 'cross',
         opens: 'magic',
         grants: {
           name: { en: 'Read the Wind', th: 'อ่านลม' },
@@ -222,6 +241,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'Whatever you ate the ashes of should have stayed burned, and you know it.',
           th: 'ไม่ว่าคุณกลืนเถ้าของอะไรไป มันควรจะถูกเผาทิ้งไปแล้ว และคุณก็รู้',
         },
+        route: 'cross',
         opens: 'blackMagic',
         grants: {
           name: { en: 'Ash Breath', th: 'ลมหายใจเถ้า' },
@@ -254,6 +274,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You went deep enough, often enough, that the deep things stopped being strangers.',
           th: 'คุณลงไปลึกพอ และบ่อยพอ จนสิ่งที่อยู่ข้างล่างไม่ใช่คนแปลกหน้าอีกต่อไป',
         },
+        route: 'cross',
         opens: 'blackMagic',
         grants: {
           name: { en: 'Marked Quarry', th: 'เหยื่อที่ถูกหมาย' },
@@ -268,6 +289,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'Somebody has to hold the way back down, and you do it by the light you set yourself.',
           th: 'ต้องมีใครสักคนกันทางลงไว้ และคุณทำมันด้วยแสงไฟที่คุณจุดเอง',
         },
+        route: 'cross',
         opens: 'flame',
         grants: {
           name: { en: 'Set Against', th: 'ตั้งรับ' },
@@ -304,6 +326,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'Nothing you do kills quickly. Almost everything kills.',
           th: 'ไม่มีอะไรที่คุณทำฆ่าได้เร็ว แต่เกือบทุกอย่างฆ่าได้',
         },
+        route: 'cross',
         opens: 'flame',
         grants: {
           name: { en: 'The Slow Cup', th: 'ถ้วยช้า' },
@@ -318,6 +341,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'Doors open for you. People check their purses afterwards.',
           th: 'ประตูเปิดให้คุณ แล้วผู้คนก็คลำกระเป๋าตัวเองทีหลัง',
         },
+        route: 'cross',
         opens: 'song',
         grants: {
           name: { en: 'The Right Name', th: 'ชื่อที่ถูก' },
@@ -350,6 +374,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You learned the figures that keep things out. It took longer.',
           th: 'คุณเรียนอักขระที่กันสิ่งต่าง ๆ ไว้ข้างนอก มันใช้เวลานานกว่า',
         },
+        route: 'cross',
         opens: 'guard',
         grants: {
           name: { en: 'Closed Figure', th: 'อักขระปิด' },
@@ -364,6 +389,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You copied out the pages nobody was supposed to copy.',
           th: 'คุณคัดลอกหน้าที่ไม่มีใครควรคัดลอก',
         },
+        route: 'cross',
         opens: 'blackMagic',
         grants: {
           name: { en: 'The Bad Page', th: 'หน้าที่ไม่ควรอ่าน' },
@@ -396,6 +422,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'It speaks through you now, and people listen.',
           th: 'ตอนนี้มันพูดผ่านคุณ และผู้คนก็ฟัง',
         },
+        route: 'cross',
         opens: 'song',
         grants: {
           name: { en: 'Borrowed Mouth', th: 'ปากที่ยืมมา' },
@@ -410,6 +437,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'What it gives you burns on the way out.',
           th: 'สิ่งที่มันให้คุณ เผาไหม้ตอนออกมา',
         },
+        route: 'cross',
         opens: 'flame',
         grants: {
           name: { en: 'Given Freely', th: 'ให้โดยไม่หวง' },
@@ -442,6 +470,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'Something answered that should not have been listening.',
           th: 'มีบางอย่างตอบกลับมา ทั้งที่ไม่ควรจะฟังอยู่',
         },
+        route: 'cross',
         opens: 'blackMagic',
         grants: {
           name: { en: 'What Answered', th: 'สิ่งที่ตอบกลับ' },
@@ -456,6 +485,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You keep the light going, and the light keeps going.',
           th: 'คุณดูแลให้แสงไม่ดับ และแสงก็ไม่ดับ',
         },
+        route: 'cross',
         opens: 'flame',
         grants: {
           name: { en: 'Kept Light', th: 'แสงที่รักษาไว้' },
@@ -488,6 +518,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You learned to sing from further away.',
           th: 'คุณเรียนร้องเพลงจากที่ไกลขึ้น',
         },
+        route: 'cross',
         opens: 'bow',
         grants: {
           name: { en: 'Parting Note', th: 'โน้ตอำลา' },
@@ -502,6 +533,7 @@ export const CLASSES: readonly CharacterClass[] = [
           en: 'You have been writing all of it down, including the parts nobody wanted written.',
           th: 'คุณจดทุกอย่างไว้ รวมถึงส่วนที่ไม่มีใครอยากให้จด',
         },
+        route: 'cross',
         opens: 'magic',
         grants: {
           name: { en: 'Marginalia', th: 'บันทึกริมหน้า' },
@@ -525,6 +557,39 @@ export function subclassById(classId: string | undefined, subclassId: string | u
   if (!held || !subclassId) return null;
   return held.subclasses.find((s) => s.id === subclassId) ?? null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Resolving from a character                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Anything carrying a class: a sheet, or the tree's options. */
+export type ClassHolder = { classId?: string; classSpec?: CharacterClass; subclassId?: string };
+
+/**
+ * The class a character actually has.
+ *
+ * PREFER THE CARRIED SPEC, and only fall back to the authored eight. Classes
+ * are generated per world, so an id no longer names anything globally — and
+ * regenerating a roster to resolve one would mean any change to the generator
+ * silently rewrote what an existing character IS.
+ *
+ * The fallback is what keeps every session made before generated classes
+ * working: those stored `fighter` or `warlock` and nothing else, and those
+ * words still mean what they always did.
+ */
+export const classOf = (who: ClassHolder | undefined): CharacterClass | null =>
+  who?.classSpec ?? classById(who?.classId);
+
+/** The subclass a character took, found inside whichever class they hold. */
+export function subclassOf(who: ClassHolder | undefined): Subclass | null {
+  const held = classOf(who);
+  if (!held || !who?.subclassId) return null;
+  return held.subclasses.find((s) => s.id === who.subclassId) ?? null;
+}
+
+/** Whether a subclass is still open to them, from a holder rather than two ids. */
+export const canChooseSubclassOf = (level: number, who: ClassHolder | undefined): boolean =>
+  level >= SUBCLASS_LEVEL && Boolean(classOf(who)) && !who?.subclassId;
 
 /** The level a subclass becomes available. Familiar, and early enough to shape a build. */
 export const SUBCLASS_LEVEL = 3;

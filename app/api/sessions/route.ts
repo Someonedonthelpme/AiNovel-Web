@@ -15,7 +15,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const language = body.language === 'th' ? 'th' : 'en';
   try {
-    return Response.json({ id: await newGame(language, body.answers, body.draft) });
+        // The seed the creation page generated its class roster from. Without it
+    // the player would be handed a world whose classes are not the ones they
+    // were shown.
+    const seed = Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined;
+    return Response.json({ id: await newGame(language, body.answers, body.draft, seed) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

@@ -1,7 +1,7 @@
 import type { Attack } from '../combat/types.ts';
 import type { Provider } from '../llm/provider.ts';
 import { keepsake, stripMechanics } from '../items/catalogue.ts';
-import { classById } from '../character/classes.ts';
+import { classOf } from '../character/classes.ts';
 import { humanisePlaces, pruneDangling } from '../world/naming.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
@@ -64,7 +64,7 @@ export async function generateCharacter(provider: Provider, interview: Interview
   if (!isComplete(interview)) throw new Error('the interview is not finished');
 
   const { language, draft } = interview;
-  const held = classById(draft.classId);
+  const held = classOf(draft);
   const pinned = [
     draft.name ? `The character is named "${draft.name}".` : '',
     draft.backgroundName ? `Their background must be "${draft.backgroundName}".` : '',
@@ -144,6 +144,10 @@ export async function generateCharacter(provider: Provider, interview: Interview
     traits: draft.traits ?? generated.traits,
     level: 1,
     classId: held?.id,
+    // Carried onto the sheet, not just its id. A generated class is in no
+    // global list, so the id alone would resolve to nothing the moment this
+    // world's roster was regenerated with a different generator.
+    classSpec: draft.classSpec,
     // The class decides the die. Asking a model to pick one meant a scholar
     // could roll d12 and a barbarian d6, and nothing downstream could tell.
     hitDie: held ? held.hitDie : [6, 8, 10, 12].includes(generated.hitDie) ? generated.hitDie : 8,
