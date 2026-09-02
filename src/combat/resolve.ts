@@ -36,6 +36,25 @@ export function applyDamage(target: Combatant, amount: number): Combatant {
 
 export type AttackOutcome = { attacker: Combatant; target: Combatant; event: AttackResult };
 
+/**
+ * The lowest natural roll that crits, which LUCK lowers.
+ *
+ * Twenty by default, and never below eighteen however lucky you get — a crit
+ * range wider than that stops being a lucky break and becomes the normal case,
+ * which flattens the damage curve `scripts/balance.ts` is tuned against.
+ *
+ * Widening the range rather than rolling a separate chance is deliberate: it
+ * rides the attack roll that already happened, so nothing extra is drawn from
+ * the rng and a replayed log resolves identically. Determinism is not
+ * negotiable here — every fight is a fold over an event log.
+ */
+export const CRIT_FLOOR_MIN = 18;
+
+export function critFloor(attacker: Combatant): number {
+  const luck = abilityMod(attacker.abilities.luk);
+  return Math.max(CRIT_FLOOR_MIN, 20 - Math.max(0, Math.floor(luck / 2)));
+}
+
 export function resolveAttack(
   rng: Rng,
   attacker: Combatant,
@@ -51,7 +70,7 @@ export function resolveAttack(
 
   // A natural 1 always misses and a natural 20 always hits, whatever the AC.
   const hit = roll.natural === 20 || (roll.natural !== 1 && roll.total >= target.ac);
-  const critical = hit && (roll.natural === 20 || mods.autoCrit);
+  const critical = hit && (roll.natural >= critFloor(attacker) || mods.autoCrit);
 
   if (!hit) {
     return {

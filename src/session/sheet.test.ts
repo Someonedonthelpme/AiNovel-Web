@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  armourClassFor, defaultAbilities, derive, finalAbilities, maxHpFor,
+  armourClassFor, defaultAbilities, derive, finalAbilities, HP_AT_FIRST, HP_PER_LEVEL, maxHpFor,
   pointBuyCost, POINT_BUY_BUDGET, proficiencyFor, toCombatant, validateAbilities, validateSheet,
 } from './sheet.ts';
 import { abilitiesOf, background, scholar, sheet, soldier, thaiSheet } from './fixtures.ts';
@@ -24,7 +24,7 @@ test('the default array spends exactly the budget', () => {
 test('overspending the budget is rejected', () => {
   const v = validateAbilities(abilitiesOf({ str: 15, dex: 15, con: 15 }));
   assert.equal(v.ok, false);
-  assert.ok(v.errors.some((e) => /budget is 27/.test(e)));
+  assert.ok(v.errors.some((e) => new RegExp(`budget is ${POINT_BUY_BUDGET}`).test(e)));
 });
 
 test('scores outside the buyable range are rejected by name', () => {
@@ -54,21 +54,27 @@ test('backgrounds grant their own distinct skill sets', () => {
   assert.equal(soldierSkills.some((id) => scholarSkills.includes(id)), false, 'no shared pool');
 });
 
-test('hit points are the full die plus constitution at first level', () => {
-  const s = sheet({ hitDie: 10, level: 1, baseAbilities: abilitiesOf({ con: 13 }), background: soldier });
-  // con 13 + 1 from soldier = 14, modifier +2
-  assert.equal(maxHpFor(s), 12);
+test('hit points come from VITALITY, not from a class die', () => {
+  // The die is gone with the classes. VIT is the body; CON is the mind holding
+  // on, and giving CON hit points too would restart the fight between them.
+  const s = sheet({ level: 1, baseAbilities: abilitiesOf({ vit: 14 }), background: soldier });
+  assert.equal(maxHpFor(s), HP_AT_FIRST + 2);
 });
 
-test('later levels add the fixed average plus constitution', () => {
-  const s = sheet({ hitDie: 10, level: 3, baseAbilities: abilitiesOf({ con: 13 }), background: soldier });
-  // 12 at level 1, then two levels of (6 + 2)
-  assert.equal(maxHpFor(s), 28);
+test('constitution buys no hit points at all', () => {
+  const tough = sheet({ level: 1, baseAbilities: abilitiesOf({ vit: 10, con: 15 }), background: soldier });
+  const frail = sheet({ level: 1, baseAbilities: abilitiesOf({ vit: 10, con: 8 }), background: soldier });
+  assert.equal(maxHpFor(tough), maxHpFor(frail), 'CON moved the body, which is the job VIT was split off to do');
 });
 
-test('hit points never drop below 1 even with dire constitution', () => {
+test('later levels add the fixed step plus vitality', () => {
+  const s = sheet({ level: 3, baseAbilities: abilitiesOf({ vit: 14 }), background: soldier });
+  assert.equal(maxHpFor(s), HP_AT_FIRST + 2 + 2 * (HP_PER_LEVEL + 2));
+});
+
+test('hit points never drop below 1 even with dire vitality', () => {
   const frail = background('frail', { grantsStats: {} });
-  const s = sheet({ hitDie: 6, level: 1, baseAbilities: abilitiesOf({ con: 8 }), background: frail });
+  const s = sheet({ level: 1, baseAbilities: abilitiesOf({ vit: 8 }), background: frail });
   assert.ok(maxHpFor(s) >= 1);
 });
 

@@ -221,3 +221,18 @@ test('random encounters never reach an invalid state and always terminate', () =
     assert.equal(checkVictory(s), s.victor, `seed ${seed}: recorded victor disagrees with the board`);
   }
 });
+
+test('agility rolls initiative, not dexterity', () => {
+  /*
+   * Why AGI exists at all. DEX is the steady hand — it hits and it keeps
+   * damage consistent. AGI is how fast you are off the mark, which is the
+   * whole of what initiative asks. Leaving it on DEX would have made DEX the
+   * stat that did everything and AGI the stat that did nothing.
+   */
+  const quick = hero({ abilities: abilities({ agi: 18, dex: 8 }) });
+  const steady = orc({ abilities: abilities({ agi: 8, dex: 18 }) });
+
+  // The same roll for both, so only the modifier can separate them.
+  const state = startCombat(d20Sequence(10, 10), [quick, steady], open());
+  assert.equal(state.order[0], 'hero', 'the fast one should act first, not the accurate one');
+});

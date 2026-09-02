@@ -13,7 +13,7 @@ import { repairAbilities, repairRegion, repairVoice } from './repair.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { CHARACTER_SCHEMA, GROUND_FLOOR_SCHEMA } from './schema.ts';
 import type { Background, CharacterSheet, Skill, SkillKind } from './sheet.ts';
-import { validateSheet } from './sheet.ts';
+import { POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, validateSheet } from './sheet.ts';
 import { sword } from '../combat/fixtures.ts';
 
 /**
@@ -92,7 +92,11 @@ export async function generateCharacter(provider: Provider, interview: Interview
           'Skill "kind" must match the skill: physical actions are combat or utility, never social.',
           'Attack "range" is in 5-foot squares, so a melee weapon has range 1. It is not a distance in feet.',
           'Write complete descriptions. Never trail off with an ellipsis.',
-          'Ability scores use point buy: each score 8-15, costing 0,1,2,3,4,5,7,9 respectively, 27 points total.',
+          // Read from the constant, not written out. The budget moved from 27
+          // to 40 when the stats went from six to nine, and a prompt saying
+          // otherwise would have the model quietly building illegal sheets.
+          `Ability scores use point buy: each score ${POINT_BUY_MIN}-${POINT_BUY_MAX}, costing 0,1,2,3,4,5,7,9 respectively, ${POINT_BUY_BUDGET} points total.`,
+          'There are NINE scores. con is the mind holding on and grants no hit points; vit is the body and grants them all.',
         ].join('\n'),
       },
       {

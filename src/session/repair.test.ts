@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { repairAbilities, repairRegion, repairVoice, repairVoiceForm } from './repair.ts';
-import { validateAbilities } from './sheet.ts';
+import { POINT_BUY_BUDGET, validateAbilities } from './sheet.ts';
 import { validateRegion } from '../world/validate.ts';
 import { groundFloor, place, world } from '../world/fixtures.ts';
 import { abilitiesOf } from './fixtures.ts';
@@ -38,11 +38,11 @@ test('fractional scores are rounded', () => {
 });
 
 test('an overspent build is shaved down to the budget', () => {
-  const greedy = { str: 15, dex: 15, con: 15, int: 15, wis: 15, cha: 15 };
+  const greedy = { str: 15, dex: 15, con: 15, agi: 15, vit: 15, int: 15, wis: 15, cha: 15, luk: 15 };
   const r = repairAbilities(greedy);
   const check = validateAbilities(r.value);
   assert.equal(check.ok, true, check.errors.join('; '));
-  assert.ok(check.spent <= 27);
+  assert.ok(check.spent <= POINT_BUY_BUDGET);
   assert.ok(r.repairs.some((m) => /budget/.test(m)));
 });
 

@@ -154,7 +154,17 @@ export type ReadBook = {
 /* Point buy                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export const POINT_BUY_BUDGET = 27;
+/**
+ * Forty, not twenty-seven.
+ *
+ * Twenty-seven across six stats bought a character with two strong scores and
+ * four passable ones. Across NINE it buys a character who is thin everywhere,
+ * and every stat past the second becomes a dump stat — which is fatal now that
+ * the stat is what decides which skills a character can even reach.
+ *
+ * Forty is a starting number and expects to move with playtesting.
+ */
+export const POINT_BUY_BUDGET = 40;
 export const POINT_BUY_MIN = 8;
 export const POINT_BUY_MAX = 15;
 
@@ -193,9 +203,9 @@ export function validateAbilities(base: Abilities): AbilityValidation {
 
 /** An even spread that costs exactly the budget — the fallback starting array. */
 export function defaultAbilities(): Abilities {
-  // 5+5+5+4+4+4 = 27. Leaving points unspent would quietly hand out a worse
-  // character than the rules allow.
-  return { str: 13, dex: 13, con: 13, int: 12, wis: 12, cha: 12 };
+  // 4x5 + 5x4 = 40, exactly the budget. Leaving points unspent would quietly
+  // hand out a worse character than the rules allow.
+  return { str: 13, dex: 13, con: 12, agi: 12, vit: 13, int: 12, wis: 13, cha: 12, luk: 12 };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -234,12 +244,27 @@ export function proficiencyFor(level: number): number {
  * one unlucky roll.
  */
 export function maxHpFor(sheet: CharacterSheet, inventory?: Inventory): number {
-  const con = abilityMod(finalAbilities(sheet, inventory).con);
-  const perLevel = Math.floor(sheet.hitDie / 2) + 1;
+  /*
+   * VIT carries the body now, not CON and not a class hit die.
+   *
+   * The die is gone because classes no longer hand one out — and CON is
+   * deliberately not here either: it is the mind holding on, and giving it hit
+   * points as well would put it straight back into the fight with VIT that the
+   * split exists to end.
+   *
+   * The shape is the old fixed progression, so the curve `scripts/fight.ts`
+   * measures does not move further than the stat change alone forces: a solid
+   * first level, then a steady climb that one unlucky number cannot ruin.
+   */
+  const vit = abilityMod(finalAbilities(sheet, inventory).vit);
   const level = Math.max(1, sheet.level);
   const fromTree = sheet.treeBonuses?.maxHp ?? 0;
-  return Math.max(1, sheet.hitDie + con + (level - 1) * (perLevel + con) + fromTree);
+  return Math.max(1, HP_AT_FIRST + vit + (level - 1) * (HP_PER_LEVEL + vit) + fromTree);
 }
+
+/** What a body is worth before VIT says anything. Was the class hit die. */
+export const HP_AT_FIRST = 10;
+export const HP_PER_LEVEL = 6;
 
 /** Worn armour sets the base; without it you are as hard to hit as you are quick. */
 export function armourClassFor(sheet: CharacterSheet, inventory?: Inventory): number {

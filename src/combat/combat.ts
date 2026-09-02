@@ -104,13 +104,22 @@ function advanceToNextActor(rng: Rng, state: CombatState): CombatState {
 }
 
 export function startCombat(rng: Rng, roster: Combatant[], grid: Grid): CombatState {
-  const rolled = roster.map((c) => ({ c, init: d20(rng, abilityMod(c.abilities.dex)).total }));
+  /*
+   * AGILITY rolls initiative, not dexterity.
+   *
+   * DEX is the steady hand — it hits and it keeps damage consistent. AGI is
+   * how fast you are off the mark, which is the whole of what initiative asks.
+   * Splitting them is why AGI exists at all; leaving initiative on DEX would
+   * have made it the stat that did everything and AGI the stat that did
+   * nothing until the combat pass.
+   */
+  const rolled = roster.map((c) => ({ c, init: d20(rng, abilityMod(c.abilities.agi)).total }));
 
-  // Ties break on dexterity then id, so initiative order is fully deterministic.
+  // Ties break on agility then id, so initiative order is fully deterministic.
   rolled.sort(
     (a, b) =>
       b.init - a.init ||
-      abilityMod(b.c.abilities.dex) - abilityMod(a.c.abilities.dex) ||
+      abilityMod(b.c.abilities.agi) - abilityMod(a.c.abilities.agi) ||
       a.c.id.localeCompare(b.c.id),
   );
 

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDamage, attackBonus, resolveAttack, resolveSave, rollDeathSave } from './resolve.ts';
+import {
+  applyDamage, attackBonus, CRIT_FLOOR_MIN, critFloor, resolveAttack, resolveSave, rollDeathSave,
+} from './resolve.ts';
 import { addCondition } from './conditions.ts';
 import { combatant, d20Sequence, abilities } from './fixtures.ts';
 
@@ -115,4 +117,31 @@ test('poison imposes disadvantage on saves', () => {
   assert.equal(r.event.roll.advantage, 'disadvantage');
   assert.equal(r.event.roll.natural, 3, 'the worse die counts');
   assert.equal(r.event.success, false);
+});
+
+test('luck widens the crit range, and only so far', () => {
+  /*
+   * LUK's job in combat. It rides the attack roll that already happened rather
+   * than drawing a separate chance, so a replayed log resolves identically —
+   * every fight is a fold over an event log and determinism is not negotiable.
+   */
+  const plain = combatant('a', { abilities: abilities({ luk: 10 }) });
+  const lucky = combatant('a', { abilities: abilities({ luk: 18 }) });
+
+  assert.equal(critFloor(plain), 20, 'average luck should crit only on a twenty');
+  assert.ok(critFloor(lucky) < 20, 'high luck should crit more often than that');
+  assert.ok(critFloor(lucky) >= CRIT_FLOOR_MIN, 'a crit range this wide stops being a lucky break');
+});
+
+test('a crit range never runs away, however lucky', () => {
+  // The floor is what keeps the damage curve `scripts/balance.ts` measures from
+  // flattening: crits have to stay the exception.
+  for (const luk of [10, 14, 18, 20, 30]) {
+    assert.ok(critFloor(combatant('a', { abilities: abilities({ luk }) })) >= CRIT_FLOOR_MIN);
+  }
+});
+
+test('bad luck is not punished, it is merely not rewarded', () => {
+  // A dumped stat should cost you the upside, not hand the enemy an advantage.
+  assert.equal(critFloor(combatant('a', { abilities: abilities({ luk: 3 }) })), 20);
 });

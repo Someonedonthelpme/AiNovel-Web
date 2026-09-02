@@ -58,6 +58,11 @@ export function scaleFoe(danger: number, role: FoeRole): FoeStats {
     str: physical,
     dex: 10 + clamp(Math.floor(d / 4), 0, 6),
     con: physical,
+    // A foe's body scales with its danger the way its strength does; its speed
+    // and its luck do not, because neither should make a fight unreadable.
+    agi: 10 + clamp(Math.floor(d / 4), 0, 6),
+    vit: physical,
+    luk: 10,
     int: 8,
     wis: 10,
     cha: 8,
@@ -139,7 +144,7 @@ export function makeFoe(spec: FoeSpec, danger: number): Combatant {
 export function referencePc(level: number, id = 'pc'): Combatant {
   const lvl = clamp(level, 1, 20);
   const str = 15 + clamp(Math.floor(lvl / 4) * 2, 0, 5);
-  const abilities: Abilities = { str, dex: 13, con: 14, int: 10, wis: 12, cha: 12 };
+  const abilities: Abilities = { str, dex: 13, con: 12, agi: 13, vit: 14, int: 10, wis: 12, cha: 12, luk: 10 };
   const hp = 12 + (lvl - 1) * 7;
 
   return {

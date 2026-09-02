@@ -251,9 +251,14 @@ const ABILITY_TO_DISCIPLINE: Record<Ability, ArchetypeId> = {
   str: 'sword',
   dex: 'bow',
   con: 'survival',
+  // Provisional. This whole table dies with the disciplines — a book's set will
+  // name a STAT directly once the tree is rebuilt on paths.
+  agi: 'shadow',
+  vit: 'guard',
   int: 'magic',
   wis: 'wisdom',
   cha: 'song',
+  luk: 'guile',
 };
 
 export const isSkillBook = (item: Item): item is SkillBook =>

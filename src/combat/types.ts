@@ -6,7 +6,26 @@
  * free of per-round token cost, and fast.
  */
 
-export const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+/**
+ * Nine stats, and each one has a job.
+ *
+ * Six was the D&D set. The three additions come from the other tradition —
+ * AGI, VIT and LUK — and they exist because the progression system now turns
+ * on stats rather than on disciplines: a skill is keyed to a STAT, and the
+ * stat decides what that skill is able to do. Six axes was too few to carry
+ * that, and left "how tough you are" and "how fast you are" fused together.
+ *
+ * CON AND VIT ARE DELIBERATELY SPLIT, and it is the one place this set departs
+ * from both traditions. D&D has no VIT because CON does the body; Ragnarok has
+ * no CON because VIT does. Taking both from either would leave two stats
+ * fighting over one job, and a player unable to say which to raise. So:
+ *
+ *   CON  the mind holding on — concentration, poison, disease, death saves.
+ *        Grants NO hit points. It is whether you keep going, not how much of
+ *        you there is.
+ *   VIT  the body — hit points, recovery, physical defence, resisting a stun.
+ */
+export const ABILITIES = ['str', 'dex', 'con', 'agi', 'vit', 'int', 'wis', 'cha', 'luk'] as const;
 export type Ability = (typeof ABILITIES)[number];
 export type Abilities = Record<Ability, number>;
 

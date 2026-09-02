@@ -1,7 +1,7 @@
 import type { Abilities, Attack, Combatant, Side, Vec } from './types.ts';
 
 export const abilities = (over: Partial<Abilities> = {}): Abilities => ({
-  str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, ...over,
+  str: 10, dex: 10, con: 10, agi: 10, vit: 10, int: 10, wis: 10, cha: 10, luk: 10, ...over,
 });
 
 export const sword: Attack = {
