@@ -179,7 +179,7 @@ const placed = (node: TreeNode, offsets: Offsets, camera: Camera) => {
  * its node the moment anything is panned or zoomed.
  */
 function NodeCard({ node, offsets, camera }: { node: TreeNode; offsets: Offsets; camera: Camera }) {
-  const hue = hueOf(node.archetype);
+  const hue = hueOf(node.stat);
   const at = placed(node, offsets, camera);
   const left = asPercent(at.x * camera.zoom + camera.x);
   const top = asPercent(at.y * camera.zoom + camera.y);
@@ -202,7 +202,7 @@ function NodeCard({ node, offsets, camera }: { node: TreeNode; offsets: Offsets;
         <strong style={{ color: hue }}>{node.name}</strong>
         <span className="node-kind">{node.kind}</span>
       </div>
-      <p className="node-discipline">{DISCIPLINE[node.archetype]?.label ?? node.archetype}</p>
+      <p className="node-discipline">{DISCIPLINE[node.stat]?.label ?? node.stat}</p>
       <p className="node-grant">{node.description}</p>
       {node.teaches && <p className="teaches">teaches {node.teaches}</p>}
       {/* Why this branch exists at all. The old islands never said. */}
@@ -387,8 +387,8 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
   const spent = view.tree.nodes.filter((n) => n.taken && n.id !== 'start').length;
   // Ordered so the character's own discipline stays first.
   const shownDisciplines = [
-    ...view.tree.disciplines.filter((id) => view.tree.nodes.some((n) => n.archetype === id)),
-    ...[...new Set(view.tree.nodes.map((n) => n.archetype))].filter((id) => !view.tree.disciplines.includes(id)),
+    ...view.tree.paths.filter((id) => view.tree.nodes.some((n) => n.stat === id)),
+    ...[...new Set(view.tree.nodes.map((n) => n.stat))].filter((id) => !view.tree.paths.includes(id)),
   ];
   const rearranged = Object.keys(offsets).length > 0 || camera.zoom !== 1 || camera.x !== 0 || camera.y !== 0;
 
@@ -446,7 +446,7 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
         >
           <defs>
             {/* A held node glows in its own colour; one gradient per discipline. */}
-            {view.tree.disciplines.map((id) => (
+            {view.tree.paths.map((id) => (
               <radialGradient id={`glow-${id}`} key={id}>
                 <stop offset="0%" stopColor={hueOf(id)} stopOpacity={0.5} />
                 <stop offset="100%" stopColor={hueOf(id)} stopOpacity={0} />
@@ -467,12 +467,12 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
                   const lit = node.taken && other.taken;
                   const live = node.taken !== other.taken && (node.reachable || other.reachable);
                   const crossing =
-                    node.archetype !== other.archetype && node.id !== 'start' && other.id !== 'start';
+                    node.stat !== other.stat && node.id !== 'start' && other.id !== 'start';
                   return (
                     <line
                       key={`${node.id}-${to}`}
                       x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                      stroke={lit ? hueOf(node.archetype) : live ? '#4a3f31' : '#221e19'}
+                      stroke={lit ? hueOf(node.stat) : live ? '#4a3f31' : '#221e19'}
                       strokeWidth={lit ? 0.75 : 0.38}
                       strokeLinecap="round"
                       // A link between disciplines is the hybrid route; dashing
@@ -488,7 +488,7 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
               // Reachable draws the route; affordable decides whether it can be
               // clicked. Showing one without the other is what makes a tree legible.
               const open = node.reachable && !busy && view.character.skillPoints > 0;
-              const hue = hueOf(node.archetype);
+              const hue = hueOf(node.stat);
               const lit = hover === node.id;
               const at = placed(node, offsets, camera);
 
@@ -503,7 +503,7 @@ function SkillTree({ view, act, busy }: { view: GameView; act: Act; busy: boolea
                   onMouseLeave={() => setHover(null)}
                 >
                   {node.taken && (
-                    <circle cx={at.x} cy={at.y} r={r * 2.6} fill={`url(#glow-${node.archetype})`} />
+                    <circle cx={at.x} cy={at.y} r={r * 2.6} fill={`url(#glow-${node.stat})`} />
                   )}
 
                   {/* Keystones are diamonds. They are the decisions, and a

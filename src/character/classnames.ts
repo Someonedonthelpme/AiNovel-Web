@@ -1,6 +1,7 @@
 import type { Provider } from '../llm/provider.ts';
 import type { ClassShape } from './classgen.ts';
 import type { ClassNaming } from './classbuild.ts';
+import { STAT_BRIEF } from '../play/pathgen.ts';
 
 /**
  * Naming a world's classes.
@@ -59,35 +60,20 @@ export const CLASS_NAMING_SCHEMA = {
 
 type NamingResponse = { classes: ClassNaming[] };
 
-/** What each discipline is, in words, so the model can name a door sensibly. */
-const DISCIPLINE_WORDS: Record<string, string> = {
-  sword: 'close fighting with a blade',
-  bow: 'shooting at range',
-  guard: 'armour, shields and holding ground',
-  wisdom: 'reading people and situations',
-  magic: 'worked figures and formal power',
-  blackMagic: 'the power nobody is supposed to touch',
-  guile: 'lying, stealing and getting in',
-  survival: 'living rough and coming back',
-  flame: 'fire, and what it does to a room',
-  venom: 'poisons, doses and what is in the phial',
-  shadow: 'moving unseen and striking from it',
-  song: 'performance, rallying and being listened to',
-};
 
 const describe = (shape: ClassShape): string => {
   const lines = [
     `${shape.id}: someone who ${shape.brief}.`,
-    `  They fight with ${shape.primary}, and are built on: ${shape.core.map((c) => DISCIPLINE_WORDS[c]).join('; ')}.`,
-    `  They are shut out of: ${shape.forbidden.map((f) => DISCIPLINE_WORDS[f]).join('; ')}.`,
+    `  They fight with ${shape.primary}, and lean on: ${shape.favours.map((c) => STAT_BRIEF[c]).join('; ')}.`,
+    `  They lean away from: ${shape.against.map((f) => STAT_BRIEF[f]).join('; ')}.`,
     `  They set out holding a ${shape.weapon.range > 1 ? 'ranged' : 'melee'} weapon; name it for this world.`,
   ];
 
   for (const sub of shape.subclasses) {
     lines.push(
       sub.route === 'cross'
-        ? `  ${sub.id}: a path that crosses INTO ${DISCIPLINE_WORDS[sub.opens]}, which this kind of person is normally shut out of. Name what they became.`
-        : `  ${sub.id}: a path that goes DEEPER into ${DISCIPLINE_WORDS[sub.opens]}, which they already do. Name the specialist.`,
+        ? `  ${sub.id}: a road that crosses INTO ${STAT_BRIEF[sub.opens]}, which this kind of person normally leans away from. Name what they became.`
+        : `  ${sub.id}: a road that goes DEEPER into ${STAT_BRIEF[sub.opens]}, which they already lean on. Name the specialist.`,
     );
   }
 

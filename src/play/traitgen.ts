@@ -1,6 +1,5 @@
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
-import type { ArchetypeId } from './archetypes.ts';
 import type { EntryRule } from './graft.ts';
 import type { Ability } from '../combat/types.ts';
 import type { Axis } from '../character/persona.ts';
@@ -54,8 +53,8 @@ export type TraitTheme = {
   notes: Bilingual[];
   /** The score a bump goes to, when it grants one. */
   ability: Ability;
-  /** What its branch grows into. */
-  disciplines: ArchetypeId[];
+  /** The stats its branch grows on. */
+  stats: Ability[];
 };
 
 export const THEMES: readonly TraitTheme[] = [
@@ -82,7 +81,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'Rooms go quiet a little before you speak.', th: 'ห้องจะเงียบลงเล็กน้อยก่อนที่คุณจะพูด' },
     ],
     ability: 'str',
-    disciplines: ['sword', 'shadow', 'blackMagic'],
+    stats: ['str', 'agi', 'int'],
   },
   {
     id: 'endurance',
@@ -107,7 +106,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'Nobody expects you to still be here, and here you are.', th: 'ไม่มีใครคิดว่าคุณจะยังอยู่ และคุณก็ยังอยู่' },
     ],
     ability: 'con',
-    disciplines: ['guard', 'survival', 'sword'],
+    stats: ['vit', 'con', 'str'],
   },
   {
     id: 'depth',
@@ -132,7 +131,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'The air up here does not bother you any more.', th: 'อากาศข้างบนนี้ไม่รบกวนคุณอีกต่อไป' },
     ],
     ability: 'wis',
-    disciplines: ['wisdom', 'survival', 'magic'],
+    stats: ['wis', 'con', 'int'],
   },
   {
     id: 'curiosity',
@@ -157,7 +156,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'Nothing here is quite as unfamiliar as it was.', th: 'ไม่มีอะไรที่นี่แปลกหน้าเท่าเมื่อก่อนอีกแล้ว' },
     ],
     ability: 'int',
-    disciplines: ['guile', 'wisdom', 'shadow'],
+    stats: ['cha', 'wis', 'agi'],
   },
   {
     id: 'sociability',
@@ -182,7 +181,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'You are owed favours you have not called in.', th: 'คุณมีบุญคุณค้างที่ยังไม่ได้ทวง' },
     ],
     ability: 'cha',
-    disciplines: ['song', 'guile', 'wisdom'],
+    stats: ['cha', 'wis'],
   },
   {
     id: 'craft',
@@ -207,7 +206,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'You have started reading labels other people invent.', th: 'คุณเริ่มอ่านฉลากที่คนอื่นแต่งขึ้นเอง' },
     ],
     ability: 'int',
-    disciplines: ['venom', 'magic', 'flame'],
+    stats: ['int'],
   },
   {
     id: 'solitude',
@@ -232,7 +231,7 @@ export const THEMES: readonly TraitTheme[] = [
       { en: 'Company has become a thing you visit, not a thing you need.', th: 'การมีเพื่อนกลายเป็นสิ่งที่คุณแวะไปหา ไม่ใช่สิ่งที่คุณต้องการ' },
     ],
     ability: 'con',
-    disciplines: ['survival', 'guard', 'shadow'],
+    stats: ['con', 'vit', 'agi'],
   },
 ];
 
@@ -326,7 +325,7 @@ export function composeTrait(draw: TraitDraw): { trait: Trait; signature: string
    */
   const opens = rng() < 0.5
     ? {
-        archetype: theme.disciplines[Math.floor(rng() * theme.disciplines.length)],
+        stat: theme.stats[Math.floor(rng() * theme.stats.length)],
         entry: ENTRIES[Math.floor(rng() * ENTRIES.length)],
         size: 2 + Math.floor(rng() * 4),
         needs: 2 + Math.floor(rng() * 2),
@@ -408,7 +407,7 @@ const themeAt = (n: number): TraitTheme => THEMES[n % THEMES.length];
 export function favouredThemes(
   seed: number,
   origin: TraitOrigin,
-  subclassOpens?: ArchetypeId,
+  subclassOpens?: Ability,
 ): { source: string; theme: TraitTheme }[] {
   const out: { source: string; theme: TraitTheme }[] = [];
 
@@ -445,7 +444,7 @@ export function favouredThemes(
    */
   if (origin.subclassId) {
     const byDiscipline = subclassOpens
-      ? THEMES.find((t) => t.disciplines.includes(subclassOpens))
+      ? THEMES.find((t) => t.stats.includes(subclassOpens))
       : undefined;
     out.push({
       source: `subclass_${origin.subclassId}`,
@@ -460,7 +459,7 @@ export type GenerateInput = {
   seed: number;
   count: number;
   origin?: TraitOrigin;
-  subclassOpens?: ArchetypeId;
+  subclassOpens?: Ability;
 };
 
 /**

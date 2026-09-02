@@ -218,3 +218,26 @@ export function edgeFor(skills: readonly ActiveSkill[], ability: Ability): numbe
   }
   return bonus;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Authored skill specs                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A skill written by hand rather than composed.
+ *
+ * Rehomed here when `archetypes.ts` was deleted — these two types were the only
+ * things left in that file that were not a fantasy discipline. A class's
+ * subclass grant is the last authored skill in the game; everything else is
+ * composed from a stat's grammar.
+ */
+export type Bilingual = { en: string; th: string };
+
+export type SkillSpec = {
+  name: Bilingual;
+  description: Bilingual;
+  kind: ActiveKind;
+  effect: ActiveEffect;
+  range: number;
+  usesPerRest: number;
+};

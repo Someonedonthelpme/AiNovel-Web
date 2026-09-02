@@ -1,10 +1,11 @@
+import { ABILITIES } from '../combat/types.ts';
 import { RATION_ID } from '../items/catalogue.ts';
 import type { PlayState } from './state.ts';
 import type { Reachable, Signet } from './signet.ts';
 import { admissible } from './signet.ts';
 import { COUNTERS, WRITTEN_COUNTERS } from './traits.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import { ARCHETYPES } from './archetypes.ts';
+
 import type { EntryRule } from './graft.ts';
 import type { Gate } from './signet.ts';
 import { GATEABLE_FLAGS, generateSignets } from './signetgen.ts';
@@ -87,7 +88,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     grant: { ability: { wis: 1 }, maxHp: 4 },
     discovery: 'hinted',
     hint: 'A trader mentions that the shards from the upper floors hum differently.',
-    opens: { archetype: 'magic', entry: 'combination', size: 5, needs: 2 },
+    opens: { stat: 'int', entry: 'combination', size: 5, needs: 2 },
   },
   {
     id: 'signet_ledger_hand',
@@ -104,7 +105,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     grant: { ability: { int: 1 } },
     discovery: 'hinted',
     hint: 'There is a ledger somewhere in town that nobody will talk about.',
-    opens: { archetype: 'venom', entry: 'sequence', size: 4 },
+    opens: { stat: 'int', entry: 'sequence', size: 4 },
   },
   {
     id: 'signet_long_patience',
@@ -128,7 +129,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     },
     grant: { ability: { con: 1 }, maxHp: 3 },
     discovery: 'hidden',
-    opens: { archetype: 'survival', entry: 'parallel', size: 4 },
+    opens: { stat: 'con', entry: 'parallel', size: 4 },
   },
   {
     id: 'signet_quiet_kill',
@@ -145,7 +146,7 @@ export const CANDIDATE_SIGNETS: readonly Signet[] = [
     },
     grant: { attack: 1, damage: 1 },
     discovery: 'hidden',
-    opens: { archetype: 'blackMagic', entry: 'combination', size: 5, needs: 3 },
+    opens: { stat: 'int', entry: 'combination', size: 5, needs: 3 },
   },
 ];
 
@@ -229,7 +230,7 @@ export function variedAuthoredSignets(seed: number): Signet[] {
     gate: varyGate(signet.gate),
     opens: signet.opens
       ? {
-          archetype: ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)].id,
+          stat: ABILITIES[Math.floor(rng() * ABILITIES.length)],
           entry: SIGNET_ENTRIES[Math.floor(rng() * SIGNET_ENTRIES.length)],
           size: 3 + Math.floor(rng() * 3),
           needs: 2 + Math.floor(rng() * 2),

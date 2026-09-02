@@ -1,7 +1,5 @@
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
-import { ARCHETYPES } from '../play/archetypes.ts';
-import type { ArchetypeId } from '../play/archetypes.ts';
 import type { Ability } from '../combat/types.ts';
 import { ROLES } from './roles.ts';
 import type { Role } from './roles.ts';
@@ -44,9 +42,9 @@ export type ClassShape = {
   hitDie: 6 | 8 | 10 | 12;
   primary: Ability;
   secondary: Ability;
-  core: ArchetypeId[];
-  affinity: ArchetypeId[];
-  forbidden: ArchetypeId[];
+  /** Stats it leans on, and away from. A price on a path's gate, not a lock. */
+  favours: Ability[];
+  against: Ability[];
   startingArmour: number | null;
   /** The weapon shape it sets out with. The model names it. */
   weapon: { sides: number; range: number; type: string };
@@ -56,8 +54,8 @@ export type ClassShape = {
 export type SubclassShape = {
   id: string;
   route: SubclassRoute;
-  /** The discipline its island belongs to. */
-  opens: ArchetypeId;
+  /** The stat its island belongs to. */
+  opens: Ability;
   /** What the granted skill is composed against. */
   grant: { kind: 'combat' | 'utility' | 'social'; budget: number };
 };
@@ -111,19 +109,16 @@ export const SUBCLASS_BUDGET = { low: 9, high: 15 };
 
 function shapeFrom(rng: Rng, role: Role, index: number): ClassShape {
   const [primary, secondary] = pick(rng, role.abilities);
-  const core = draw(rng, role.coreFrom, 2);
+  const favours = draw(rng, role.favoursFrom, 2);
 
   /*
-   * Affinity must not overlap core, and forbidden must not overlap either. A
-   * discipline that was both "always on the tree" and "never on the tree" is a
-   * contradiction the generator would resolve silently and wrongly.
+   * A stat can be leant on or leant away from, never both. Mapping the old
+   * discipline lists across mechanically produced exactly that contradiction —
+   * a scholar who favoured INT and resisted it — and a generator resolves such
+   * a thing silently and wrongly.
    */
-  const taken = new Set<ArchetypeId>(core);
-  const affinity = draw(rng, role.affinityFrom.filter((a) => !taken.has(a)), 2);
-  for (const a of affinity) taken.add(a);
-
-  const wantForbidden = MIN_FORBIDDEN + Math.floor(rng() * (MAX_FORBIDDEN - MIN_FORBIDDEN + 1));
-  const forbidden = draw(rng, role.forbiddenFrom.filter((f) => !taken.has(f)), wantForbidden);
+  const leaning = new Set<Ability>(favours);
+  const against = draw(rng, role.againstFrom.filter((a) => !leaning.has(a)), 2);
 
   const id = `cls_${role.id}_${index}`;
 
@@ -133,8 +128,8 @@ function shapeFrom(rng: Rng, role: Role, index: number): ClassShape {
    * locked disciplines permanently locked. Two of each, so the decision is
    * specialise-or-broaden and then which flavour of it.
    */
-  const crossings = draw(rng, forbidden, Math.min(2, forbidden.length));
-  const deepenings = draw(rng, [...core, ...affinity], 2);
+  const crossings = draw(rng, against, Math.min(2, against.length));
+  const deepenings = draw(rng, favours, Math.min(2, favours.length));
 
   const subclasses: SubclassShape[] = [
     ...crossings.map((opens, i) => ({
@@ -164,9 +159,8 @@ function shapeFrom(rng: Rng, role: Role, index: number): ClassShape {
     hitDie: pick(rng, role.dice),
     primary,
     secondary,
-    core,
-    affinity,
-    forbidden,
+    favours,
+    against,
     startingArmour: pick(rng, role.armour),
     weapon: pick(rng, WEAPONS[primary]),
     subclasses,
@@ -218,37 +212,29 @@ export type ShapeProblem = { shape: string; why: string };
  * a discipline that is both always and never present, and nothing downstream
  * would report it — the player would just have a tree that made no sense.
  */
-export function checkShape(shape: ClassShape, maxDisciplines: number): ShapeProblem[] {
+export function checkShape(shape: ClassShape, _unused = 0): ShapeProblem[] {
   const problems: ShapeProblem[] = [];
   const say = (why: string) => problems.push({ shape: shape.id, why });
 
-  const core = new Set(shape.core);
-  const affinity = new Set(shape.affinity);
-  const forbidden = new Set(shape.forbidden);
+  const favours = new Set(shape.favours);
+  const against = new Set(shape.against);
 
-  if (core.size !== 2) say(`has ${core.size} core disciplines, not 2`);
-  if (affinity.size !== 2) say(`has ${affinity.size} affinity disciplines, not 2`);
-  for (const a of affinity) if (core.has(a)) say(`"${a}" is both core and affinity`);
-  for (const f of forbidden) {
-    if (core.has(f)) say(`"${f}" is both core and forbidden`);
-    if (affinity.has(f)) say(`"${f}" is both affinity and forbidden`);
+  if (favours.size === 0) say('leans on nothing, so it is not a kind of person');
+  if (against.size === 0) say('leans away from nothing, so it has nowhere to cross to');
+  for (const a of against) {
+    if (favours.has(a)) say(`"${a}" is both leant on and leant away from`);
   }
-
-  const left = ARCHETYPES.length - forbidden.size;
-  if (left < maxDisciplines) say(`leaves only ${left} disciplines for a subset of up to ${maxDisciplines}`);
 
   const crossings = shape.subclasses.filter((s) => s.route === 'cross');
   const deepenings = shape.subclasses.filter((s) => s.route === 'deepen');
-  if (crossings.length === 0) say('offers no way across, so its locked disciplines stay locked forever');
-  if (deepenings.length === 0) say('offers no way deeper, so level three is only ever a choice of door');
+  if (crossings.length === 0) say('offers no way across');
+  if (deepenings.length === 0) say('offers no way deeper');
 
   for (const sub of crossings) {
-    if (!forbidden.has(sub.opens)) say(`crossing "${sub.id}" opens "${sub.opens}", which it was never shut out of`);
+    if (!against.has(sub.opens)) say(`crossing "${sub.id}" opens "${sub.opens}", which it does not lean away from`);
   }
   for (const sub of deepenings) {
-    if (!core.has(sub.opens) && !affinity.has(sub.opens)) {
-      say(`deepening "${sub.id}" opens "${sub.opens}", which is not something it already is`);
-    }
+    if (!favours.has(sub.opens)) say(`deepening "${sub.id}" opens "${sub.opens}", which it does not lean on`);
   }
 
   const opened = shape.subclasses.map((s) => s.opens);

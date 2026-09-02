@@ -1,6 +1,7 @@
 import { mulberry32 } from '../engine/roll.ts';
-import { ARCHETYPES } from '../play/archetypes.ts';
-import type { SkillSpec } from '../play/archetypes.ts';
+import { STAT_GRAMMAR } from '../skills/statgrammar.ts';
+import { PATH_WORDS } from '../play/pathwords.ts';
+import type { SkillSpec } from '../skills/active.ts';
 import { composeSkill, nameFor } from '../skills/compose.ts';
 import type { ClassShape, SubclassShape } from './classgen.ts';
 import type { CharacterClass, Subclass } from './classes.ts';
@@ -60,7 +61,7 @@ const ROLE_FALLBACK: Record<string, { name: string; description: string; weapon:
  * reloads at level nine must not find it has become something else.
  */
 export function subclassGrant(sub: SubclassShape, language: 'th' | 'en'): SkillSpec {
-  const archetype = ARCHETYPES.find((a) => a.id === sub.opens) ?? ARCHETYPES[0];
+  const grammar = STAT_GRAMMAR[sub.opens];
   const rng = mulberry32(hash(sub.id));
 
   const composed = composeSkill(rng, {
@@ -68,14 +69,14 @@ export function subclassGrant(sub: SubclassShape, language: 'th' | 'en'): SkillS
     name: '',
     description: '',
     kind: sub.grant.kind,
-    ability: archetype.ability,
-    grammar: archetype.draws,
+    ability: sub.opens,
+    grammar,
     budget: sub.grant.budget,
   });
 
   return {
     name: both(nameFor(rng, composed.effect, language)),
-    description: both(composed.description || archetype.keystoneNote[language]),
+    description: both(composed.description || PATH_WORDS[sub.opens].keystone),
     kind: composed.kind,
     effect: composed.effect,
     range: composed.range,
@@ -138,9 +139,8 @@ export function buildClass(
     hitDie: shape.hitDie,
     primary: shape.primary,
     secondary: shape.secondary,
-    core: shape.core,
-    affinity: shape.affinity,
-    forbidden: shape.forbidden,
+    favours: shape.favours,
+    against: shape.against,
     startingAttack,
     startingArmour: shape.startingArmour,
     subclasses,

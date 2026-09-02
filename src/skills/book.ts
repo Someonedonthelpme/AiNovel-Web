@@ -2,12 +2,12 @@ import type { Ability, Condition } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import type { Item } from '../items/types.ts';
-import type { ArchetypeId } from '../play/archetypes.ts';
+
 import type { GraftSpec } from '../play/graft.ts';
 import type { Skill } from '../session/sheet.ts';
 import type { ActiveKind, ActiveSkill } from './active.ts';
 import { composeSkill, nameFor } from './compose.ts';
-import { ARCHETYPES } from '../play/archetypes.ts';
+import { STAT_GRAMMAR } from './statgrammar.ts';
 
 /**
  * Where active skills come from.
@@ -64,14 +64,13 @@ function composedFor(
   language: 'th' | 'en',
 ): ActiveSkill {
   const rng = mulberry32(seed);
-  const archetype = ARCHETYPES.find((a) => a.id === ABILITY_TO_DISCIPLINE[ability]) ?? ARCHETYPES[0];
   const effect = composeSkill(rng, {
     id: `skill_book_${seed.toString(36)}`,
     name: '',
     description: '',
     kind,
     ability,
-    grammar: archetype.draws,
+    grammar: STAT_GRAMMAR[ability],
     budget: budgetForFloor(floor),
   });
 
@@ -223,8 +222,14 @@ export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en')
     requires: floor >= 8 ? [{ kind: 'level', atLeast: Math.min(12, Math.floor(floor / 2)) }] : undefined,
   };
 
-  // Which discipline the set belongs to. Deeper books lean on the harder ones.
-  const family = ABILITY_TO_DISCIPLINE[ability];
+  /*
+   * The set belongs to the STAT the book teaches out of.
+   *
+   * There used to be a table mapping each ability onto a discipline, which was
+   * the only way to answer "a book about steadiness grows what?" while the tree
+   * ran on fantasy categories. A stat answers it directly.
+   */
+  const family = ability;
 
   return {
     id: `book_${seed.toString(36)}`,
@@ -237,29 +242,10 @@ export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en')
     value: 60 + floor * 10,
     foundOn: floor,
     teaches: taught,
-    set: { archetype: family, entry: 'parallel', size: floor >= 10 ? 3 : 2 },
+    set: { stat: family, entry: 'parallel', size: floor >= 10 ? 3 : 2 },
   };
 }
 
-/**
- * Which discipline a book's set belongs to.
- *
- * Keyed off the ability it teaches, so a book about steadiness grows shield
- * nodes and one about figures grows magic ones.
- */
-const ABILITY_TO_DISCIPLINE: Record<Ability, ArchetypeId> = {
-  str: 'sword',
-  dex: 'bow',
-  con: 'survival',
-  // Provisional. This whole table dies with the disciplines — a book's set will
-  // name a STAT directly once the tree is rebuilt on paths.
-  agi: 'shadow',
-  vit: 'guard',
-  int: 'magic',
-  wis: 'wisdom',
-  cha: 'song',
-  luk: 'guile',
-};
 
 export const isSkillBook = (item: Item): item is SkillBook =>
   typeof (item as SkillBook).teaches === 'object' && (item as SkillBook).teaches !== null;

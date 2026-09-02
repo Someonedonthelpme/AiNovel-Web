@@ -14,7 +14,7 @@ import type { TraitContext } from './traits.ts';
 const source: GraftSource = { kind: 'trait', id: 'butcher', name: 'Butcher' };
 
 const anchor = (id: string, x = 60, y = 60): SkillNode => ({
-  id, name: id, description: '', kind: 'minor', archetype: 'sword',
+  id, name: id, description: '', kind: 'minor', path: 'p', stat: 'str',
   ring: 3, x, y, connections: [], grant: {},
 });
 
@@ -38,7 +38,7 @@ const ctxOf = (): TraitContext => {
 /* -------------------------------------------------------------------------- */
 
 test('a sequence branch needs one held node, like everywhere else', () => {
-  const [head] = grow({ archetype: 'sword', entry: 'sequence', size: 3 }, [anchor('a')]);
+  const [head] = grow({ stat: 'str', entry: 'sequence', size: 3 }, [anchor('a')]);
   assert.equal(entryOpen(head, held()), false, 'nothing held, no way in');
   assert.equal(entryOpen(head, held('a')), true);
 });
@@ -46,7 +46,7 @@ test('a sequence branch needs one held node, like everywhere else', () => {
 test('a parallel branch needs nothing held at all', () => {
   // The book or trait that grew it already paid the entry. This is the one
   // place on the tree you can spend without having walked there.
-  const [head] = grow({ archetype: 'wisdom', entry: 'parallel', size: 3 }, [anchor('a')]);
+  const [head] = grow({ stat: 'wis', entry: 'parallel', size: 3 }, [anchor('a')]);
   assert.equal(head.freeStanding, true);
   assert.equal(head.connections.length, 0, 'no edge to anything');
   assert.equal(entryOpen(head, held()), true);
@@ -54,7 +54,7 @@ test('a parallel branch needs nothing held at all', () => {
 
 test('a combination branch needs every one of its anchors, not any', () => {
   // The only thing on the tree you plan for rather than walk to.
-  const nodes = grow({ archetype: 'shadow', entry: 'combination', size: 4, needs: 2 }, [
+  const nodes = grow({ stat: 'agi', entry: 'combination', size: 4, needs: 2 }, [
     anchor('a', 60, 60), anchor('b', 40, 60), anchor('c', 60, 40),
   ]);
   const head = nodes[0];
@@ -82,7 +82,7 @@ test('the refusal says which kind of gate it is', () => {
 test('a combination falls back to a road when there is nothing to bridge', () => {
   // One anchor cannot make a bridge. Refusing to generate would leave the
   // trait that earned it paying out nothing.
-  const nodes = grow({ archetype: 'shadow', entry: 'combination', size: 3 }, [anchor('a')]);
+  const nodes = grow({ stat: 'agi', entry: 'combination', size: 3 }, [anchor('a')]);
   assert.ok(nodes.length > 0);
   assert.equal(nodes[0].requiresAll, undefined);
 });
@@ -93,7 +93,7 @@ test('a combination falls back to a road when there is nothing to bridge', () =>
 
 test('a branch is between two and five nodes, whatever it asks for', () => {
   for (const size of [-4, 0, 1, 2, 5, 9, 40]) {
-    const nodes = grow({ archetype: 'sword', entry: 'sequence', size }, [anchor('a')]);
+    const nodes = grow({ stat: 'str', entry: 'sequence', size }, [anchor('a')]);
     assert.ok(nodes.length >= GRAFT_MIN, `${size} gave ${nodes.length}`);
     assert.ok(nodes.length <= GRAFT_MAX, `${size} gave ${nodes.length}`);
   }
@@ -103,19 +103,19 @@ test('every branch teaches something', () => {
   // A branch that only moves numbers is the thing this system was built to
   // stop being the whole tree.
   for (const entry of ['sequence', 'parallel', 'combination'] as const) {
-    const nodes = grow({ archetype: 'venom', entry, size: 4 }, [anchor('a'), anchor('b', 40, 40)]);
+    const nodes = grow({ stat: 'int', entry, size: 4 }, [anchor('a'), anchor('b', 40, 40)]);
     assert.ok(nodes.some((n) => n.teaches), `${entry} taught nothing`);
   }
 });
 
 test('a branch says what grew it', () => {
-  const nodes = grow({ archetype: 'sword', entry: 'sequence', size: 3 }, [anchor('a')]);
+  const nodes = grow({ stat: 'str', entry: 'sequence', size: 3 }, [anchor('a')]);
   assert.ok(nodes.every((n) => n.grafted?.id === 'butcher'));
   assert.ok(nodes.every((n) => n.grafted?.kind === 'trait'));
 });
 
 test('the same source always grows the same branch', () => {
-  const spec: GraftSpec = { archetype: 'sword', entry: 'sequence', size: 4 };
+  const spec: GraftSpec = { stat: 'str', entry: 'sequence', size: 4 };
   assert.deepEqual(grow(spec, [anchor('a')], 11), grow(spec, [anchor('a')], 11));
 });
 
@@ -194,8 +194,8 @@ test('everything is reachable, counting free-standing branches as their own root
       traits: grownBy(seed, sub).traits,
       signets: grownBy(seed, sub).signets.slice(0, 2),
       books: [
-        { bookId: 'book_a', name: 'A Soldier’s Notes', set: { archetype: 'sword', entry: 'parallel', size: 2 } },
-        { bookId: 'book_b', name: 'The Long Watch', set: { archetype: 'song', entry: 'parallel', size: 3 } },
+        { bookId: 'book_a', name: 'A Soldier’s Notes', set: { stat: 'str', entry: 'parallel', size: 2 } },
+        { bookId: 'book_b', name: 'The Long Watch', set: { stat: 'cha', entry: 'parallel', size: 3 } },
       ],
     });
 
@@ -231,9 +231,9 @@ test('a grown tree outgrows the points you will ever have', () => {
     traits: grows.traits,
     signets: grows.signets,
     books: [
-      { bookId: 'book_a', name: 'One', set: { archetype: 'sword', entry: 'parallel', size: 2 } },
-      { bookId: 'book_b', name: 'Two', set: { archetype: 'song', entry: 'parallel', size: 3 } },
-      { bookId: 'book_c', name: 'Three', set: { archetype: 'venom', entry: 'parallel', size: 3 } },
+      { bookId: 'book_a', name: 'One', set: { stat: 'str', entry: 'parallel', size: 2 } },
+      { bookId: 'book_b', name: 'Two', set: { stat: 'cha', entry: 'parallel', size: 3 } },
+      { bookId: 'book_c', name: 'Three', set: { stat: 'int', entry: 'parallel', size: 3 } },
     ],
   });
 

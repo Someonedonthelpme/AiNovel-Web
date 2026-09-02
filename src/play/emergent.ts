@@ -1,5 +1,5 @@
+import type { Ability } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import type { ArchetypeId } from './archetypes.ts';
 import type { EntryRule } from './graft.ts';
 import { SHAPES } from './traits.ts';
 import type { Trait } from './traits.ts';
@@ -35,7 +35,7 @@ type Dressing = {
   nouns: Bilingual[];
   /** What it says. Written flat, because the observation is the drama. */
   line: Bilingual;
-  disciplines: ArchetypeId[];
+  stats: Ability[];
 };
 
 const DRESSING: Record<string, Dressing> = {
@@ -46,7 +46,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You have killed more things than you have spoken to.',
       th: 'คุณฆ่ามามากกว่าที่คุณได้พูดคุยด้วย',
     },
-    disciplines: ['shadow', 'sword', 'blackMagic'],
+    stats: ['agi', 'str', 'int'],
   },
   sleepless: {
     qualifiers: [{ en: 'Sleepless', th: 'ไม่หลับ' }, { en: 'Waking', th: 'ตื่น' }, { en: 'Long', th: 'ยาวนาน' }],
@@ -55,7 +55,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You have not slept properly since the ground floor, and it shows.',
       th: 'คุณไม่ได้นอนเต็มตื่นเลยตั้งแต่ชั้นล่าง และมันก็เห็นได้',
     },
-    disciplines: ['survival', 'shadow', 'wisdom'],
+    stats: ['con', 'agi', 'wis'],
   },
   stubborn: {
     qualifiers: [{ en: 'Stubborn', th: 'ดื้อรั้น' }, { en: 'Returning', th: 'หวนกลับ' }, { en: 'Standing', th: 'ยังยืน' }],
@@ -64,7 +64,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You lose often, and you keep coming back, and people have noticed.',
       th: 'คุณแพ้บ่อย และคุณก็กลับมาเรื่อย ๆ และผู้คนก็สังเกตเห็น',
     },
-    disciplines: ['guard', 'survival', 'sword'],
+    stats: ['vit', 'con', 'str'],
   },
   ground_down: {
     qualifiers: [{ en: 'Worn', th: 'สึกกร่อน' }, { en: 'Ground', th: 'ถูกบด' }, { en: 'Thin', th: 'บางลง' }],
@@ -73,7 +73,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'The tower has taken more from you than you have taken from it.',
       th: 'หอคอยเอาไปจากคุณมากกว่าที่คุณเอามาจากมัน',
     },
-    disciplines: ['survival', 'guard', 'wisdom'],
+    stats: ['con', 'vit', 'wis'],
   },
   hoarder: {
     qualifiers: [{ en: 'Laden', th: 'หนักอึ้ง' }, { en: 'Saving', th: 'เก็บออม' }, { en: 'Full', th: 'เต็ม' }],
@@ -82,7 +82,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You carry everything and use almost none of it.',
       th: 'คุณแบกทุกอย่างไว้ และแทบไม่ได้ใช้มันเลย',
     },
-    disciplines: ['guile', 'venom', 'wisdom'],
+    stats: ['cha', 'int', 'wis'],
   },
   spendthrift: {
     qualifiers: [{ en: 'Spending', th: 'สุรุ่ยสุร่าย' }, { en: 'Open', th: 'เปิด' }, { en: 'Quick', th: 'ฉับไว' }],
@@ -91,7 +91,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You solve more with the pack than with the blade.',
       th: 'คุณแก้ปัญหาด้วยของในเป้มากกว่าด้วยคมดาบ',
     },
-    disciplines: ['venom', 'magic', 'flame'],
+    stats: ['int'],
   },
   headlong: {
     qualifiers: [{ en: 'Headlong', th: 'บุ่มบ่าม' }, { en: 'Unresting', th: 'ไม่พัก' }, { en: 'Fast', th: 'เร็ว' }],
@@ -100,7 +100,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You climb faster than you recover, and you have not stopped to think about it.',
       th: 'คุณไต่เร็วกว่าที่คุณฟื้นตัว และคุณก็ไม่เคยหยุดคิดถึงมัน',
     },
-    disciplines: ['survival', 'shadow', 'wisdom'],
+    stats: ['con', 'agi', 'wis'],
   },
   unbloodied: {
     qualifiers: [{ en: 'Unbloodied', th: 'ไร้เลือด' }, { en: 'Open', th: 'เปิดเผย' }, { en: 'Spoken', th: 'ผ่านคำพูด' }],
@@ -109,7 +109,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You have got this far mostly by talking, which almost nobody manages.',
       th: 'คุณมาไกลขนาดนี้ด้วยการพูดเป็นส่วนใหญ่ ซึ่งแทบไม่มีใครทำได้',
     },
-    disciplines: ['song', 'guile', 'wisdom'],
+    stats: ['cha', 'wis'],
   },
   out_of_depth: {
     qualifiers: [{ en: 'Overreaching', th: 'เกินตัว' }, { en: 'Early', th: 'ก่อนกำหนด' }, { en: 'Thin', th: 'เบาบาง' }],
@@ -118,7 +118,7 @@ const DRESSING: Record<string, Dressing> = {
       en: 'You are further up than anybody at your weight has business being.',
       th: 'คุณขึ้นมาสูงกว่าที่คนระดับคุณควรจะอยู่',
     },
-    disciplines: ['magic', 'blackMagic', 'shadow'],
+    stats: ['int', 'agi'],
   },
 };
 
@@ -168,7 +168,7 @@ export function emergentTraitsFor(seed: number, language: 'th' | 'en' = 'en'): T
       // an emergent trait must not be.
       grants: { note: dress.line[language] },
       opens: {
-        archetype: dress.disciplines[Math.floor(rng() * dress.disciplines.length)],
+        stat: dress.stats[Math.floor(rng() * dress.stats.length)],
         entry: (['sequence', 'parallel', 'combination'] as EntryRule[])[Math.floor(rng() * 3)],
         size: 2 + Math.floor(rng() * 3),
         needs: 2,

@@ -131,12 +131,14 @@ export const allocationOf = (sheet: CharacterSheet, tree: SkillTree): Allocation
 export type TreeBonuses = {
   ability: Partial<Abilities>;
   maxHp: number;
+  maxStamina: number;
+  maxMana: number;
   ac: number;
   attack: number;
   damage: number;
 };
 
-export const noBonuses = (): TreeBonuses => ({ ability: {}, maxHp: 0, ac: 0, attack: 0, damage: 0 });
+export const noBonuses = (): TreeBonuses => ({ ability: {}, maxHp: 0, maxStamina: 0, maxMana: 0, ac: 0, attack: 0, damage: 0 });
 
 const applyGrant = (into: TreeBonuses, grant: NodeGrant, sign: 1 | -1): void => {
   for (const [ability, bonus] of Object.entries(grant.ability ?? {})) {
@@ -144,6 +146,8 @@ const applyGrant = (into: TreeBonuses, grant: NodeGrant, sign: 1 | -1): void => 
     into.ability[key] = (into.ability[key] ?? 0) + sign * (bonus ?? 0);
   }
   into.maxHp += sign * (grant.maxHp ?? 0);
+  into.maxStamina += sign * (grant.maxStamina ?? 0);
+  into.maxMana += sign * (grant.maxMana ?? 0);
   into.ac += sign * (grant.ac ?? 0);
   into.attack += sign * (grant.attack ?? 0);
   into.damage += sign * (grant.damage ?? 0);

@@ -1,7 +1,9 @@
 import type { Rng } from '../engine/roll.ts';
-import { ARCHETYPES } from './archetypes.ts';
+import { ABILITIES } from '../combat/types.ts';
+import type { Ability } from '../combat/types.ts';
+import { PATH_WORDS } from './pathwords.ts';
+import { STAT_GRAMMAR } from '../skills/statgrammar.ts';
 import { composeSkill, generatorFor, nameFor } from '../skills/compose.ts';
-import type { ArchetypeId } from './archetypes.ts';
 import type { NodeGrant, SkillNode } from './skilltree.ts';
 
 /**
@@ -43,8 +45,16 @@ export const GRAFT_MIN = 2;
 export const GRAFT_MAX = 5;
 
 export type GraftSpec = {
-  /** Which discipline it belongs to — its colour, its flavour, what it teaches. */
-  archetype: ArchetypeId;
+  /**
+   * Which STAT it belongs to — its colour, and through `statgrammar`,
+   * everything it can teach.
+   *
+   * A stat rather than a path id, deliberately: stats are a fixed enum of
+   * nine and paths are generated per world, so a graft stored on a sheet can
+   * never point at a path a regenerated pool no longer contains. The same
+   * orphan-proofing that put `classSpec` on the sheet.
+   */
+  stat: Ability;
   entry: EntryRule;
   /** Two to five. Clamped, because an authored typo should not warp a tree. */
   size: number;
@@ -83,12 +93,14 @@ const budgetFor = (source: GraftSource, size: number): number => (4 + size * 1.6
  * A graft hangs off wherever it attached, so its ring number says nothing about
  * how far it was to get here. The earning was the distance.
  */
-function grantFor(rng: Rng, archetype: (typeof ARCHETYPES)[number], notable: boolean): NodeGrant {
-  if (notable) return { ability: { [archetype.ability]: 1 }, maxHp: 3 };
+function grantFor(rng: Rng, stat: Ability, notable: boolean): NodeGrant {
+  if (notable) return { ability: { [stat]: 1 }, maxHp: 3 };
   const roll = rng();
-  if (roll < 0.5) return { ability: { [archetype.ability]: 1 } };
+  if (roll < 0.5) return { ability: { [stat]: 1 } };
   if (roll < 0.8) return { maxHp: 3 };
-  return { ability: { [archetype.secondary]: 1 } };
+  // A grafted branch has no second stat of its own — it is a spur off one
+  // thing — so the alternative is staying power rather than another score.
+  return { maxStamina: 3 };
 }
 
 const describe = (grant: NodeGrant, language: 'th' | 'en'): string => {
@@ -124,8 +136,8 @@ export type GraftInput = {
  */
 export function graftFor(rng: Rng, input: GraftInput): SkillNode[] {
   const { id, spec, source, anchors, language } = input;
-  const archetype = ARCHETYPES.find((a) => a.id === spec.archetype);
-  if (!archetype) return [];
+  const stat = ABILITIES.includes(spec.stat) ? spec.stat : ABILITIES[0];
+  const words = PATH_WORDS[stat];
 
   const size = clampSize(spec.size);
 
@@ -167,16 +179,19 @@ export function graftFor(rng: Rng, input: GraftInput): SkillNode[] {
     // rather than back through it.
     const angle = Math.atan2(from.y - 50, from.x - 50) + spread;
     const reach = 5 + step * 4.4;
-    const grant = grantFor(rng, archetype, notable);
+    const grant = grantFor(rng, stat, notable);
 
     const node: SkillNode = {
       id: `graft_${id}_${suffix}`,
       name: notable
-        ? archetype.notables[Math.min(1, taught)][language]
-        : archetype.minors[Math.floor(rng() * archetype.minors.length)][language],
+        ? words.notables[Math.min(1, taught)]
+        : words.minors[Math.floor(rng() * words.minors.length)],
       description: describe(grant, language),
       kind: notable ? 'notable' : 'minor',
-      archetype: archetype.id,
+      // A graft belongs to its STAT and to no path — it is a spur the world
+      // grew, not part of the web the spread laid out.
+      path: `graft_${id}`,
+      stat,
       // Past the rim, so nothing in the main web mistakes these for its own.
       ring: 11,
       x: from.x + Math.cos(angle) * reach,
@@ -205,8 +220,8 @@ export function graftFor(rng: Rng, input: GraftInput): SkillNode[] {
         name: '',
         description: '',
         kind: 'combat',
-        ability: archetype.ability,
-        grammar: archetype.draws,
+        ability: stat,
+        grammar: STAT_GRAMMAR[stat],
         budget: budgetFor(source, size),
       });
       node.teaches = { ...composed, name: nameFor(own, composed.effect, language) };

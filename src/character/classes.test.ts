@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canChooseSubclass, classById, CLASSES, subclassById, subclassSkill, SUBCLASS_LEVEL } from './classes.ts';
-import { ARCHETYPES } from '../play/archetypes.ts';
-import { MAX_DISCIPLINES, skillTreeFor } from '../play/skilltree.ts';
+import { canChooseSubclassOf, subclassSkill, SUBCLASS_LEVEL } from './classes.ts';
+import { classShapesFor } from './classgen.ts';
+import { buildClass } from './classbuild.ts';
+import { ABILITIES } from '../combat/types.ts';
+import { skillTreeFor } from '../play/skilltree.ts';
 import { grownBy } from '../play/fixtures.ts';
 import { applySheetAction } from '../play/sheetaction.ts';
 import { activeSkills } from '../session/sheet.ts';
@@ -10,6 +12,16 @@ import { playState } from '../play/fixtures.ts';
 import type { PlayState } from '../play/state.ts';
 
 const SEEDS = [1, 7, 21, 55, 108, 512, 2024];
+
+/*
+ * A class to test the subclass MECHANICS against.
+ *
+ * There is no authored roster any more, so these tests build one the way the
+ * game does. What is being proved here is the machinery — when a subclass may
+ * be taken, what it grows, that it pays out in stages — none of which depends
+ * on WHICH class it is. The generated roster's own soundness is classgen's job.
+ */
+const someClass = (seed = 9) => buildClass(classShapesFor(seed)[0], null, 'en');
 
 const withClass = (state: PlayState, classId: string, over = {}): PlayState => ({
   ...state,
@@ -20,92 +32,51 @@ const withClass = (state: PlayState, classId: string, over = {}): PlayState => (
 /* The hard lock                                                               */
 /* -------------------------------------------------------------------------- */
 
-test('a class is never generated a discipline it is locked out of', () => {
-  // The property the whole design rests on. If a Fighter could ever roll black
-  // magic onto their own tree, an island into it would be worth nothing — it
-  // would just be more nodes arriving late.
-  for (const held of CLASSES) {
-    for (const seed of SEEDS) {
-      const tree = skillTreeFor(seed, 'bg', 'en', '', { classId: held.id });
-      for (const forbidden of held.forbidden) {
-        assert.equal(
-          tree.disciplines.includes(forbidden),
-          false,
-          `${held.id} was given ${forbidden} on seed ${seed}`,
-        );
-      }
-    }
-  }
-});
+test('one world offers one set of paths, and a spread decides what is open', () => {
+  /*
+   * A REAL CHANGE OF CLAIM, recorded rather than quietly dropped. Two classes
+   * used to get different trees because a class DECIDED which disciplines were
+   * printed. The world decides now, and a spread decides which of them are
+   * open — so the same tower shows the same paths to everybody, and what
+   * differs is how much of it you can reach.
+   *
+   * That is the point of the move: what you cannot reach is a goal you can
+   * see, rather than something that was never printed for you.
+   */
+  const brawn = Object.fromEntries(ABILITIES.map((a) => [a, 8])) as Record<typeof ABILITIES[number], number>;
+  const strong = { ...brawn, str: 15, vit: 15 };
+  const clever = { ...brawn, int: 15, wis: 15 };
 
-test('a class always gets its core, and opens on the first of them', () => {
-  for (const held of CLASSES) {
-    for (const seed of SEEDS) {
-      const tree = skillTreeFor(seed, 'bg', 'en', '', { classId: held.id });
-      assert.equal(tree.home, held.core[0], `${held.id} should open on ${held.core[0]}`);
-      for (const core of held.core) {
-        assert.ok(tree.disciplines.includes(core), `${held.id} lost its core ${core} on seed ${seed}`);
-      }
-    }
-  }
-});
+  const a = skillTreeFor(21, 'bg', 'en', '', { scores: strong });
+  const b = skillTreeFor(21, 'bg', 'en', '', { scores: clever });
 
-test('two classes on the same world get genuinely different trees', () => {
-  const fighter = skillTreeFor(21, 'bg', 'en', '', { classId: 'fighter' });
-  const wizard = skillTreeFor(21, 'bg', 'en', '', { classId: 'wizard' });
+  assert.deepEqual(a.paths, b.paths, 'the world offers the same paths to both');
+  assert.notEqual(a.home, b.home, 'but they open next to different ones');
 
-  assert.notEqual(fighter.home, wizard.home);
-  assert.ok(fighter.disciplines.includes('sword') && !wizard.disciplines.includes('sword'));
-  assert.ok(wizard.disciplines.includes('magic') && !fighter.disciplines.includes('magic'));
-});
-
-test('no class is locked out of its own core, or of everything', () => {
-  // A configuration error here would be silent: the tree would simply be short.
-  for (const held of CLASSES) {
-    for (const core of held.core) {
-      assert.equal(held.forbidden.includes(core), false, `${held.id} forbids its own core ${core}`);
-    }
-    assert.ok(
-      held.forbidden.length < ARCHETYPES.length - held.core.length,
-      `${held.id} forbids too much to fill a tree`,
-    );
-  }
-});
-
-/* -------------------------------------------------------------------------- */
-/* Subclasses                                                                  */
-/* -------------------------------------------------------------------------- */
-
-test('every subclass opens a way somewhere, and mostly somewhere barred', () => {
-  for (const held of CLASSES) {
-    assert.ok(held.subclasses.length >= 2, `${held.id} needs a choice, not a formality`);
-    for (const sub of held.subclasses) {
-      assert.ok(ARCHETYPES.some((a) => a.id === sub.opens), `${sub.id} opens onto nothing`);
-      assert.equal(held.core.includes(sub.opens), false, `${sub.id} opens what ${held.id} already has`);
-    }
-  }
+  const sealed = (t: typeof a) => t.nodes.filter((n) => n.requires?.some((r) => r.kind === 'ability')).length;
+  assert.notEqual(sealed(a), sealed(b), 'and different amounts of it are sealed to them');
 });
 
 test('choosing a subclass grows a branch that was not there before', () => {
   // The point of the whole feature: a choice that visibly reshapes the tree.
-  const held = classById('fighter')!;
+  const held = someClass();
   const sub = held.subclasses[0];
 
-  const before = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, level: 3 });
-  const after = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: sub.id, level: 3 });
+  const before = skillTreeFor(9, 'bg', 'en', '', { classSpec: held, level: 3 });
+  const after = skillTreeFor(9, 'bg', 'en', '', { classSpec: held, subclassId: sub.id, level: 3 });
 
   const grown = after.nodes.filter((n) => n.grafted?.kind === 'subclass');
   assert.equal(before.nodes.some((n) => n.grafted?.kind === 'subclass'), false);
   assert.ok(grown.length > 0, 'the subclass should have opened something');
-  assert.ok(grown.every((n) => n.archetype === sub.opens), `the branch should be ${sub.opens}`);
+  assert.ok(grown.every((n) => n.stat === sub.opens), `the branch should be ${sub.opens}`);
 });
 
 test('a subclass pays out again as the character grows', () => {
   // Three stages rather than one parcel: a permanent choice should buy an arc.
-  const held = classById('fighter')!;
+  const held = someClass();
   const sub = held.subclasses[0];
   const at = (level: number) =>
-    skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: sub.id, level })
+    skillTreeFor(9, 'bg', 'en', '', { classSpec: held, subclassId: sub.id, level })
       .nodes.filter((n) => n.grafted?.kind === 'subclass').length;
 
   assert.equal(at(2), 0, 'nothing before the first stage');
@@ -117,30 +88,20 @@ test('a subclass pays out again as the character grows', () => {
 test('the first subclass stage is a combination, not a walk', () => {
   // The crossing only opens once several parts of your own tree line up, so an
   // Eldritch Knight has to have genuinely walked the sword first.
+  const held = someClass();
   const tree = skillTreeFor(9, 'bg', 'en', '', {
-    classId: 'fighter', subclassId: 'eldritch_knight', level: 3,
+    classSpec: held, subclassId: held.subclasses[0].id, level: 3,
   });
   const head = tree.nodes.find((n) => n.grafted?.kind === 'subclass' && n.requiresAll?.length);
   assert.ok(head, 'the first stage should need more than one held node');
   assert.ok((head!.requiresAll ?? []).length >= 2);
 });
 
-test('the subclass island reaches somewhere the class could never go', () => {
-  const held = classById('fighter')!;
-  const knight = held.subclasses.find((s) => s.opens === 'magic')!;
-  assert.ok(held.forbidden.includes('magic'), 'magic is barred to a fighter');
-
-  const tree = skillTreeFor(9, 'bg', 'en', '', { classId: held.id, subclassId: knight.id, level: 3 });
-  assert.ok(
-    tree.nodes.some((n) => n.archetype === 'magic'),
-    'and the only route in is the subclass',
-  );
-});
-
 test('a subclass branch is open, not waiting on a tally', () => {
   // It was earned by taking the subclass. Gating it again would mean choosing
   // one and seeing nothing happen.
-  const tree = skillTreeFor(9, 'bg', 'en', '', { classId: 'rogue', subclassId: 'poisoner', level: 3 });
+  const held = someClass();
+  const tree = skillTreeFor(9, 'bg', 'en', '', { classSpec: held, subclassId: held.subclasses[0].id, level: 3 });
   const branch = tree.nodes.filter((n) => n.grafted?.kind === 'subclass');
   assert.ok(branch.length > 0);
   assert.ok(branch.every((n) => !n.requires?.length), 'no requirement left on it');
@@ -150,7 +111,8 @@ test('nothing is orphaned once a subclass island is attached', () => {
   // The chaotic generator has to keep its promise: a node nothing connects to
   // is a node nobody can ever buy.
   for (const seed of SEEDS) {
-    const who = { classId: 'warlock', subclassId: 'pact_voice' };
+    const held = someClass(seed);
+    const who = { classSpec: held, subclassId: held.subclasses[0].id };
     const grows = grownBy(seed, who, 2);
     const tree = skillTreeFor(seed, 'bg', 'en', '', {
       ...who, level: 10, traits: grows.traits, signets: grows.signets.slice(0, 1),
@@ -180,33 +142,44 @@ test('nothing is orphaned once a subclass island is attached', () => {
 /* -------------------------------------------------------------------------- */
 
 test('a subclass cannot be taken early, twice, or from another class', () => {
-  const base = withClass(playState(), 'rogue');
+  const held = someClass();
+  const other = someClass(21);
+  const mine = held.subclasses[0];
+  const base = playState();
+  const withMe = (over = {}): PlayState =>
+    ({ ...base, sheet: { ...base.sheet, classId: held.id, classSpec: held, ...over } });
 
-  assert.match(applySheetAction(base, { type: 'chooseSubclass', id: 'poisoner' }).error ?? '', /level/);
+  assert.match(applySheetAction(withMe(), { type: 'chooseSubclass', id: mine.id }).error ?? '', /level/);
 
-  const ready = withClass(playState(), 'rogue', { level: SUBCLASS_LEVEL });
+  const ready = withMe({ level: SUBCLASS_LEVEL });
   assert.match(
-    applySheetAction(ready, { type: 'chooseSubclass', id: 'eldritch_knight' }).error ?? '',
+    applySheetAction(ready, { type: 'chooseSubclass', id: other.subclasses[0].id }).error ?? '',
     /no such path/,
-    'a fighter path is not on offer to a rogue',
+    'a road from another class is not on offer',
   );
 
-  const taken = applySheetAction(ready, { type: 'chooseSubclass', id: 'poisoner' });
+  const taken = applySheetAction(ready, { type: 'chooseSubclass', id: mine.id });
   assert.equal(taken.error, null);
   assert.match(
-    applySheetAction(taken.state, { type: 'chooseSubclass', id: 'confidence' }).error ?? '',
+    applySheetAction(taken.state, { type: 'chooseSubclass', id: held.subclasses[1].id }).error ?? '',
     /already chosen/,
+    'and only one may ever be taken',
   );
 });
-
 test('taking a subclass grants its signature skill', () => {
-  const ready = withClass(playState(), 'wizard', { level: SUBCLASS_LEVEL });
-  const taken = applySheetAction(ready, { type: 'chooseSubclass', id: 'abjurer' });
+  const held = someClass();
+  const sub = held.subclasses[0];
+  const base = playState();
+  const ready: PlayState = {
+    ...base,
+    sheet: { ...base.sheet, classId: held.id, classSpec: held, level: SUBCLASS_LEVEL },
+  };
+  const taken = applySheetAction(ready, { type: 'chooseSubclass', id: sub.id });
 
   assert.equal(taken.error, null);
-  assert.equal(taken.state.sheet.subclassId, 'abjurer');
+  assert.equal(taken.state.sheet.subclassId, sub.id);
 
-  const granted = subclassSkill(subclassById('wizard', 'abjurer')!, 'th');
+  const granted = subclassSkill(sub, 'th');
   assert.ok(
     activeSkills(taken.state.sheet).some((s) => s.id === granted.id),
     'the signature skill should be usable straight away',
@@ -214,121 +187,78 @@ test('taking a subclass grants its signature skill', () => {
 });
 
 test('the offer only stands when it can actually be taken', () => {
-  assert.equal(canChooseSubclass(1, 'rogue', undefined), false);
-  assert.equal(canChooseSubclass(SUBCLASS_LEVEL, 'rogue', undefined), true);
-  assert.equal(canChooseSubclass(9, 'rogue', 'poisoner'), false, 'already chosen');
-  assert.equal(canChooseSubclass(9, undefined, undefined), false, 'no class, no paths');
+  const held = someClass();
+  const sub = held.subclasses[0];
+
+  assert.equal(canChooseSubclassOf(1, { classSpec: held }), false, 'not before the level');
+  assert.equal(canChooseSubclassOf(SUBCLASS_LEVEL, { classSpec: held }), true);
+  assert.equal(canChooseSubclassOf(9, { classSpec: held, subclassId: sub.id }), false, 'already chosen');
+  assert.equal(canChooseSubclassOf(9, {}), false, 'no class, no roads');
 });
 
 /* -------------------------------------------------------------------------- */
 /* Not breaking what came before                                               */
 /* -------------------------------------------------------------------------- */
 
-test('a session with no class behaves exactly as it did', () => {
-  // Every save made before classes existed has none. A stored tree must not
-  // rearrange itself under a character who has already spent points on it.
-  const before = skillTreeFor(21, 'harbour_guard', 'en', 'Harbour Guard');
+test('a tree still builds for a character with no class at all', () => {
+  // The class is optional and always was — a sheet without one gets the
+  // world's paths ungated, which is what the creation-page preview relies on.
+  const bare = skillTreeFor(21, 'harbour_guard', 'en', 'Harbour Guard');
   const same = skillTreeFor(21, 'harbour_guard', 'en', 'Harbour Guard', {});
-  assert.deepEqual(before.nodes, same.nodes);
-  assert.equal(before.home, 'guard', 'still inferred from the background');
-});
 
+  assert.deepEqual(bare.nodes, same.nodes);
+  assert.ok(bare.nodes.length > 0, 'no class should still mean a tree');
+  assert.ok(bare.paths.length > 0);
+});
 test('the same class and subclass always give the same tree', () => {
-  const a = skillTreeFor(4, 'bg', 'en', '', { classId: 'bard', subclassId: 'skirmisher', level: 10 });
-  const b = skillTreeFor(4, 'bg', 'en', '', { classId: 'bard', subclassId: 'skirmisher', level: 10 });
+  const held = someClass();
+  const opts = { classSpec: held, subclassId: held.subclasses[0].id, level: 10 };
+  const a = skillTreeFor(4, 'bg', 'en', '', opts);
+  const b = skillTreeFor(4, 'bg', 'en', '', opts);
   assert.deepEqual(a.nodes, b.nodes);
-  assert.deepEqual(a.disciplines, b.disciplines);
+  assert.deepEqual(a.paths, b.paths);
 });
 
-test('every class is coherent enough to build a character from', () => {
-  for (const held of CLASSES) {
-    assert.ok([6, 8, 10, 12].includes(held.hitDie), `${held.id} has a strange die`);
-    assert.ok(held.startingAttack.damage.sides > 0, `${held.id} cannot hit anything`);
-    assert.equal(classById(held.id)?.id, held.id);
-    assert.ok(held.name.th.trim() && held.description.th.trim(), `${held.id} is not translated`);
+test('every generated class is coherent enough to build a character from', () => {
+  for (const seed of SEEDS) {
+    for (const shape of classShapesFor(seed)) {
+      const held = buildClass(shape, null, 'en');
+      assert.ok([6, 8, 10, 12].includes(held.hitDie), `${held.id} has a strange die`);
+      assert.ok(held.startingAttack.damage.sides > 0, `${held.id} cannot hit anything`);
+      assert.ok(held.name.en.trim() && held.description.en.trim(), `${held.id} is unnamed`);
+    }
   }
 });
 
 test('a subclass goes where its route says it goes', () => {
   /*
-   * Crossings were "usually" rather than always: twelve of sixteen opened
-   * somewhere the class could already reach, and the Rogue's Poisoner opened
-   * `venom` — already in its own affinity, a crossing into a room it was
-   * standing in.
-   *
-   * Enforced per route now. A crossing that opens nothing new is a level-three
-   * decision that buys a name; a deepening that opens something the class was
-   * shut out of is a crossing wearing the wrong label.
+   * Crossings were "usually" rather than always in the authored roster:
+   * twelve of sixteen opened somewhere the class could already reach. Enforced
+   * per route now, against the generated classes that replaced them.
    */
-  for (const held of CLASSES) {
-    for (const sub of held.subclasses) {
-      if (sub.route === 'cross') {
-        assert.ok(
-          held.forbidden.includes(sub.opens),
-          `${held.id}/${sub.id} crosses to ${sub.opens}, which ${held.id} was never shut out of`,
-        );
-      } else {
-        assert.ok(
-          held.core.includes(sub.opens) || held.affinity.includes(sub.opens),
-          `${held.id}/${sub.id} deepens ${sub.opens}, which is not something ${held.id} already is`,
-        );
+  for (const seed of SEEDS) {
+    for (const shape of classShapesFor(seed)) {
+      const held = buildClass(shape, null, 'en');
+      for (const sub of held.subclasses) {
+        if (sub.route === 'cross') {
+          assert.ok((held.against ?? []).includes(sub.opens),
+            `${held.id}/${sub.id} crosses to ${sub.opens}, which it does not lean away from`);
+        } else {
+          assert.ok((held.favours ?? []).includes(sub.opens),
+            `${held.id}/${sub.id} deepens ${sub.opens}, which it does not lean on`);
+        }
       }
     }
   }
 });
-
-test('the authored eight are all crossings, and that is the flaw generation fixes', () => {
-  // Kept as a statement of what the shipped catalogue is, so the generated
-  // rosters can be compared against it rather than to nothing.
-  const routes = new Set(CLASSES.flatMap((c) => c.subclasses.map((s) => s.route)));
-  assert.deepEqual([...routes], ['cross'], 'the authored set grew a deepening without anyone deciding to');
-});
-
-test('a class does not point both its subclasses at the same door', () => {
-  // Two islands into one discipline would make the choice at level three a
-  // choice of flavour text.
-  for (const held of CLASSES) {
-    const opened = held.subclasses.map((s) => s.opens);
-    assert.equal(new Set(opened).size, opened.length, `${held.id} opens ${opened.join(' and ')}`);
+test('a class does not point both its subclasses at the same road', () => {
+  // Two roads into one stat would make the choice at level three a choice of
+  // flavour text.
+  for (const seed of SEEDS) {
+    for (const shape of classShapesFor(seed)) {
+      const opened = shape.subclasses.map((sub) => sub.opens);
+      assert.equal(new Set(opened).size, opened.length, `${shape.id} opens ${opened.join(' and ')}`);
+    }
   }
 });
 
-test('shutting a class out never leaves it too little to grow a tree', () => {
-  // Several classes gained a forbidden entry to make their crossings real.
-  // Taken too far, that starves `disciplinesFor` of anything to choose from.
-  for (const held of CLASSES) {
-    const left = ARCHETYPES.length - held.forbidden.length;
-    assert.ok(left >= MAX_DISCIPLINES, `${held.id} leaves only ${left} for a subset of up to ${MAX_DISCIPLINES}`);
-  }
-});
-
-test('a book may teach what a class refuses, and the base tree still may not', () => {
-  /*
-   * Kept deliberately. A book is a thing FOUND in the tower, and a found thing
-   * teaching you what your training would not is the better version of the
-   * subclass idea — a Warlock who picks up a book on shield-work learns a
-   * little of it. The class says what you were trained in, not what the world
-   * is allowed to hand you.
-   *
-   * What must stay true is the other half: the base tree never generates a
-   * forbidden discipline on its own, so crossing is always something that
-   * happened to a character rather than something they rolled.
-   */
-  const warlock = classById('warlock')!;
-  const shut = warlock.forbidden[0];
-
-  const bare = skillTreeFor(11, 'bg', 'en', '', { classId: 'warlock' });
-  assert.equal(
-    bare.nodes.some((n) => warlock.forbidden.includes(n.archetype)), false,
-    'the base tree generated a discipline the class is shut out of',
-  );
-
-  const read = skillTreeFor(11, 'bg', 'en', '', {
-    classId: 'warlock',
-    books: [{ bookId: 'b1', name: 'On Holding Ground', set: { archetype: shut, entry: 'parallel', size: 3 } }],
-  });
-  assert.ok(
-    read.nodes.some((n) => n.archetype === shut && n.grafted?.kind === 'book'),
-    `a book on ${shut} taught a Warlock nothing`,
-  );
-});

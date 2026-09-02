@@ -1,6 +1,6 @@
+import type { Ability } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
-import type { ArchetypeId } from './archetypes.ts';
 import type { EntryRule, GraftSpec } from './graft.ts';
 import type { Gate, Signet } from './signet.ts';
 import type { NodeGrant } from './skilltree.ts';
@@ -47,8 +47,8 @@ export type SignetTheme = {
   /** Words the name is built from. */
   qualifiers: Bilingual[];
   nouns: Bilingual[];
-  /** What its branch grows into. */
-  disciplines: ArchetypeId[];
+  /** The stats its branch grows on. */
+  stats: Ability[];
   /** A line for the hinted ones, so the world has something to drop. */
   rumour: Bilingual;
 };
@@ -75,7 +75,7 @@ export const THEMES: readonly SignetTheme[] = [
     nouns: [
       { en: 'Current', th: 'กระแส' }, { en: 'Air', th: 'อากาศ' }, { en: 'Stair', th: 'บันได' },
     ],
-    disciplines: ['wisdom', 'magic', 'survival'],
+    stats: ['wis', 'int', 'con'],
     rumour: {
       en: 'A trader mentions that the shards from the upper floors hum differently.',
       th: 'พ่อค้าคนหนึ่งบอกว่าเศษหินจากชั้นบนส่งเสียงหึ่งไม่เหมือนกัน',
@@ -95,7 +95,7 @@ export const THEMES: readonly SignetTheme[] = [
     nouns: [
       { en: 'Kill', th: 'การสังหาร' }, { en: 'Hand', th: 'มือ' }, { en: 'Edge', th: 'คม' },
     ],
-    disciplines: ['sword', 'shadow', 'blackMagic'],
+    stats: ['str', 'agi', 'int'],
     rumour: {
       en: 'Somebody has been counting, and they have stopped talking to you about it.',
       th: 'มีคนนับอยู่ และเขาก็เลิกพูดเรื่องนั้นกับคุณแล้ว',
@@ -115,7 +115,7 @@ export const THEMES: readonly SignetTheme[] = [
     nouns: [
       { en: 'Patience', th: 'ความอดทน' }, { en: 'Watch', th: 'การเฝ้า' }, { en: 'Night', th: 'ราตรี' },
     ],
-    disciplines: ['guard', 'survival', 'wisdom'],
+    stats: ['vit', 'con', 'wis'],
     rumour: {
       en: 'The ones who last are not the ones who hurry, an old climber says.',
       th: 'คนที่อยู่รอดไม่ใช่คนที่รีบ นักปีนแก่คนหนึ่งบอกไว้',
@@ -135,7 +135,7 @@ export const THEMES: readonly SignetTheme[] = [
     nouns: [
       { en: 'Hand', th: 'มือ' }, { en: 'Dose', th: 'ปริมาณยา' }, { en: 'Page', th: 'หน้ากระดาษ' },
     ],
-    disciplines: ['venom', 'magic', 'flame'],
+    stats: ['int'],
     rumour: {
       en: 'There is a ledger somewhere in town that nobody will talk about.',
       th: 'มีสมุดบัญชีเล่มหนึ่งในเมืองที่ไม่มีใครยอมพูดถึง',
@@ -155,7 +155,7 @@ export const THEMES: readonly SignetTheme[] = [
     nouns: [
       { en: 'Face', th: 'ใบหน้า' }, { en: 'Word', th: 'คำพูด' }, { en: 'Debt', th: 'หนี้' },
     ],
-    disciplines: ['song', 'guile', 'wisdom'],
+    stats: ['cha', 'wis'],
     rumour: {
       en: 'Your name has started arriving in rooms before you do.',
       th: 'ชื่อของคุณเริ่มไปถึงห้องก่อนตัวคุณเอง',
@@ -306,7 +306,7 @@ export function generateSignets(input: SignetGenInput): Signet[] {
       discovery: rng() < 0.5 ? 'hinted' : 'hidden',
       hint: theme.rumour[input.language],
       opens: {
-        archetype: pick(rng, theme.disciplines),
+        stat: pick(rng, theme.stats),
         entry: pick(rng, ENTRIES),
         size: 3 + Math.floor(rng() * 3),
         needs: 2 + Math.floor(rng() * 2),

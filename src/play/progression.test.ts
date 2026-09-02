@@ -7,7 +7,8 @@ import {
   abilityPointsBetween, depthFactor, grantXp, spendAbilityPoint, xpForFight, xpForNewDepth, xpToNext,
 } from './progress.ts';
 import { allocate, allocationOf, canAllocate, totalGrant, visibleNodes } from './allocate.ts';
-import { ARCHETYPES, MAX_DISCIPLINES, MIN_DISCIPLINES, skillTreeFor } from './skilltree.ts';
+import {  MAX_DISCIPLINES, MIN_DISCIPLINES, skillTreeFor } from './skilltree.ts';
+import { ABILITIES } from '../combat/types.ts';
 import { activeSkills } from '../session/sheet.ts';
 import { awardTraits, COUNTERS, newlyEarned, progressOf, traitMet } from './traits.ts';
 import { TRAITS } from './traitbook.ts';
@@ -126,7 +127,7 @@ test('walking a route costs a point at every step', () => {
   const tree = treeOf(state);
   let sheet: CharacterSheet = { ...state.sheet, skillPoints: 3 };
 
-  const branch = tree.nodes.filter((n) => n.archetype === tree.home && n.ring > 0).sort((a, b) => a.ring - b.ring);
+  const branch = tree.nodes.filter((n) => n.path === tree.home && n.ring > 0).sort((a, b) => a.ring - b.ring);
   for (const node of branch.slice(0, 3)) {
     const r = allocate(tree, { ...ctxOf(state), sheet }, node.id);
     assert.equal(r.error, null, `could not take ${node.id}`);
@@ -158,22 +159,40 @@ test('a hidden node does not exist until it is earned', () => {
   assert.ok(visibleNodes(tree, veteran).some((n) => n.kind === 'keystone'));
 });
 
-test('a tree holds a subset, not every discipline there is', () => {
-  // What is missing is missing for good: a soldier cannot buy their way into
-  // black magic, because that branch was never printed on their tree.
-  const tree = skillTreeFor(21, 'soldier', 'en');
-  assert.ok(tree.disciplines.length >= MIN_DISCIPLINES);
-  assert.ok(tree.disciplines.length <= MAX_DISCIPLINES);
-  assert.ok(tree.disciplines.length < ARCHETYPES.length, 'a subset, not the lot');
-  assert.ok(tree.disciplines.includes(tree.home), 'and it always holds your own');
-});
+test('a tree holds every path, and a spread decides how much is reachable', () => {
+  /*
+   * THE PREMISE INVERTED, deliberately. A tree used to hold a SUBSET of the
+   * twelve disciplines and what was missing was missing for good — a soldier
+   * could never buy their way into black magic because that branch was never
+   * printed.
+   *
+   * Every path is printed now. A path the spread does not open is SEALED, with
+   * its stat gate on it, and raising the stat unseals a branch that was
+   * visibly waiting. What you cannot reach became a goal you can see rather
+   * than something that was never there.
+   */
+  const thin = Object.fromEntries(ABILITIES.map((a) => [a, 8])) as Record<typeof ABILITIES[number], number>;
+  const broad = Object.fromEntries(ABILITIES.map((a) => [a, 15])) as Record<typeof ABILITIES[number], number>;
 
+  const poor = skillTreeFor(7, 'bg', 'en', '', { scores: thin });
+  const rich = skillTreeFor(7, 'bg', 'en', '', { scores: broad });
+
+  assert.deepEqual(poor.paths, rich.paths, 'the same paths are printed for both');
+
+  const gated = (t: typeof poor) => t.nodes.filter((n) => n.requires?.some((r) => r.kind === 'ability')).length;
+  assert.ok(gated(poor) > gated(rich), 'a thin spread should have more of it sealed');
+  assert.equal(gated(rich), 0, 'and a broad one should have none of it sealed');
+});
 test('different backgrounds get different trees, not the same map re-entered', () => {
   const soldier = skillTreeFor(21, 'soldier', 'en', 'Soldier');
   const scholar = skillTreeFor(21, 'scholar', 'en', 'Scholar of the Archive');
 
-  assert.notDeepEqual(soldier.disciplines, scholar.disciplines);
-  assert.notEqual(soldier.home, scholar.home);
+  /*
+   * The PATHS are now the world's, so both see the same list — what differs is
+   * the web grown over them: shapes, depths, angles and cross-links all draw
+   * from a seed that includes the background.
+   */
+  assert.deepEqual(soldier.paths, scholar.paths, 'one world, one set of paths');
   assert.notDeepEqual(
     soldier.nodes.map((n) => n.id).sort(),
     scholar.nodes.map((n) => n.id).sort(),
@@ -187,7 +206,7 @@ test('the same character always gets the same tree back', () => {
   const a = skillTreeFor(9, 'harbour_guard', 'en', 'Harbour Guard');
   const b = skillTreeFor(9, 'harbour_guard', 'en', 'Harbour Guard');
   assert.deepEqual(a.nodes, b.nodes);
-  assert.deepEqual(a.disciplines, b.disciplines);
+  assert.deepEqual(a.paths, b.paths);
 });
 
 test('every discipline on a tree teaches, and every node is reachable from the start', () => {
@@ -196,8 +215,8 @@ test('every discipline on a tree teaches, and every node is reachable from the s
   for (const seed of [1, 7, 21, 55, 108]) {
     const tree = skillTreeFor(seed, 'soldier', 'en');
 
-    for (const id of tree.disciplines) {
-      const teaching = tree.nodes.filter((n) => n.archetype === id && n.teaches);
+    for (const id of tree.paths) {
+      const teaching = tree.nodes.filter((n) => n.path === id && n.teaches);
       assert.ok(teaching.length > 0, `seed ${seed}: ${id} teaches nothing`);
     }
 
@@ -241,8 +260,8 @@ test('islands exist, and stay invisible until something opens them', () => {
 test('branches vary in shape and length rather than marching in step', () => {
   // A perfectly radial tree is a wheel, and a wheel has no decisions in it.
   const tree = skillTreeFor(33, 'soldier', 'en');
-  const depths = tree.disciplines.map(
-    (id) => Math.max(...tree.nodes.filter((n) => n.archetype === id && n.ring < 9).map((n) => n.ring)),
+  const depths = tree.paths.map(
+    (id) => Math.max(...tree.nodes.filter((n) => n.path === id && n.ring < 9).map((n) => n.ring)),
   );
   assert.ok(new Set(depths).size > 1, `every branch ran to the same depth: ${depths.join(', ')}`);
 });
@@ -251,11 +270,11 @@ test('taking a notable teaches its skill', () => {
   // This is what was missing: the tree had no actives in it at all.
   const state = playState();
   const tree = treeOf(state);
-  const notable = tree.nodes.find((n) => n.teaches && n.archetype === tree.home)!;
+  const notable = tree.nodes.find((n) => n.teaches && n.path === tree.home)!;
 
   // Walk out to it, paying for the route like anyone would.
   const route = tree.nodes
-    .filter((n) => n.archetype === tree.home && n.ring > 0 && n.ring <= notable.ring)
+    .filter((n) => n.path === tree.home && n.ring > 0 && n.ring <= notable.ring)
     .sort((a, b) => a.ring - b.ring);
 
   let sheet: CharacterSheet = { ...state.sheet, skillPoints: route.length };
@@ -268,19 +287,34 @@ test('taking a notable teaches its skill', () => {
   assert.ok(activeSkills(sheet).some((s) => s.id === notable.teaches!.id));
 });
 
-test('the tree opens next to the discipline the background trained for', () => {
-  assert.equal(skillTreeFor(1, 'harbour_guard').home, 'guard');
-  assert.equal(skillTreeFor(1, 'scholar_of_the_archive').home, 'magic');
-  assert.equal(skillTreeFor(1, 'dock_thief').home, 'guile');
-  assert.equal(skillTreeFor(1, 'something_unheard_of').home, 'sword', 'and falls back rather than failing');
-});
+test('the tree opens next to the path the spread opens best', () => {
+  // Home moved from "a discipline matched off the background's name" to "the
+  // best path this character actually qualifies for" — which is the same idea
+  // reached through the character rather than through a keyword.
+  const brawn = Object.fromEntries(ABILITIES.map((a) => [a, 8])) as Record<typeof ABILITIES[number], number>;
 
-test('the display name is read too, since ids are generated', () => {
-  // Observed: a "Lighthouse Keeper" arrived with a meaningless id and was sent
-  // to the sword — the fallback for "no idea" rather than an answer.
-  assert.equal(skillTreeFor(1, 'bg_2', 'en', 'Lighthouse Keeper').home, 'wisdom');
-  assert.equal(skillTreeFor(1, 'bg_7', 'en', 'Blood Cultist').home, 'blackMagic');
-  assert.equal(skillTreeFor(1, 'bg_9', 'en', 'Fisher').home, 'survival');
+  const strong = skillTreeFor(3, 'bg', 'en', '', { scores: { ...brawn, str: 15 } });
+  const clever = skillTreeFor(3, 'bg', 'en', '', { scores: { ...brawn, int: 15 } });
+
+  const homeStat = (t: typeof strong) => t.nodes.find((n) => n.id === 'start')!.stat;
+  assert.notEqual(homeStat(strong), homeStat(clever), 'different spreads should open on different stats');
+});
+test('a background still shapes the tree, though no longer by matching a word', () => {
+  /*
+   * A REAL CHANGE OF CLAIM. `archetypeForBackground` read the background's name
+   * and picked a discipline from it — a Lighthouse Keeper went to wisdom, a
+   * Blood Cultist to black magic. Both the function and the disciplines are
+   * gone.
+   *
+   * A background still reaches the tree, but through the character rather than
+   * through a keyword: it grants stats, stats decide which paths open, and the
+   * best-opened path becomes home. That is a longer chain and a better one —
+   * it cannot be fooled by a name nobody thought to match.
+   */
+  const a = skillTreeFor(1, 'bg_2', 'en', 'Lighthouse Keeper');
+  const b = skillTreeFor(1, 'bg_7', 'en', 'Blood Cultist');
+
+  assert.notDeepEqual(a.nodes.map((n) => n.id).sort(), b.nodes.map((n) => n.id).sort());
 });
 
 test('the tree is a web, not eight separate ladders', () => {
@@ -288,7 +322,7 @@ test('the tree is a web, not eight separate ladders', () => {
   // spoke forever.
   const tree = skillTreeFor(5, 'soldier');
   const crossings = tree.nodes.filter((n) =>
-    n.connections.some((c) => tree.nodes.find((o) => o.id === c)?.archetype !== n.archetype && c !== 'start'),
+    n.connections.some((c) => tree.nodes.find((o) => o.id === c)?.stat !== n.stat && c !== 'start'),
   );
   assert.ok(crossings.length > 0, 'some branches should touch');
 });
@@ -310,7 +344,7 @@ test('what the tree grants reaches the character', () => {
   const before = derive(state.sheet, state.pc.inventory);
 
   let sheet: CharacterSheet = { ...state.sheet, skillPoints: 4 };
-  const branch = tree.nodes.filter((n) => n.archetype === tree.home && n.ring > 0).sort((a, b) => a.ring - b.ring);
+  const branch = tree.nodes.filter((n) => n.path === tree.home && n.ring > 0).sort((a, b) => a.ring - b.ring);
   for (const node of branch.slice(0, 3)) {
     sheet = allocate(tree, { ...ctxOf(state), sheet }, node.id).sheet;
   }

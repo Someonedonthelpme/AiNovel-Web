@@ -85,6 +85,8 @@ export type CharacterSheet = Persona & {
   treeBonuses?: {
     ability: Partial<Abilities>;
     maxHp: number;
+    maxStamina: number;
+    maxMana: number;
     ac: number;
     attack: number;
     damage: number;
@@ -306,14 +308,16 @@ export function maxStaminaFor(sheet: CharacterSheet, inventory?: Inventory): num
   const vit = abilityMod(finalAbilities(sheet, inventory).vit);
   const level = Math.max(1, sheet.level);
   const worn = Math.floor((sheet.mental?.stress ?? 0) / 2);
-  return Math.max(1, POOL_BASE + vit * 2 + (level - 1) * POOL_PER_LEVEL - worn);
+  const granted = sheet.treeBonuses?.maxStamina ?? 0;
+  return Math.max(1, POOL_BASE + vit * 2 + (level - 1) * POOL_PER_LEVEL - worn + granted);
 }
 
 export function maxManaFor(sheet: CharacterSheet, inventory?: Inventory): number {
   const con = abilityMod(finalAbilities(sheet, inventory).con);
   const level = Math.max(1, sheet.level);
   const worn = Math.floor((sheet.mental?.fatigue ?? 0) / 2);
-  return Math.max(1, POOL_BASE + con * 2 + (level - 1) * POOL_PER_LEVEL - worn);
+  const granted = sheet.treeBonuses?.maxMana ?? 0;
+  return Math.max(1, POOL_BASE + con * 2 + (level - 1) * POOL_PER_LEVEL - worn + granted);
 }
 
 /** Worn armour sets the base; without it you are as hard to hit as you are quick. */

@@ -269,8 +269,8 @@ export default function NewCharacter() {
                 <span className="class-line">
                   <b>{held.primary}</b> · {held.secondary}
                 </span>
-                <span className="class-line class-core">opens: {held.core.join(', ')}</span>
-                <span className="class-line class-barred">never: {held.forbidden.join(', ')}</span>
+                <span className="class-line class-core">leans on: {(held.favours ?? []).join(', ')}</span>
+                <span className="class-line class-barred">away from: {(held.against ?? []).join(', ')}</span>
               </button>
             );
           })}

@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  checkShape, classShapesFor, MAX_CLASSES, MAX_FORBIDDEN, MIN_CLASSES, MIN_FORBIDDEN,
+  checkShape, classShapesFor, MAX_CLASSES, MIN_CLASSES,
 } from './classgen.ts';
 import { buildClass, subclassGrant } from './classbuild.ts';
-import { canChooseSubclassOf, classOf, CLASSES, subclassOf } from './classes.ts';
-import { ARCHETYPES } from '../play/archetypes.ts';
-import { MAX_DISCIPLINES, skillTreeFor } from '../play/skilltree.ts';
+import { canChooseSubclassOf, classOf, subclassOf } from './classes.ts';
+import { ABILITIES } from '../combat/types.ts';
+import { skillTreeFor } from '../play/skilltree.ts';
+import { STAT_GRAMMAR } from '../skills/statgrammar.ts';
 import { priceSkill } from '../skills/compose.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 
@@ -21,39 +22,38 @@ const asSkill = (grant: { effect: unknown; range: number; usesPerRest: number })
 
 test('every generated class is sound', () => {
   /*
-   * The claim everything else rests on, and it earns its keep the way
-   * `admissible` does for Signets. A class whose forbidden list overlapped its
-   * core would generate a tree with a discipline that is both always and never
-   * present, and nothing downstream would report it — the player would simply
-   * have a tree that made no sense, differently in every world.
+   * The claim everything else rests on. A class that both leant ON a stat and
+   * AWAY from it would shift a path's gate in two directions at once — which a
+   * generator resolves silently and wrongly, and nothing downstream would
+   * report. Mapping the old discipline lists across mechanically produced
+   * exactly that: a scholar who favoured INT and resisted it.
    */
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
       assert.deepEqual(
-        checkShape(shape, MAX_DISCIPLINES).map((p) => p.why), [],
+        checkShape(shape).map((p) => p.why), [],
         `seed ${seed} generated an unsound ${shape.id}`,
       );
     }
   }
 });
 
-test('shutting a class out never starves its tree', () => {
-  // `disciplinesFor` draws a subset of up to MAX_DISCIPLINES. Forbid too much
-  // and there is nothing left to draw from.
+test('leaning away never leaves a class with nowhere to go', () => {
+  // A lean is a price and not a lock, so nothing is ever unreachable — but a
+  // class that leant away from most of the sheet would still be miserable.
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
-      const left = ARCHETYPES.length - shape.forbidden.length;
-      assert.ok(left >= MAX_DISCIPLINES, `${shape.id} leaves ${left}`);
-      assert.ok(shape.forbidden.length >= MIN_FORBIDDEN && shape.forbidden.length <= MAX_FORBIDDEN);
+      assert.ok(shape.against.length <= 3, `${shape.id} leans away from ${shape.against.length} stats`);
+      assert.ok(shape.favours.length >= 1, `${shape.id} leans on nothing`);
     }
   }
 });
 
-test('core, affinity and forbidden never overlap', () => {
+test('a stat is never both leant on and leant away from', () => {
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
-      const all = [...shape.core, ...shape.affinity, ...shape.forbidden];
-      assert.equal(new Set(all).size, all.length, `${shape.id} lists a discipline twice: ${all.join(', ')}`);
+      const both = shape.favours.filter((f) => shape.against.includes(f));
+      assert.deepEqual(both, [], `${shape.id} both favours and resists ${both.join(', ')}`);
     }
   }
 });
@@ -72,8 +72,8 @@ test('every class offers a way out AND a way deeper', () => {
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
       const routes = shape.subclasses.map((s) => s.route);
-      assert.ok(routes.includes('cross'), `${shape.id} can never leave its own disciplines`);
-      assert.ok(routes.includes('deepen'), `${shape.id} can only ever leave them`);
+      assert.ok(routes.includes('cross'), `${shape.id} can never cross away from what it is`);
+      assert.ok(routes.includes('deepen'), `${shape.id} can only ever cross away`);
     }
   }
 });
@@ -83,12 +83,9 @@ test('a crossing crosses and a deepening deepens', () => {
     for (const shape of classShapesFor(seed)) {
       for (const sub of shape.subclasses) {
         if (sub.route === 'cross') {
-          assert.ok(shape.forbidden.includes(sub.opens), `${sub.id} crosses to ${sub.opens}, never shut out of`);
+          assert.ok(shape.against.includes(sub.opens), `${sub.id} crosses to ${sub.opens}, which it does not lean away from`);
         } else {
-          assert.ok(
-            shape.core.includes(sub.opens) || shape.affinity.includes(sub.opens),
-            `${sub.id} deepens ${sub.opens}, which it is not`,
-          );
+          assert.ok(shape.favours.includes(sub.opens), `${sub.id} deepens ${sub.opens}, which it does not lean on`);
         }
       }
     }
@@ -108,44 +105,44 @@ test('no class points two subclasses at the same door', () => {
 /* What it grants                                                              */
 /* -------------------------------------------------------------------------- */
 
-test('a granted skill belongs to the discipline it opens', () => {
-  // The coherence claim, same as everywhere else: a door into `bow` that
-  // taught healing would be legal, correctly priced, and read as a bug.
+test('a granted skill belongs to the stat it opens', () => {
+  // The coherence claim, same as everywhere else: a road into DEX that taught
+  // healing would be legal, correctly priced, and read as a bug.
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
       for (const sub of shape.subclasses) {
-        const archetype = ARCHETYPES.find((a) => a.id === sub.opens)!;
+        const grammar = STAT_GRAMMAR[sub.opens];
         const grant = subclassGrant(sub, 'en');
         assert.ok(
-          archetype.draws.payloads.includes(grant.effect.kind),
+          grammar.payloads.includes(grant.effect.kind),
           `${sub.id} opens ${sub.opens} and teaches ${grant.effect.kind}`,
         );
-        assert.ok(grant.range <= archetype.draws.maxRange, `${sub.id} reaches ${grant.range}`);
+        assert.ok(grant.range <= grammar.maxRange, `${sub.id} reaches ${grant.range}`);
       }
     }
   }
 });
 
-test('grants land in the same country as the authored sixteen', () => {
+test('a grant is worth having and never the best thing in the game', () => {
   /*
-   * Measured, not asserted. The shipped sixteen price 4.0 to 13.0 with a
-   * median of 7.5; a generated grant that outclassed all of them would make
-   * the roster strictly better than the game it replaced.
+   * The authored sixteen used to be the yardstick — they priced 4.0 to 13.0
+   * with a median of 7.5, and a generated grant was checked against their
+   * ceiling. They are deleted, so the range they defined is written down here
+   * instead of being read off them. Losing the yardstick is a real cost of the
+   * demolition and worth recording rather than quietly dropping the check.
    */
-  const authored = CLASSES.flatMap((c) => c.subclasses).map((s) => priceSkill(asSkill(s.grants)));
-  const ceiling = Math.max(...authored);
+  const CEILING = 15;
 
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
       for (const sub of shape.subclasses) {
         const price = priceSkill(asSkill(subclassGrant(sub, 'en')));
-        assert.ok(price <= ceiling + 2, `${sub.id} prices ${price.toFixed(1)} against a ceiling of ${ceiling}`);
         assert.ok(price > 0, `${sub.id} grants nothing`);
+        assert.ok(price <= CEILING, `${sub.id} prices ${price.toFixed(1)} against a ceiling of ${CEILING}`);
       }
     }
   }
 });
-
 test('the same subclass always teaches the same thing', () => {
   // Keyed on the subclass id rather than the world, so a character who took it
   // at level three and reloads at level nine does not find it has changed.
@@ -200,8 +197,8 @@ test('a built class keeps the mechanics the shape decided', () => {
     const built = buildClass(shape, { shapeId: shape.id, name: 'X', description: 'Y', weaponName: 'Z', subclasses: [] }, 'en');
     assert.equal(built.hitDie, shape.hitDie);
     assert.equal(built.primary, shape.primary);
-    assert.deepEqual(built.core, shape.core);
-    assert.deepEqual(built.forbidden, shape.forbidden);
+    assert.deepEqual(built.favours, shape.favours);
+    assert.deepEqual(built.against, shape.against);
     assert.deepEqual(built.subclasses.map((s) => s.opens), shape.subclasses.map((s) => s.opens));
   }
 });
@@ -250,30 +247,44 @@ test('a character carries their class, so a regenerated roster cannot orphan the
   assert.equal(classOf({ classId: built.id }), null);
 });
 
-test('a session made before generated classes still resolves', () => {
-  // Every save stores `fighter` or `warlock` and no spec. Those words still
-  // mean what they always did.
-  const old = { classId: 'warlock', subclassId: 'pact_ember' };
-  assert.equal(classOf(old)?.id, 'warlock');
-  assert.equal(subclassOf(old)?.id, 'pact_ember');
-  assert.equal(canChooseSubclassOf(3, { classId: 'warlock' }), true);
-  assert.equal(canChooseSubclassOf(3, old), false, 'they have already chosen');
-  assert.equal(canChooseSubclassOf(2, { classId: 'warlock' }), false, 'not until level three');
+test('an id with no spec behind it resolves to nothing, and nothing breaks', () => {
+  /*
+   * This test used to assert the opposite: that a save storing `warlock` and
+   * no spec still resolved against the authored eight. Those are deleted along
+   * with every existing session, so the fallback has nothing left to catch.
+   *
+   * What matters now is that the absence is HANDLED rather than thrown on — a
+   * sheet carrying a stale id must resolve to null and leave the character
+   * classless, not crash the page that renders them.
+   */
+  const stale = { classId: 'warlock', subclassId: 'pact_ember' };
+  assert.equal(classOf(stale), null);
+  assert.equal(subclassOf(stale), null);
+  assert.equal(canChooseSubclassOf(3, stale), false, 'no class, no roads');
+
+  const built = buildClass(classShapesFor(9)[0], null, 'en');
+  assert.equal(canChooseSubclassOf(3, { classSpec: built }), true, 'a carried spec still works');
 });
 
 test('a generated class grows a tree that obeys its own locks', () => {
+  /*
+   * A class no longer decides WHICH paths exist — the world does, and the
+   * spread decides which are open. What a class does is shift the gate, so the
+   * claim worth testing changed: not "the tree lacks what it is shut out of"
+   * (nothing is shut out any more) but "leaning on a stat opens its paths
+   * sooner than leaning away would".
+   */
   for (const seed of [7, 42, 2024]) {
     const built = buildClass(classShapesFor(seed)[0], null, 'en');
-    const tree = skillTreeFor(seed, 'bg', 'en', '', { classId: built.id, classSpec: built });
+    const middling = Object.fromEntries(ABILITIES.map((a) => [a, 12])) as Record<typeof ABILITIES[number], number>;
 
+    const tree = skillTreeFor(seed, 'bg', 'en', '', { classId: built.id, classSpec: built, scores: middling });
     assert.ok(tree.nodes.length > 0, 'a generated class grew no tree at all');
-    assert.equal(
-      tree.nodes.some((n) => built.forbidden.includes(n.archetype)), false,
-      'the base tree generated a discipline the class is shut out of',
-    );
-    assert.ok(
-      tree.nodes.some((n) => built.core.includes(n.archetype)),
-      'the tree holds none of what the class is built on',
-    );
+    assert.ok(tree.paths.length > 0, 'the world offered no paths at all');
+
+    // Every path is present whether open or sealed; what a lean changes is the
+    // score at which it unseals, which pathgen.test proves directly.
+    const stats = new Set(tree.nodes.map((n) => n.stat));
+    assert.ok(stats.size > 1, 'a tree of one stat is not a tree');
   }
 });

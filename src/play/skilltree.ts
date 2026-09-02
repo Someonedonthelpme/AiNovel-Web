@@ -1,10 +1,14 @@
 import type { Ability, Abilities } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { ActiveSkill } from '../skills/active.ts';
-import { ARCHETYPES, archetypeForBackground, skillFrom } from './archetypes.ts';
+import { gateFor, isOpen, openPaths, pathsFor } from './pathgen.ts';
+import type { Lean, PathShape } from './pathgen.ts';
+import { grantForRing, keystoneTradeFor, PATH_WORDS } from './pathwords.ts';
+import { composeSkill, nameFor } from '../skills/compose.ts';
+import { STAT_GRAMMAR } from '../skills/statgrammar.ts';
+import { budgetForFloor } from '../skills/book.ts';
 import { classOf, subclassOf } from '../character/classes.ts';
 import type { CharacterClass } from '../character/classes.ts';
-import type { Archetype, ArchetypeId } from './archetypes.ts';
 import type { TraitCondition } from './traits.ts';
 import { graftFor } from './graft.ts';
 import type { GraftSource, GraftSpec } from './graft.ts';
@@ -52,6 +56,15 @@ export type NodeGrant = {
   ac?: number;
   attack?: number;
   damage?: number;
+  /**
+   * Pool ceilings, beyond what VIT and CON give.
+   *
+   * The only reward nothing else in the game grants, which is what makes it
+   * worth having as a distinct one — and it is unmissable in a way a stat
+   * bump is not, because the bar visibly lengthens.
+   */
+  maxStamina?: number;
+  maxMana?: number;
 };
 
 export type SkillNode = {
@@ -59,8 +72,15 @@ export type SkillNode = {
   name: string;
   description: string;
   kind: NodeKind;
-  /** Which discipline this belongs to. Drives colour and grouping in the UI. */
-  archetype: ArchetypeId;
+  /**
+   * The path this belongs to, and the stat that path runs on.
+   *
+   * `archetype` was a hardcoded fantasy category and the last such thing in a
+   * generated game. The path id groups a branch; the STAT drives its colour
+   * and, through `statgrammar`, everything it is able to teach.
+   */
+  path: string;
+  stat: Ability;
   /** Rings out from the start. Drives both power and layout. */
   ring: number;
   x: number;
@@ -98,10 +118,17 @@ export type SkillNode = {
 export type SkillTree = {
   id: string;
   start: string;
-  /** Which discipline the character opens next to. */
-  home: ArchetypeId;
-  /** The subset this character's tree holds. What is absent is absent for good. */
-  disciplines: ArchetypeId[];
+  /** The path the character opens next to — the one their spread opens best. */
+  home: string;
+  /**
+   * Every path this world has, open or sealed.
+   *
+   * No longer a SUBSET fixed at creation. A class used to decide which
+   * disciplines were on the tree for ever; a spread decides which are open
+   * NOW, and a sealed path is present with its stat gate showing. What is
+   * missing is missing until you raise the stat, not for good.
+   */
+  paths: string[];
   nodes: SkillNode[];
 };
 
@@ -125,20 +152,6 @@ export const MAX_DISCIPLINES = 7;
  * random handful: someone who works with figures is more likely to be offered
  * fire and poison than the shield.
  */
-const AFFINITY: Record<ArchetypeId, ArchetypeId[]> = {
-  sword: ['guard', 'shadow', 'survival'],
-  bow: ['shadow', 'wisdom', 'survival'],
-  guard: ['sword', 'survival', 'song'],
-  wisdom: ['magic', 'bow', 'song'],
-  magic: ['flame', 'venom', 'wisdom'],
-  blackMagic: ['venom', 'shadow', 'magic'],
-  guile: ['shadow', 'song', 'venom'],
-  survival: ['bow', 'guard', 'venom'],
-  flame: ['magic', 'blackMagic', 'sword'],
-  venom: ['magic', 'blackMagic', 'guile'],
-  shadow: ['guile', 'bow', 'blackMagic'],
-  song: ['guile', 'wisdom', 'guard'],
-};
 
 /** The shapes a branch can take. A tree of one shape is a wheel. */
 const SHAPES = ['chain', 'fork', 'wheel', 'spur'] as const;
@@ -153,7 +166,7 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
-const nodeId = (archetype: ArchetypeId, ring: number) => `${archetype}_r${ring}`;
+const nodeId = (path: string, ring: number) => `${path}_r${ring}`;
 
 /**
  * What a node at this depth is worth.
@@ -161,41 +174,6 @@ const nodeId = (archetype: ArchetypeId, ring: number) => `${archetype}_r${ring}`
  * Power rises with distance from the centre, which is what makes a long route
  * a real investment rather than a longer way to the same place.
  */
-function grantFor(archetype: Archetype, kind: NodeKind, ring: number, roll: number): NodeGrant {
-  if (kind === 'keystone') return {};
-
-  if (kind === 'notable') {
-    return ring >= 5
-      ? { ability: { [archetype.ability]: 1, [archetype.secondary]: 1 }, maxHp: 4 }
-      : { ability: { [archetype.ability]: 1 }, ...(roll < 0.5 ? { attack: 1 } : { ac: 1 }) };
-  }
-
-  // Minors alternate between the discipline's ability and raw staying power, so
-  // a branch is not purely one number going up.
-  if (roll < 0.55) return { ability: { [archetype.ability]: 1 } };
-  if (roll < 0.8) return { maxHp: 3 };
-  return { ability: { [archetype.secondary]: 1 } };
-}
-
-/** A keystone's trade, themed to its discipline rather than drawn from a pot. */
-function keystoneTrade(archetype: Archetype): { grant: NodeGrant; cost: NodeGrant } {
-  switch (archetype.id) {
-    case 'sword': return { grant: { damage: 2, attack: 1 }, cost: { maxHp: 6 } };
-    case 'bow': return { grant: { attack: 2, damage: 1 }, cost: { ac: 2 } };
-    case 'guard': return { grant: { ac: 2, maxHp: 8 }, cost: { attack: 1 } };
-    case 'wisdom': return { grant: { ability: { wis: 2 }, ac: 1 }, cost: { damage: 1 } };
-    case 'magic': return { grant: { ability: { int: 2, wis: 1 } }, cost: { ability: { str: 2 } } };
-    case 'blackMagic': return { grant: { ability: { int: 2 }, damage: 2 }, cost: { maxHp: 8 } };
-    case 'guile': return { grant: { ability: { cha: 2, dex: 1 } }, cost: { maxHp: 4 } };
-    case 'survival': return { grant: { maxHp: 12, ability: { con: 1 } }, cost: { damage: 1 } };
-    // Fire does not know who it was aimed at: enormous reach, and you are in it.
-    case 'flame': return { grant: { damage: 3 }, cost: { maxHp: 6, ac: 1 } };
-    case 'venom': return { grant: { ability: { int: 1, dex: 1 }, damage: 1 }, cost: { attack: 1 } };
-    case 'shadow': return { grant: { damage: 3, attack: 1 }, cost: { maxHp: 8 } };
-    case 'song': return { grant: { ability: { cha: 2, wis: 1 }, maxHp: 4 }, cost: { damage: 1 } };
-  }
-}
-
 const describe = (grant: NodeGrant, cost: NodeGrant | undefined, language: Lang): string => {
   const parts: string[] = [];
   const add = (g: NodeGrant, sign: string) => {
@@ -215,58 +193,31 @@ const describe = (grant: NodeGrant, cost: NodeGrant | undefined, language: Lang)
 /* -------------------------------------------------------------------------- */
 
 /**
- * Pick the disciplines this character's tree actually contains.
+ * What a notable on this path teaches.
  *
- * Home is guaranteed. The rest are drawn with affinity weighting, so the set
- * hangs together — and because it is a SUBSET, what is missing is missing for
- * good. A soldier cannot buy their way into black magic; that tree was never
- * printed for them.
+ * Composed from the STAT'S grammar, so a notable can only ever teach something
+ * its path is genuinely capable of — a path running on STR cannot produce a
+ * skill that heals from across the room, whatever the world happens to call it.
+ * That is the coherence guarantee discipline grammar used to give, moved onto
+ * the stat where it belongs.
+ *
+ * Keyed on the NODE id rather than the world seed, so the same node always
+ * teaches the same thing: a character who took it at level four and reloads at
+ * twelve must not find it has become something else.
  */
-function disciplinesFor(rng: () => number, home: ArchetypeId, held: CharacterClass | null): Archetype[] {
-  /*
-   * The hard lock.
-   *
-   * A class does not merely favour some disciplines; it is shut out of others
-   * permanently, at any price. That is what makes an island worth finding —
-   * without it, every tree could eventually contain everything and a detached
-   * cluster would just be more nodes arriving late.
-   */
-  const barred = new Set<ArchetypeId>(held?.forbidden ?? []);
-  const allowed = (id: ArchetypeId) => !barred.has(id);
-
-  const chosen = new Set<ArchetypeId>();
-  if (held) for (const id of held.core) chosen.add(id);
-  chosen.add(home);
-
-  const want = MIN_DISCIPLINES + Math.floor(rng() * (MAX_DISCIPLINES - MIN_DISCIPLINES + 1));
-
-  // The class's own leanings first, then the general affinities of whatever is
-  // already in — so the set reads as a character rather than a handful.
-  const pool = () => {
-    const near: ArchetypeId[] = [];
-    for (const friend of held?.affinity ?? []) if (!chosen.has(friend) && allowed(friend)) near.push(friend);
-    for (const id of chosen) {
-      for (const friend of AFFINITY[id]) if (!chosen.has(friend) && allowed(friend)) near.push(friend);
-    }
-    return near;
-  };
-
-  let guard = 0;
-  while (chosen.size < want && guard++ < 64) {
-    const near = pool();
-    if (near.length > 0 && rng() < 0.7) {
-      chosen.add(near[Math.floor(rng() * near.length)]);
-      continue;
-    }
-    const any = ARCHETYPES.filter((a) => !chosen.has(a.id) && allowed(a.id));
-    if (any.length === 0) break;
-    chosen.add(any[Math.floor(rng() * any.length)].id);
-  }
-
-  // Home first, so it faces outward under the player's hand when the tree opens.
-  return [...chosen]
-    .map((id) => ARCHETYPES.find((a) => a.id === id)!)
-    .sort((a, b) => (a.id === home ? -1 : b.id === home ? 1 : 0));
+function teachFor(path: PathShape, nodeId: string, ring: number, language: Lang) {
+  const rng = mulberry32(hash(nodeId));
+  const skill = composeSkill(rng, {
+    id: `node_${nodeId}`,
+    name: '',
+    description: '',
+    kind: 'combat',
+    ability: path.primary,
+    grammar: STAT_GRAMMAR[path.primary],
+    // Deeper nodes are richer, the same way a deeper book is.
+    budget: budgetForFloor(ring * 2),
+  });
+  return { ...skill, name: nameFor(rng, skill.effect, language) };
 }
 
 type Placed = { node: SkillNode; ring: number };
@@ -281,7 +232,7 @@ type Placed = { node: SkillNode; ring: number };
  */
 function growBranch(
   rng: () => number,
-  archetype: Archetype,
+  path: PathShape,
   shape: Shape,
   angle: number,
   language: Lang,
@@ -306,11 +257,12 @@ function growBranch(
   ): SkillNode => {
     const pos = at(ring, spread);
     const node: SkillNode = {
-      id: `${archetype.id}_${suffix}`,
+      id: `${path.id}_${suffix}`,
       name: '',
       description: '',
       kind,
-      archetype: archetype.id,
+      path: path.id,
+      stat: path.primary,
       ring,
       x: pos.x,
       y: pos.y,
@@ -318,23 +270,27 @@ function growBranch(
       grant: {},
     };
 
+    const words = PATH_WORDS[path.primary];
+
     if (kind === 'keystone') {
-      const trade = keystoneTrade(archetype);
-      node.name = archetype.keystone[language];
-      node.description = archetype.keystoneNote[language];
+      const trade = keystoneTradeFor(path.primary);
+      node.name = words.keystone;
+      node.description = describe(trade.grant, trade.cost, language);
       node.grant = trade.grant;
       node.cost = trade.cost;
       node.requires = [{ kind: 'level', atLeast: 5 + Math.floor(rng() * 4) }];
     } else if (kind === 'notable') {
       const which = (taught === 0 ? 0 : 1) as 0 | 1;
-      node.name = archetype.notables[which][language];
-      node.grant = grantFor(archetype, kind, ring, rng());
-      node.teaches = skillFrom(archetype, which, language);
+      node.name = words.notables[which];
+      node.grant = grantForRing(path.primary, path.secondary, kind, ring, rng());
+      // Composed from the stat's own grammar, so a notable can only ever teach
+      // something its path is actually capable of.
+      node.teaches = teachFor(path, node.id, ring, language);
       node.description = describe(node.grant, undefined, language);
       taught += 1;
     } else {
-      node.name = archetype.minors[Math.floor(rng() * archetype.minors.length)][language];
-      node.grant = grantFor(archetype, kind, ring, rng());
+      node.name = words.minors[Math.floor(rng() * words.minors.length)];
+      node.grant = grantForRing(path.primary, path.secondary, kind, ring, rng());
       node.description = describe(node.grant, undefined, language);
     }
 
@@ -394,7 +350,7 @@ function growBranch(
  */
 function growIsland(
   rng: () => number,
-  archetype: Archetype,
+  path: PathShape,
   index: number,
   language: Lang,
   bridgeTo: string,
@@ -419,7 +375,8 @@ function growIsland(
     name: language === 'th' ? 'สะพาน' : 'The Crossing',
     description: language === 'th' ? 'ทางที่เพิ่งเปิด' : 'A way across that was not there before.',
     kind: 'minor',
-    archetype: archetype.id,
+    path: path.id,
+    stat: path.primary,
     ring: 9,
     x: cx,
     y: cy,
@@ -431,16 +388,17 @@ function growIsland(
 
   const heart: SkillNode = {
     id: `isle${index}_heart`,
-    name: archetype.notables[index % 2][language],
+    name: PATH_WORDS[path.primary].notables[index % 2],
     description: '',
     kind: 'notable',
-    archetype: archetype.id,
+    path: path.id,
+    stat: path.primary,
     ring: 10,
     x: cx + Math.cos(angle) * 5,
     y: cy + Math.sin(angle) * 5,
     connections: [gate.id],
-    grant: grantFor(archetype, 'notable', 6, rng()),
-    teaches: skillFrom(archetype, (index % 2) as 0 | 1, language),
+    grant: grantForRing(path.primary, path.secondary, 'notable', 6, rng()),
+    teaches: teachFor(path, `isle${index}_heart`, 6, language),
     requires,
   };
   heart.description = describe(heart.grant, undefined, language);
@@ -460,6 +418,14 @@ export type TreeOptions = {
   subclassId?: string;
   /** Drives which subclass stages have grown. */
   level?: number;
+  /**
+   * The character's scores, which decide which paths are open.
+   *
+   * Optional so a tree can still be drawn before a sheet exists — the creation
+   * page previews one — but without it every path is treated as open, because
+   * a preview that hid most of the tree would be worse than useless.
+   */
+  scores?: Record<Ability, number>;
   /** Traits earned, Signets claimed, books read — each may grow a branch. */
   traits?: readonly string[];
   signets?: readonly string[];
@@ -489,7 +455,16 @@ export function skillTreeFor(
    * matcher keeps every session made before classes existed working exactly as
    * it did — a stored tree must not rearrange itself under a save.
    */
-  const home = held ? held.core[0] : archetypeForBackground(backgroundId, backgroundName);
+  /*
+   * HOME IS THE PATH THIS CHARACTER OPENS BEST, not a class's first discipline.
+   * The spread decides it, so the tree centres on what the character actually
+   * is rather than on a category they picked at creation.
+   */
+  const world = pathsFor(seed);
+  const scores = options.scores ?? null;
+  const lean: Lean = { favours: held?.favours, against: held?.against };
+  const openToThem = scores ? openPaths(world, scores, lean) : world.slice(0, MIN_DISCIPLINES);
+  const home = (openToThem[0] ?? world[0]);
   const nodes: SkillNode[] = [];
 
   const start: SkillNode = {
@@ -497,7 +472,8 @@ export function skillTreeFor(
     name: language === 'th' ? 'จุดเริ่ม' : 'Origin',
     description: language === 'th' ? 'จุดที่ทุกอย่างเริ่มต้น' : 'Where everything starts.',
     kind: 'minor',
-    archetype: home,
+    path: home.id,
+    stat: home.primary,
     ring: 0,
     x: 50,
     y: 50,
@@ -506,18 +482,33 @@ export function skillTreeFor(
   };
   nodes.push(start);
 
-  const chosen = disciplinesFor(rng, home, held);
-  const shapes = new Map<ArchetypeId, Shape>();
+  /*
+   * Every path the world has, not only the ones open now. A sealed one is on
+   * the tree with its stat gate on it, so raising a score unseals a branch
+   * that was visibly waiting rather than conjuring one from nowhere.
+   */
+  const chosen = world;
+  const shapes = new Map<string, Shape>();
 
-  chosen.forEach((archetype, index) => {
+  chosen.forEach((path, index) => {
     // Angles are spread but not even — a perfectly regular fan reads as a wheel.
     const base = (index / chosen.length) * Math.PI * 2 - Math.PI / 2;
     const angle = base + (rng() - 0.5) * 0.5;
     const shape = SHAPES[Math.floor(rng() * SHAPES.length)];
-    shapes.set(archetype.id, shape);
+    shapes.set(path.id, shape);
 
-    for (const { node } of growBranch(rng, archetype, shape, angle, language, start.id)) {
-      nodes.push(node);
+    /*
+     * A path the spread does not open is SEALED rather than absent: its nodes
+     * carry the stat gate, and `requires` already hides anything unmet. Being
+     * able to see what you have not earned is the point — a threshold is a
+     * goal, and goals may be shown.
+     */
+    const gate = scores && !isOpen(path, scores, lean)
+      ? [{ kind: 'ability' as const, ability: path.primary, atLeast: gateFor(path, lean) }]
+      : undefined;
+
+    for (const { node } of growBranch(rng, path, shape, angle, language, start.id)) {
+      nodes.push(gate ? { ...node, requires: [...(node.requires ?? []), ...gate] } : node);
     }
   });
 
@@ -533,8 +524,8 @@ export function skillTreeFor(
       const there = chosen[(i + hop) % chosen.length];
       if (here.id === there.id) continue;
 
-      const from = nodes.filter((n) => n.archetype === here.id && n.ring >= 2 && n.ring <= 5);
-      const to = nodes.filter((n) => n.archetype === there.id && n.ring >= 2 && n.ring <= 5);
+      const from = nodes.filter((n) => n.path === here.id && n.ring >= 2 && n.ring <= 5);
+      const to = nodes.filter((n) => n.path === there.id && n.ring >= 2 && n.ring <= 5);
       if (from.length === 0 || to.length === 0) continue;
 
       const a = from[Math.floor(rng() * from.length)];
@@ -547,14 +538,17 @@ export function skillTreeFor(
   const islands = 1 + Math.floor(rng() * 2);
   for (let i = 0; i < islands; i++) {
     const host = chosen[Math.floor(rng() * chosen.length)];
-    const tips = nodes.filter((n) => n.archetype === host.id && n.ring >= 3);
+    const tips = nodes.filter((n) => n.path === host.id && n.ring >= 3);
     if (tips.length === 0) continue;
     const anchor = tips[Math.floor(rng() * tips.length)];
 
-    // Islands can belong to a discipline the tree does NOT otherwise hold —
-    // the reward for playing a certain way is a door into something else, and
-    // for a class that is shut out of somewhere, it is the ONLY door.
-    const foreign = ARCHETYPES[Math.floor(rng() * ARCHETYPES.length)];
+    /*
+     * An island belongs to a path the spread has NOT opened — the reward for
+     * playing a certain way is a door into something your scores do not yet
+     * justify, which is the only way to reach one without raising the stat.
+     */
+    const sealed = scores ? world.filter((p) => !isOpen(p, scores, lean)) : world;
+    const foreign = (sealed.length ? sealed : world)[Math.floor(rng() * (sealed.length || world.length))];
     for (const node of growIsland(rng, foreign, i, language, anchor.id)) {
       nodes.push(node);
       byId.set(node.id, node);
@@ -658,7 +652,7 @@ export function skillTreeFor(
       const shape = SUBCLASS_STAGES[stage];
       attach(
         `sub_${chosenSub.id}_${stage}`,
-        { archetype: chosenSub.opens, entry: shape.entry, size: shape.size, needs: shape.needs },
+        { stat: chosenSub.opens, entry: shape.entry, size: shape.size, needs: shape.needs },
         { kind: 'subclass', id: chosenSub.id, name: chosenSub.name[language] },
       );
     }
@@ -677,8 +671,8 @@ export function skillTreeFor(
   return {
     id: `tree_${backgroundId}`,
     start: start.id,
-    home,
-    disciplines: chosen.map((a) => a.id),
+    home: home.id,
+    paths: chosen.map((p) => p.id),
     nodes: linkBothWays([...byId.values()]),
   };
 }
@@ -695,5 +689,3 @@ function linkBothWays(nodes: SkillNode[]): SkillNode[] {
   return [...byId.values()];
 }
 
-export { ARCHETYPES } from './archetypes.ts';
-export type { ArchetypeId } from './archetypes.ts';

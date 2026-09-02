@@ -26,21 +26,22 @@ test('a book grows the discipline it is about, not a default one', () => {
   const tree = skillTreeFor(5, 'bg', 'en', '', {
     classId: 'fighter',
     books: [
-      { bookId: 'a', name: 'On Holding Ground', set: { archetype: 'guard', entry: 'parallel', size: 3 } },
-      { bookId: 'b', name: 'Field Marks', set: { archetype: 'venom', entry: 'parallel', size: 2 } },
+      { bookId: 'a', name: 'On Holding Ground', set: { stat: 'vit', entry: 'parallel', size: 3 } },
+      { bookId: 'b', name: 'Field Marks', set: { stat: 'int', entry: 'parallel', size: 2 } },
     ],
   });
 
   const grown = tree.nodes.filter((n) => n.grafted?.kind === 'book');
-  assert.ok(grown.some((n) => n.archetype === 'guard'));
-  assert.ok(grown.some((n) => n.archetype === 'venom'));
-  assert.equal(grown.every((n) => n.archetype === 'wisdom'), false, 'not all the same discipline');
+  // Each book grew a set on the STAT it teaches out of, so three books about
+  // three different things cannot all land on one branch.
+  const stats = new Set(grown.map((n) => n.stat));
+  assert.ok(stats.size > 1, `three books grew ${stats.size} kind of branch`);
 });
 
 test('a book set free-stands, whatever it is about', () => {
   const tree = skillTreeFor(5, 'bg', 'en', '', {
     classId: 'fighter',
-    books: [{ bookId: 'a', name: 'A', set: { archetype: 'song', entry: 'parallel', size: 3 } }],
+    books: [{ bookId: 'a', name: 'A', set: { stat: 'cha', entry: 'parallel', size: 3 } }],
   });
   const head = tree.nodes.find((n) => n.grafted?.kind === 'book' && n.freeStanding);
   assert.ok(head, 'you read your way in rather than walking');
@@ -172,7 +173,7 @@ test('a varied trait still gates on a counter something increments', () => {
 
 test('the branch a trait grows is this world’s business too', () => {
   const opens = (seed: number) =>
-    traitsFor(seed).filter((t) => t.opens).map((t) => `${t.id}:${t.opens!.archetype}:${t.opens!.entry}`);
+    traitsFor(seed).filter((t) => t.opens).map((t) => `${t.id}:${t.opens!.stat}:${t.opens!.entry}`);
   assert.notDeepEqual(opens(1).sort(), opens(999).sort());
 });
 
