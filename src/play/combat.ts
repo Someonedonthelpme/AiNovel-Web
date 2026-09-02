@@ -13,7 +13,8 @@ import { COUNTERS } from './traits.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import { activeSkills, toCombatant } from '../session/sheet.ts';
-import { isCombatUsable, needsTarget, radiusOf, resolveSkill, spendUse, usesLeft } from '../skills/active.ts';
+import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
+import { canAfford, priceOfUse, spend } from '../skills/pools.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 
@@ -138,15 +139,24 @@ export function combatOptions(state: PlayState): CombatOption[] {
     }
   }
 
-  // Actives, and what they still have left. A skill with no uses is not offered
-  // rather than offered and refused — the option lists in this game have always
-  // been legal moves only.
+  /*
+   * Actives, and what they cost. A skill you cannot pay for is not offered
+   * rather than offered and refused — the option lists in this game have
+   * always been legal moves only.
+   *
+   * The label carries the price, not a remaining count. With a shared pool the
+   * interesting number is what this will take out of you, because that is what
+   * you are weighing it against the other skills for.
+   */
+  const me = state.combat?.combatants['pc'];
   for (const skill of activeSkills(state.sheet)) {
-    if (!isCombatUsable(skill) || usesLeft(skill, state.pc.skillUses) <= 0) continue;
-    const left = usesLeft(skill, state.pc.skillUses);
+    if (!isCombatUsable(skill)) continue;
+    if (me && !canAfford(me, skill)) continue;
+    const { pool, cost } = priceOfUse(skill);
+    const left = `${cost} ${pool}`;
 
     if (!needsTarget(skill)) {
-      options.push({ action: { kind: 'skill', skill: skill.id }, label: `${skill.name} (${left} left)` });
+      options.push({ action: { kind: 'skill', skill: skill.id }, label: `${skill.name} (${left})` });
       continue;
     }
     // A skill reaches as far as the SKILL says, not as far as whatever happens
@@ -228,7 +238,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
     const skill = activeSkills(state.sheet).find((s) => s.id === action.skill);
     if (!skill) error = 'you do not know that';
     else if (!isCombatUsable(skill)) error = `${skill.name} is not something you use in a fight`;
-    else if (usesLeft(skill, state.pc.skillUses) <= 0) error = `${skill.name} is spent until you rest`;
+    else if (!canAfford(next.combatants['pc'], skill)) error = `you do not have the ${priceOfUse(skill).pool} for ${skill.name}`;
     else {
       const self = next.combatants['pc'];
       const aim = action.target ? next.combatants[action.target] : null;
@@ -247,12 +257,14 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
           : [];
 
         const outcome = resolveSkill(skill, self, targets);
-        const combatants: typeof next.combatants = { ...next.combatants, pc: outcome.actor };
+        // Paid for out of the pool the skill's STAT names, on the actor the
+        // skill just resolved through — so a drain heals and is paid for in
+        // the same step and neither can be lost.
+        const combatants: typeof next.combatants = { ...next.combatants, pc: spend(outcome.actor, skill) };
         for (const hit of outcome.affected) combatants[hit.id] = hit;
 
         // Using a skill is your action for the turn, like swinging is.
         next = endTurn(rng, { ...next, combatants }).state;
-        spent = spendUse(spent, skill.id);
       }
     }
   } else {

@@ -96,6 +96,16 @@ export type Combatant = {
   abilities: Abilities;
   hp: number;
   maxHp: number;
+  /**
+   * The two pools every skill is paid for out of, which replaced per-skill
+   * uses. Stamina is the body exerting itself and comes from VIT; mana is the
+   * mind concentrating and comes from CON. Which one a skill draws on follows
+   * its STAT — see `poolFor`.
+   */
+  stamina: number;
+  maxStamina: number;
+  mana: number;
+  maxMana: number;
   ac: number;
   /** Movement in squares per turn. */
   speed: number;

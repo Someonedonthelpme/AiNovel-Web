@@ -29,6 +29,17 @@ export type PlayState = {
     coin: number;
     inventory: Inventory;
     /** Uses spent since the last rest. Refreshed by resting, not by time. */
+    /**
+     * The two pools every skill is paid for out of. Stamina is the body
+     * exerting itself and comes from VIT; mana is the mind concentrating and
+     * comes from CON. Which one a skill draws on follows its stat.
+     *
+     * Carried on the run rather than derived, because what you have SPENT is a
+     * thing that happened — the ceilings are derived, the current levels are
+     * not.
+     */
+    stamina: number;
+    mana: number;
     skillUses: SkillUses;
   };
   /** The fight in progress, if any. A finished fight is discarded, not kept. */
@@ -111,7 +122,7 @@ export function initialPlayState(world: World, sheet: CharacterSheet): PlayState
   return {
     world,
     sheet,
-    pc: { hp: d.maxHp, maxHp: d.maxHp, conditions: [], coin: 0, inventory, skillUses: {} },
+    pc: { hp: d.maxHp, maxHp: d.maxHp, stamina: d.maxStamina, mana: d.maxMana, conditions: [], coin: 0, inventory, skillUses: {} },
     combat: null,
     ended: null,
   };

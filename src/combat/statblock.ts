@@ -1,4 +1,5 @@
 import type { Abilities, Attack, Combatant, Size, Vec } from './types.ts';
+import { abilityMod } from './types.ts';
 
 /**
  * Foe statistics, derived from floor depth in code.
@@ -120,6 +121,13 @@ export function makeFoe(spec: FoeSpec, danger: number): Combatant {
     abilities: stats.abilities,
     hp: stats.hp,
     maxHp: stats.hp,
+    // A foe's pools scale with its body and its focus, the same way a
+    // character's do, so a long fight wears one down rather than letting it
+    // spend freely for ever.
+    stamina: 10 + abilityMod(stats.abilities.vit) * 2,
+    maxStamina: 10 + abilityMod(stats.abilities.vit) * 2,
+    mana: 10 + abilityMod(stats.abilities.con) * 2,
+    maxMana: 10 + abilityMod(stats.abilities.con) * 2,
     ac: stats.ac,
     speed: stats.speed,
     proficiency: stats.proficiency,
@@ -154,6 +162,10 @@ export function referencePc(level: number, id = 'pc'): Combatant {
     abilities,
     hp,
     maxHp: hp,
+    stamina: 10 + abilityMod(abilities.vit) * 2 + (lvl - 1) * 2,
+    maxStamina: 10 + abilityMod(abilities.vit) * 2 + (lvl - 1) * 2,
+    mana: 10 + abilityMod(abilities.con) * 2 + (lvl - 1) * 2,
+    maxMana: 10 + abilityMod(abilities.con) * 2 + (lvl - 1) * 2,
     ac: clamp(14 + Math.floor(lvl / 6), 14, 18),
     speed: 6,
     proficiency: clamp(2 + Math.floor((lvl - 1) / 4), 2, 6),

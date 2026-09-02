@@ -266,6 +266,56 @@ export function maxHpFor(sheet: CharacterSheet, inventory?: Inventory): number {
 export const HP_AT_FIRST = 10;
 export const HP_PER_LEVEL = 6;
 
+/* -------------------------------------------------------------------------- */
+/* The two pools                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Stamina and mana, which replaced per-skill uses.
+ *
+ * Uses were a weak lever. Every skill carried its own four, independent of
+ * every other, so a character with ten skills had forty of them and no
+ * scarcity at all — and the count came from the SOURCE's budget, meaning a
+ * deep book handed the same four to an INT-8 reader as to an INT-18 one. The
+ * stat gated what you could do and said nothing about how long you could keep
+ * doing it.
+ *
+ * Two shared pools fix both. The spread decides the ceiling, and spending is a
+ * decision between skills rather than a per-skill allowance.
+ *
+ *   STAMINA  the body exerting itself   from VIT
+ *   MANA     the mind concentrating     from CON
+ *
+ * Which pool a skill draws on follows its STAT, not its payload — see
+ * `poolFor` in skills/pools.ts. One rule, and it makes the physical and mental
+ * halves of the stat sheet structural rather than thematic.
+ */
+export const POOL_BASE = 8;
+export const POOL_PER_LEVEL = 2;
+
+/**
+ * FATIGUE AND STRESS DOCK THE CEILING, which is what finally gives the mental
+ * track mechanical teeth.
+ *
+ * `sheet.mental` has existed all along and gated nothing: drift wrote it, rest
+ * eased it, the model read it aloud, and no rule anywhere consulted it. Now
+ * climbing hard without resting lowers what you can hold before it lowers
+ * anything else, and a rest is a decision rather than a formality.
+ */
+export function maxStaminaFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  const vit = abilityMod(finalAbilities(sheet, inventory).vit);
+  const level = Math.max(1, sheet.level);
+  const worn = Math.floor((sheet.mental?.stress ?? 0) / 2);
+  return Math.max(1, POOL_BASE + vit * 2 + (level - 1) * POOL_PER_LEVEL - worn);
+}
+
+export function maxManaFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  const con = abilityMod(finalAbilities(sheet, inventory).con);
+  const level = Math.max(1, sheet.level);
+  const worn = Math.floor((sheet.mental?.fatigue ?? 0) / 2);
+  return Math.max(1, POOL_BASE + con * 2 + (level - 1) * POOL_PER_LEVEL - worn);
+}
+
 /** Worn armour sets the base; without it you are as hard to hit as you are quick. */
 export function armourClassFor(sheet: CharacterSheet, inventory?: Inventory): number {
   const base = inventory ? equippedArmour(inventory) : null;
@@ -275,6 +325,8 @@ export function armourClassFor(sheet: CharacterSheet, inventory?: Inventory): nu
 export type DerivedSheet = {
   abilities: Abilities;
   maxHp: number;
+  maxStamina: number;
+  maxMana: number;
   ac: number;
   proficiency: number;
   speed: number;
@@ -296,6 +348,8 @@ export function derive(sheet: CharacterSheet, inventory: Inventory = emptyInvent
   return {
     abilities: finalAbilities(sheet, inventory),
     maxHp: maxHpFor(sheet, inventory),
+    maxStamina: maxStaminaFor(sheet, inventory),
+    maxMana: maxManaFor(sheet, inventory),
     ac: armourClassFor(sheet, inventory),
     proficiency: proficiencyFor(sheet.level),
     speed: 6,
@@ -324,6 +378,10 @@ export function toCombatant(sheet: CharacterSheet, id = 'pc', inventory: Invento
     abilities: d.abilities,
     hp: d.maxHp,
     maxHp: d.maxHp,
+    stamina: d.maxStamina,
+    maxStamina: d.maxStamina,
+    mana: d.maxMana,
+    maxMana: d.maxMana,
     ac: d.ac,
     speed: d.speed,
     proficiency: d.proficiency,

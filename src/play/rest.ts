@@ -71,7 +71,8 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
   const check = canRest(state, kind);
   if (!check.ok) return { state, healed: 0, error: check.reason, turnsSpent: 0 };
 
-  const maxHp = derive(state.sheet, state.pc.inventory).maxHp;
+  const derived = derive(state.sheet, state.pc.inventory);
+  const { maxHp, maxStamina, maxMana } = derived;
   const before = state.pc.hp;
 
   if (kind === 'short') {
@@ -82,7 +83,22 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
         ...state,
         // Actives come back on any rest: that is what puts them on the same
         // supply economy as healing, rather than on a timer.
-        pc: { ...state.pc, hp: Math.min(maxHp, before + healed), maxHp, inventory, skillUses: refreshUses() },
+        /*
+         * A short rest gives back a quarter of each pool, the same fraction it
+         * gives back of hit points. Pools are on the supply economy rather
+         * than a timer — the same argument that used to put skill uses here,
+         * except a shared pool means the choice of what to spend it on
+         * survives the rest instead of being reset per skill.
+         */
+        pc: {
+          ...state.pc,
+          hp: Math.min(maxHp, before + healed),
+          maxHp,
+          inventory,
+          stamina: Math.min(maxStamina, state.pc.stamina + Math.max(1, Math.floor(maxStamina / 4))),
+          mana: Math.min(maxMana, state.pc.mana + Math.max(1, Math.floor(maxMana / 4))),
+          skillUses: refreshUses(),
+        },
         sheet: { ...state.sheet, mental: easedShort(state.sheet.mental) },
         world: { ...state.world, turn: state.world.turn + SHORT_REST_TURNS },
       },
@@ -95,7 +111,10 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
   return {
     state: {
       ...state,
-      pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], skillUses: refreshUses() },
+      // A long rest fills everything. It also clears stress and fatigue, which
+      // is what lifts the pool CEILINGS back up — resting is now the only way
+      // to undo what a hard climb took off the top.
+      pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], stamina: maxStamina, mana: maxMana, skillUses: refreshUses() },
       sheet: { ...state.sheet, mental: { stress: 0, morale: state.sheet.mental.morale, fatigue: 0 } },
       world: { ...state.world, turn: state.world.turn + LONG_REST_TURNS },
     },

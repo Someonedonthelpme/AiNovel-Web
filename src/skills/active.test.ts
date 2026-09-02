@@ -5,6 +5,7 @@ import { hasCondition } from '../combat/conditions.ts';
 import { referencePc } from '../combat/statblock.ts';
 import { edgeFor, isCombatUsable, needsTarget, radiusOf, refreshUses, resolveSkill, spendUse, usesLeft } from './active.ts';
 import type { ActiveSkill } from './active.ts';
+import { priceOfUse } from './pools.ts';
 import { activate, isSkillBook, skillBook } from './book.ts';
 import { addItem } from '../items/types.ts';
 import { awaitingPlayer, beginEncounter, combatOptions, takeCombatAction } from '../play/combat.ts';
@@ -124,28 +125,45 @@ test('a usable skill is offered once something is in reach', () => {
   const offered = optionsFor(state, hinder.id);
   assert.ok(offered.length > 0, 'the skill should be on the list');
   assert.match(offered[0].label, /Trip/);
-  assert.match(offered[0].label, /left/, 'and it says how many uses remain');
+  // The label carries the PRICE, not a remaining count. With a shared pool the
+  // interesting number is what this takes out of you, because that is what you
+  // weigh it against every other skill for.
+  assert.match(offered[0].label, /stamina|mana/, 'and it says what it will cost');
 });
 
-test('a spent skill is not offered at all', () => {
+test('a skill you cannot pay for is not offered at all', () => {
   // Option lists in this game have always been legal moves only — offering
   // something and then refusing it would break that.
-  const base = withSkill(dangerous(), hinder);
-  const state = beginEncounter({ ...base, pc: { ...base.pc, skillUses: { [hinder.id]: 2 } } });
-  if (!awaitingPlayer(state)) return;
-  assert.deepEqual(optionsFor(state, hinder.id), [], 'spent, so not on the list at all');
+  const state = closeIn(beginEncounter(withSkill(dangerous(), hinder)), hinder.id);
+  assert.ok(awaitingPlayer(state), 'the fixture should have reached the player');
+
+  const broke = {
+    ...state,
+    combat: {
+      ...state.combat!,
+      combatants: {
+        ...state.combat!.combatants,
+        pc: { ...state.combat!.combatants['pc'], stamina: 0, mana: 0 },
+      },
+    },
+  };
+  assert.deepEqual(optionsFor(broke, hinder.id), [], 'nothing left to pay with, so not on the list');
 });
 
-test('using a skill spends a use and lands the effect', () => {
+test('using a skill spends from its pool and lands the effect', () => {
   const state = closeIn(beginEncounter(withSkill(dangerous(), hinder)), hinder.id);
-  if (!awaitingPlayer(state)) return;
+  assert.ok(awaitingPlayer(state), 'the fixture should have reached the player');
 
+  const before = state.combat!.combatants['pc'];
   const [option] = optionsFor(state, hinder.id);
-  if (!option) return;
+  assert.ok(option, 'the skill should be affordable and on the list');
 
+  const { pool, cost } = priceOfUse(hinder);
   const step = takeCombatAction(state, option.action);
   assert.equal(step.error, null);
-  assert.equal(step.state.pc.skillUses[hinder.id], 1, 'a use is spent');
+
+  const after = step.state.combat!.combatants['pc'];
+  assert.equal(after[pool], before[pool] - cost, `${cost} ${pool} should have been spent`);
 
   // And the effect landed on somebody who is not you.
   const foes = Object.values(step.state.combat!.combatants).filter((c) => c.side === 'foe');
