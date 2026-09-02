@@ -57,6 +57,10 @@ export function attackModifiers(attacker: Combatant, target: Combatant, distance
     hasCondition(attacker, 'blinded') ||
     hasCondition(attacker, 'poisoned') ||
     hasCondition(attacker, 'restrained') ||
+    // Deliberately impairs and does NOT expose: being frightened makes you
+    // worse at fighting, it does not make you easier to hit. That is what
+    // separates a CHA hinder from a DEX one.
+    hasCondition(attacker, 'frightened') ||
     hasCondition(attacker, 'prone');
 
   const targetExposed =

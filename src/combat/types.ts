@@ -51,6 +51,16 @@ export const CONDITIONS = [
   'poisoned',
   'stunned',
   'unconscious',
+  /**
+   * Rattled, taunted, talked out of it.
+   *
+   * Added for CHARISMA, which otherwise had no way to hinder anybody — its
+   * whole idea is getting under someone's skin, and there was no condition in
+   * the engine that meant that. It impairs the frightened creature's own
+   * attacks without exposing it, so it is a way to take somebody OUT of a
+   * fight rather than a way to help everyone kill them faster.
+   */
+  'frightened',
 ] as const;
 export type Condition = (typeof CONDITIONS)[number];
 
