@@ -1,5 +1,6 @@
 import type { Rng } from '../engine/roll.ts';
 import { d20, rollDamage } from './dice.ts';
+import { breakCast } from './cast.ts';
 import { attackModifiers, addCondition, hasCondition, removeCondition } from './conditions.ts';
 import { distance } from './grid.ts';
 import type { Ability, AttackResult, Combatant, DeathSaveResult, SaveResult } from './types.ts';
@@ -86,8 +87,17 @@ export function resolveAttack(
   }
 
   const dmg = rollDamage(rng, attack.damage, attacker.abilities, critical);
+
+  /*
+   * A blow that lands on somebody mid-cast makes them hold it or lose it.
+   * Resolved HERE rather than in `applyDamage`, which is pure and has no dice —
+   * and the check needs one.
+   */
+  const jolted = breakCast(rng, target, dmg.total);
   const hpBefore = target.hp;
-  const hurt = applyDamage(target, dmg.total);
+  // Damage lands on whatever the jolt left behind, so a broken cast's refund
+  // is not thrown away by the hit that caused it.
+  const hurt = applyDamage(jolted.who, dmg.total);
 
   return {
     attacker,
@@ -98,6 +108,7 @@ export function resolveAttack(
       targetHpBefore: hpBefore, targetHpAfter: hurt.hp,
       droppedTarget: hpBefore > 0 && hurt.hp === 0,
       killedTarget: hurt.dead && !target.dead,
+      brokeCast: jolted.broken || undefined,
     },
   };
 }

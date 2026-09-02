@@ -16,6 +16,7 @@ import { activeSkills, toCombatant } from '../session/sheet.ts';
 import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
 import { canAfford, costOf, priceOfUse, spend } from '../skills/pools.ts';
 import { canAct, castTicks, spendTicks } from '../combat/tempo.ts';
+import { advanceCast, beginCast, finishCast } from '../combat/cast.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 
@@ -215,13 +216,53 @@ export type CombatStep = {
  * again (or the fight ends). One call per player decision, however many foes
  * are on the board.
  */
+
+/**
+ * Bring off a wind-up that has finished waiting.
+ *
+ * Called at the top of the player's move rather than inside `combat.ts`,
+ * because resolving one needs the SHEET — the skill lives on the character,
+ * and the combat engine has no idea what a character knows. The alternative
+ * was pushing skills down into the engine, which would put the whole
+ * progression system inside the tactical layer.
+ *
+ * A cast whose target has died or vanished simply resolves on nothing: it was
+ * paid for and it was held, and the tower does not owe you a second chance at
+ * aiming it.
+ */
+function settleCast(state: PlayState, combat: CombatState): CombatState {
+  const me = combat.combatants['pc'];
+  const cast = me?.pendingCast;
+  if (!cast || cast.done < cast.total) return combat;
+
+  const skill = activeSkills(state.sheet).find((s) => s.id === cast.skillId);
+  const cleared = finishCast(me);
+  if (!skill) return { ...combat, combatants: { ...combat.combatants, pc: cleared } };
+
+  const aim = cast.targetId ? (combat.combatants as Record<string, Combatant>)[cast.targetId] : null;
+  const spread = radiusOf(skill);
+  const targets = aim && !aim.dead
+    ? spread > 0
+      ? Object.values(combat.combatants).filter(
+          (c) => !c.dead && c.side !== cleared.side && distance(aim.pos, c.pos) <= spread,
+        )
+      : [aim]
+    : [];
+
+  // The pool was charged when it was declared, so nothing is spent here.
+  const outcome = resolveSkill(skill, cleared, targets);
+  const combatants: Record<string, Combatant> = { ...combat.combatants, pc: outcome.actor };
+  for (const hit of outcome.affected) combatants[hit.id] = hit;
+  return { ...combat, combatants };
+}
+
 export function takeCombatAction(state: PlayState, action: CombatAction): CombatStep {
   const combat = state.combat;
   if (!combat || combat.over) return { state, events: [], error: 'no fight is happening' };
   if (!awaitingPlayer(state)) return { state, events: [], error: 'it is not your move' };
 
   const before = combat.log.length;
-  let next: CombatState = combat;
+  let next: CombatState = settleCast(state, combat);
   let error: string | null = null;
   let spent = state.pc.skillUses;
 
@@ -258,18 +299,36 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
             : [aim]
           : [];
 
-        const outcome = resolveSkill(skill, self, targets);
         /*
          * Paid for twice over, out of two different budgets: the POOL the
-         * skill's stat names, and the TICKS bringing it off takes. Both land
-         * on the actor the skill just resolved through, so a drain heals and
-         * is paid for in the same step and neither can be lost.
+         * skill's stat names, and the TICKS bringing it off takes.
          *
-         * DEX shortens the tick cost, which is that stat's third distinct job
-         * and the only reading of "reduces casting time" that means anything
-         * in an engine where a turn is a turn.
+         * DEX shortens the ticks, which is that stat's third distinct job and
+         * the only reading of "reduces casting time" that means anything in an
+         * engine where a turn is a turn.
          */
-        const paid = spendTicks(spend(outcome.actor, skill), castTicks(self, costOf(skill.effect)));
+        const { pool, cost } = priceOfUse(skill);
+        const needs = castTicks(self, costOf(skill.effect));
+
+        if (needs > self.ticks) {
+          /*
+           * TOO BIG TO BRING OFF THIS ROUND, so it becomes a wind-up: declared
+           * now, paid for now, fed by the rounds that follow, and breakable
+           * the whole time.
+           *
+           * Whether something telegraphs is therefore a BUILD decision and not
+           * a property of the skill — the same effect is instant for a deft
+           * caster and a two-round commitment for a slow one.
+           */
+          const charged = spend(self, skill);
+          const started = advanceCast(beginCast(charged, skill.id, aim?.id ?? null, needs, cost, pool), charged.ticks);
+          next = endTurn(rng, {
+            ...next,
+            combatants: { ...next.combatants, pc: spendTicks(started.who, charged.ticks) },
+          }).state;
+        } else {
+        const outcome = resolveSkill(skill, self, targets);
+        const paid = spendTicks(spend(outcome.actor, skill), needs);
         const combatants: typeof next.combatants = { ...next.combatants, pc: paid };
         for (const hit of outcome.affected) combatants[hit.id] = hit;
 
@@ -282,6 +341,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
          */
         next = { ...next, combatants };
         if (!canAct(paid)) next = endTurn(rng, next).state;
+        }
       }
     }
   } else {

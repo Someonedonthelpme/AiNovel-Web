@@ -25,6 +25,8 @@
  *        you there is.
  *   VIT  the body — hit points, recovery, physical defence, resisting a stun.
  */
+import type { PendingCast } from './cast.ts';
+
 export const ABILITIES = ['str', 'dex', 'con', 'agi', 'vit', 'int', 'wis', 'cha', 'luk'] as const;
 export type Ability = (typeof ABILITIES)[number];
 export type Abilities = Record<Ability, number>;
@@ -115,6 +117,14 @@ export type Combatant = {
    * penalty. See tempo.ts.
    */
   ticks: number;
+  /**
+   * A skill too big to bring off in one round, part-way through.
+   *
+   * Whether something telegraphs is a BUILD decision rather than a property of
+   * the skill: the same effect is instant for a deft caster and a two-round
+   * commitment for a slow one, because DEX shortens the tick cost. See cast.ts.
+   */
+  pendingCast?: PendingCast;
   /** Movement in squares per turn. */
   speed: number;
   proficiency: number;
@@ -167,6 +177,8 @@ export type AttackResult = {
   targetHpAfter: number;
   droppedTarget: boolean;
   killedTarget: boolean;
+  /** The blow broke a wind-up cast the target was holding. */
+  brokeCast?: boolean;
 };
 
 export type MoveResult = {
