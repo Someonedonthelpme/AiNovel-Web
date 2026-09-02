@@ -78,6 +78,8 @@ export const THEMES: readonly TraitTheme[] = [
     notes: [
       { en: 'You have stopped flinching first.', th: 'คุณเลิกสะดุ้งก่อนใครแล้ว' },
       { en: 'Frightened people tell you things.', th: 'คนที่กลัวมักบอกอะไรกับคุณ' },
+      { en: 'You no longer rehearse it beforehand.', th: 'คุณไม่ต้องซ้อมในหัวก่อนอีกแล้ว' },
+      { en: 'Rooms go quiet a little before you speak.', th: 'ห้องจะเงียบลงเล็กน้อยก่อนที่คุณจะพูด' },
     ],
     ability: 'str',
     disciplines: ['sword', 'shadow', 'blackMagic'],
@@ -101,6 +103,8 @@ export const THEMES: readonly TraitTheme[] = [
     notes: [
       { en: 'You have gone down and got back up.', th: 'คุณเคยล้ม และลุกขึ้นมาแล้ว' },
       { en: 'The second day hurts less than it should.', th: 'วันที่สองเจ็บน้อยกว่าที่ควรจะเป็น' },
+      { en: 'You have learned which pain is worth stopping for.', th: 'คุณเรียนรู้แล้วว่าความเจ็บแบบไหนควรค่าแก่การหยุด' },
+      { en: 'Nobody expects you to still be here, and here you are.', th: 'ไม่มีใครคิดว่าคุณจะยังอยู่ และคุณก็ยังอยู่' },
     ],
     ability: 'con',
     disciplines: ['guard', 'survival', 'sword'],
@@ -124,6 +128,8 @@ export const THEMES: readonly TraitTheme[] = [
     notes: [
       { en: 'The tower has stopped being strange.', th: 'หอคอยไม่แปลกสำหรับคุณอีกแล้ว' },
       { en: 'You read a new floor faster than you used to.', th: 'คุณอ่านชั้นใหม่ได้เร็วกว่าเดิม' },
+      { en: 'You can tell how high you are with your eyes shut.', th: 'คุณบอกได้ว่าอยู่สูงแค่ไหนโดยไม่ต้องลืมตา' },
+      { en: 'The air up here does not bother you any more.', th: 'อากาศข้างบนนี้ไม่รบกวนคุณอีกต่อไป' },
     ],
     ability: 'wis',
     disciplines: ['wisdom', 'survival', 'magic'],
@@ -147,6 +153,8 @@ export const THEMES: readonly TraitTheme[] = [
     notes: [
       { en: 'You notice the way out before you need it.', th: 'คุณเห็นทางออกก่อนที่จะต้องใช้มัน' },
       { en: 'You have walked into more rooms than you can name.', th: 'คุณเดินเข้าห้องมามากกว่าที่จะเรียกชื่อได้หมด' },
+      { en: 'You open things other people walk past.', th: 'คุณเปิดสิ่งที่คนอื่นเดินผ่านไป' },
+      { en: 'Nothing here is quite as unfamiliar as it was.', th: 'ไม่มีอะไรที่นี่แปลกหน้าเท่าเมื่อก่อนอีกแล้ว' },
     ],
     ability: 'int',
     disciplines: ['guile', 'wisdom', 'shadow'],
@@ -170,6 +178,8 @@ export const THEMES: readonly TraitTheme[] = [
     notes: [
       { en: 'People have started recognising you.', th: 'ผู้คนเริ่มจำคุณได้' },
       { en: 'Your name arrives in a room before you do.', th: 'ชื่อของคุณไปถึงห้องก่อนตัวคุณ' },
+      { en: 'Somebody would put you up, if you asked.', th: 'มีคนยอมให้คุณพักด้วย ถ้าคุณเอ่ยปาก' },
+      { en: 'You are owed favours you have not called in.', th: 'คุณมีบุญคุณค้างที่ยังไม่ได้ทวง' },
     ],
     ability: 'cha',
     disciplines: ['song', 'guile', 'wisdom'],
@@ -188,11 +198,13 @@ export const THEMES: readonly TraitTheme[] = [
     ],
     nouns: [
       { en: 'Dose', th: 'ปริมาณยา' }, { en: 'Hand', th: 'มือ' },
-      { en: 'Page', th: 'หน้ากระดาษ' }, { en: 'Measure', th: 'มาตรา' },
+      { en: 'Page', th: 'หน้ากระดาษ' }, { en: 'Scale', th: 'ตราชั่ง' },
     ],
     notes: [
       { en: 'You know what is in the phial before you drink it.', th: 'คุณรู้ว่าในขวดมีอะไรก่อนจะดื่ม' },
       { en: 'Nothing in your pack is there by accident.', th: 'ไม่มีอะไรในเป้ของคุณที่อยู่ตรงนั้นโดยบังเอิญ' },
+      { en: 'You measure twice, and it has saved you twice.', th: 'คุณวัดสองครั้ง และมันช่วยคุณไว้สองครั้ง' },
+      { en: 'You have started reading labels other people invent.', th: 'คุณเริ่มอ่านฉลากที่คนอื่นแต่งขึ้นเอง' },
     ],
     ability: 'int',
     disciplines: ['venom', 'magic', 'flame'],
@@ -216,6 +228,8 @@ export const THEMES: readonly TraitTheme[] = [
     notes: [
       { en: 'You can sleep on stone and wake up useful.', th: 'คุณนอนบนหินแล้วตื่นมาทำงานได้' },
       { en: 'A short rest costs you less than it costs other people.', th: 'การพักสั้นราคาถูกกว่าสำหรับคุณ' },
+      { en: 'You keep the last watch, because you always do.', th: 'คุณเฝ้ายามกะสุดท้าย เพราะคุณทำแบบนั้นเสมอ' },
+      { en: 'Company has become a thing you visit, not a thing you need.', th: 'การมีเพื่อนกลายเป็นสิ่งที่คุณแวะไปหา ไม่ใช่สิ่งที่คุณต้องการ' },
     ],
     ability: 'con',
     disciplines: ['survival', 'guard', 'shadow'],
@@ -329,10 +343,7 @@ export function composeTrait(draw: TraitDraw): { trait: Trait; signature: string
     opens,
   };
 
-  // The NAME is part of the signature as well as the conditions. Two draws
-  // that ask different things can still land on the same words, and a list
-  // holding two "Named Debt" reads as a bug however different they are.
-  return { trait, signature: `${trait.name}|${signatureOf(theme, requires)}` };
+  return { trait, signature: signatureOf(theme, requires) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -480,14 +491,23 @@ export function generateTraits(input: GenerateInput): Trait[] {
       // that is absent from changing one that is present.
       if (seen.has(`sig|${scope}|${signature}`)) continue;
 
-      // Names are deduped ACROSS the list, because "Long Air" appearing twice
-      // reads as a bug however different the two are. That is a global check,
-      // so it is only safe because the sources are ordered with the subclass —
-      // the one thing that can arrive mid-run — last.
+      /*
+       * Names and lines are deduped ACROSS the whole list. "Long Air" twice
+       * reads as a bug however different the two are, and so does a list where
+       * two traits both explain that you know what is in the phial before you
+       * drink it — which is what shipped until the panel was actually read.
+       *
+       * Both are global checks, and are only safe because the sources are
+       * ordered with the subclass — the one thing that can arrive mid-run —
+       * last, so a re-draw can never reach backwards into what somebody has
+       * already earned.
+       */
       if (seen.has(`name|${trait.name}`)) continue;
+      if (seen.has(`desc|${trait.description}`)) continue;
 
       seen.add(`sig|${scope}|${signature}`);
       seen.add(`name|${trait.name}`);
+      seen.add(`desc|${trait.description}`);
       traits.push(trait);
       return;
     }

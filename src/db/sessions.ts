@@ -163,7 +163,11 @@ export async function loadSession(sessionId: string): Promise<LoadedSession | nu
         // Snapshots taken before these were stored fall back to the opening
         // sheet and an unfinished run, which is what they used to mean.
         sheet: snapshot.sheet ?? sheet,
-        pc: snapshot.pc,
+        // And the same for a field added to `pc` later. A snapshot written
+        // before skill uses were tracked restores a pc without the map, and
+        // the play page threw a 500 on it — the run became unopenable rather
+        // than merely missing a number. Nothing spent is what it used to mean.
+        pc: { ...snapshot.pc, skillUses: snapshot.pc.skillUses ?? {} },
         combat: null,
         ended: snapshot.ended ?? null,
       }

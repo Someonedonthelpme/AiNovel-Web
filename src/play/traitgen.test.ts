@@ -285,3 +285,19 @@ test('no two traits in one list share a name', () => {
     }
   }
 });
+
+test('no two traits in one list say the same thing', () => {
+  /*
+   * Found by reading the actual panel rather than by a test: three pairs in
+   * one list explained that you know what is in the phial before you drink
+   * it. The names were distinct, so the name check passed and the list still
+   * read as broken.
+   */
+  for (const seed of SEEDS) {
+    for (const held of CLASSES) {
+      const lines = traitsFor(seed, en({ classId: held.id, subclassId: held.subclasses[0]?.id }))
+        .map((t) => t.description);
+      assert.equal(new Set(lines).size, lines.length, `seed ${seed} ${held.id} repeated a line`);
+    }
+  }
+});

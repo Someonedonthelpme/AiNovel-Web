@@ -88,8 +88,20 @@ export const radiusOf = (skill: ActiveSkill): number =>
 /** Uses spent since the last rest, keyed by skill id. */
 export type SkillUses = Record<string, number>;
 
-export const usesLeft = (skill: ActiveSkill, spent: SkillUses): number =>
-  Math.max(0, skill.usesPerRest - (spent[skill.id] ?? 0));
+/*
+ * `spent` is defaulted, and that is not belt-and-braces.
+ *
+ * A save written before `skillUses` existed restores a `pc` without it, and
+ * indexing the missing map threw on the SERVER while rendering the play page —
+ * the whole session became a 500 with no way back in. The same shape of failure
+ * as every other "state added later vanished on an old save": the field is
+ * fine going forward and absent behind you.
+ *
+ * A skill with nothing recorded against it has spent nothing, which is exactly
+ * what an older save means.
+ */
+export const usesLeft = (skill: ActiveSkill, spent: SkillUses | undefined): number =>
+  Math.max(0, skill.usesPerRest - (spent?.[skill.id] ?? 0));
 
 export const spendUse = (spent: SkillUses, id: string): SkillUses => ({
   ...spent,
