@@ -7,6 +7,9 @@ import { chainedBook, CHAIN_LENGTH, provableChain, volumeFloor, volumeId } from 
 import { candidateSignetsFor, signetsFor, TOWER_HORIZON } from './signetbook.ts';
 import { MAX_TRAITS, MIN_TRAITS, TRAITS, traitsFor } from './traitbook.ts';
 import { COUNTERS } from './traits.ts';
+import { counterOf } from '../character/persona.ts';
+import { applyTurn } from './delta.ts';
+import type { TurnRecord } from './state.ts';
 import { skillTreeFor } from './skilltree.ts';
 import { useItem } from './rest.ts';
 import { playState } from './fixtures.ts';
@@ -222,4 +225,45 @@ test('volumes appear at the depth their series says', () => {
       );
     }
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* Every counter a trait may gate on has to actually move                      */
+/* -------------------------------------------------------------------------- */
+
+test('meeting somebody counts, so the trait gating on it can be earned', () => {
+  /*
+   * Regression, and an ugly one: `people_met` sat in the counter registry with
+   * NOTHING writing it, so "A Known Face" was unearnable in every world ever
+   * generated — and the Signet proof treated the counter as live, because the
+   * registry says a name exists, not that anything increments it.
+   */
+  const start = playState();
+  assert.equal(counterOf(start.sheet.counters, COUNTERS.peopleMet), 0);
+
+  const turn: TurnRecord = {
+    kind: 'turn', input: 'look around', mode: 'exploration', classification: 'NEUTRAL',
+    addressed: null, roll: null, delta: {}, rejected: [], prose: '',
+  };
+  const after = applyTurn(start, turn).state;
+
+  assert.ok(
+    counterOf(after.sheet.counters, COUNTERS.peopleMet) > 0,
+    'standing among people you have never met should count',
+  );
+});
+
+test('the same faces are not counted twice', () => {
+  const turn: TurnRecord = {
+    kind: 'turn', input: 'look around', mode: 'exploration', classification: 'NEUTRAL',
+    addressed: null, roll: null, delta: {}, rejected: [], prose: '',
+  };
+  const once = applyTurn(playState(), turn).state;
+  const twice = applyTurn(once, turn).state;
+
+  assert.equal(
+    counterOf(twice.sheet.counters, COUNTERS.peopleMet),
+    counterOf(once.sheet.counters, COUNTERS.peopleMet),
+    'they are not strangers the second time',
+  );
 });

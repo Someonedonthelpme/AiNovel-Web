@@ -194,6 +194,31 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
     next = { ...next, sheet: { ...next.sheet, counters: bumpCounter(next.sheet.counters, COUNTERS.placesFound) } };
   }
 
+  /*
+   * Faces you had not seen before.
+   *
+   * `people_met` was in the counter registry and NOTHING EVER WROTE IT, so the
+   * trait gating on it could never be earned in any world — and the Signet
+   * proof happily treated it as live, because the registry says a name exists,
+   * not that anything increments it.
+   *
+   * `lastSeenTurn` is the record of having met somebody: nought means never.
+   */
+  const standing = activeRegion(next.world)?.places.find((p) => p.id === next.world.currentPlace);
+  const strangers = (standing?.people ?? []).filter(
+    (id) => next.world.people[id] && next.world.people[id].lastSeenTurn === 0,
+  );
+
+  if (strangers.length) {
+    const people = { ...next.world.people };
+    for (const id of strangers) people[id] = { ...people[id], lastSeenTurn: next.world.turn };
+
+    let counters = next.sheet.counters;
+    for (const _ of strangers) counters = bumpCounter(counters, COUNTERS.peopleMet);
+
+    next = { ...next, world: { ...next.world, people }, sheet: { ...next.sheet, counters } };
+  }
+
   // Carrying and recovering. These run after the world has moved, so resting
   // at a place you have just walked into is resolved where you now stand.
   if (delta.equipItem) {
