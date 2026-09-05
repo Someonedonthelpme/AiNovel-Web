@@ -79,6 +79,19 @@ export const CHARACTER_SCHEMA = obj(
       },
       ['intuition', 'feeling', 'nerve', 'discipline'],
     ),
+    /**
+     * WHY they climb, chosen from the world's own subjects.
+     *
+     * Indices rather than names or free text: a model picks a number from a
+     * numbered list reliably, and `repair` can clamp one into range. Free text
+     * could name a subject this world does not have, and the whole point of a
+     * generated subject vocabulary is that a drive and a piece of lore are
+     * guaranteed to speak the same language.
+     */
+    drive: obj(
+      { want: { type: 'integer', minimum: 0 }, fear: { type: 'integer', minimum: 0 } },
+      ['want', 'fear'],
+    ),
     baseAbilities: abilityScores,
     background: obj(
       {
@@ -97,7 +110,7 @@ export const CHARACTER_SCHEMA = obj(
       ['id', 'name', 'description', 'grantsStats', 'grantsSkills', 'startingGear', 'startingAttacks', 'socialStanding'],
     ),
   },
-  ['name', 'traits', 'hitDie', 'voice', 'personality', 'baseAbilities', 'background'],
+  ['name', 'traits', 'hitDie', 'voice', 'personality', 'drive', 'baseAbilities', 'background'],
 );
 
 const place = obj(
@@ -176,6 +189,8 @@ export type GeneratedCharacter = {
     nerve: number;
     discipline: number;
   };
+  /** Indices into this world's subjects. Absent is survivable — see `driveFrom`. */
+  drive?: { want: number; fear: number };
   baseAbilities: Record<string, number>;
   background: {
     id: string;

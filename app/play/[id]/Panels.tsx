@@ -165,11 +165,15 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
             {item.count > 1 && <span className="muted"> ×{item.count}</span>}{' '}
             <span className="tag">{item.kind}</span>
             {item.equipped && <span className="tag" style={{ color: 'var(--amber)' }}>worn</span>}
+            {item.read && <span className="tag" style={{ color: 'var(--muted)' }}>read</span>}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{item.description}</p>
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
             {item.usable && (
               <button className="mini" disabled={busy} onClick={() => act({ type: 'use', item: item.id })}>use</button>
+            )}
+            {item.hasLore && !item.read && (
+              <button className="mini" disabled={busy} onClick={() => act({ type: 'read', item: item.id })}>read</button>
             )}
             {item.wearable && !item.equipped && (
               <button className="mini" disabled={busy} onClick={() => act({ type: 'equip', item: item.id })}>equip</button>

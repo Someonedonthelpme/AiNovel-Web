@@ -1,4 +1,8 @@
 import type { Attack } from '../combat/types.ts';
+import { mulberry32 } from '../engine/roll.ts';
+import { subjectsFor } from '../world/subjects.ts';
+import type { Subject } from '../world/subjects.ts';
+import type { Drive } from '../character/persona.ts';
 import type { Provider } from '../llm/provider.ts';
 import { keepsake, stripMechanics } from '../items/catalogue.ts';
 import { classOf } from '../character/classes.ts';
@@ -75,10 +79,44 @@ const scaleToStored = (narrow: Record<string, number> | undefined): Record<strin
   return out;
 };
 
-export async function generateCharacter(provider: Provider, interview: Interview): Promise<CharacterGenesis> {
+/**
+ * A drive, mapped from what the model chose to what the world actually has.
+ *
+ * Indices are clamped rather than trusted, and a want that came back equal to
+ * the fear is nudged — a character running from the very thing they are
+ * climbing for is a coherent idea, but not one a model picks on purpose.
+ *
+ * Falls back to a seeded pick, so a drive exists even when the model returns
+ * nothing usable. A character with no WHY is worse than one with a guessed WHY.
+ */
+export function driveFrom(
+  chosen: { want?: number; fear?: number } | undefined,
+  subjects: readonly Subject[],
+  seed: number,
+): Drive {
+  if (subjects.length === 0) return { want: '', fear: '' };
+  const at = (n: number | undefined, fallback: number) =>
+    Number.isInteger(n) && n! >= 0 && n! < subjects.length ? n! : fallback;
+
+  const rng = mulberry32((seed ^ 0xd21e) >>> 0);
+  const wantAt = at(chosen?.want, Math.floor(rng() * subjects.length));
+  let fearAt = at(chosen?.fear, Math.floor(rng() * subjects.length));
+  if (fearAt === wantAt) fearAt = (wantAt + 1) % subjects.length;
+
+  return { want: subjects[wantAt].id, fear: subjects[fearAt].id };
+}
+
+export async function generateCharacter(
+  provider: Provider,
+  interview: Interview,
+  seed = 0,
+): Promise<CharacterGenesis> {
   if (!isComplete(interview)) throw new Error('the interview is not finished');
 
   const { language, draft } = interview;
+  // Derived from the seed rather than stored, like every other catalogue —
+  // traits, paths, Signets and the class roster all work this way.
+  const subjects = subjectsFor(seed);
   const held = classOf(draft);
   const pinned = [
     draft.name ? `The character is named "${draft.name}".` : '',
@@ -120,6 +158,9 @@ export async function generateCharacter(provider: Provider, interview: Interview
           'Session Zero interview:',
           '',
           transcript(interview),
+          '',
+          'The subjects this world turns on. "drive" picks two of these BY NUMBER:',
+          ...subjects.map((subject, at) => `  ${at}. ${subject.name} (${subject.kind})`),
           ...(pinned.length ? ['', 'Fixed by the player, do not contradict:', ...pinned] : []),
         ].join('\n'),
       },
@@ -181,6 +222,7 @@ export async function generateCharacter(provider: Provider, interview: Interview
     }).value,
     status: background.socialStanding,
     temperament: clampTemperament(scaleToStored(generated.personality)),
+    drive: driveFrom(generated.drive, subjects, seed),
     needs: metNeeds(),
     counters: {},
     pressure: neutralTemperament(),
@@ -439,7 +481,7 @@ export async function runGenesis(
   interview: Interview,
   seed = Date.now(),
 ): Promise<GenesisResult> {
-  const character = await generateCharacter(provider, interview);
+  const character = await generateCharacter(provider, interview, seed);
   const ground = await generateGroundFloor(provider, interview, character.sheet);
 
   const world: World = {

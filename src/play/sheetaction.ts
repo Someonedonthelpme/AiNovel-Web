@@ -1,4 +1,7 @@
 import type { Abilities } from '../combat/types.ts';
+import { loreFor } from './lorebook.ts';
+import { knowsLore, learn } from './lore.ts';
+import { findItem } from '../items/types.ts';
 import { signetsFor } from './signetbook.ts';
 import { gateOpen } from './signet.ts';
 import { dispositionOf } from '../character/persona.ts';
@@ -37,6 +40,16 @@ export type SheetAction =
   | { type: 'use'; item: string }
   /** Taken once, at level three. It reshapes the tree by opening an island. */
   | { type: 'chooseSubclass'; id: string }
+  /**
+   * Read what a thing has to tell you.
+   *
+   * The action that makes lore a mechanic rather than decoration: a history
+   * touching what you are climbing FOR meets `purpose`, and one about what you
+   * are running from still counts. Once only — a paragraph cannot be re-read
+   * for the same comfort — and what it leaves behind is knowledge you can tell
+   * somebody else.
+   */
+  | { type: 'read'; item: string }
   /**
    * Claim a Signet whose gate has opened.
    *
@@ -115,6 +128,22 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       const used = useItem(state, action.item);
       if (used.error) return { state, error: used.error, note: null };
       return settle(used.state, state, used.narration);
+    }
+
+    case 'read': {
+      const found = findItem(state.pc.inventory, action.item);
+      if (!found) return { state, error: 'you are not carrying that', note: null };
+
+      const lore = loreFor(found, state.world.seed, state.sheet.language);
+      if (!lore) return { state, error: 'there is nothing to it', note: null };
+      if (knowsLore(state.sheet, lore.id)) return { state, error: 'you have read it', note: null };
+
+      const heard = learn(state.sheet, lore);
+      return settle(
+        { ...state, sheet: heard.who },
+        state,
+        heard.resonance.hit ? lore.text : 'you read it, and it is not about you',
+      );
     }
 
     case 'claimSignet': {

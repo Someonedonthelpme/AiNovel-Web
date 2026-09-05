@@ -1,4 +1,6 @@
 import { describeMental, describePersonality } from '../character/persona.ts';
+import { loreFor } from '../play/lorebook.ts';
+import { knowsLore } from '../play/lore.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { carriedWeight } from '../items/types.ts';
 import type { Needs, Personality } from '../character/persona.ts';
@@ -139,7 +141,12 @@ export type GameView = {
   };
   /** What the character panel shows. */
   inventory: {
-    stacks: { id: string; name: string; description: string; kind: string; count: number; equipped: boolean; slot: string | null; usable: boolean; wearable: boolean }[];
+    stacks: {
+      id: string; name: string; description: string; kind: string; count: number;
+      equipped: boolean; slot: string | null; usable: boolean; wearable: boolean;
+      /** Whether it has a history, and whether this character has read it. */
+      hasLore: boolean; read: boolean;
+    }[];
     equipped: Record<string, string>;
   };
   /** What the skills panel shows. Hidden nodes and Signets are absent, not greyed. */
@@ -572,6 +579,10 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
       slot: stack.item.slot ?? null,
       usable: stack.item.kind === 'consumable' && Boolean(stack.item.effect),
       wearable: stack.item.kind === 'equipment' && Boolean(stack.item.slot),
+      // A history is not advertised until it exists, and once read the button
+      // goes rather than sitting there offering nothing.
+      hasLore: Boolean(loreFor(stack.item, state.world.seed, state.sheet.language)),
+      read: knowsLore(state.sheet, `lore_${stack.item.id}`),
     })),
     equipped: { ...inv.equipped } as Record<string, string>,
   };

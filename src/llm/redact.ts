@@ -48,7 +48,13 @@ export type WriterView = {
   language: 'th' | 'en';
   place: { name: string; description: string; affordances: string[] };
   peoplePresent: PresentPerson[];
-  pc: { name: string; selfPronoun: string };
+  /**
+   * The Writer knew a name and a pronoun — less than it knew about any villager
+   * in the room, who came with a disposition and a condition. It was writing
+   * somebody it had never met. Condition and bearing are safe to hand over:
+   * they are what an onlooker could see.
+   */
+  pc: { name: string; selfPronoun: string; bearing: string[]; condition: string[] };
   /** Verbatim, because pronoun continuity lives in the surface text. */
   recentTurns: string[];
   /**
@@ -114,7 +120,12 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       affordances: (place?.affordances ?? []).map(say),
     },
     peoplePresent,
-    pc: { name: state.sheet.name, selfPronoun: state.sheet.voice.selfPronoun },
+    pc: {
+      name: state.sheet.name,
+      selfPronoun: state.sheet.voice.selfPronoun,
+      bearing: describePersonality(dispositionOf(state.sheet)),
+      condition: describeMental(state.sheet.needs),
+    },
     speaking: opts.speaking ?? null,
     recentTurns: opts.recentTurns ?? [],
     canonFacts: opts.canonFacts ?? [],

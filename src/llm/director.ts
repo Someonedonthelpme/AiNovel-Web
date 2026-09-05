@@ -1,4 +1,5 @@
 import { describeMental, describePersonality } from '../character/persona.ts';
+import { subjectById, subjectsFor } from '../world/subjects.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
@@ -180,6 +181,21 @@ export function mergeDeltas(base: WorldDelta, outcome: WorldDelta): WorldDelta {
  * chooses from what this place actually offers rather than inventing somewhere
  * new, which is why a world with edges cannot wander.
  */
+/**
+ * What they climb for, and what they are running from — in the world's own
+ * words rather than as ids, so it reads as motive rather than as data.
+ */
+function driveLine(state: PlayState): string {
+  const drive = state.sheet.drive;
+  if (!drive) return '';
+  const subjects = subjectsFor(state.world.seed);
+  const named = (id: string) => subjectById(subjects, id)?.name ?? null;
+  const want = named(drive.want);
+  const fear = named(drive.fear);
+  if (!want && !fear) return '';
+  return `They are climbing for ${want ?? 'something they will not name'}, and away from ${fear ?? 'something else'}.`;
+}
+
 export function directorContext(state: PlayState, canonFacts: string[]): string {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
@@ -205,7 +221,18 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
+    /*
+     * WHO THE PLAYER IS.
+     *
+     * The Director knew the name, the background, some trait strings and a hit
+     * point total — strictly LESS than it knew about any villager standing in
+     * the room, who came with a disposition and a condition. It was adjudicating
+     * for somebody it had never been introduced to.
+     */
     `Character: ${state.sheet.name}, ${state.sheet.background.name}. Traits: ${state.sheet.traits.join(', ') || '—'}`,
+    `They come across as: ${describePersonality(dispositionOf(state.sheet)).join(', ') || 'unremarkable'}`,
+    `Right now they are: ${describeMental(state.sheet.needs).join(', ') || 'steady enough'}`,
+    driveLine(state),
     `Skills: ${state.sheet.background.grantsSkills.map((s) => s.name).join(', ') || '—'}`,
     `Health: ${state.pc.hp}/${state.pc.maxHp}`,
     // The Director has to see the pack to name an item id at all. The WRITER

@@ -571,6 +571,12 @@ shortens poison. STR's "forcing things" needed no code — the Director calls a
 check on any ability and `finalAbilities` covers STR. The old gap table is kept
 in the plan file for history.
 
+**The Director and Writer now know the PC.** Both were told less about the
+player than about any villager in the room — a name, a background, some trait
+strings and a hit-point total, while an NPC came with a disposition and a
+condition. Both now receive bearing, condition and (the Director) what the
+character climbs FOR and away from.
+
 **Stale player-facing copy** — the creation page still tells the player that a
 class decides *"which disciplines your skill tree can ever hold"* and that
 *"what a class is locked out of stays locked out"*. Disciplines were purged;

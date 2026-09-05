@@ -36,7 +36,11 @@ function systemPrompt(view: WriterView): string {
     // answering you does not deliver a paragraph.
     view.speaking ? 'One or two sentences.' : LENGTH[view.brief.length],
     '',
-    `The player character is ${view.pc.name}.`,
+    [
+      `The player character is ${view.pc.name}.`,
+      view.pc.bearing.length ? `They come across as ${view.pc.bearing.join(', ')}.` : '',
+      view.pc.condition.length ? `Right now they are ${view.pc.condition.join(', ')}.` : '',
+    ].filter(Boolean).join(' '),
   ];
 
   if (view.speaking) {
