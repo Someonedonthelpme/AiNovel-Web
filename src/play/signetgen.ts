@@ -37,7 +37,7 @@ type TermKind =
   | { kind: 'counter'; counter: string; low: number; high: number }
   | { kind: 'item'; family: string; low: number; high: number }
   | { kind: 'ability'; ability: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'; low: number; high: number }
-  | { kind: 'personality'; axis: 'warmth' | 'nerve' | 'discipline' | 'candour' | 'loyalty'; over: boolean }
+  | { kind: 'personality'; axis: 'warmth' | 'nerve' | 'discipline' | 'candour' | 'feeling'; over: boolean }
   | { kind: 'flag'; flag: string };
 
 export type SignetTheme = {

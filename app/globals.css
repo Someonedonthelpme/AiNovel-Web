@@ -589,3 +589,59 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
 /* Where a branch came from, and how it is entered. */
 .node-from { color: var(--ink-dim); font-size: 0.7rem !important; font-style: italic; }
 .node-entry { color: var(--amber); font-size: 0.7rem !important; }
+
+/* -------------------------------------------------------------------------- */
+/* The sheet panel: a persistent left column beside the tab body              */
+/* -------------------------------------------------------------------------- */
+
+.sheet-tabs { border-bottom: 1px solid var(--line); padding-bottom: 0.6rem; }
+
+.sheet-split {
+  display: grid;
+  grid-template-columns: minmax(180px, 34%) 1fr;
+  gap: 1.2rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .sheet-split { grid-template-columns: 1fr; }
+}
+
+.sheet-aside {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 0.9rem;
+}
+
+.sheet-main { min-width: 0; }
+
+.portrait-frame {
+  aspect-ratio: 3 / 4;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.doll-slot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.doll-slot:last-child { border-bottom: none; }
+.doll-slot span { grid-column: 1 / -1; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+
+.status-strip {
+  margin-top: 0.8rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}

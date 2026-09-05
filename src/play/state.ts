@@ -1,6 +1,7 @@
 import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
 import type { SheetRecord } from './sheetaction.ts';
+import type { ClimbRecord } from './climb.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import type { SkillUses } from '../skills/active.ts';
 import type { Inventory } from '../items/types.ts';
@@ -111,7 +112,7 @@ export type TurnRecord = {
   combatActions?: CombatAction[];
 };
 
-export type PlayEvent = { kind: 'start' } | TurnRecord | SheetRecord;
+export type PlayEvent = { kind: 'start' } | TurnRecord | SheetRecord | ClimbRecord;
 
 export function initialPlayState(world: World, sheet: CharacterSheet): PlayState {
   const inventory = startingInventory(sheet);

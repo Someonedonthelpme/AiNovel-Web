@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
 import { sheet } from '../session/fixtures.ts';
 import { placeBudget } from './budget.ts';
-import { ensureFloor, floorSchema, generateFloor } from './floorgen.ts';
+import { floorSchema, generateFloor } from './floorgen.ts';
 import type { GeneratedFloor } from './floorgen.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, person, world } from './fixtures.ts';
@@ -28,7 +28,7 @@ const generated = (over: Partial<GeneratedFloor> = {}): GeneratedFloor => ({
     id: 'kell', name: 'Kell', oneLine: 'knows the grove', tags: ['poacher'], trust: 0, status: 'peer',
     selfPronoun: 'ข้า', underStress: 'กู',
     addressDistant: 'เจ้า', addressWarm: 'เอ็ง', particleDistant: 'วะ', particleWarm: 'นะ',
-    warmth: 1, nerve: 2, discipline: -1, candour: 2, loyalty: 0,
+    intuition: 1, feeling: 2, nerve: 2, discipline: -1,
   }],
   creatures: ['หมาป่าเงา'],
   ...over,
@@ -149,21 +149,4 @@ test('the rehydration brief puts the established canon in front of the model', a
   assert.match(sent, /same place/);
   assert.match(sent, /the snare you never checked/);
   assert.match(sent, /The Grey Grove/);
-});
-
-/* -------------------------------------------------------------------------- */
-/* Wiring into travel                                                          */
-/* -------------------------------------------------------------------------- */
-
-test('ensureFloor installs the floor, folds in its people, and steps into it', async () => {
-  const w = world({ currentPlace: 'stair' });
-  const { world: next, result } = await ensureFloor(provider(), w, 1, pc);
-
-  assert.equal(next.currentRegion, 'floor-1');
-  assert.equal(next.currentPlace, 'landing');
-  assert.equal(activeRegion(next)?.name, 'The Grey Grove');
-  assert.ok(next.people['kell'], 'the floor’s people joined the registry');
-  assert.equal(next.deepestFloor, 1);
-  assert.equal(isFull(next.regions['floor-1']), true);
-  assert.equal(result.creatures.length, 1);
 });

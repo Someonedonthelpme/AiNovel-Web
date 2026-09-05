@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { dispositionOf } from '../character/persona.ts';
 import assert from 'node:assert/strict';
 import {
   EMERGENT_BRANCH_CAP, EMERGENT_PREFIX, emergentTraitsFor, isEmergent,
@@ -16,7 +17,7 @@ const SEEDS = [1, 3, 7, 21, 42, 108, 512, 2024, 31337];
 const ctxWith = (counters: Counters, level = 5): TraitContext => {
   const state = playState();
   const sheet = { ...state.sheet, level, counters, traits: [] as string[] };
-  return { sheet, inventory: state.pc.inventory, counters, personality: state.sheet.personality };
+  return { sheet, inventory: state.pc.inventory, counters, personality: dispositionOf(state.sheet) };
 };
 
 /* -------------------------------------------------------------------------- */

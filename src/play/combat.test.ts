@@ -254,3 +254,44 @@ test('a fight that opens on the foe side still hands you a move', () => {
     );
   }
 });
+
+/* -------------------------------------------------------------------------- */
+/* Pools survive a fight                                                       */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The regression: `toCombatant` fills the pools to their ceilings, which is
+ * right for a foe drawn from a statblock and wrong for the player. Nothing
+ * carried the spent pools IN and nothing carried them back OUT, so every
+ * encounter opened full however hard the last one had been — and the scarcity
+ * the whole stamina/mana economy exists to create never happened.
+ */
+
+test('a fight opens with the pools you actually have, not full ones', () => {
+  const worn = onFloorTwo();
+  const spent: PlayState = { ...worn, pc: { ...worn.pc, stamina: 2, mana: 1 } };
+
+  const me = beginEncounter(spent).combat!.combatants['pc'];
+  assert.equal(me.stamina, 2, 'a tired climber starts the fight tired');
+  assert.equal(me.mana, 1);
+  assert.ok(me.maxStamina > 2, 'the ceiling is unchanged — only what is in the pool moved');
+});
+
+test('what a fight costs is still gone when it ends', () => {
+  const start = onFloorTwo();
+  const fought = fightItOut(beginEncounter(start));
+  const done = concludeCombat(fought.state);
+
+  const me = fought.state.combat?.combatants['pc'];
+  if (!me) return; // the encounter cleared before anyone could spend
+
+  assert.equal(done.state.pc.stamina, me.stamina, 'stamina is carried back out');
+  assert.equal(done.state.pc.mana, me.mana, 'and so is mana');
+});
+
+test('a pool never comes back above its ceiling by fighting', () => {
+  const start = onFloorTwo();
+  const done = concludeCombat(fightItOut(beginEncounter(start)).state);
+  assert.ok(done.state.pc.stamina <= start.pc.stamina, 'a fight cannot refill you');
+  assert.ok(done.state.pc.mana <= start.pc.mana);
+});

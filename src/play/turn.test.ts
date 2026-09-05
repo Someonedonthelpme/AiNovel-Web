@@ -311,14 +311,14 @@ test('a warm person and a cold one are addressed differently at the same trust',
     ...base.world,
     people: {
       ...base.world.people,
-      smith: { ...base.world.people['smith'], trust: 1, voice, personality: { ...base.world.people['smith'].personality, warmth: 3 } },
+      smith: { ...base.world.people['smith'], trust: 1, voice, temperament: { intuition: 0, feeling: 9, nerve: 0, discipline: 0 } },
     },
   };
   const coldWorld = {
     ...base.world,
     people: {
       ...base.world.people,
-      smith: { ...base.world.people['smith'], trust: 1, voice, personality: { ...base.world.people['smith'].personality, warmth: -3 } },
+      smith: { ...base.world.people['smith'], trust: 1, voice, temperament: { intuition: 0, feeling: -9, nerve: 0, discipline: 0 } },
     },
   };
 
@@ -346,8 +346,8 @@ test('the writer is told who it is writing, not just their name', async () => {
       ...base.world.people,
       smith: {
         ...base.world.people['smith'],
-        personality: { warmth: -3, nerve: 3, discipline: 0, candour: 3, loyalty: 0 },
-        mental: { stress: 8, morale: -2, fatigue: 0 },
+        temperament: { intuition: 0, feeling: -9, nerve: 0, discipline: 0 },
+        needs: { rest: 10, food: 10, safety: 2, company: 0, purpose: 10 },
       },
     },
   };

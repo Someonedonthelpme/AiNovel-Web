@@ -1,11 +1,10 @@
 import type { Provider } from '../llm/provider.ts';
-import { clampPersonality, neutralPersonality, restingMind } from '../character/persona.ts';
+import { clampTemperament, neutralTemperament, metNeeds } from '../character/persona.ts';
 import { repairRegion, repairVoice } from '../session/repair.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { humanisePlaces, pruneDangling } from './naming.ts';
 import { dangerFor, peopleBudget, placeBudget, settlementBudget } from './budget.ts';
 import { rehydrationBrief } from './lod.ts';
-import { installRegion } from './travel.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
@@ -61,15 +60,14 @@ const personSchema = obj(
     addressWarm: str,
     particleDistant: str,
     particleWarm: str,
-    warmth: { type: 'integer', minimum: -3, maximum: 3 },
+    intuition: { type: 'integer', minimum: -3, maximum: 3 },
+    feeling: { type: 'integer', minimum: -3, maximum: 3 },
     nerve: { type: 'integer', minimum: -3, maximum: 3 },
     discipline: { type: 'integer', minimum: -3, maximum: 3 },
-    candour: { type: 'integer', minimum: -3, maximum: 3 },
-    loyalty: { type: 'integer', minimum: -3, maximum: 3 },
   },
   ['id', 'name', 'oneLine', 'tags', 'trust', 'status', 'selfPronoun', 'underStress',
    'addressDistant', 'addressWarm', 'particleDistant', 'particleWarm',
-   'warmth', 'nerve', 'discipline', 'candour', 'loyalty'],
+   'intuition', 'feeling', 'nerve', 'discipline'],
 );
 
 /** Sized per floor, because the budget grows with depth. */
@@ -106,7 +104,7 @@ export type GeneratedFloor = {
     id: string; name: string; oneLine: string; tags: string[]; trust: number; status: string;
     selfPronoun: string; underStress: string; addressDistant: string; addressWarm: string;
     particleDistant: string; particleWarm: string;
-    warmth: number; nerve: number; discipline: number; candour: number; loyalty: number;
+    intuition: number; feeling: number; nerve: number; discipline: number;
   }[];
   creatures: string[];
 };
@@ -150,7 +148,8 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
     'Every id in a place\'s people list must be an id in the people array.',
     '"creatures" names what lives and hunts here. Names only, no statistics.',
     'Every person needs a disposition, each from -3 to +3:',
-    '  warmth: cold and guarded (-3) to open and generous (+3)',
+    '  intuition: literal and concrete (-3) to imaginative and abstract (+3)',
+    '  feeling: coldly logical (-3) to led by what matters to them (+3)',
     '  nerve: easily frightened (-3) to fearless (+3)',
     '  discipline: impulsive (-3) to rigidly controlled (+3)',
     '  candour: evasive and deceitful (-3) to blunt to a fault (+3)',
@@ -279,13 +278,15 @@ export async function generateFloor(
         particleBands: { '-3': p.particleDistant, '2': p.particleWarm },
         tics: [],
       }).value,
-      personality: clampPersonality({
-        warmth: p.warmth, nerve: p.nerve, discipline: p.discipline,
-        candour: p.candour, loyalty: p.loyalty,
+      // Written on the narrow scale a model can hold in its head, stored on
+      // the wide one drift and the skill formulas need.
+      temperament: clampTemperament({
+        intuition: p.intuition * 3, feeling: p.feeling * 3,
+        nerve: p.nerve * 3, discipline: p.discipline * 3,
       }),
-      mental: restingMind(),
+      needs: metNeeds(),
       counters: {},
-      pressure: neutralPersonality(),
+      pressure: neutralTemperament(),
     };
   }
   // A rehydrated floor keeps everyone it had, even if the model forgot them.
@@ -342,28 +343,5 @@ export async function generateFloor(
     creatures: generated.creatures,
     repairs,
     warnings: check.warnings.map((w) => w.message),
-  };
-}
-
-/**
- * Satisfy a `needsRegion` request from travel: generate or rehydrate the floor,
- * fold its people into the registry, and step into it.
- */
-export async function ensureFloor(
-  provider: Provider,
-  world: World,
-  floor: number,
-  sheet: CharacterSheet,
-  arriveAt?: string,
-): Promise<{ world: World; result: FloorResult }> {
-  const existing = world.regions[regionIdFor(floor)];
-  const gazetteer = existing && existing.detail === 'gazetteer' ? existing : null;
-
-  const result = await generateFloor(provider, world, floor, sheet, gazetteer);
-  const withPeople: World = { ...world, people: { ...world.people, ...result.people } };
-
-  return {
-    world: installRegion(withPeople, result.region, arriveAt ?? result.region.entrance),
-    result,
   };
 }

@@ -1,14 +1,14 @@
 import type { Ability, Abilities, Attack, Combatant } from '../combat/types.ts';
+import { metNeeds, unmet } from '../character/persona.ts';
 import { ABILITIES, abilityMod } from '../combat/types.ts';
 import type { Inventory } from '../items/types.ts';
-import { emptyInventory, equippedArmour, equippedAttack, equippedGrants } from '../items/types.ts';
+import { carriedWeight, emptyInventory, equippedArmour, equippedAttack, equippedGrants } from '../items/types.ts';
 import { activate } from '../skills/book.ts';
 import type { Item } from '../items/types.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import type { GraftSpec } from '../play/graft.ts';
 import type { CharacterClass } from '../character/classes.ts';
 import type { Persona, Status } from '../character/persona.ts';
-import { emptyPersona, neutralPersonality, restingMind } from '../character/persona.ts';
 
 /**
  * The character sheet, and the bridge from it into the combat engine.
@@ -292,22 +292,40 @@ export const HP_PER_LEVEL = 6;
  * `poolFor` in skills/pools.ts. One rule, and it makes the physical and mental
  * halves of the stat sheet structural rather than thematic.
  */
+export const BASE_SPEED = 6;
+/** Nobody is rooted to the spot by being quick or slow alone. */
+export const MIN_SPEED = 3;
+
+/*
+ * CARRYING, which STR has claimed since the nine stats were written and which
+ * did not exist. Durability, repair kits and materials all assume that hauling
+ * things has a cost; without a capacity there is nothing for them to press on.
+ *
+ * Capacity comes off the SCORE rather than the modifier: carrying is the one
+ * place where being a little stronger should help a little, rather than only
+ * mattering every second point.
+ */
+export const CARRY_BASE = 20;
+export const CARRY_PER_STR = 2;
+/** How much overload costs a square of movement. */
+export const OVERLOAD_STEP = 8;
 export const POOL_BASE = 8;
 export const POOL_PER_LEVEL = 2;
 
 /**
- * FATIGUE AND STRESS DOCK THE CEILING, which is what finally gives the mental
- * track mechanical teeth.
+ * UNMET NEEDS DOCK THE CEILING.
  *
- * `sheet.mental` has existed all along and gated nothing: drift wrote it, rest
- * eased it, the model read it aloud, and no rule anywhere consulted it. Now
- * climbing hard without resting lowers what you can hold before it lowers
- * anything else, and a rest is a decision rather than a formality.
+ * `sheet.mental` existed all along and gated nothing: drift wrote it, rest
+ * eased it, the model read it aloud, and no rule anywhere consulted it. Needs
+ * inherit that job and straighten out which need feeds which pool — stamina is
+ * the body, so it is worn down by going UNRESTED; mana is the mind, so it is
+ * worn down by feeling UNSAFE. The old pairing had stress docking stamina and
+ * fatigue docking mana, which was crossed.
  */
 export function maxStaminaFor(sheet: CharacterSheet, inventory?: Inventory): number {
   const vit = abilityMod(finalAbilities(sheet, inventory).vit);
   const level = Math.max(1, sheet.level);
-  const worn = Math.floor((sheet.mental?.stress ?? 0) / 2);
+  const worn = Math.floor(unmet(sheet.needs ?? metNeeds(), 'rest') / 2);
   const granted = sheet.treeBonuses?.maxStamina ?? 0;
   return Math.max(1, POOL_BASE + vit * 2 + (level - 1) * POOL_PER_LEVEL - worn + granted);
 }
@@ -315,15 +333,26 @@ export function maxStaminaFor(sheet: CharacterSheet, inventory?: Inventory): num
 export function maxManaFor(sheet: CharacterSheet, inventory?: Inventory): number {
   const con = abilityMod(finalAbilities(sheet, inventory).con);
   const level = Math.max(1, sheet.level);
-  const worn = Math.floor((sheet.mental?.fatigue ?? 0) / 2);
+  const worn = Math.floor(unmet(sheet.needs ?? metNeeds(), 'safety') / 2);
   const granted = sheet.treeBonuses?.maxMana ?? 0;
   return Math.max(1, POOL_BASE + con * 2 + (level - 1) * POOL_PER_LEVEL - worn + granted);
 }
 
-/** Worn armour sets the base; without it you are as hard to hit as you are quick. */
+/**
+ * Worn armour sets the base; without it you are as hard to hit as you are quick.
+ *
+ * AC READS AGI, NOT DEX, and that is a correction. The nine-stat split gives
+ * DEX accuracy — it decides whether YOUR blow lands — and AGI evasion, which
+ * decides whether THEIRS does. AC was reading DEX, so a steady-handed archer
+ * was also hard to hit and AGI bought nothing but tick cost. Not being hit is
+ * the whole of what AGI is for.
+ *
+ * Soaking a hit is a different claim from dodging it, and that one is VIT's —
+ * see `damageReduction` in resolve.ts.
+ */
 export function armourClassFor(sheet: CharacterSheet, inventory?: Inventory): number {
   const base = inventory ? equippedArmour(inventory) : null;
-  return (base ?? 10) + abilityMod(finalAbilities(sheet, inventory).dex) + (sheet.treeBonuses?.ac ?? 0);
+  return (base ?? 10) + abilityMod(finalAbilities(sheet, inventory).agi) + (sheet.treeBonuses?.ac ?? 0);
 }
 
 export type DerivedSheet = {
@@ -348,15 +377,43 @@ export function activeSkills(sheet: CharacterSheet): ActiveSkill[] {
   return [...sheet.background.grantsSkills.map(activate), ...(sheet.learned ?? [])];
 }
 
+export function carryCapacityFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  return CARRY_BASE + finalAbilities(sheet, inventory).str * CARRY_PER_STR;
+}
+
+/**
+ * How far past what you can carry you are, in squares of lost movement.
+ *
+ * Nought while you are within capacity. Deliberately NOT a hard block on
+ * picking things up: loot you cannot carry is loot you resent, and the honest
+ * cost of hauling a hoard up a tower is that you move like somebody hauling a
+ * hoard up a tower.
+ */
+export function overloadFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  if (!inventory) return 0;
+  const over = carriedWeight(inventory) - carryCapacityFor(sheet, inventory);
+  return over <= 0 ? 0 : Math.ceil(over / OVERLOAD_STEP);
+}
+
+export function speedFor(sheet: CharacterSheet, inventory?: Inventory): number {
+  const quick = BASE_SPEED + abilityMod(finalAbilities(sheet, inventory).agi);
+  const load = overloadFor(sheet, inventory);
+  return load > 0 ? Math.max(1, quick - load) : Math.max(MIN_SPEED, quick);
+}
+
 export function derive(sheet: CharacterSheet, inventory: Inventory = emptyInventory()): DerivedSheet {
+  const abilities = finalAbilities(sheet, inventory);
   return {
-    abilities: finalAbilities(sheet, inventory),
+    abilities,
     maxHp: maxHpFor(sheet, inventory),
     maxStamina: maxStaminaFor(sheet, inventory),
     maxMana: maxManaFor(sheet, inventory),
     ac: armourClassFor(sheet, inventory),
     proficiency: proficiencyFor(sheet.level),
-    speed: 6,
+    // Quick people cover more ground. `speed` was a hardcoded 6 derived from
+    // nothing, which left AGI paying for tick cost alone. An overloaded pack
+    // can drag it below the ordinary floor — you can still shuffle.
+    speed: speedFor(sheet, inventory),
     skills: sheet.background.grantsSkills,
   };
 }

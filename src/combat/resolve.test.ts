@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyDamage, attackBonus, CRIT_FLOOR_MIN, critFloor, resolveAttack, resolveSave, rollDeathSave,
+  applyDamage, attackBonus, CRIT_FLOOR_MIN, critFloor, MAX_REDUCTION, resolveAttack, resolveSave,
+  rollDeathSave, soakOf,
 } from './resolve.ts';
 import { addCondition } from './conditions.ts';
 import { combatant, d20Sequence, abilities } from './fixtures.ts';
@@ -144,4 +145,33 @@ test('a crit range never runs away, however lucky', () => {
 test('bad luck is not punished, it is merely not rewarded', () => {
   // A dumped stat should cost you the upside, not hand the enemy an advantage.
   assert.equal(critFloor(combatant('a', { abilities: abilities({ luk: 3 }) })), 20);
+});
+
+/* -------------------------------------------------------------------------- */
+/* VIT soaks — the "physical DEF" that was never implemented                    */
+/* -------------------------------------------------------------------------- */
+
+test('a hardy body takes less from the same blow', () => {
+  const soft = combatant('soft', { abilities: abilities({ vit: 8 }), hp: 30, maxHp: 30 });
+  const hard = combatant('hard', { abilities: abilities({ vit: 18 }), hp: 30, maxHp: 30 });
+  assert.ok(applyDamage(hard, 12).hp > applyDamage(soft, 12).hp);
+});
+
+test('soak never makes a landed blow free', () => {
+  const hard = combatant('hard', { abilities: abilities({ vit: 20 }), hp: 30, maxHp: 30 });
+  assert.equal(applyDamage(hard, 1).hp, 29, 'something always lands');
+});
+
+test('soak is capped by a share of the blow, not just by the stat', () => {
+  // Flat reduction was measured and rejected: taking 2 off a 3-damage hit is
+  // most of it, and off a 20-damage hit is nothing. It flattened floors 1-5
+  // and steepened floor 20.
+  const hard = combatant('hard', { abilities: abilities({ vit: 18 }), hp: 40, maxHp: 40 });
+  assert.equal(soakOf(hard, 3), 1, 'a small hit loses at most a third');
+  assert.equal(soakOf(hard, 30), MAX_REDUCTION, 'a big one loses the stat, and no more');
+});
+
+test('nothing soaks what was never damage', () => {
+  const c = combatant('c', { abilities: abilities({ vit: 18 }) });
+  assert.equal(applyDamage(c, 0).hp, c.hp);
 });

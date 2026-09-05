@@ -1,4 +1,7 @@
 import type { Abilities } from '../combat/types.ts';
+import { signetsFor } from './signetbook.ts';
+import { gateOpen } from './signet.ts';
+import { dispositionOf } from '../character/persona.ts';
 import { equip, unequip } from '../items/types.ts';
 import type { Slot } from '../items/types.ts';
 import { allocate } from './allocate.ts';
@@ -33,7 +36,17 @@ export type SheetAction =
   | { type: 'unequip'; slot: Slot }
   | { type: 'use'; item: string }
   /** Taken once, at level three. It reshapes the tree by opening an island. */
-  | { type: 'chooseSubclass'; id: string };
+  | { type: 'chooseSubclass'; id: string }
+  /**
+   * Claim a Signet whose gate has opened.
+   *
+   * The last step of a system that was otherwise complete: Signets were
+   * generated, proved reachable, filtered for visibility and rendered with a
+   * "within reach" tag — and `CharacterSheet.signets` was written by NO code
+   * path, so none of them could ever be acquired. `SignetView.available` has
+   * said "the gate is open and it can be claimed" the whole time.
+   */
+  | { type: 'claimSignet'; id: string };
 
 /** The log entry. Mirrors TurnRecord's shape so the fold can tell them apart. */
 export type SheetRecord = { kind: 'sheet'; action: SheetAction };
@@ -58,7 +71,7 @@ export const contextOf = (state: PlayState): TraitContext => ({
   sheet: state.sheet,
   inventory: state.pc.inventory,
   counters: state.sheet.counters,
-  personality: state.sheet.personality,
+  personality: dispositionOf(state.sheet),
 });
 
 /**
@@ -102,6 +115,27 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       const used = useItem(state, action.item);
       if (used.error) return { state, error: used.error, note: null };
       return settle(used.state, state, used.narration);
+    }
+
+    case 'claimSignet': {
+      const held = state.sheet.signets ?? [];
+      if (held.includes(action.id)) return { state, error: 'already yours', note: null };
+
+      const world = { flags: state.world.flags, deepestFloor: state.world.deepestFloor };
+      const signet = signetsFor(state).kept.find((s) => s.id === action.id);
+      if (!signet) return { state, error: 'no such signet', note: null };
+
+      // The gate is re-checked here rather than trusted from the view, because
+      // the view is a suggestion and this is the boundary.
+      if (!gateOpen(signet.gate, contextOf(state), world)) {
+        return { state, error: 'it is not within reach yet', note: null };
+      }
+
+      return settle(
+        { ...state, sheet: { ...state.sheet, signets: [...held, signet.id] } },
+        state,
+        `${signet.name} claimed`,
+      );
     }
 
     case 'chooseSubclass': {

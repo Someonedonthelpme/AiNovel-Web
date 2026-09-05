@@ -1,4 +1,4 @@
-import { neutralPersonality, restingMind } from '../character/persona.ts';
+import { neutralTemperament, metNeeds } from '../character/persona.ts';
 import type { NpcVoice, Person, Place, PlaceId, Region, World } from './types.ts';
 
 export function place(id: PlaceId, over: Partial<Place> = {}): Place {
@@ -49,10 +49,10 @@ export function person(id: string, over: Partial<Person> = {}): Person {
     lastSeenTurn: 0,
     voice: defaultVoice(),
     status: 'peer',
-    personality: neutralPersonality(),
-    mental: restingMind(),
+    temperament: neutralTemperament(),
+    needs: metNeeds(),
     counters: {},
-    pressure: neutralPersonality(),
+    pressure: neutralTemperament(),
     ...over,
   };
 }

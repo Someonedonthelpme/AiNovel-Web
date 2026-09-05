@@ -72,13 +72,12 @@ export const CHARACTER_SCHEMA = obj(
     voice: obj({ selfPronoun: str, underStress: str }, ['selfPronoun', 'underStress']),
     personality: obj(
       {
-    warmth: { type: 'integer', minimum: -3, maximum: 3 },
+    intuition: { type: 'integer', minimum: -3, maximum: 3 },
+    feeling: { type: 'integer', minimum: -3, maximum: 3 },
     nerve: { type: 'integer', minimum: -3, maximum: 3 },
     discipline: { type: 'integer', minimum: -3, maximum: 3 },
-    candour: { type: 'integer', minimum: -3, maximum: 3 },
-    loyalty: { type: 'integer', minimum: -3, maximum: 3 },
       },
-      ['warmth', 'nerve', 'discipline', 'candour', 'loyalty'],
+      ['intuition', 'feeling', 'nerve', 'discipline'],
     ),
     baseAbilities: abilityScores,
     background: obj(
@@ -133,15 +132,14 @@ const personSchema = obj(
     addressWarm: str,
     particleDistant: str,
     particleWarm: str,
-    warmth: { type: 'integer', minimum: -3, maximum: 3 },
+    intuition: { type: 'integer', minimum: -3, maximum: 3 },
+    feeling: { type: 'integer', minimum: -3, maximum: 3 },
     nerve: { type: 'integer', minimum: -3, maximum: 3 },
     discipline: { type: 'integer', minimum: -3, maximum: 3 },
-    candour: { type: 'integer', minimum: -3, maximum: 3 },
-    loyalty: { type: 'integer', minimum: -3, maximum: 3 },
   },
   ['id', 'name', 'oneLine', 'tags', 'trust', 'status', 'selfPronoun', 'underStress',
    'addressDistant', 'addressWarm', 'particleDistant', 'particleWarm',
-   'warmth', 'nerve', 'discipline', 'candour', 'loyalty'],
+   'intuition', 'feeling', 'nerve', 'discipline'],
 );
 
 export const GROUND_FLOOR_SCHEMA = obj(
@@ -173,11 +171,10 @@ export type GeneratedCharacter = {
   hitDie: number;
   voice: { selfPronoun: string; underStress: string };
   personality: {
-    warmth: number;
+    intuition: number;
+    feeling: number;
     nerve: number;
     discipline: number;
-    candour: number;
-    loyalty: number;
   };
   baseAbilities: Record<string, number>;
   background: {
@@ -223,10 +220,9 @@ export type GeneratedGroundFloor = {
     addressWarm: string;
     particleDistant: string;
     particleWarm: string;
-    warmth: number;
+    intuition: number;
+    feeling: number;
     nerve: number;
     discipline: number;
-    candour: number;
-    loyalty: number;
   }[];
 };

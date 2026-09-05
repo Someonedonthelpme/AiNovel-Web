@@ -143,7 +143,7 @@ test('fatigue and stress dock the ceilings, which is the mental track finally bi
   const fresh = sheet({ baseAbilities: { ...abilities(), vit: 14, con: 14 } });
   const worn = sheet({
     baseAbilities: { ...abilities(), vit: 14, con: 14 },
-    mental: { stress: 8, morale: 0, fatigue: 8 },
+    needs: { rest: 2, food: 10, safety: 2, company: 10, purpose: 10 },
   });
 
   assert.ok(maxStaminaFor(worn) < maxStaminaFor(fresh), 'stress should cost stamina');
@@ -155,7 +155,7 @@ test('a ceiling never falls below one, however worn out', () => {
   // dead end rather than a hard time.
   const wrecked = sheet({
     baseAbilities: { ...abilities(), vit: 8, con: 8 },
-    mental: { stress: 10, morale: -3, fatigue: 10 },
+    needs: { rest: 0, food: 10, safety: 0, company: 10, purpose: 10 },
   });
   assert.ok(maxStaminaFor(wrecked) >= 1);
   assert.ok(maxManaFor(wrecked) >= 1);

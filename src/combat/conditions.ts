@@ -1,21 +1,53 @@
 import type { AdvantageState, Combatant, Condition } from './types.ts';
+import { abilityMod } from './types.ts';
 import { combineAdvantage } from './dice.ts';
 
 export function hasCondition(c: Combatant, kind: Condition): boolean {
   return c.conditions.some((x) => x.kind === kind);
 }
 
+/**
+ * Which stat shrugs a condition off, and by how much.
+ *
+ * Resistance shortens a DURATION rather than rolling a save, for two reasons.
+ * `resolveSave` exists and is called by nothing but its own tests, so
+ * conditions have always landed unconditionally — and `addCondition` is a pure
+ * function with no `Rng`, so a save here would mean threading dice through
+ * every call site. Shortening is deterministic, replays for free, and reads the
+ * same at the table: a tough person is stunned for less time, never for none.
+ *
+ * VIT is the body — being knocked down, held, or rattled senseless.
+ * CON is the mind holding on — poison, fear, and losing your bearings.
+ */
+const RESISTED_BY: Partial<Record<Condition, 'vit' | 'con'>> = {
+  stunned: 'vit', prone: 'vit', grappled: 'vit', restrained: 'vit',
+  poisoned: 'con', frightened: 'con', blinded: 'con',
+};
+
+/** Never immunity: something always lands for at least `MIN_ROUNDS`. */
+export const MIN_ROUNDS = 1;
+
+export function resistedRounds(c: Combatant, kind: Condition, rounds: number): number {
+  const stat = RESISTED_BY[kind];
+  if (!stat) return rounds;
+  const shrug = Math.max(0, abilityMod(c.abilities[stat]));
+  return Math.max(MIN_ROUNDS, rounds - shrug);
+}
+
 export function addCondition(c: Combatant, kind: Condition, roundsLeft: number | null = null): Combatant {
+  // A permanent condition is not shortened — being unconscious is a state, not
+  // a timer somebody tough gets less of.
+  const rounds = roundsLeft === null ? null : resistedRounds(c, kind, roundsLeft);
   if (hasCondition(c, kind)) {
     // Re-applying refreshes the duration; a permanent one stays permanent.
     return {
       ...c,
       conditions: c.conditions.map((x) =>
-        x.kind === kind ? { kind, roundsLeft: x.roundsLeft === null ? null : roundsLeft } : x,
+        x.kind === kind ? { kind, roundsLeft: x.roundsLeft === null ? null : rounds } : x,
       ),
     };
   }
-  return { ...c, conditions: [...c.conditions, { kind, roundsLeft }] };
+  return { ...c, conditions: [...c.conditions, { kind, roundsLeft: rounds }] };
 }
 
 export function removeCondition(c: Combatant, kind: Condition): Combatant {

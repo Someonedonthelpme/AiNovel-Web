@@ -164,7 +164,7 @@ export const THEMES: readonly TraitTheme[] = [
       { kind: 'counter', counter: COUNTERS.peopleMet, low: 8, high: 22 },
       { kind: 'ability', ability: 'cha', low: 13, high: 17 },
       { kind: 'personality', axis: 'warmth', over: true },
-      { kind: 'personality', axis: 'loyalty', over: true },
+      { kind: 'personality', axis: 'feeling', over: true },
     ],
     adjectives: [
       { en: 'Known', th: 'เป็นที่รู้จัก' }, { en: 'Owed', th: 'ติดค้าง' },

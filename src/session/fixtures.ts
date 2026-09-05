@@ -1,6 +1,6 @@
 import { sword } from '../combat/fixtures.ts';
 import type { Abilities } from '../combat/types.ts';
-import { neutralPersonality, restingMind } from '../character/persona.ts';
+import { neutralTemperament, metNeeds } from '../character/persona.ts';
 import type { Background, CharacterSheet, Skill } from './sheet.ts';
 import { defaultAbilities } from './sheet.ts';
 
@@ -54,10 +54,10 @@ export function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
     hitDie: 10,
     voice: { selfPronoun: 'I', underStress: 'I', addressBands: {}, particleBands: {}, tics: [] },
     status: 'peer',
-    personality: neutralPersonality(),
-    mental: restingMind(),
+    temperament: neutralTemperament(),
+    needs: metNeeds(),
     counters: {},
-    pressure: neutralPersonality(),
+    pressure: neutralTemperament(),
     ...over,
   };
 }

@@ -1,4 +1,5 @@
 import { counterOf } from '../character/persona.ts';
+import { dispositionOf } from '../character/persona.ts';
 import type { Axis, Counters, Personality } from '../character/persona.ts';
 import type { Ability } from '../combat/types.ts';
 import type { GraftSpec } from './graft.ts';
@@ -317,7 +318,7 @@ export function awardTraits(
     sheet,
     inventory,
     counters: sheet.counters,
-    personality: sheet.personality,
+    personality: dispositionOf(sheet),
   };
 
   const earned = newlyEarned(catalogue, sheet.traits, ctx);

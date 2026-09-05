@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { dispositionOf } from '../character/persona.ts';
 import assert from 'node:assert/strict';
 import { admissible, gateOpen, unsatisfiable, validateSignet, visibleSignets } from './signet.ts';
 import type { Gate, Reachable, Signet } from './signet.ts';
@@ -9,13 +10,15 @@ import { addItem } from '../items/types.ts';
 import { material } from '../items/catalogue.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import { playState } from './fixtures.ts';
+import { applySheetAction, sheetRecord } from './sheetaction.ts';
+import { foldPlay } from './delta.ts';
 import type { PlayState } from './state.ts';
 
 const ctxOf = (state: PlayState): TraitContext => ({
   sheet: state.sheet,
   inventory: state.pc.inventory,
   counters: state.sheet.counters,
-  personality: state.sheet.personality,
+  personality: dispositionOf(state.sheet),
 });
 
 const world = (over: Partial<PlayState['world']> = {}) => ({ flags: {}, deepestFloor: 0, ...over });
@@ -198,4 +201,71 @@ test('admissible keeps the sound and drops the rest, with reasons', () => {
   assert.deepEqual(result.kept.map((s) => s.id), ['good']);
   assert.equal(result.discarded[0].signet.id, 'bad');
   assert.ok(result.discarded[0].problems.length > 0);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Claiming — the step that was never built                                     */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * `CharacterSheet.signets` was written by no code path at all. Signets were
+ * generated, proved reachable, filtered for visibility and tagged "within
+ * reach" in the panel — and could never be acquired. `SignetView.available`
+ * said "the gate is open and it can be claimed" the whole time.
+ */
+
+/** A run far enough along that at least some gates have opened. */
+function wellTravelled(): PlayState {
+  const base = playState();
+  return {
+    ...base,
+    world: { ...base.world, deepestFloor: 12, flags: { ...base.world.flags } },
+    sheet: {
+      ...base.sheet,
+      level: 8,
+      counters: {
+        [COUNTERS.kills]: 60, [COUNTERS.fightsWon]: 40, [COUNTERS.floorsClimbed]: 20,
+        [COUNTERS.deepestFloor]: 12, [COUNTERS.placesFound]: 40, [COUNTERS.peopleMet]: 20,
+        [COUNTERS.shortRests]: 30, [COUNTERS.longRests]: 10, [COUNTERS.itemsUsed]: 25,
+      },
+    },
+  };
+}
+
+const openHere = (state: PlayState) =>
+  signetsFor(state).kept.find((s) =>
+    gateOpen(s.gate, ctxOf(state), { flags: state.world.flags, deepestFloor: state.world.deepestFloor }));
+
+test('a signet whose gate is open can be claimed, and is then held', () => {
+  const state = wellTravelled();
+  const target = openHere(state);
+  assert.ok(target, 'a well-travelled run should have reached at least one signet');
+
+  const after = applySheetAction(state, { type: 'claimSignet', id: target.id });
+  assert.equal(after.error, null);
+  assert.ok((after.state.sheet.signets ?? []).includes(target.id), 'it is on the sheet');
+});
+
+test('claiming the same signet twice is refused', () => {
+  const state = wellTravelled();
+  const target = openHere(state);
+  assert.ok(target);
+
+  const once = applySheetAction(state, { type: 'claimSignet', id: target.id }).state;
+  const twice = applySheetAction(once, { type: 'claimSignet', id: target.id });
+  assert.match(twice.error ?? '', /already yours/);
+});
+
+test('an unknown signet id is refused rather than throwing', () => {
+  const after = applySheetAction(wellTravelled(), { type: 'claimSignet', id: 'no_such_thing' });
+  assert.match(after.error ?? '', /no such signet/);
+});
+
+test('a claimed signet survives a reload, because claiming is an event', () => {
+  const state = wellTravelled();
+  const target = openHere(state);
+  assert.ok(target);
+
+  const replayed = foldPlay(state, [sheetRecord({ type: 'claimSignet', id: target.id })]);
+  assert.ok((replayed.sheet.signets ?? []).includes(target.id));
 });

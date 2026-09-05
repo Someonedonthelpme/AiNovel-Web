@@ -3,6 +3,8 @@ import { bumpCounter } from '../character/persona.ts';
 import { awardTraits, COUNTERS } from './traits.ts';
 import type { Trait } from './traits.ts';
 import { traitOriginOf, traitsFor } from './traitbook.ts';
+import { applyClimb } from './climb.ts';
+import type { ClimbRecord } from './climb.ts';
 import { applySheetAction } from './sheetaction.ts';
 import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
@@ -273,6 +275,10 @@ function causesFor(state: PlayState, record: TurnRecord): { npc: DriftCause[]; p
 
   if (record.delta.timeSpent) pc.push({ kind: 'travel', cost: record.delta.timeSpent });
 
+  // Resting was a `DriftCause` that nothing ever emitted, so the one thing that
+  // restores a need could never reach the person it restores.
+  if (record.delta.rest) pc.push({ kind: 'rest', quality: record.delta.rest === 'long' ? 3 : 1 });
+
   const region = state.world.regions[state.world.currentRegion];
   if (region && region.detail === 'full' && region.danger > 0) {
     pc.push({ kind: 'danger', level: region.danger });
@@ -344,6 +350,9 @@ export function foldPlay(initial: PlayState, events: readonly { kind: string }[]
     // in-memory fight and the lossy snapshot both fell into.
     if (event.kind === 'turn') state = applyTurn(state, event as TurnRecord).state;
     else if (event.kind === 'sheet') state = applySheetAction(state, (event as SheetRecord).action).state;
+    // A crossing carries the floor that was generated to make it, because a
+    // model call cannot be repeated inside a synchronous fold.
+    else if (event.kind === 'climb') state = applyClimb(state, event as ClimbRecord).state;
   }
   return state;
 }

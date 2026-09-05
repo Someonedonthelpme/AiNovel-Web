@@ -1,4 +1,4 @@
-import type { MentalState, NpcVoice, Personality, Status } from '../character/persona.ts';
+import type { Needs, NpcVoice, Status, Temperament } from '../character/persona.ts';
 import { registerTrust } from '../character/persona.ts';
 
 /**
@@ -49,9 +49,9 @@ export type Speaker = { id: string; voice: NpcVoice };
  * something the player HEARS rather than a number on a sheet.
  */
 export function registerForPerson(
-  who: Speaker & { trust: number; personality: Personality; mental: MentalState },
+  who: Speaker & { trust: number; temperament: Temperament; needs: Needs },
 ): RegisterInstruction {
-  return registerFor(who, registerTrust(who.trust, who.personality, who.mental));
+  return registerFor(who, registerTrust(who.trust, who));
 }
 
 export function registerFor(who: Speaker, trust: number): RegisterInstruction {

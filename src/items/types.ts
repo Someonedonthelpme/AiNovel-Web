@@ -1,4 +1,6 @@
 import type { Ability, Attack } from '../combat/types.ts';
+import { join, rect, shapeFrom } from './shape.ts';
+import type { Shape } from './shape.ts';
 
 /**
  * Things you carry.
@@ -51,6 +53,23 @@ export type Item = {
    * travel with the object rather than being inferred later.
    */
   foundOn?: number;
+  /**
+   * How much of your back it takes up.
+   *
+   * Optional, and defaulted by kind in `weightOf`, so the dozens of places that
+   * build an item need not each name a number — and nothing generated is ever
+   * accidentally weightless. Set it only where a thing is unusually heavy or
+   * light for its kind.
+   */
+  weight?: number;
+  /**
+   * Its silhouette in a slot inventory, as a mask (see `shape.ts`).
+   *
+   * Optional, like `weight`, and for the same reason: `shapeOf` falls back to
+   * the archetype it was generated from and then to its kind, so nothing is
+   * ever shapeless. Set it only to override.
+   */
+  shape?: string;
   /** Whether several of these collapse into one line. */
   stackable: boolean;
   /** Rough worth, for shops and for sorting. */
@@ -170,4 +189,96 @@ export function equippedGrants(inv: Inventory): Partial<Record<Ability, number>>
 /** The attack a wielded weapon offers, if one is wielded. */
 export function equippedAttack(inv: Inventory): Attack | null {
   return equippedItems(inv).find((i) => i.attack)?.attack ?? null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Load                                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a thing weighs when nobody said.
+ *
+ * STR has claimed "carrying" since the nine stats were written and there was no
+ * weight in the game at all — `stripMechanics` even deletes "Weight: 3 lbs"
+ * from generated item text, correctly, because the model must not invent
+ * numbers the engine uses. So the engine supplies them.
+ */
+const DEFAULT_WEIGHT: Record<ItemKind, number> = {
+  equipment: 3,
+  consumable: 1,
+  material: 1,
+  key: 0,
+};
+
+/** Armour is the heavy exception; everything else follows its kind. */
+export const weightOf = (item: Item): number =>
+  item.weight ?? (item.slot === 'armour' ? 8 : DEFAULT_WEIGHT[item.kind]);
+
+export const carriedWeight = (inventory: Inventory): number =>
+  inventory.stacks.reduce((total, stack) => total + weightOf(stack.item) * stack.count, 0);
+
+/* -------------------------------------------------------------------------- */
+/* Silhouette                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a thing looks like on a grid, ASSEMBLED FROM SQUARES.
+ *
+ * A haft is a line and a head is a blob; joining them is what makes a
+ * one-headed axe an L and a two-headed axe a T. Building the archetypes this
+ * way rather than hand-drawing each mask means a generated weapon can take its
+ * silhouette from the parts it was generated with.
+ */
+const HAFT = (length: number) => rect(1, length);
+const HEAD = (width: number) => rect(width, 1);
+
+const ARCHETYPES: Record<string, Shape> = {
+  // A blade is its own length; nothing to join.
+  shortsword: rect(1, 3),
+  longsword: rect(1, 5),
+  dagger: rect(1, 2),
+  'longknife': rect(1, 2),
+  spear: rect(1, 4),
+  // Haft, then a head hung off the top — the L the user described.
+  axe: join(HAFT(3), HEAD(1), { x: 1, y: 0 }),
+  // Two heads, one either side, and the T falls out of it.
+  greataxe: join(HEAD(3), HAFT(3), { x: 1, y: 1 }),
+  bow: rect(1, 4),
+  sling: rect(1, 2),
+};
+
+/** Failing an archetype, a shape from what kind of thing it is. */
+const KIND_SHAPES: Record<ItemKind, Shape> = {
+  consumable: rect(1, 1),
+  material: rect(1, 1),
+  key: rect(1, 1),
+  equipment: rect(2, 2),
+};
+
+/**
+ * Generated ids carry their archetype — `weapon_axe_d8`, `weapon_longknife_d6`
+ * — so the slug is where the silhouette comes from without anything having to
+ * be authored per generated item.
+ */
+/*
+ * LONGEST NAME WINS. `weapon_greataxe_d12` contains "axe", so scanning in
+ * declaration order gave a great-axe the silhouette of an ordinary one — a
+ * two-headed weapon quietly drawn as a one-headed weapon.
+ */
+const ARCHETYPE_NAMES = Object.keys(ARCHETYPES).sort((a, b) => b.length - a.length);
+
+function archetypeOf(id: string): Shape | null {
+  const slug = id.toLowerCase().replace(/[^a-z]/g, '');
+  for (const name of ARCHETYPE_NAMES) {
+    if (slug.includes(name)) return ARCHETYPES[name];
+  }
+  return null;
+}
+
+export function shapeOf(item: Item): Shape {
+  if (item.shape) return shapeFrom(item.shape);
+  const named = archetypeOf(item.id);
+  if (named) return named;
+  if (item.slot === 'armour') return rect(2, 3);
+  return KIND_SHAPES[item.kind];
 }

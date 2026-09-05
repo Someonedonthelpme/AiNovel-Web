@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { hasCondition } from '../combat/conditions.ts';
+import { soakOf } from '../combat/resolve.ts';
 import { referencePc } from '../combat/statblock.ts';
 import { edgeFor, isCombatUsable, needsTarget, radiusOf, refreshUses, resolveSkill, spendUse, usesLeft } from './active.ts';
 import type { ActiveSkill } from './active.ts';
@@ -131,11 +132,34 @@ test('a usable skill is offered once something is in reach', () => {
   assert.match(offered[0].label, /stamina|mana/, 'and it says what it will cost');
 });
 
+/**
+ * Put the player next to something, without walking there.
+ *
+ * `closeIn` paths across the arena, which makes any test using it depend on
+ * movement — and speed now derives from AGI, so that pathing shifted under
+ * tests that were never about pathing. These two are about what a skill COSTS.
+ */
+function beside(start: PlayState): PlayState {
+  const combat = start.combat!;
+  const me = combat.combatants['pc'];
+  const foe = Object.values(combat.combatants).find((c) => c.side === 'foe' && !c.dead)!;
+  return {
+    ...start,
+    combat: {
+      ...combat,
+      combatants: {
+        ...combat.combatants,
+        pc: { ...me, pos: { x: foe.pos.x - 1, y: foe.pos.y } },
+      },
+    },
+  };
+}
+
 test('a skill you cannot pay for is not offered at all', () => {
   // Option lists in this game have always been legal moves only — offering
   // something and then refusing it would break that.
-  const state = closeIn(beginEncounter(withSkill(dangerous(), hinder)), hinder.id);
-  assert.ok(awaitingPlayer(state), 'the fixture should have reached the player');
+  const state = beside(beginEncounter(withSkill(dangerous(), hinder)));
+  assert.ok(optionsFor(state, hinder.id).length > 0, 'standing next to it, the skill is on the list');
 
   const broke = {
     ...state,
@@ -151,8 +175,7 @@ test('a skill you cannot pay for is not offered at all', () => {
 });
 
 test('using a skill spends from its pool and lands the effect', () => {
-  const state = closeIn(beginEncounter(withSkill(dangerous(), hinder)), hinder.id);
-  assert.ok(awaitingPlayer(state), 'the fixture should have reached the player');
+  const state = beside(beginEncounter(withSkill(dangerous(), hinder)));
 
   const before = state.combat!.combatants['pc'];
   const [option] = optionsFor(state, hinder.id);
@@ -267,9 +290,11 @@ test('a drain hurts them and feeds you', () => {
   const them = combatant({ id: 'foe1', name: 'wolf', hp: 20, maxHp: 20 });
   const drain: ActiveSkill = { ...hinder, id: 'sk_drain', effect: { kind: 'drain', damage: 6, heal: 3 } };
 
+  // 6 damage, less the target's VIT soak. Skills go through the engine's own
+  // `applyDamage`, so they are reduced exactly as a sword blow is.
   const out = resolveSkill(drain, me, [them]);
-  assert.equal(out.affected[0].hp, 14);
-  assert.equal(out.actor.hp, 8);
+  assert.equal(out.affected[0].hp, 20 - (6 - soakOf(them, 6)));
+  assert.equal(out.actor.hp, 8, 'what you drain is not reduced — you take all of it');
 });
 
 test('a drain cannot overfill you either', () => {
@@ -290,7 +315,7 @@ test('a burst catches everyone it was given', () => {
 
   const out = resolveSkill(burst, me, pack);
   assert.equal(out.affected.length, 3);
-  assert.ok(out.affected.every((c) => c.hp === 15));
+  assert.ok(out.affected.every((c) => c.hp === 20 - (5 - soakOf(c, 5))), 'each soaks it by their own VIT');
 });
 
 test('a hex both hurts and sticks', () => {
@@ -301,7 +326,7 @@ test('a hex both hurts and sticks', () => {
   };
 
   const out = resolveSkill(hex, me, [them]);
-  assert.equal(out.affected[0].hp, 16);
+  assert.equal(out.affected[0].hp, 20 - (4 - soakOf(them, 4)));
   assert.equal(hasCondition(out.affected[0], 'poisoned'), true);
 });
 

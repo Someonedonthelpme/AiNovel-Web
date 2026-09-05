@@ -1,8 +1,10 @@
 import type { ActiveCondition } from '../combat/types.ts';
+import { NEED_MAX, dispositionOf } from '../character/persona.ts';
 import { RATION_ID } from '../items/catalogue.ts';
 import { countOf, findItem, removeItem } from '../items/types.ts';
 import type { Inventory, ItemEffect } from '../items/types.ts';
-import { derive } from '../session/sheet.ts';
+import { derive, finalAbilities } from '../session/sheet.ts';
+import { abilityMod } from '../combat/types.ts';
 import { refreshUses } from '../skills/active.ts';
 import { isSkillBook } from '../skills/book.ts';
 import { conditionMet } from './traits.ts';
@@ -76,7 +78,16 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
   const before = state.pc.hp;
 
   if (kind === 'short') {
-    const healed = Math.max(1, Math.floor(maxHp / 4));
+    /*
+     * VIT DRIVES RECOVERY, not just the ceiling.
+     *
+     * A short rest healed a flat quarter of maximum, so VIT decided how much of
+     * you there was and said nothing about how fast you came back — even though
+     * "HP recovery" is the second thing the stat claims to do. A hardy person
+     * now gets more out of the same hour.
+     */
+    const vit = abilityMod(finalAbilities(state.sheet, state.pc.inventory).vit);
+    const healed = Math.max(1, Math.floor(maxHp / 4) + vit);
     const inventory = removeItem(state.pc.inventory, RATION_ID, 1);
     return {
       state: {
@@ -99,7 +110,7 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
           mana: Math.min(maxMana, state.pc.mana + Math.max(1, Math.floor(maxMana / 4))),
           skillUses: refreshUses(),
         },
-        sheet: { ...state.sheet, mental: easedShort(state.sheet.mental) },
+        sheet: { ...state.sheet, needs: easedShort(state.sheet.needs) },
         world: { ...state.world, turn: state.world.turn + SHORT_REST_TURNS },
       },
       healed: Math.min(maxHp, before + healed) - before,
@@ -111,11 +122,12 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
   return {
     state: {
       ...state,
-      // A long rest fills everything. It also clears stress and fatigue, which
-      // is what lifts the pool CEILINGS back up — resting is now the only way
-      // to undo what a hard climb took off the top.
+      // A long rest fills everything. It also meets rest and safety outright,
+      // which is what lifts the pool CEILINGS back up — resting is the only way
+      // to undo what a hard climb took off the top. Food, company and purpose
+      // are not things sleeping fixes.
       pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], stamina: maxStamina, mana: maxMana, skillUses: refreshUses() },
-      sheet: { ...state.sheet, mental: { stress: 0, morale: state.sheet.mental.morale, fatigue: 0 } },
+      sheet: { ...state.sheet, needs: { ...state.sheet.needs, rest: NEED_MAX, safety: NEED_MAX } },
       world: { ...state.world, turn: state.world.turn + LONG_REST_TURNS },
     },
     healed: maxHp - before,
@@ -125,10 +137,10 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
 }
 
 /** A short rest takes the edge off without resetting anyone. */
-const easedShort = (mental: PlayState['sheet']['mental']) => ({
-  ...mental,
-  stress: Math.max(0, mental.stress - 2),
-  fatigue: Math.max(0, mental.fatigue - 2),
+const easedShort = (needs: PlayState['sheet']['needs']) => ({
+  ...needs,
+  safety: Math.min(NEED_MAX, needs.safety + 2),
+  rest: Math.min(NEED_MAX, needs.rest + 2),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -165,7 +177,7 @@ export function useItem(state: PlayState, itemId: string): UseResult {
       return { state, narration: null, error: 'this follows on from something you have not read' };
     }
 
-    const context = { sheet: state.sheet, inventory: state.pc.inventory, counters: state.sheet.counters, personality: state.sheet.personality };
+    const context = { sheet: state.sheet, inventory: state.pc.inventory, counters: state.sheet.counters, personality: dispositionOf(state.sheet) };
     const notReady = (item.teaches.requires ?? []).filter((c) => !conditionMet(c, context));
     if (notReady.length) {
       return { state, narration: null, error: 'you read it, and none of it makes sense yet' };
@@ -215,7 +227,7 @@ function applyEffect(state: PlayState, effect: ItemEffect): { state: PlayState; 
   if (effect.kind === 'restore') {
     // Eating outside a rest is just eating: it steadies you, nothing more.
     return {
-      state: { ...state, sheet: { ...state.sheet, mental: easedShort(state.sheet.mental) } },
+      state: { ...state, sheet: { ...state.sheet, needs: easedShort(state.sheet.needs) } },
       narration: 'steadier',
     };
   }

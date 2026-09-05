@@ -1,5 +1,7 @@
 import { describeMental, describePersonality } from '../character/persona.ts';
-import type { MentalState, Personality } from '../character/persona.ts';
+import { dispositionOf } from '../character/persona.ts';
+import { carriedWeight } from '../items/types.ts';
+import type { Needs, Personality } from '../character/persona.ts';
 import { describeChanges } from '../character/drift.ts';
 import { pgFactRetriever } from '../db/facts.ts';
 import { bootstrap } from '../db/db.ts';
@@ -29,7 +31,7 @@ import { runGenesis } from '../session/genesis.ts';
 import { recordAnswer, setDraft, startInterview, STAGES } from '../session/interview.ts';
 import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
-import { activeSkills, derive } from '../session/sheet.ts';
+import { activeSkills, derive, carryCapacityFor } from '../session/sheet.ts';
 import { canChooseSubclassOf, classOf, subclassOf } from '../character/classes.ts';
 import { usesLeft } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
@@ -114,11 +116,16 @@ export type GameView = {
     hp: number;
     maxHp: number;
     ac: number;
+    /** What you are hauling, against what you can. Overload costs movement. */
+    carried: number;
+    capacity: number;
+    /** What is acting on you right now, outside a fight as well as inside one. */
+    conditions: string[];
     abilities: Record<string, number>;
     traits: string[];
     skills: { name: string; kind: string; description: string; effect: string; usesLeft: number; usesPerRest: number }[];
     personality: Personality;
-    mental: MentalState;
+    needs: Needs;
     voice: { selfPronoun: string; underStress: string };
     xp: number;
     xpToNext: number;
@@ -154,6 +161,8 @@ export type GameView = {
   };
   traits: {
     id: string; name: string; description: string; held: boolean;
+    /** What you became. Present only once earned — see `traitsViewOf`. */
+    note: string | null;
     progress: { label: string; have: number; need: number; met: boolean }[];
   }[];
   signets: { id: string; name: string; description: string; held: boolean; available: boolean; augments: string }[];
@@ -235,6 +244,9 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       hp: state.pc.hp,
       maxHp: state.pc.maxHp,
       ac: d.ac,
+      carried: carriedWeight(state.pc.inventory),
+      capacity: carryCapacityFor(state.sheet, state.pc.inventory),
+      conditions: state.pc.conditions.map((c) => c.kind),
       abilities: d.abilities,
       traits: state.sheet.traits,
       // Actives, with what they do and what is left of them — a skill the
@@ -247,8 +259,8 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
         usesLeft: usesLeft(s, state.pc.skillUses),
         usesPerRest: s.usesPerRest,
       })),
-      personality: state.sheet.personality,
-      mental: state.sheet.mental,
+      personality: dispositionOf(state.sheet),
+      needs: state.sheet.needs,
       voice: { selfPronoun: state.sheet.voice.selfPronoun, underStress: state.sheet.voice.underStress },
       xp: state.sheet.xp ?? 0,
       xpToNext: xpToNext(state.sheet.level),
@@ -289,8 +301,8 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
         name: p.name,
         oneLine: p.oneLine,
         trust: p.trust,
-        disposition: describePersonality(p.personality),
-        condition: describeMental(p.mental),
+        disposition: describePersonality(dispositionOf(p)),
+        condition: describeMental(p.needs),
       })),
     inventory: inventoryViewOf(state),
     tree: treeViewOf(state),
@@ -467,10 +479,13 @@ export async function climbFloor(id: string): Promise<ClimbOutcomeView | null> {
   if (!loaded) return null;
 
   const result = await climb(provider(), loaded.state);
-  if (result.error) {
+  if (result.error || !result.record) {
     return { view: viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, arrived: null };
   }
 
+  // The crossing goes in the log, carrying the floor that was generated to make
+  // it — a synchronous fold holds no Provider and could never rebuild one.
+  await appendTurn(id, result.record);
   // A new floor is a large change; snapshot rather than replay it later.
   await saveSnapshot(id, result.state);
   const region = activeRegion(result.state.world);
@@ -629,6 +644,20 @@ export function traitsViewOf(state: PlayState): GameView['traits'] {
     name: trait.name,
     description: trait.description,
     held: held.has(trait.id),
+    /*
+     * The note, which nothing has ever read.
+     *
+     * `Trait.grants.note` is set by every authored, generated and emergent
+     * trait and was consumed by nobody — so the twelve authored traits carry
+     * lines strictly better than their own descriptions ("You have stopped
+     * flinching first.", "Frightened people tell you things.") that no player
+     * has ever seen.
+     *
+     * Shown only once EARNED, on purpose. A note says what you have become; as
+     * an unearned goal it would read as a promise, and for an emergent trait
+     * that would be the aiming the trait claims you did not do.
+     */
+    note: held.has(trait.id) ? trait.grants?.note ?? null : null,
     progress: progressOf(trait, ctx).map((p) => ({ label: p.label, have: p.have, need: p.need, met: p.met })),
   }));
 }

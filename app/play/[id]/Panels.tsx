@@ -40,19 +40,29 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 /* Character: what you carry, and where unspent points go                      */
 /* -------------------------------------------------------------------------- */
 
-export function CharacterPanel({ view, act, busy, onClose }: {
-  view: GameView; act: Act; busy: boolean; onClose: () => void;
-}) {
+function StatusTab({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   const c = view.character;
+  const [open, setOpen] = useState(false);
 
   return (
-    <Modal title={c.name} onClose={onClose}>
+    <div className="sheet-split">
+      {/* The portrait. A 2D picture or a 3D model belongs here; until the body
+          field lands there is a frame and the words the character was given. */}
+      <aside className="sheet-aside portrait">
+        <div className="portrait-frame">
+          <span className="muted">no likeness yet</span>
+        </div>
+        <p className="muted" style={{ margin: '0.5rem 0 0', fontSize: '0.8rem' }}>
+          {c.background} · level {c.level}
+        </p>
+        <div className="tags">{c.traits.map((t) => <span className="tag" key={t}>{t}</span>)}</div>
+      </aside>
+
+      <div className="sheet-main">
       <div className="tabs">
         {c.className && <span className="tag" style={{ color: 'var(--amber)' }}>{c.className}</span>}
         {c.subclassName && <span className="tag">{c.subclassName}</span>}
-        <span className="tag">level {c.level}</span>
         <span className="tag">{c.xp} / {c.xpToNext} xp</span>
-        <span className="tag">{c.coin} coin</span>
         {c.abilityPoints > 0 && (
           <span className="points">{c.abilityPoints} ability point{c.abilityPoints > 1 ? 's' : ''} unspent</span>
         )}
@@ -72,7 +82,77 @@ export function CharacterPanel({ view, act, busy, onClose }: {
         </div>
       ))}
 
-      <p className="label" style={{ marginTop: '1.2rem' }}>Carrying</p>
+      {/* The expandable strip the mock-up puts under the stats: everything
+          currently acting on you, without crowding the numbers above it. */}
+      <button className="mini" style={{ marginTop: '1rem' }} onClick={() => setOpen(!open)}>
+        {open ? 'hide' : 'expand'} full status
+      </button>
+      {open && (
+        <div className="status-strip">
+          <p className="label">Condition</p>
+          {c.conditions.length === 0
+            ? <p className="muted">Nothing is acting on you.</p>
+            : <div className="tags">{c.conditions.map((x) => <span className="tag" key={x}>{x}</span>)}</div>}
+          <p className="label" style={{ marginTop: '0.8rem' }}>Needs</p>
+          <div className="tags">
+            {Object.entries(c.needs).map(([need, value]) => (
+              <span className="tag" key={need}>{need} {value as number}/10</span>
+            ))}
+          </div>
+          <p className="label" style={{ marginTop: '0.8rem' }}>Disposition</p>
+          <div className="tags">
+            {Object.entries(c.personality).map(([axis, value]) => (
+              <span className="tag" key={axis}>{axis} {(value as number) > 0 ? '+' : ''}{value as number}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Inventory: the paper-doll, and what is in the pack                          */
+/* -------------------------------------------------------------------------- */
+
+function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
+  const c = view.character;
+  const worn = view.inventory.stacks.filter((i) => i.equipped);
+
+  return (
+    <div className="sheet-split">
+      {/* The equipment paper-doll. One entry per filled slot for now; when the
+          ruleset defines slots this becomes the full doll whether filled or not. */}
+      <aside className="sheet-aside">
+        <p className="label">Equipment</p>
+        {worn.length === 0 && <p className="muted">Nothing worn.</p>}
+        {worn.map((item) => (
+          <div className="doll-slot" key={item.id}>
+            <span className="muted">{item.slot}</span>
+            <strong>{item.name}</strong>
+            <button
+              className="mini"
+              disabled={busy}
+              onClick={() => act({ type: 'unequip', slot: item.slot as Slot })}
+            >
+              remove
+            </button>
+          </div>
+        ))}
+      </aside>
+
+      <div className="sheet-main">
+      <p className="label">
+        Carrying{' '}
+        <span
+          className="muted"
+          style={{ fontWeight: 400, color: c.carried > c.capacity ? 'var(--bad)' : undefined }}
+          title="over capacity costs you movement"
+        >
+          — {c.carried}/{c.capacity} load
+        </span>
+      </p>
       <div className="row purse">
         <div><strong>coin</strong> <span className="muted">what you have on you</span></div>
         <div className="coin">{c.coin}</div>
@@ -106,7 +186,8 @@ export function CharacterPanel({ view, act, busy, onClose }: {
           </div>
         </div>
       ))}
-    </Modal>
+      </div>
+    </div>
   );
 }
 
@@ -572,6 +653,9 @@ function TraitList({ view }: { view: GameView }) {
             <strong style={{ color: trait.held ? 'var(--amber)' : undefined }}>{trait.name}</strong>{' '}
             {trait.held && <span className="tag" style={{ color: 'var(--good)' }}>earned</span>}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{trait.description}</p>
+            {trait.note && (
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.8rem', color: 'var(--amber)' }}>{trait.note}</p>
+            )}
             {!trait.held && (
               <div style={{ marginTop: '0.3rem' }}>
                 {trait.progress.map((p) => (
@@ -588,7 +672,7 @@ function TraitList({ view }: { view: GameView }) {
   );
 }
 
-function SignetList({ view }: { view: GameView }) {
+function SignetList({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   if (view.signets.length === 0) {
     return (
       <p className="muted">
@@ -604,38 +688,61 @@ function SignetList({ view }: { view: GameView }) {
           <div>
             <strong style={{ color: s.held ? 'var(--amber)' : undefined }}>{s.name}</strong>{' '}
             {s.held && <span className="tag" style={{ color: 'var(--good)' }}>held</span>}
-            {s.available && !s.held && <span className="tag" style={{ color: 'var(--amber)' }}>within reach</span>}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{s.description}</p>
           </div>
+          {s.available && !s.held && (
+            <button className="take" disabled={busy} onClick={() => act({ type: 'claimSignet', id: s.id })}>
+              claim
+            </button>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-export function SkillsPanel({ view, act, busy, onClose }: {
-  view: GameView; act: Act; busy: boolean; onClose: () => void;
+/* -------------------------------------------------------------------------- */
+/* The sheet: one modal, six tabs                                              */
+/* -------------------------------------------------------------------------- */
+
+export const SHEET_TABS = ['status', 'inventory', 'skill', 'trait', 'signet', 'quest'] as const;
+export type SheetTab = (typeof SHEET_TABS)[number];
+
+/**
+ * One panel for everything about the character.
+ *
+ * This replaced two separate modals — a character sheet and a tree/traits/
+ * signets one — which meant the same person was described in two places and
+ * neither held the whole of them. Six tabs, a persistent left column, and one
+ * way in.
+ */
+export function SheetPanel({ view, act, busy, onClose, start = 'status' }: {
+  view: GameView; act: Act; busy: boolean; onClose: () => void; start?: SheetTab;
 }) {
-  const [tab, setTab] = useState<'tree' | 'traits' | 'signets'>('tree');
+  const [tab, setTab] = useState<SheetTab>(start);
+  const c = view.character;
+
+  const badge = (t: SheetTab) =>
+    t === 'skill' && c.skillPoints > 0 ? ` (${c.skillPoints})` : '';
 
   return (
-    <Modal title="Skills" onClose={onClose}>
-      <div className="tabs">
-        <button className={tab === 'tree' ? 'tab on' : 'tab'} onClick={() => setTab('tree')}>
-          tree{view.character.skillPoints > 0 ? ` (${view.character.skillPoints})` : ''}
-        </button>
-        <button className={tab === 'traits' ? 'tab on' : 'tab'} onClick={() => setTab('traits')}>traits</button>
-        <button className={tab === 'signets' ? 'tab on' : 'tab'} onClick={() => setTab('signets')}>signets</button>
+    <Modal title={c.name} onClose={onClose}>
+      <div className="tabs sheet-tabs">
+        {SHEET_TABS.map((t) => (
+          <button key={t} className={tab === t ? 'tab on' : 'tab'} onClick={() => setTab(t)}>
+            {t}{badge(t)}
+          </button>
+        ))}
       </div>
 
       {/* The one choice that reshapes the tree rather than filling it in. */}
-      {tab === 'tree' && view.character.subclassChoices.length > 0 && (
+      {tab === 'skill' && c.subclassChoices.length > 0 && (
         <div className="subclass-prompt">
           <p>
-            <strong>Level {view.character.level}.</strong> Choose a path. It grants a skill outright and
-            opens a way into a discipline your class cannot otherwise reach — and it cannot be changed.
+            <strong>Level {c.level}.</strong> Choose a path. It grants a skill outright and opens a way
+            into a part of the tree your class cannot otherwise reach — and it cannot be changed.
           </p>
-          {view.character.subclassChoices.map((sub) => (
+          {c.subclassChoices.map((sub) => (
             <div className="row" key={sub.id}>
               <div>
                 <strong>{sub.name}</strong>
@@ -650,9 +757,17 @@ export function SkillsPanel({ view, act, busy, onClose }: {
         </div>
       )}
 
-      {tab === 'tree' && <SkillTree view={view} act={act} busy={busy} />}
-      {tab === 'traits' && <TraitList view={view} />}
-      {tab === 'signets' && <SignetList view={view} />}
+      {tab === 'status' && <StatusTab view={view} act={act} busy={busy} />}
+      {tab === 'inventory' && <InventoryTab view={view} act={act} busy={busy} />}
+      {tab === 'skill' && <SkillTree view={view} act={act} busy={busy} />}
+      {tab === 'trait' && <TraitList view={view} />}
+      {tab === 'signet' && <SignetList view={view} act={act} busy={busy} />}
+      {tab === 'quest' && (
+        <p className="muted">
+          Nothing is asked of you yet. Tasks will appear here when the tower, or somebody in it,
+          wants something.
+        </p>
+      )}
     </Modal>
   );
 }

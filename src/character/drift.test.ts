@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDrift, describeChanges, PERSONALITY_THRESHOLD } from './drift.ts';
 import type { DriftCause } from './drift.ts';
-import { clampPersonality, emptyPersona, neutralPersonality, restingMind } from './persona.ts';
+import { NEED_MAX, clampNeeds, clampTemperament, emptyPersona, metNeeds, neutralTemperament } from './persona.ts';
 import type { Persona } from './persona.ts';
 import { defaultVoice } from '../world/fixtures.ts';
 
@@ -21,68 +21,78 @@ function repeat(start: Persona, cause: DriftCause, times: number) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* The fast clock                                                              */
+/* The fast clock: needs                                                       */
 /* -------------------------------------------------------------------------- */
 
-test('state of mind moves immediately', () => {
+test('needs move immediately', () => {
   const r = applyDrift(persona(), [{ kind: 'check', tier: 'miss' }]);
-  assert.equal(r.persona.mental.stress, 1);
-  assert.equal(r.persona.mental.morale, -1);
+  assert.equal(r.persona.needs.safety, NEED_MAX - 1);
+  assert.equal(r.persona.needs.purpose, NEED_MAX - 1);
 });
 
 test('succeeding steadies you; failing wears you down', () => {
-  const won = applyDrift(persona({ mental: { stress: 4, morale: 0, fatigue: 0 } }), [{ kind: 'check', tier: 'hit' }]);
-  assert.equal(won.persona.mental.stress, 3);
-  assert.equal(won.persona.mental.morale, 1);
+  const worn = persona({ needs: clampNeeds({ safety: 4, purpose: 4 }) });
+  const won = applyDrift(worn, [{ kind: 'check', tier: 'hit' }]);
+  assert.equal(won.persona.needs.safety, 5);
+  assert.equal(won.persona.needs.purpose, 5);
 });
 
-test('mental state stays inside its bounds however bad the day', () => {
+test('needs stay inside their bounds however bad the day', () => {
   const r = repeat(persona(), { kind: 'check', tier: 'miss' }, 40);
-  assert.equal(r.persona.mental.stress, 10, 'stress caps');
-  assert.equal(r.persona.mental.morale, -3, 'morale bottoms out on the same band as trust');
+  assert.equal(r.persona.needs.safety, 0, 'safety bottoms out rather than going negative');
+  assert.equal(r.persona.needs.purpose, 0);
 });
 
-test('rest recovers what danger costs', () => {
+test('rest recovers what danger and travel cost', () => {
   const worn = applyDrift(persona(), [{ kind: 'danger', level: 12 }, { kind: 'travel', cost: 3 }]);
-  assert.ok(worn.persona.mental.stress > 0);
-  assert.ok(worn.persona.mental.fatigue > 0);
+  assert.ok(worn.persona.needs.safety < NEED_MAX, 'danger costs safety');
+  assert.ok(worn.persona.needs.rest < NEED_MAX, 'travel costs rest');
 
   const rested = applyDrift(worn.persona, [{ kind: 'rest', quality: 3 }]);
-  assert.ok(rested.persona.mental.stress < worn.persona.mental.stress);
-  assert.ok(rested.persona.mental.fatigue < worn.persona.mental.fatigue);
+  assert.ok(rested.persona.needs.safety > worn.persona.needs.safety);
+  assert.ok(rested.persona.needs.rest > worn.persona.needs.rest);
 });
 
-test('fatigue never goes negative from over-resting', () => {
+test('a need never exceeds met, however long you sleep', () => {
   const r = applyDrift(persona(), [{ kind: 'rest', quality: 9 }]);
-  assert.equal(r.persona.mental.fatigue, 0);
-  assert.equal(r.persona.mental.stress, 0);
+  assert.equal(r.persona.needs.rest, NEED_MAX);
+  assert.equal(r.persona.needs.safety, NEED_MAX);
+});
+
+test('making camp feeds you, but it does not keep you company', () => {
+  // A short rest spends a ration, so food belongs to resting rather than to a
+  // cause of its own. Company does not: sleeping is not a friend.
+  const hungry = persona({ needs: clampNeeds({ food: 2, company: 2 }) });
+  const r = applyDrift(hungry, [{ kind: 'rest', quality: 3 }]);
+  assert.ok(r.persona.needs.food > 2, 'you eat when you make camp');
+  assert.equal(r.persona.needs.company, 2, 'nor is it a friend');
 });
 
 /* -------------------------------------------------------------------------- */
-/* The slow clock                                                              */
+/* The slow clock: temperament                                                 */
 /* -------------------------------------------------------------------------- */
 
 test('one rude exchange does not change who someone is', () => {
   // The whole point of hysteresis: a character is not a mood ring.
   const r = applyDrift(persona(), [{ kind: 'address', tone: 'crude' }]);
   assert.deepEqual(r.changed, []);
-  assert.deepEqual(r.persona.personality, neutralPersonality());
+  assert.deepEqual(r.persona.temperament, neutralTemperament());
 });
 
 test('being spoken to badly, again and again, eventually hardens someone', () => {
   const r = repeat(persona(), { kind: 'address', tone: 'crude' }, 8);
-  assert.ok(r.changes.some((c) => c.axis === 'warmth' && c.to < c.from), 'warmth should have fallen');
-  assert.ok(r.persona.personality.warmth < 0);
+  assert.ok(r.changes.some((c) => c.axis === 'feeling' && c.to < c.from), 'feeling should have fallen');
+  assert.ok(r.persona.temperament.feeling < 0);
 });
 
-test('disposition moves one step at a time, however hard it is pushed', () => {
-  const r = applyDrift(persona({ pressure: clampPersonality({ warmth: 3 }) }), [
+test('temperament moves one step at a time, however hard it is pushed', () => {
+  const r = applyDrift(persona({ pressure: clampTemperament({ feeling: 3 }) }), [
     { kind: 'trust', change: 1 }, { kind: 'trust', change: 1 }, { kind: 'trust', change: 1 },
     { kind: 'trust', change: 1 }, { kind: 'trust', change: 1 }, { kind: 'trust', change: 1 },
   ]);
-  const warmth = r.changed.filter((c) => c.axis === 'warmth');
-  assert.equal(warmth.length, 1, 'a single turn cannot rewrite a personality');
-  assert.equal(r.persona.personality.warmth, 1);
+  const feeling = r.changed.filter((c) => c.axis === 'feeling');
+  assert.equal(feeling.length, 1, 'a single turn cannot rewrite a personality');
+  assert.equal(r.persona.temperament.feeling, 1);
 });
 
 test('pressure bleeds off, so isolated moments never accumulate', () => {
@@ -90,20 +100,27 @@ test('pressure bleeds off, so isolated moments never accumulate', () => {
   // One slight, then a long stretch of nothing.
   current = applyDrift(current, [{ kind: 'address', tone: 'crude' }]).persona;
   const after = repeat(current, { kind: 'travel', cost: 1 }, 6);
-  assert.equal(after.persona.pressure.warmth, 0, 'the grudge faded');
-  assert.deepEqual(after.changes.filter((c) => c.axis === 'warmth'), []);
+  assert.equal(after.persona.pressure.feeling, 0, 'the grudge faded');
+  assert.deepEqual(after.changes.filter((c) => c.axis === 'feeling'), []);
 });
 
 test('someone already at the extreme does not fire a change every turn', () => {
-  const devoted = persona({ personality: clampPersonality({ loyalty: 3 }) });
-  const r = repeat(devoted, { kind: 'trust', change: 2 }, 30);
-  assert.equal(r.persona.personality.loyalty, 3, 'still capped');
-  assert.deepEqual(r.changes.filter((c) => c.axis === 'loyalty'), [], 'and silent about it');
+  const settled = persona({ temperament: clampTemperament({ feeling: 10 }) });
+  const r = repeat(settled, { kind: 'trust', change: 2 }, 30);
+  assert.equal(r.persona.temperament.feeling, 10, 'still capped');
+  assert.deepEqual(r.changes.filter((c) => c.axis === 'feeling'), [], 'and silent about it');
 });
 
 test('the threshold is what stops a character flipping scene to scene', () => {
   const justUnder = repeat(persona(), { kind: 'address', tone: 'crude' }, 2);
-  assert.deepEqual(justUnder.changes, [], `two slights should not cross ${PERSONALITY_THRESHOLD}`);
+  assert.deepEqual(justUnder.changes, [], 'two slights should not cross the threshold');
+  assert.ok(PERSONALITY_THRESHOLD > 2);
+});
+
+test('the wide scale makes drift gradual rather than a sixth of a person', () => {
+  // On the old -3..+3 range one step was a sixth of the whole range.
+  const r = repeat(persona(), { kind: 'address', tone: 'crude' }, 8);
+  assert.equal(r.persona.temperament.feeling, -1, 'one crossing, one point out of ten');
 });
 
 test('drift is deterministic', () => {
@@ -124,24 +141,34 @@ test('nothing happening changes nothing', () => {
 /* Narration                                                                   */
 /* -------------------------------------------------------------------------- */
 
-test('a shifted disposition reads as something that happened, not a number', () => {
+test('a shifted temperament reads as something that happened, not a number', () => {
   const said = describeChanges([
-    { axis: 'warmth', from: 1, to: 0 },
-    { axis: 'loyalty', from: 0, to: 1 },
+    { axis: 'nerve', from: 1, to: 0 },
+    { axis: 'discipline', from: 0, to: 1 },
   ]);
-  assert.deepEqual(said, ['has grown colder toward you', 'is more committed to you than before']);
+  assert.deepEqual(said, ['is losing their nerve', 'has tightened their grip on themselves']);
 });
 
-test('kindness and cruelty push warmth in opposite directions', () => {
+test('kindness and cruelty push in opposite directions', () => {
   const kind = repeat(persona(), { kind: 'trust', change: 1 }, 8);
   const cruel = repeat(persona(), { kind: 'trust', change: -1 }, 8);
-  assert.ok(kind.persona.personality.warmth > 0);
-  assert.ok(cruel.persona.personality.warmth < 0);
+  assert.ok(kind.persona.temperament.feeling > 0);
+  assert.ok(cruel.persona.temperament.feeling < 0);
+});
+
+test('kindness meets the need other people exist to meet', () => {
+  const alone = persona({ needs: clampNeeds({ company: 2 }) });
+  const r = applyDrift(alone, [{ kind: 'trust', change: 1 }]);
+  assert.ok(r.persona.needs.company > 2);
 });
 
 test('a deep floor wears down nerve even when nothing attacks you', () => {
   const shallow = repeat(persona(), { kind: 'danger', level: 2 }, 8);
   const deep = repeat(persona(), { kind: 'danger', level: 20 }, 8);
-  assert.equal(shallow.persona.personality.nerve, 0);
-  assert.ok(deep.persona.personality.nerve < 0, 'the tower itself should mark people');
+  assert.equal(shallow.persona.temperament.nerve, 0);
+  assert.ok(deep.persona.temperament.nerve < 0, 'the tower itself should mark people');
+});
+
+test('a persona untouched by drift keeps every need met', () => {
+  assert.deepEqual(applyDrift(persona(), []).persona.needs, metNeeds());
 });

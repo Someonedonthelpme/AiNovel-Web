@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
 import { climb, exitStatus, godown } from './climb.ts';
+import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
 import { isFull } from '../world/types.ts';
@@ -86,4 +87,53 @@ test('a compressed floor is rebuilt rather than left unreachable', async () => {
   assert.equal(again.error, null);
   assert.equal(again.state.world.currentRegion, 'floor-1');
   assert.equal(p.calls.length, 1, 'rehydrated from the gazetteer');
+});
+
+/* -------------------------------------------------------------------------- */
+/* A climb is an event                                                         */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The regression these guard.
+ *
+ * Floor generation is the one model call that changes world state, and it used
+ * to reach storage only inside a snapshot — so replaying a climbed session
+ * landed on a `currentRegion` naming a region that was not there, and the
+ * counters and depth experience the crossing paid went with it. `foldPlay` is
+ * synchronous and holds no Provider, so it could never rebuild either.
+ */
+
+test('a climb produces a record carrying the floor it had to build', async () => {
+  const r = await climb(provider(), atTheStair());
+  assert.equal(r.record?.kind, 'climb');
+  assert.equal(r.record?.direction, 'up');
+  assert.equal(r.record?.built?.region.name, 'The Grey Grove');
+});
+
+test('replaying that record reaches the same state, with no provider', async () => {
+  const start = atTheStair();
+  const live = await climb(provider(), start);
+
+  // Exactly what a load with every snapshot deleted would do.
+  const replayed = foldPlay(start, [live.record!]);
+
+  assert.equal(replayed.world.currentRegion, 'floor-1');
+  assert.equal(replayed.world.currentPlace, 'landing');
+  assert.equal(isFull(replayed.world.regions['floor-1']), true);
+  assert.equal(replayed.world.deepestFloor, live.state.world.deepestFloor);
+  assert.deepEqual(replayed.sheet.counters, live.state.sheet.counters);
+  assert.equal(replayed.sheet.xp, live.state.sheet.xp);
+  assert.equal(replayed.sheet.level, live.state.sheet.level);
+});
+
+test('a crossing onto a floor already loaded records no floor, and still replays', async () => {
+  const start = atTheStair();
+  const up = await climb(provider(), start);
+  const down = await godown(new FakeProvider({ structured: [] }), up.state);
+
+  assert.equal(down.record?.built, null, 'nothing was generated, so nothing is stored');
+
+  const replayed = foldPlay(start, [up.record!, down.record!]);
+  assert.equal(replayed.world.currentRegion, 'floor-0');
+  assert.equal(replayed.world.turn, down.state.world.turn);
 });

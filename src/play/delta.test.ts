@@ -177,13 +177,13 @@ test('replaying a prefix then continuing equals replaying the whole log', () => 
 test('being spoken to badly, turn after turn, hardens someone', () => {
   const rude = Array.from({ length: 8 }, () => spokenTo('smith', 'กูไม่เชื่อมึง'));
   const after = foldPlay(playState(), rude);
-  assert.ok(after.world.people['smith'].personality.warmth < 0, 'she should have cooled');
+  assert.ok(after.world.people['smith'].temperament.feeling < 0, 'she should have cooled');
 });
 
 test('a single rude turn changes nothing about who they are', () => {
   const after = foldPlay(playState(), [spokenTo('smith', 'กูไม่เชื่อมึง')]);
-  assert.equal(after.world.people['smith'].personality.warmth, 0);
-  assert.ok(after.world.people['smith'].mental.stress > 0, 'though it did land');
+  assert.equal(after.world.people['smith'].temperament.feeling, 0);
+  assert.ok(after.world.people['smith'].needs.company < 10, 'though it did land');
 });
 
 test('drift is part of the fold, so replaying a session preserves it', () => {
@@ -204,11 +204,11 @@ test('drift is part of the fold, so replaying a session preserves it', () => {
 test('the player character wears down too', () => {
   const climbing = Array.from({ length: 5 }, () => record({ timeSpent: 3 }));
   const after = foldPlay(playState(), climbing);
-  assert.ok(after.sheet.mental.fatigue > 0, 'travel should tire the climber');
+  assert.ok(after.sheet.needs.rest < 10, 'travel should tire the climber');
 });
 
 test('nobody drifts once the session has ended', () => {
   const ended = { ...playState(), ended: { reason: 'died' } };
   const after = foldPlay(ended, [spokenTo('smith', 'กูไม่เชื่อมึง')]);
-  assert.deepEqual(after.world.people['smith'].mental, playState().world.people['smith'].mental);
+  assert.deepEqual(after.world.people['smith'].needs, playState().world.people['smith'].needs);
 });

@@ -1,9 +1,11 @@
+import { addItem, carriedWeight, emptyInventory, weightOf } from '../items/types.ts';
+import type { Item } from '../items/types.ts';
+import { startingInventory } from '../play/state.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   armourClassFor, defaultAbilities, derive, finalAbilities, HP_AT_FIRST, HP_PER_LEVEL, maxHpFor,
-  pointBuyCost, POINT_BUY_BUDGET, proficiencyFor, toCombatant, validateAbilities, validateSheet,
-} from './sheet.ts';
+  pointBuyCost, POINT_BUY_BUDGET, proficiencyFor, toCombatant, validateAbilities, validateSheet, carryCapacityFor, overloadFor, speedFor, MIN_SPEED } from './sheet.ts';
 import { abilitiesOf, background, scholar, sheet, soldier, thaiSheet } from './fixtures.ts';
 
 test('point buy costs follow the standard curve, with 14 and 15 costing extra', () => {
@@ -78,8 +80,23 @@ test('hit points never drop below 1 even with dire vitality', () => {
   assert.ok(maxHpFor(s) >= 1);
 });
 
-test('armour class is ten plus dexterity', () => {
-  assert.equal(armourClassFor(sheet({ baseAbilities: abilitiesOf({ dex: 14 }), background: background('b') })), 12);
+test('armour class is ten plus AGILITY — evasion, not accuracy', () => {
+  // DEX decides whether YOUR blow lands; AGI decides whether theirs does.
+  // AC read DEX for a long time, which left AGI buying nothing but tick cost.
+  const quick = armourClassFor(sheet({ baseAbilities: abilitiesOf({ agi: 18 }), background: background('b') }));
+  const still = armourClassFor(sheet({ baseAbilities: abilitiesOf({ agi: 8 }), background: background('b') }));
+  assert.ok(quick > still, 'agility is what keeps a blow off you');
+
+  const steady = armourClassFor(sheet({ baseAbilities: abilitiesOf({ dex: 18 }), background: background('b') }));
+  const clumsy = armourClassFor(sheet({ baseAbilities: abilitiesOf({ dex: 8 }), background: background('b') }));
+  assert.equal(steady, clumsy, 'a steady hand does not make you hard to hit');
+});
+
+test('speed comes off agility rather than being a constant', () => {
+  const quick = derive(sheet({ baseAbilities: abilitiesOf({ agi: 18 }), background: background('b') }));
+  const slow = derive(sheet({ baseAbilities: abilitiesOf({ agi: 6 }), background: background('b') }));
+  assert.ok(quick.speed > slow.speed, 'quick people cover more ground');
+  assert.ok(slow.speed >= 3, 'and nobody is rooted to the spot');
 });
 
 test('proficiency steps up every four levels', () => {
@@ -141,4 +158,55 @@ test('a background with no skills or no attack warns rather than fails', () => {
   const v = validateSheet(sheet({ background: empty }));
   assert.equal(v.ok, true);
   assert.equal(v.warnings.length, 2);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Carrying — what STR has always claimed and never did                        */
+/* -------------------------------------------------------------------------- */
+
+const packed = (items: { item: Item; count: number }[]) =>
+  items.reduce((inv, { item, count }) => addItem(inv, item, count), emptyInventory());
+
+const brick = (id: string, weight: number): Item =>
+  ({ id, name: id, description: '', kind: 'material', weight, stackable: true, value: 0 });
+
+test('a stronger back carries more', () => {
+  const strong = sheet({ baseAbilities: abilitiesOf({ str: 18 }), background: background('b') });
+  const weak = sheet({ baseAbilities: abilitiesOf({ str: 8 }), background: background('b') });
+  assert.ok(carryCapacityFor(strong) > carryCapacityFor(weak));
+});
+
+test('capacity comes off the score, not the modifier', () => {
+  // Carrying is the one place a single point should help, rather than only
+  // mattering every second one.
+  const a = sheet({ baseAbilities: abilitiesOf({ str: 12 }), background: background('b') });
+  const b = sheet({ baseAbilities: abilitiesOf({ str: 13 }), background: background('b') });
+  assert.ok(carryCapacityFor(b) > carryCapacityFor(a));
+});
+
+test('an ordinary pack is nowhere near capacity', () => {
+  // Encumbrance should bite when you hoard, not when you are equipped.
+  const s = sheet({ background: background('b') });
+  const pack = startingInventory(s);
+  assert.ok(carriedWeight(pack) < carryCapacityFor(s, pack), 'setting out should not slow you down');
+  assert.equal(overloadFor(s, pack), 0);
+});
+
+test('hauling more than you can costs movement', () => {
+  const s = sheet({ background: background('b') });
+  const hoard = packed([{ item: brick('slab', 40), count: 6 }]);
+  assert.ok(overloadFor(s, hoard) > 0);
+  assert.ok(speedFor(s, hoard) < speedFor(s, emptyInventory()));
+});
+
+test('overload can drag you below the ordinary floor, but never to a stop', () => {
+  const s = sheet({ background: background('b') });
+  const absurd = packed([{ item: brick('slab', 400), count: 9 }]);
+  assert.ok(speedFor(s, absurd) < MIN_SPEED);
+  assert.ok(speedFor(s, absurd) >= 1, 'you can still shuffle');
+});
+
+test('a weightless item is impossible — everything defaults by kind', () => {
+  const anonymous: Item = { id: 'x', name: 'x', description: '', kind: 'equipment', stackable: false, value: 0 };
+  assert.ok(weightOf(anonymous) > 0, 'nothing generated is accidentally weightless');
 });

@@ -21,8 +21,50 @@ export function attackBonus(attacker: Combatant, attackId: string): number {
 }
 
 /** Apply damage, handling the party/foe split at 0 HP. */
+/**
+ * What the body soaks. VIT's "physical DEF", which nothing implemented.
+ *
+ * The split that makes VIT and AGI a real choice rather than two words for the
+ * same thing: AGI decides whether a blow LANDS (it is AC), VIT decides how much
+ * it costs you when it does. Dodging and enduring are different builds.
+ *
+ * FLAT REDUCTION IS THE TRAP, and it was measured rather than guessed. Taking
+ * a straight 2 off every blow made floors 1-5 a formality (94% → 100% win, 73%
+ * → 83% hp left) while making floor 20 meaningfully worse (51% → 41%), because
+ * subtracting 2 from a 4-damage hit halves it and from a 20-damage hit is
+ * noise — and deep foes have the VIT to soak the player right back. It widened
+ * the curve at BOTH ends.
+ *
+ * So the soak is capped by a FRACTION of the blow as well as by the stat: at
+ * most `SOAK_SHARE` of what was coming. Being tough takes the edge off a heavy
+ * hit; it does not make you immune to small ones.
+ *
+ * A ceiling of 2 rather than 4, also measured. At 4 the deep floors got worse
+ * (20: 51% → 42%) because a boss has the VIT to soak the player straight back.
+ * At 2 the whole curve shifts up 3-5 points and KEEPS ITS SHAPE, which is the
+ * honest cost of giving VIT a defensive job it never had:
+ *
+ *   floor      1     5     8    10    14    20    30
+ *   before    94%   96%   86%   78%   83%   51%   53%
+ *   after     99%   99%   89%   84%   86%   56%   57%
+ *
+ * VIT's headline is hit points. This is a nudge on top, not a second HP bar.
+ */
+export const MAX_REDUCTION = 2;
+export const MIN_HIT = 1;
+/** The most of any single blow that VIT may absorb. */
+export const SOAK_SHARE = 1 / 3;
+
+export const damageReduction = (who: Combatant): number =>
+  Math.max(0, Math.min(MAX_REDUCTION, abilityMod(who.abilities.vit)));
+
+/** What this particular blow actually loses to the body it lands on. */
+export const soakOf = (target: Combatant, amount: number): number =>
+  Math.min(damageReduction(target), Math.floor(amount * SOAK_SHARE));
+
 export function applyDamage(target: Combatant, amount: number): Combatant {
-  const hp = Math.max(0, target.hp - amount);
+  const soaked = amount > 0 ? Math.max(MIN_HIT, amount - soakOf(target, amount)) : amount;
+  const hp = Math.max(0, target.hp - soaked);
   if (hp > 0) return { ...target, hp };
 
   if (target.side === 'foe') {

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { dispositionOf } from '../character/persona.ts';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { canAllocate, entryOpen } from './allocate.ts';
@@ -29,7 +30,7 @@ const ctxOf = (): TraitContext => {
     sheet: { ...state.sheet, skillPoints: 5 },
     inventory: state.pc.inventory,
     counters: state.sheet.counters,
-    personality: state.sheet.personality,
+    personality: dispositionOf(state.sheet),
   };
 };
 

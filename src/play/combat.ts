@@ -69,6 +69,19 @@ export function playerCombatant(state: PlayState): Combatant {
   return {
     ...base,
     hp: Math.min(state.pc.hp, base.maxHp),
+    /*
+     * POOLS ARE CARRIED IN, and this was a real hole.
+     *
+     * `toCombatant` fills stamina and mana to their ceilings, which is right
+     * for a foe built from a statblock and wrong for the player: nothing
+     * carried the spent pools in, and `concludeCombat` carried nothing back
+     * out. So every encounter opened with full pools however hard the last one
+     * had been, and the scarcity the whole stamina/mana economy exists to
+     * create never happened. Two fights back to back cost exactly as much as
+     * one.
+     */
+    stamina: Math.min(state.pc.stamina, base.maxStamina),
+    mana: Math.min(state.pc.mana, base.maxMana),
     conditions: state.pc.conditions,
     pos: { x: 1, y: Math.floor(ARENA_SIZE / 2) },
   };
@@ -436,6 +449,10 @@ export function concludeCombat(state: PlayState): CombatOutcome {
         ...state.pc,
         hp: combat.victor === 'foe' ? 0 : grown.hp,
         maxHp: grown.maxHp,
+        // And carried back out, or the fight would cost nothing to walk away
+        // from. Rest is the only thing that refills them.
+        stamina: pc?.stamina ?? state.pc.stamina,
+        mana: pc?.mana ?? state.pc.mana,
         conditions: pc?.conditions ?? state.pc.conditions,
         inventory,
         coin,

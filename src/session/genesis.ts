@@ -8,7 +8,7 @@ import { PLACE_KINDS } from '../world/types.ts';
 import { validateRegion } from '../world/validate.ts';
 import type { Interview } from './interview.ts';
 import { isComplete, transcript } from './interview.ts';
-import { clampPersonality, neutralPersonality, restingMind } from '../character/persona.ts';
+import { clampTemperament, neutralTemperament, metNeeds } from '../character/persona.ts';
 import { repairAbilities, repairRegion, repairVoice } from './repair.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { CHARACTER_SCHEMA, GROUND_FLOOR_SCHEMA } from './schema.ts';
@@ -58,6 +58,21 @@ export type CharacterGenesis = {
   sheet: CharacterSheet;
   repairs: string[];
   warnings: string[];
+};
+
+/**
+ * A model writes on the narrow scale; temperament is stored on the wide one.
+ *
+ * Asking for −10..+10 gets you a wall of 7s and −4s that mean nothing. Asking
+ * for −3..+3 gets you a judgement, which is the only part a model is good at.
+ * The width exists for drift and the skill formulas, not for the author.
+ */
+const scaleToStored = (narrow: Record<string, number> | undefined): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [axis, value] of Object.entries(narrow ?? {})) {
+    if (typeof value === 'number' && Number.isFinite(value)) out[axis] = value * 3;
+  }
+  return out;
 };
 
 export async function generateCharacter(provider: Provider, interview: Interview): Promise<CharacterGenesis> {
@@ -165,10 +180,10 @@ export async function generateCharacter(provider: Provider, interview: Interview
       tics: [],
     }).value,
     status: background.socialStanding,
-    personality: clampPersonality(generated.personality ?? {}),
-    mental: restingMind(),
+    temperament: clampTemperament(scaleToStored(generated.personality)),
+    needs: metNeeds(),
     counters: {},
-    pressure: neutralPersonality(),
+    pressure: neutralTemperament(),
   };
 
   const check = validateSheet(sheet);
@@ -320,13 +335,13 @@ export async function generateGroundFloor(
         particleBands: { '-3': p.particleDistant, '2': p.particleWarm },
         tics: [],
       }).value,
-      personality: clampPersonality({
-        warmth: p.warmth, nerve: p.nerve, discipline: p.discipline,
-        candour: p.candour, loyalty: p.loyalty,
+      temperament: clampTemperament({
+        intuition: p.intuition * 3, feeling: p.feeling * 3,
+        nerve: p.nerve * 3, discipline: p.discipline * 3,
       }),
-      mental: restingMind(),
+      needs: metNeeds(),
       counters: {},
-      pressure: neutralPersonality(),
+      pressure: neutralTemperament(),
     };
   }
 

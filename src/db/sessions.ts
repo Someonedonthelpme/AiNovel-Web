@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, count, desc, eq, gt, max, sql } from 'drizzle-orm';
 import { initialPlayState } from '../play/state.ts';
 import type { SheetRecord } from '../play/sheetaction.ts';
+import type { ClimbRecord } from '../play/climb.ts';
 import { foldPlay } from '../play/delta.ts';
 import type { PlayEvent, PlayState, TurnRecord } from '../play/state.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
@@ -52,7 +53,7 @@ export async function createSession(
  * gap-free — they ARE the replay order, and the primary key rejects a duplicate
  * rather than letting two writers silently interleave.
  */
-export async function appendTurn(sessionId: string, record: TurnRecord | SheetRecord): Promise<number> {
+export async function appendTurn(sessionId: string, record: TurnRecord | SheetRecord | ClimbRecord): Promise<number> {
   const db = getDb();
   const inserted = await db
     .insert(events)
@@ -69,7 +70,7 @@ export async function appendTurn(sessionId: string, record: TurnRecord | SheetRe
 }
 
 /** Event kinds `foldPlay` knows how to apply. */
-const FOLDED_KINDS = new Set(['turn', 'sheet']);
+const FOLDED_KINDS = new Set(['turn', 'sheet', 'climb']);
 
 export async function loadEvents(sessionId: string, afterSeq = -1): Promise<PlayEvent[]> {
   const rows = await getDb()

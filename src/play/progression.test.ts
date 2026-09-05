@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { dispositionOf } from '../character/persona.ts';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { addItem, emptyInventory } from '../items/types.ts';
@@ -23,7 +24,7 @@ const ctxOf = (state: PlayState): TraitContext => ({
   sheet: state.sheet,
   inventory: state.pc.inventory,
   counters: state.sheet.counters,
-  personality: state.sheet.personality,
+  personality: dispositionOf(state.sheet),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -457,7 +458,7 @@ test('a long rest in town puts everything back', () => {
 
   const rested = takeRest(state, 'long');
   assert.equal(rested.state.pc.hp, rested.state.pc.maxHp);
-  assert.equal(rested.state.sheet.mental.fatigue, 0);
+  assert.equal(rested.state.sheet.needs.rest, 10);
   assert.ok(rested.turnsSpent > 1, 'and the world moves on while you sleep');
 });
 

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CombatView, GameView, TurnOutcomeView } from '../../../src/server/game.ts';
 import type { CombatAction } from '../../../src/play/combat.ts';
 import type { SheetAction } from '../../../src/play/sheetaction.ts';
-import { CharacterPanel, SkillsPanel } from './Panels.tsx';
+import { SheetPanel } from './Panels.tsx';
+import type { SheetTab } from './Panels.tsx';
 
 /** A signed −3..+3 axis, drawn from the centre so direction reads at a glance. */
 function AxisBar({ label, value }: { label: string; value: number }) {
@@ -167,7 +168,8 @@ export default function Game({ initial }: { initial: GameView }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [lastShifts, setLastShifts] = useState<string[]>([]);
-  const [panel, setPanel] = useState<null | 'character' | 'skills'>(null);
+  // One panel now, opened at whichever tab you clicked from.
+  const [panel, setPanel] = useState<null | SheetTab>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -278,7 +280,7 @@ export default function Game({ initial }: { initial: GameView }) {
         <div className="col">
           <section
             className="panel opens"
-            onClick={() => setPanel('character')}
+            onClick={() => setPanel('status')}
             title="Inventory, experience and unspent points"
           >
             <p className="label">
@@ -314,14 +316,14 @@ export default function Game({ initial }: { initial: GameView }) {
             {Object.entries(c.personality).map(([axis, value]) => (
               <AxisBar key={axis} label={axis} value={value as number} />
             ))}
-            <p className="label" style={{ margin: '1rem 0 0.6rem' }}>Condition</p>
-            <LinearBar label="stress" value={c.mental.stress} max={10} />
-            <LinearBar label="fatigue" value={c.mental.fatigue} max={10} />
-            <AxisBar label="morale" value={c.mental.morale} />
+            <p className="label" style={{ margin: '1rem 0 0.6rem' }}>Needs</p>
+            {Object.entries(c.needs).map(([need, value]) => (
+              <LinearBar key={need} label={need} value={value as number} max={10} />
+            ))}
           </section>
 
           {(
-            <section className="panel opens" onClick={() => setPanel('skills')} title="Tree, traits and signets">
+            <section className="panel opens" onClick={() => setPanel('skill')} title="Tree, traits and signets">
               <p className="label">
                 Skills
                 {c.skillPoints > 0 && <span className="points"> · {c.skillPoints} to spend</span>}
@@ -497,11 +499,8 @@ export default function Game({ initial }: { initial: GameView }) {
           </section>
         </div>
       </div>
-      {panel === 'character' && (
-        <CharacterPanel view={view} act={actOnSheet} busy={busy} onClose={() => setPanel(null)} />
-      )}
-      {panel === 'skills' && (
-        <SkillsPanel view={view} act={actOnSheet} busy={busy} onClose={() => setPanel(null)} />
+      {panel && (
+        <SheetPanel view={view} act={actOnSheet} busy={busy} start={panel} onClose={() => setPanel(null)} />
       )}
     </main>
   );

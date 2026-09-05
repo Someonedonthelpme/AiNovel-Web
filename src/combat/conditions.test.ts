@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addCondition, attackModifiers, effectiveSpeed, hasCondition, isIncapacitated, removeCondition, tickConditions } from './conditions.ts';
-import { combatant } from './fixtures.ts';
+import { addCondition, attackModifiers, effectiveSpeed, hasCondition, isIncapacitated, removeCondition, tickConditions, MIN_ROUNDS,
+} from './conditions.ts';
+import { abilities, combatant } from './fixtures.ts';
 
 test('conditions can be added, found and removed', () => {
   let c = combatant('a');
@@ -76,4 +77,46 @@ test('a blinded attacker attacking a blinded target cancels out', () => {
   const attacker = addCondition(combatant('a'), 'blinded');
   const target = addCondition(combatant('b', { side: 'foe' }), 'blinded');
   assert.equal(attackModifiers(attacker, target, 1).advantage, 'none');
+});
+
+/* -------------------------------------------------------------------------- */
+/* Shrugging it off — VIT and CON resist, by duration                           */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * `resolveSave` exists and is called by nothing but its own tests, so
+ * conditions have always landed unconditionally and neither VIT's "stun
+ * resistance" nor CON's "poison" claim was implemented. Resistance shortens a
+ * duration instead of rolling: `addCondition` is pure and has no Rng, and
+ * shortening replays for free.
+ */
+
+test('a tough body is stunned for less time', () => {
+  const soft = combatant('soft', { abilities: abilities({ vit: 8 }) });
+  const hard = combatant('hard', { abilities: abilities({ vit: 18 }) });
+  const left = (c: typeof soft) => addCondition(c, 'stunned', 4).conditions[0].roundsLeft;
+  assert.ok((left(hard) ?? 0) < (left(soft) ?? 0));
+});
+
+test('a steady mind shakes off poison sooner', () => {
+  const soft = combatant('soft', { abilities: abilities({ con: 8 }) });
+  const hard = combatant('hard', { abilities: abilities({ con: 18 }) });
+  const left = (c: typeof soft) => addCondition(c, 'poisoned', 4).conditions[0].roundsLeft;
+  assert.ok((left(hard) ?? 0) < (left(soft) ?? 0));
+});
+
+test('the body and the mind resist different things', () => {
+  const body = combatant('body', { abilities: abilities({ vit: 18, con: 8 }) });
+  assert.equal(addCondition(body, 'poisoned', 4).conditions[0].roundsLeft, 4, 'a strong back is no help against poison');
+});
+
+test('resistance is never immunity', () => {
+  const titan = combatant('titan', { abilities: abilities({ vit: 20, con: 20 }) });
+  assert.equal(addCondition(titan, 'stunned', 2).conditions[0].roundsLeft, MIN_ROUNDS);
+  assert.equal(addCondition(titan, 'poisoned', 1).conditions[0].roundsLeft, MIN_ROUNDS);
+});
+
+test('a permanent condition is not shortened — it is a state, not a timer', () => {
+  const titan = combatant('titan', { abilities: abilities({ vit: 20 }) });
+  assert.equal(addCondition(titan, 'unconscious', null).conditions[0].roundsLeft, null);
 });

@@ -1,4 +1,5 @@
 import type { Tier } from '../engine/roll.ts';
+import { dispositionOf } from '../character/persona.ts';
 import { describeMental, describePersonality } from '../character/persona.ts';
 import type { PlayState } from '../play/state.ts';
 import { activeRegion } from '../world/travel.ts';
@@ -100,8 +101,8 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       id: p.id,
       name: p.name,
       oneLine: p.oneLine,
-      disposition: describePersonality(p.personality),
-      condition: describeMental(p.mental),
+      disposition: describePersonality(dispositionOf(p)),
+      condition: describeMental(p.needs),
       register: registerForPerson(p),
     }));
 

@@ -20,7 +20,7 @@ const character = (over: Partial<GeneratedCharacter> = {}): GeneratedCharacter =
   traits: ['blunt', 'sleeps badly'],
   hitDie: 10,
   voice: { selfPronoun: 'I', underStress: 'I' },
-  personality: { warmth: 1, nerve: 2, discipline: 0, candour: 2, loyalty: 0 },
+  personality: { intuition: 1, feeling: 2, nerve: 2, discipline: 0 },
   baseAbilities: { str: 13, dex: 13, con: 13, int: 12, wis: 12, cha: 12 },
   background: {
     id: 'gate-guard',
@@ -59,7 +59,7 @@ const ground = (over: Partial<GeneratedGroundFloor> = {}): GeneratedGroundFloor 
     id: 'ora', name: 'Ora', oneLine: 'sells iron, trusts no one', tags: ['smith'], trust: 0,
     status: 'peer', selfPronoun: 'I', underStress: 'I',
     addressDistant: 'you', addressWarm: 'you', particleDistant: '', particleWarm: '',
-    warmth: -2, nerve: 1, discipline: 2, candour: 3, loyalty: 0,
+    intuition: -2, feeling: 3, nerve: 1, discipline: 2,
   }],
   ...over,
 });
