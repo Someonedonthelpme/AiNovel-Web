@@ -331,12 +331,7 @@ export default function Game({ initial }: { initial: GameView }) {
               {c.skills.map((s) => (
                 <div key={s.name} style={{ marginBottom: '0.6rem' }}>
                   <strong style={{ fontSize: '0.9rem' }}>{s.name}</strong>{' '}
-                  <span className="tag">{s.kind}</span>
-                  {s.usesPerRest > 0 && (
-                    <span className="tag" style={{ color: s.usesLeft > 0 ? 'var(--amber)' : 'var(--danger)' }}>
-                      {s.usesLeft}/{s.usesPerRest}
-                    </span>
-                  )}
+                  {s.cost > 0 && <span className="tag">{s.cost} {s.pool}</span>}
                   <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{s.effect}</p>
                 </div>
               ))}

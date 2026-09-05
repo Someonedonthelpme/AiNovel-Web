@@ -7,7 +7,6 @@ import { countOf, findItem, removeItem } from '../items/types.ts';
 import type { Inventory, ItemEffect } from '../items/types.ts';
 import { derive, finalAbilities } from '../session/sheet.ts';
 import { abilityMod } from '../combat/types.ts';
-import { refreshUses } from '../skills/active.ts';
 import { isSkillBook } from '../skills/book.ts';
 import { conditionMet } from './traits.ts';
 import { activeRegion, currentPlace } from '../world/travel.ts';
@@ -111,7 +110,6 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
           inventory,
           stamina: Math.min(maxStamina, state.pc.stamina + Math.max(1, Math.floor(maxStamina / 4))),
           mana: Math.min(maxMana, state.pc.mana + Math.max(1, Math.floor(maxMana / 4))),
-          skillUses: refreshUses(),
         },
         sheet: { ...state.sheet, needs: easedShort(state.sheet.needs) },
         world: { ...state.world, turn: state.world.turn + shortTurns },
@@ -129,7 +127,7 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
       // which is what lifts the pool CEILINGS back up — resting is the only way
       // to undo what a hard climb took off the top. Food, company and purpose
       // are not things sleeping fixes.
-      pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], stamina: maxStamina, mana: maxMana, skillUses: refreshUses() },
+      pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], stamina: maxStamina, mana: maxMana },
       sheet: { ...state.sheet, needs: { ...state.sheet.needs, rest: NEED_MAX, safety: NEED_MAX } },
       world: { ...state.world, turn: state.world.turn + longTurns },
     },

@@ -1,6 +1,7 @@
 import { abilityMod } from '../combat/types.ts';
 import type { Ability, Combatant } from '../combat/types.ts';
-import type { ActiveEffect, ActiveSkill } from './active.ts';
+import type { ActiveSkill } from './active.ts';
+import { costs, magnitudeOf } from './effect.ts';
 
 /**
  * What a skill costs, and which pool it comes out of.
@@ -49,36 +50,26 @@ export const poolFor = (stat: Ability): Pool => (MENTAL.includes(stat) ? 'mana' 
 export const MIN_COST = 1;
 export const MAX_COST = 12;
 
-export function costOf(effect: ActiveEffect): number {
-  const raw = (() => {
-    switch (effect.kind) {
-      case 'strike':
-        return effect.damage / 2;
-      case 'burst':
-        return (effect.damage / 2) * (1 + effect.radius * 0.5);
-      case 'hinder':
-        return 1 + effect.rounds;
-      case 'hex':
-        return effect.damage / 2 + effect.rounds;
-      case 'drain':
-        return effect.damage / 2 + effect.heal / 3;
-      case 'mend':
-        return effect.amount / 3;
-      case 'rally':
-        return 2;
-      case 'edge':
-        // Always on and never thrown, so it is never paid for out of a pool.
-        return 0;
-    }
-  })();
-
-  if (effect.kind === 'edge') return 0;
-  return Math.max(MIN_COST, Math.min(MAX_COST, Math.round(raw)));
+/**
+ * What one use costs, and out of where.
+ *
+ * READ OFF THE SKILL rather than derived from its payload. The cost used to be
+ * inferred every time anybody asked, which meant it could never be anything
+ * but a pool — and a skill that pays in hp, or in a condition on yourself, is
+ * exactly the thing the component model exists to allow. `composeSkill`
+ * declares a cost; this reports it.
+ *
+ * A skill with no cost effect is free, which is what a standing bonus is.
+ */
+export function priceOfUse(skill: ActiveSkill): { pool: Pool; cost: number } {
+  const pool = poolFor(skill.ability);
+  const paid = costs(skill.effects).find((e) => e.channel === 'stamina' || e.channel === 'mana');
+  if (!paid) return { pool, cost: 0 };
+  return {
+    pool: paid.channel === 'mana' ? 'mana' : 'stamina',
+    cost: Math.max(0, Math.min(MAX_COST, Math.round(magnitudeOf(paid)))),
+  };
 }
-
-/** What a whole skill costs to use once, and out of where. */
-export const priceOfUse = (skill: ActiveSkill): { pool: Pool; cost: number } =>
-  ({ pool: poolFor(skill.ability), cost: costOf(skill.effect) });
 
 /* -------------------------------------------------------------------------- */
 /* Spending                                                                    */

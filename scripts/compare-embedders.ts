@@ -10,7 +10,7 @@
  *   node --experimental-strip-types scripts/compare-embedders.ts
  */
 import { embed, isLocalUp, LOCAL_MODELS, probeEmbeddingSeparation } from '../src/llm/local.ts';
-import { rankClues } from '../src/llm/similarity.ts';
+import { rankFacts } from '../src/llm/similarity.ts';
 
 type Clue = { clue: string; text: string };
 type Query = { text: string; expect: string };
@@ -58,13 +58,14 @@ async function score(model: string, clues: Clue[], queries: Query[]): Promise<Sc
   const spread = await probeEmbeddingSeparation(clues.map((c) => c.text), { model });
   const clueVecs = await embed(clues.map((c) => c.text), { model });
   const queryVecs = await embed(queries.map((q) => q.text), { model });
-  const vectors = clues.map((c, i) => ({ clue: c.clue, vector: clueVecs[i] }));
+  // `rankClues` became `rankFacts` when clues did; the shape is unchanged.
+  const vectors = clues.map((c, i) => ({ fact: c.clue, vector: clueVecs[i] }));
 
   let correct = 0;
   let marginSum = 0;
   for (const [i, q] of queries.entries()) {
-    const ranked = rankClues(queryVecs[i], vectors, { limit: 2 });
-    if (ranked[0]?.clue === q.expect) correct++;
+    const ranked = rankFacts(queryVecs[i], vectors, { limit: 2 });
+    if (ranked[0]?.fact === q.expect) correct++;
     marginSum += (ranked[0]?.score ?? 0) - (ranked[1]?.score ?? 0);
   }
   return { correct, total: queries.length, spread, meanMargin: marginSum / queries.length, ms: Date.now() - started };

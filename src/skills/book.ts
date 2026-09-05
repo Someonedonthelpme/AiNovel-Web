@@ -5,8 +5,8 @@ import type { Item } from '../items/types.ts';
 
 import type { GraftSpec } from '../play/graft.ts';
 import type { Skill } from '../session/sheet.ts';
-import type { ActiveKind, ActiveSkill } from './active.ts';
-import { composeSkill, nameFor } from './compose.ts';
+import type { ActiveSkill } from './active.ts';
+import { composeSkill } from './compose.ts';
 import { STAT_GRAMMAR } from './statgrammar.ts';
 
 /**
@@ -57,24 +57,20 @@ export const budgetForFloor = (floor: number): number => 4 + Math.max(0, floor) 
  * against a budget, so no two are alike and none is unbalanced.
  */
 function composedFor(
-  kind: ActiveKind,
   ability: Ability,
   seed: number,
   floor: number,
   language: 'th' | 'en',
 ): ActiveSkill {
-  const rng = mulberry32(seed);
-  const effect = composeSkill(rng, {
+  return composeSkill(mulberry32(seed), {
     id: `skill_book_${seed.toString(36)}`,
     name: '',
     description: '',
-    kind,
     ability,
     grammar: STAT_GRAMMAR[ability],
     budget: budgetForFloor(floor),
+    language,
   });
-
-  return { ...effect, name: nameFor(rng, effect.effect, language) };
 }
 
 /**
@@ -85,11 +81,10 @@ function composedFor(
  */
 export function activate(skill: Skill): ActiveSkill {
   const seed = hash(skill.id + skill.name);
-  const kind = skill.kind as ActiveKind;
 
   // The model keeps the naming, the composer supplies the mechanism — the same
   // division as everywhere else. A background skill is a shallow budget.
-  const composed = composedFor(kind, skill.ability, seed, 1, 'en');
+  const composed = composedFor(skill.ability, seed, 1, 'en');
 
   return {
     ...composed,
@@ -209,12 +204,11 @@ export function chainedBook(
 export function skillBook(rng: Rng, floor: number, language: 'th' | 'en' = 'en'): SkillBook {
   const titles = TITLES[language];
   const title = titles[Math.floor(rng() * titles.length)];
-  const kind: ActiveKind = rng() < 0.6 ? 'combat' : rng() < 0.5 ? 'utility' : 'social';
   const ability = ABILITIES[Math.floor(rng() * ABILITIES.length)];
   const seed = Math.floor(rng() * 1e9);
 
   const taught: ActiveSkill = {
-    ...composedFor(kind, ability, seed, floor, language),
+    ...composedFor(ability, seed, floor, language),
     id: `skill_book_${seed.toString(36)}`,
     description: language === 'th' ? 'สิ่งที่ใครบางคนจดไว้ก่อนคุณ' : 'Someone worked this out before you did.',
     // Deeper books ask more of the reader, which is what keeps an early find

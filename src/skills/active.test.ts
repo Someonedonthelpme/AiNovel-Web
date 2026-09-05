@@ -4,8 +4,10 @@ import { mulberry32 } from '../engine/roll.ts';
 import { hasCondition } from '../combat/conditions.ts';
 import { soakOf } from '../combat/resolve.ts';
 import { referencePc } from '../combat/statblock.ts';
-import { edgeFor, isCombatUsable, needsTarget, radiusOf, refreshUses, resolveSkill, spendUse, usesLeft } from './active.ts';
+import { edgeFor, isCombatUsable, needsTarget, radiusOf, resolveSkill } from './active.ts';
 import type { ActiveSkill } from './active.ts';
+import { flat, instant, self, single } from './effect.ts';
+import type { Effect } from './effect.ts';
 import { priceOfUse } from './pools.ts';
 import { activate, isSkillBook, skillBook } from './book.ts';
 import { addItem } from '../items/types.ts';
@@ -14,15 +16,36 @@ import { playState } from '../play/fixtures.ts';
 import { takeRest, useItem } from '../play/rest.ts';
 import { activeSkills } from '../session/sheet.ts';
 import { groundFloor } from '../world/fixtures.ts';
+import type { Condition } from '../combat/types.ts';
 import type { PlayState } from '../play/state.ts';
 import type { Region } from '../world/types.ts';
 
 const combatant = (over = {}) => ({ ...referencePc(3), id: 'pc', name: 'Anan', ...over });
 
-const hinder: ActiveSkill = {
-  id: 'sk_trip', name: 'Trip', description: '', kind: 'combat', ability: 'str',
-  effect: { kind: 'hinder', condition: 'prone', rounds: 2 }, range: 1, usesPerRest: 2,
-};
+/* The components, as the things a test actually wants to say. */
+const hurt = (amount: number, shape: Effect['shape'] = single): Effect =>
+  ({ role: 'purpose', sign: 'minus', channel: 'hp', who: 'foe', shape, duration: instant, formula: flat(amount) });
+
+const heal = (amount: number): Effect =>
+  ({ role: 'purpose', sign: 'plus', channel: 'hp', who: 'own', shape: self, duration: instant, formula: flat(amount) });
+
+const lands = (condition: Condition, rounds: number): Effect => ({
+  role: 'purpose', sign: 'minus', channel: 'condition', condition, who: 'foe', shape: single,
+  duration: { kind: 'rounds', rounds }, formula: flat(1),
+});
+
+const pay = (amount: number): Effect =>
+  ({ role: 'cost', sign: 'minus', channel: 'stamina', who: 'own', shape: self, duration: instant, formula: flat(amount) });
+
+const edgeOn = (stat: 'wis' | 'cha', bonus: number): Effect => ({
+  role: 'purpose', sign: 'plus', channel: 'stat', stat, who: 'own', shape: self,
+  duration: { kind: 'sustained' }, formula: flat(bonus),
+});
+
+const skill = (id: string, effects: Effect[], over: Partial<ActiveSkill> = {}): ActiveSkill =>
+  ({ id, name: id, description: '', ability: 'str', effects, range: 1, ...over });
+
+const hinder = skill('sk_trip', [lands('prone', 2), pay(2)], { name: 'Trip' });
 
 /* -------------------------------------------------------------------------- */
 /* What a skill does                                                           */
@@ -38,46 +61,32 @@ test('a hindering skill puts the condition on the target, not the user', () => {
 });
 
 test('mending closes a wound but never overfills', () => {
-  const hurt = combatant({ hp: 2 });
-  const mend: ActiveSkill = { ...hinder, id: 'sk_mend', effect: { kind: 'mend', amount: 999 } };
-  assert.equal(resolveSkill(mend, hurt, []).actor.hp, hurt.maxHp);
+  const wounded = combatant({ hp: 2 });
+  assert.equal(resolveSkill(skill('sk_mend', [heal(999)]), wounded, []).actor.hp, wounded.maxHp);
 });
 
 test('rallying clears a condition off yourself', () => {
+  // The same shape as `hinder`, pointed the other way: sign is always from the
+  // recipient's side, so `plus` on a condition means it is cleared.
   const down = { ...combatant(), conditions: [{ kind: 'prone' as const, roundsLeft: null }] };
-  const rally: ActiveSkill = { ...hinder, id: 'sk_up', effect: { kind: 'rally', condition: 'prone' } };
+  const rally = skill('sk_up', [{ ...lands('prone', 1), sign: 'plus', who: 'own', shape: self }]);
   assert.equal(hasCondition(resolveSkill(rally, down, []).actor, 'prone'), false);
 });
 
-test('an edge is not something you use in a fight', () => {
-  const edge: ActiveSkill = { ...hinder, id: 'sk_read', effect: { kind: 'edge', ability: 'wis', bonus: 2 } };
-  assert.equal(isCombatUsable(edge), false);
+test('a standing bonus is not something you use in a fight', () => {
+  assert.equal(isCombatUsable(skill('sk_read', [edgeOn('wis', 2)])), false);
   assert.equal(isCombatUsable(hinder), true);
   assert.equal(needsTarget(hinder), true);
 });
 
 test('edges stack only on the ability they are for', () => {
-  const skills: ActiveSkill[] = [
-    { ...hinder, id: 'a', effect: { kind: 'edge', ability: 'wis', bonus: 2 } },
-    { ...hinder, id: 'b', effect: { kind: 'edge', ability: 'wis', bonus: 1 } },
-    { ...hinder, id: 'c', effect: { kind: 'edge', ability: 'cha', bonus: 2 } },
+  const skills = [
+    skill('a', [edgeOn('wis', 2)]),
+    skill('b', [edgeOn('wis', 1)]),
+    skill('c', [edgeOn('cha', 2)]),
   ];
   assert.equal(edgeFor(skills, 'wis'), 3);
   assert.equal(edgeFor(skills, 'str'), 0);
-});
-
-/* -------------------------------------------------------------------------- */
-/* Uses                                                                        */
-/* -------------------------------------------------------------------------- */
-
-test('a skill runs out, and resting gives it back', () => {
-  // The reason actives are a resource: unlimited, they are just a better basic
-  // attack and the fight becomes a rotation.
-  let spent = {};
-  assert.equal(usesLeft(hinder, spent), 2);
-  spent = spendUse(spendUse(spent, hinder.id), hinder.id);
-  assert.equal(usesLeft(hinder, spent), 0);
-  assert.equal(usesLeft(hinder, refreshUses()), 2);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -94,9 +103,9 @@ function dangerous(): PlayState {
 }
 
 /** A character who definitely has a combat active to offer. */
-const withSkill = (state: PlayState, skill: ActiveSkill): PlayState => ({
+const withSkill = (state: PlayState, s: ActiveSkill): PlayState => ({
   ...state,
-  sheet: { ...state.sheet, learned: [skill] },
+  sheet: { ...state.sheet, learned: [s] },
 });
 
 /** Options for one specific skill — a character also has what their background taught. */
@@ -174,7 +183,10 @@ test('a skill you cannot pay for is not offered at all', () => {
   assert.deepEqual(optionsFor(broke, hinder.id), [], 'nothing left to pay with, so not on the list');
 });
 
-test('using a skill spends from its pool and lands the effect', () => {
+test('using a skill spends what its COST EFFECT declares, and lands the purpose', () => {
+  // The cost used to be inferred from the payload every time anybody asked.
+  // Now the skill carries it, which is what lets a cost be something other
+  // than a pool at all.
   const state = beside(beginEncounter(withSkill(dangerous(), hinder)));
 
   const before = state.combat!.combatants['pc'];
@@ -202,11 +214,14 @@ test('a skill you do not know is refused', () => {
   assert.match(takeCombatAction(state, { kind: 'skill', skill: 'nonsense' }).error ?? '', /do not know/);
 });
 
-test('resting refreshes what the fight spent', () => {
+test('resting gives back what the fight spent', () => {
+  // Skills are on the shared pools, so what a rest restores is the POOL. The
+  // choice of what to spend it on therefore survives the rest, instead of every
+  // skill being separately topped back up to its own allowance.
   const base = dangerous();
-  const drained: PlayState = { ...base, pc: { ...base.pc, skillUses: { [hinder.id]: 2 }, hp: 2 } };
+  const drained: PlayState = { ...base, pc: { ...base.pc, stamina: 0, mana: 0, hp: 2 } };
   const rested = takeRest(drained, 'short');
-  assert.deepEqual(rested.state.pc.skillUses, {}, 'actives are on the same supply economy as healing');
+  assert.ok(rested.state.pc.stamina > 0, 'a short rest gives some of it back');
 });
 
 /* -------------------------------------------------------------------------- */
@@ -216,15 +231,14 @@ test('resting refreshes what the fight spent', () => {
 test('a named skill from the model becomes one that works', () => {
   // The model is good at "Shield Wall"; it has no way to know what the fight
   // economy can absorb.
-  const promoted = activate({ id: 'shield_wall', name: 'Shield Wall', description: '', ability: 'str', kind: 'combat' });
+  const promoted = activate({ id: 'shield_wall', name: 'Shield Wall', description: '', ability: 'str' });
   assert.equal(promoted.name, 'Shield Wall', 'the model keeps the naming');
-  assert.ok(promoted.effect, 'and the code supplies the effect');
-  assert.ok(promoted.usesPerRest > 0, 'a combat skill is a resource');
+  assert.ok(promoted.effects.length > 0, 'and the code supplies the effects');
 });
 
 test('the same named skill always promotes the same way', () => {
-  const skill = { id: 'read_ground', name: 'Read the Ground', description: '', ability: 'wis' as const, kind: 'utility' as const };
-  assert.deepEqual(activate(skill), activate(skill));
+  const named = { id: 'read_ground', name: 'Read the Ground', description: '', ability: 'wis' as const };
+  assert.deepEqual(activate(named), activate(named));
 });
 
 test('a background skill is usable without reading anything', () => {
@@ -272,36 +286,33 @@ test('a skill reaches as far as the skill says, not as far as your weapon', () =
 /* The wider effect vocabulary                                                 */
 /* -------------------------------------------------------------------------- */
 
-test('a strike deals damage through the engine, so dying still works', () => {
+test('damage goes through the engine, so dying still works', () => {
   // Damage goes through applyDamage rather than subtracting hp directly: a
   // skill that killed somebody by a different route than a sword would be a
   // second set of rules to keep in step.
   const me = combatant();
   const them = combatant({ id: 'foe1', name: 'wolf', hp: 3, maxHp: 20 });
-  const strike: ActiveSkill = { ...hinder, id: 'sk_hit', effect: { kind: 'strike', damage: 9 } };
 
-  const out = resolveSkill(strike, me, [them]);
+  const out = resolveSkill(skill('sk_hit', [hurt(9)]), me, [them]);
   assert.equal(out.affected[0].hp, 0);
   assert.ok(out.affected[0].dying || out.affected[0].dead, 'dropped, not silently at zero');
 });
 
-test('a drain hurts them and feeds you', () => {
+test('TWO EFFECTS IN ONE ACTION hurt them and feed you', () => {
+  // What `drain` always was. It needed a fused union arm before; it is a list
+  // of two now, which is the whole argument for components.
   const me = combatant({ hp: 5 });
   const them = combatant({ id: 'foe1', name: 'wolf', hp: 20, maxHp: 20 });
-  const drain: ActiveSkill = { ...hinder, id: 'sk_drain', effect: { kind: 'drain', damage: 6, heal: 3 } };
 
-  // 6 damage, less the target's VIT soak. Skills go through the engine's own
-  // `applyDamage`, so they are reduced exactly as a sword blow is.
-  const out = resolveSkill(drain, me, [them]);
+  const out = resolveSkill(skill('sk_drain', [hurt(6), heal(3)]), me, [them]);
   assert.equal(out.affected[0].hp, 20 - (6 - soakOf(them, 6)));
   assert.equal(out.actor.hp, 8, 'what you drain is not reduced — you take all of it');
 });
 
-test('a drain cannot overfill you either', () => {
+test('and it cannot overfill you either', () => {
   const me = combatant({ hp: combatant().maxHp - 1 });
   const them = combatant({ id: 'foe1', hp: 20, maxHp: 20 });
-  const drain: ActiveSkill = { ...hinder, id: 'sk_drain', effect: { kind: 'drain', damage: 6, heal: 99 } };
-  assert.equal(resolveSkill(drain, me, [them]).actor.hp, me.maxHp);
+  assert.equal(resolveSkill(skill('sk_drain', [hurt(6), heal(99)]), me, [them]).actor.hp, me.maxHp);
 });
 
 test('a burst catches everyone it was given', () => {
@@ -311,36 +322,29 @@ test('a burst catches everyone it was given', () => {
     combatant({ id: 'f2', name: 'b', hp: 20, maxHp: 20 }),
     combatant({ id: 'f3', name: 'c', hp: 20, maxHp: 20 }),
   ];
-  const burst: ActiveSkill = { ...hinder, id: 'sk_burst', effect: { kind: 'burst', damage: 5, radius: 2 } };
 
-  const out = resolveSkill(burst, me, pack);
+  const out = resolveSkill(skill('sk_burst', [hurt(5, { kind: 'burst', radius: 2 })]), me, pack);
   assert.equal(out.affected.length, 3);
   assert.ok(out.affected.every((c) => c.hp === 20 - (5 - soakOf(c, 5))), 'each soaks it by their own VIT');
 });
 
-test('a hex both hurts and sticks', () => {
+test('an action can both hurt and stick', () => {
   const me = combatant();
   const them = combatant({ id: 'foe1', name: 'wolf', hp: 20, maxHp: 20 });
-  const hex: ActiveSkill = {
-    ...hinder, id: 'sk_hex', effect: { kind: 'hex', damage: 4, condition: 'poisoned', rounds: 3 },
-  };
 
-  const out = resolveSkill(hex, me, [them]);
+  const out = resolveSkill(skill('sk_hex', [hurt(4), lands('poisoned', 3)]), me, [them]);
   assert.equal(out.affected[0].hp, 20 - (4 - soakOf(them, 4)));
   assert.equal(hasCondition(out.affected[0], 'poisoned'), true);
 });
 
-test('every effect that reaches out needs somebody to reach', () => {
-  const reaching = ['hinder', 'strike', 'drain', 'burst', 'hex'];
-  for (const kind of reaching) {
-    const skill = { ...hinder, effect: { ...hinder.effect, kind } } as ActiveSkill;
-    assert.equal(needsTarget(skill), true, `${kind} should need a target`);
-  }
-  assert.equal(needsTarget({ ...hinder, effect: { kind: 'mend', amount: 1 } }), false);
+test('needing a target follows from WHO, not from a table of payload kinds', () => {
+  assert.equal(needsTarget(skill('a', [hurt(4)])), true);
+  assert.equal(needsTarget(skill('b', [lands('prone', 1)])), true);
+  assert.equal(needsTarget(skill('c', [heal(4)])), false);
+  assert.equal(needsTarget(skill('d', [heal(4), pay(2)])), false, 'and a cost never makes it reach out');
 });
 
-test('a burst is the only thing with a radius', () => {
-  const burst: ActiveSkill = { ...hinder, effect: { kind: 'burst', damage: 5, radius: 3 } };
-  assert.equal(radiusOf(burst), 3);
+test('a radius is read off the shape, and only a burst has one', () => {
+  assert.equal(radiusOf(skill('sk_burst', [hurt(5, { kind: 'burst', radius: 3 })])), 3);
   assert.equal(radiusOf(hinder), 0);
 });

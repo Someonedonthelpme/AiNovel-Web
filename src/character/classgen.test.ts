@@ -8,13 +8,14 @@ import { canChooseSubclassOf, classOf, subclassOf } from './classes.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { skillTreeFor } from '../play/skilltree.ts';
 import { STAT_GRAMMAR } from '../skills/statgrammar.ts';
-import { priceSkill } from '../skills/compose.ts';
+import { obeys, priceOf } from '../skills/compose.ts';
 import type { ActiveSkill } from '../skills/active.ts';
+import type { SkillSpec } from '../skills/active.ts';
 
 const SEEDS = [1, 3, 7, 21, 42, 108, 512, 2024, 31337, 99, 555, 7777];
 
-const asSkill = (grant: { effect: unknown; range: number; usesPerRest: number }): ActiveSkill =>
-  ({ id: 'x', name: '', description: '', kind: 'combat', ability: 'str', ...grant }) as ActiveSkill;
+const asSkill = (grant: SkillSpec, ability: ActiveSkill['ability']): ActiveSkill =>
+  ({ id: 'x', name: '', description: '', ability, effects: grant.effects, range: grant.range });
 
 /* -------------------------------------------------------------------------- */
 /* The proof: a class the tree can actually be built from                      */
@@ -112,12 +113,8 @@ test('a granted skill belongs to the stat it opens', () => {
     for (const shape of classShapesFor(seed)) {
       for (const sub of shape.subclasses) {
         const grammar = STAT_GRAMMAR[sub.opens];
-        const grant = subclassGrant(sub, 'en');
-        assert.ok(
-          grammar.payloads.includes(grant.effect.kind),
-          `${sub.id} opens ${sub.opens} and teaches ${grant.effect.kind}`,
-        );
-        assert.ok(grant.range <= grammar.maxRange, `${sub.id} reaches ${grant.range}`);
+        const broke = obeys(asSkill(subclassGrant(sub, 'en'), sub.opens), grammar);
+        assert.equal(broke, null, `${sub.id} opens ${sub.opens} and ${broke}`);
       }
     }
   }
@@ -136,7 +133,7 @@ test('a grant is worth having and never the best thing in the game', () => {
   for (const seed of SEEDS) {
     for (const shape of classShapesFor(seed)) {
       for (const sub of shape.subclasses) {
-        const price = priceSkill(asSkill(subclassGrant(sub, 'en')));
+        const price = priceOf(subclassGrant(sub, 'en').effects);
         assert.ok(price > 0, `${sub.id} grants nothing`);
         assert.ok(price <= CEILING, `${sub.id} prices ${price.toFixed(1)} against a ceiling of ${CEILING}`);
       }

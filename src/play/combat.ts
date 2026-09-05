@@ -14,7 +14,7 @@ import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import { activeSkills, toCombatant } from '../session/sheet.ts';
 import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
-import { canAfford, costOf, priceOfUse, spend } from '../skills/pools.ts';
+import { canAfford, priceOfUse, spend } from '../skills/pools.ts';
 import { canAct, castTicks, spendTicks } from '../combat/tempo.ts';
 import { advanceCast, beginCast, finishCast } from '../combat/cast.ts';
 import { activeRegion } from '../world/travel.ts';
@@ -277,7 +277,6 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
   const before = combat.log.length;
   let next: CombatState = settleCast(state, combat);
   let error: string | null = null;
-  let spent = state.pc.skillUses;
 
   const rng = combatRng(state);
   if (action.kind === 'attack') {
@@ -321,7 +320,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
          * engine where a turn is a turn.
          */
         const { pool, cost } = priceOfUse(skill);
-        const needs = castTicks(self, costOf(skill.effect));
+        const needs = castTicks(self, cost);
 
         if (needs > self.ticks) {
           /*
@@ -370,7 +369,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
   }
 
   return {
-    state: { ...state, combat: next, pc: { ...state.pc, skillUses: spent } },
+    state: { ...state, combat: next },
     events: next.log.slice(before),
     error: null,
   };

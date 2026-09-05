@@ -2,16 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { ABILITIES, CONDITIONS } from '../combat/types.ts';
-import { composeSkill, PAYLOADS, priceSkill } from './compose.ts';
+import { composeSkill, obeys, PAYLOADS, priceSkill } from './compose.ts';
+import { isCombatUsable } from './active.ts';
+import { purposes } from './effect.ts';
 import { budgetForFloor } from './book.ts';
 import { grammarFor, STAT_GRAMMAR } from './statgrammar.ts';
 
 const SEEDS = [1, 7, 21, 55, 108, 512, 2024];
 const FLOORS = [1, 4, 9, 15, 20];
 
-const compose = (stat: (typeof ABILITIES)[number], budget: number, seed: number, kind: 'combat' | 'utility' = 'combat') =>
+const compose = (stat: (typeof ABILITIES)[number], budget: number, seed: number) =>
   composeSkill(mulberry32(seed), {
-    id: `s${seed}`, name: '', description: '', kind, ability: stat, grammar: grammarFor(stat), budget,
+    id: `s${seed}`, name: '', description: '', ability: stat, grammar: grammarFor(stat), budget,
   });
 
 /* -------------------------------------------------------------------------- */
@@ -30,8 +32,10 @@ test('a skill never does something its stat cannot', () => {
     for (const seed of SEEDS) {
       for (const floor of FLOORS) {
         const skill = compose(stat, budgetForFloor(floor), seed);
-        assert.ok(grammar.payloads.includes(skill.effect.kind), `${stat} produced ${skill.effect.kind}`);
-        assert.ok(skill.range <= grammar.maxRange, `${stat} reached ${skill.range}`);
+        // Checked against the COMPONENTS, not against a payload kind the
+        // composer discarded — which is the only check that still means
+        // anything once a skill is a list of effects.
+        assert.equal(obeys(skill, grammar), null, `${stat} floor ${floor}: ${obeys(skill, grammar)}`);
       }
     }
   }
@@ -41,9 +45,9 @@ test('a skill only inflicts what its stat is allowed to inflict', () => {
   for (const stat of ABILITIES) {
     const grammar = grammarFor(stat);
     for (const seed of SEEDS) {
-      const effect = compose(stat, budgetForFloor(12), seed).effect;
-      if (effect.kind === 'hinder' || effect.kind === 'hex' || effect.kind === 'rally') {
-        assert.ok(grammar.conditions.includes(effect.condition), `${stat} inflicted ${effect.condition}`);
+      for (const e of purposes(compose(stat, budgetForFloor(12), seed).effects)) {
+        if (e.channel !== 'condition') continue;
+        assert.ok(grammar.conditions.includes(e.condition), `${stat} inflicted ${e.condition}`);
       }
     }
   }
@@ -146,11 +150,14 @@ test('nothing is bought for more than it was given', () => {
       for (const floor of FLOORS) {
         const budget = budgetForFloor(floor);
         const skill = compose(stat, budget, seed);
-        // One use of something dear may exceed the budget — that is the
-        // "single formidable use" shape. Anything repeatable must not.
-        if (skill.usesPerRest > 1) {
-          assert.ok(priceSkill(skill) <= budget, `${stat} floor ${floor}: ${priceSkill(skill).toFixed(1)} of ${budget.toFixed(1)}`);
-        }
+        /*
+         * A STANDING BONUS IS A DIFFERENT BALANCE OBJECT and is exempt: it is
+         * held rather than thrown, priced per point at three rounds' worth,
+         * and a thin budget cannot buy even one point of it under that price.
+         * Everything you actually spend a turn on must fit what it was given.
+         */
+        if (!isCombatUsable(skill)) continue;
+        assert.ok(priceSkill(skill) <= budget, `${stat} floor ${floor}: ${priceSkill(skill).toFixed(1)} of ${budget.toFixed(1)}`);
       }
     }
   }

@@ -3,7 +3,6 @@ import type { CombatAction } from './combat.ts';
 import type { SheetRecord } from './sheetaction.ts';
 import type { ClimbRecord } from './climb.ts';
 import type { SocialRoll } from '../engine/roll.ts';
-import type { SkillUses } from '../skills/active.ts';
 import type { Inventory } from '../items/types.ts';
 import { addItem, emptyInventory, equip } from '../items/types.ts';
 import { namesTheSameThing, rations, weaponFromAttack } from '../items/catalogue.ts';
@@ -41,7 +40,6 @@ export type PlayState = {
      */
     stamina: number;
     mana: number;
-    skillUses: SkillUses;
   };
   /** The fight in progress, if any. A finished fight is discarded, not kept. */
   combat: CombatState | null;
@@ -123,7 +121,7 @@ export function initialPlayState(world: World, sheet: CharacterSheet): PlayState
   return {
     world,
     sheet,
-    pc: { hp: d.maxHp, maxHp: d.maxHp, stamina: d.maxStamina, mana: d.maxMana, conditions: [], coin: 0, inventory, skillUses: {} },
+    pc: { hp: d.maxHp, maxHp: d.maxHp, stamina: d.maxStamina, mana: d.maxMana, conditions: [], coin: 0, inventory },
     combat: null,
     ended: null,
   };

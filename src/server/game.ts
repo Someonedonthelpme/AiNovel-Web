@@ -35,8 +35,10 @@ import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
 import { activeSkills, derive, carryCapacityFor } from '../session/sheet.ts';
 import { canChooseSubclassOf, classOf, subclassOf } from '../character/classes.ts';
-import { usesLeft } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
+import { magnitudeOf, purposes } from '../skills/effect.ts';
+import type { Effect } from '../skills/effect.ts';
+import { priceOfUse } from '../skills/pools.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -125,7 +127,7 @@ export type GameView = {
     conditions: string[];
     abilities: Record<string, number>;
     traits: string[];
-    skills: { name: string; kind: string; description: string; effect: string; usesLeft: number; usesPerRest: number }[];
+    skills: { name: string; description: string; effect: string; cost: number; pool: string }[];
     personality: Personality;
     needs: Needs;
     voice: { selfPronoun: string; underStress: string };
@@ -256,16 +258,12 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       conditions: state.pc.conditions.map((c) => c.kind),
       abilities: d.abilities,
       traits: state.sheet.traits,
-      // Actives, with what they do and what is left of them — a skill the
+      // Actives, with what they do and what they take out of you — a skill the
       // player cannot see the cost of is one they will not plan around.
-      skills: activeSkills(state.sheet).map((s) => ({
-        name: s.name,
-        kind: s.kind,
-        description: s.description,
-        effect: describeEffect(s),
-        usesLeft: usesLeft(s, state.pc.skillUses),
-        usesPerRest: s.usesPerRest,
-      })),
+      skills: activeSkills(state.sheet).map((s) => {
+        const { pool, cost } = priceOfUse(s);
+        return { name: s.name, description: s.description, effect: describeEffect(s), cost, pool };
+      }),
       personality: dispositionOf(state.sheet),
       needs: state.sheet.needs,
       voice: { selfPronoun: state.sheet.voice.selfPronoun, underStress: state.sheet.voice.underStress },
@@ -732,17 +730,35 @@ export async function actOnSheet(id: string, action: SheetAction): Promise<Sheet
 }
 
 
-/** A skill's effect in a phrase, so the sidebar says what it actually does. */
+/**
+ * A skill's effect in a phrase, so the sidebar says what it actually does.
+ *
+ * One clause per PURPOSE, joined — which is how a two-effect skill like the old
+ * `drain` finally reads as the two things it always was. Costs are reported
+ * separately, as a number the player can weigh against a pool.
+ */
 function describeEffect(skill: ActiveSkill): string {
-  const e = skill.effect;
-  switch (e.kind) {
-    case 'hinder': return `leaves a foe ${e.condition} for ${e.rounds}`;
-    case 'mend': return `heals ${e.amount}`;
-    case 'rally': return `shakes off ${e.condition}`;
-    case 'strike': return `${e.damage} damage, no roll to hit`;
-    case 'drain': return `${e.damage} damage, ${e.heal} back to you`;
-    case 'burst': return `${e.damage} to everything within ${e.radius}`;
-    case 'hex': return `${e.damage} damage and ${e.condition} for ${e.rounds}`;
-    case 'edge': return `+${e.bonus} on ${e.ability} checks`;
+  return purposes(skill.effects).map(clauseOf).join(', ') || 'nothing on its own';
+}
+
+function clauseOf(e: Effect): string {
+  const at = e.who === 'own' ? 'you' : e.who === 'everyone' ? 'everyone' : `a ${e.who}`;
+  const area = e.shape.kind === 'burst' ? ` within ${e.shape.radius}` : '';
+  const amount = magnitudeOf(e);
+
+  switch (e.channel) {
+    case 'hp':
+      return e.sign === 'minus' ? `${amount} damage to ${at}${area}` : `heals ${at} ${amount}`;
+    case 'stamina':
+    case 'mana':
+      return `${e.sign === 'minus' ? 'drains' : 'restores'} ${amount} ${e.channel} on ${at}`;
+    case 'condition': {
+      const held = e.duration.kind === 'rounds' ? ` for ${e.duration.rounds}` : '';
+      return e.sign === 'minus' ? `leaves ${at} ${e.condition}${held}` : `clears ${e.condition} on ${at}`;
+    }
+    case 'stat':
+      return `${e.sign === 'minus' ? '-' : '+'}${amount} on ${e.stat} checks`;
+    case 'special':
+      return `${e.verb}s ${at}`;
   }
 }

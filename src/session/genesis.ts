@@ -17,7 +17,7 @@ import { clampTemperament, neutralTemperament, metNeeds } from '../character/per
 import { repairAbilities, repairRegion, repairVoice } from './repair.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { CHARACTER_SCHEMA, GROUND_FLOOR_SCHEMA } from './schema.ts';
-import type { Background, CharacterSheet, Skill, SkillKind } from './sheet.ts';
+import type { Background, CharacterSheet, Skill } from './sheet.ts';
 import { POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, validateSheet } from './sheet.ts';
 import { sword } from '../combat/fixtures.ts';
 
@@ -54,7 +54,6 @@ function styleRule(language: 'th' | 'en'): string {
 /* Character                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const asSkillKind = (v: string): SkillKind => (v === 'combat' || v === 'social' ? v : 'utility');
 
 const asAbility = (v: string) =>
   (['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).includes(v as never) ? (v as Skill['ability']) : 'str';
@@ -181,7 +180,6 @@ export async function generateCharacter(
       name: s.name,
       description: s.description,
       ability: asAbility(s.ability),
-      kind: asSkillKind(s.kind),
     })),
     // Flavour from the model, mechanics from the code: see `keepsake`.
     startingGear: generated.background.startingGear.map((g) => keepsake(g.id, g.name, stripMechanics(g.description))),

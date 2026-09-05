@@ -15,7 +15,7 @@ import {
   localChat,
   probeEmbeddingSeparation,
 } from '../src/llm/local.ts';
-import { rankClues } from '../src/llm/similarity.ts';
+import { rankFacts } from '../src/llm/similarity.ts';
 
 type Case = { clue: string; text: string };
 
@@ -58,16 +58,17 @@ async function retrieval(label: string, clues: Case[], queries: { text: string; 
 
   const clueVecs = await embed(clues.map((c) => c.text));
   const queryVecs = await embed(queries.map((q) => q.text));
-  const vectors = clues.map((c, i) => ({ clue: c.clue, vector: clueVecs[i] }));
+  // `rankClues` became `rankFacts` when clues did; the shape is unchanged.
+  const vectors = clues.map((c, i) => ({ fact: c.clue, vector: clueVecs[i] }));
 
   let correct = 0;
   for (const [i, q] of queries.entries()) {
-    const ranked = rankClues(queryVecs[i], vectors, { limit: 2 });
-    const hit = ranked[0]?.clue === q.expect;
+    const ranked = rankFacts(queryVecs[i], vectors, { limit: 2 });
+    const hit = ranked[0]?.fact === q.expect;
     if (hit) correct++;
     const margin = (ranked[0]?.score ?? 0) - (ranked[1]?.score ?? 0);
     console.log(
-      `  ${hit ? 'PASS' : 'FAIL'}  ${ranked[0]?.clue} (${ranked[0]?.score.toFixed(3)}, margin ${margin.toFixed(3)}) expected ${q.expect}  "${q.text}"`,
+      `  ${hit ? 'PASS' : 'FAIL'}  ${ranked[0]?.fact} (${ranked[0]?.score.toFixed(3)}, margin ${margin.toFixed(3)}) expected ${q.expect}  "${q.text}"`,
     );
   }
   console.log(`  retrieval: ${correct}/${queries.length}`);

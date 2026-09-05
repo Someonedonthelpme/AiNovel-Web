@@ -29,6 +29,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "scripts/**/*.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
     ".next/types/**/*.ts",

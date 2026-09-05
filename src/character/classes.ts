@@ -150,13 +150,6 @@ const weapon = (
   damage: { count: 1, sides, bonusAbility: ability, type },
 });
 
-const hinder = (condition: string, rounds: number) =>
-  ({ kind: 'hinder', condition, rounds }) as SkillSpec['effect'];
-const strike = (damage: number) => ({ kind: 'strike', damage }) as SkillSpec['effect'];
-const burst = (damage: number, radius: number) => ({ kind: 'burst', damage, radius }) as SkillSpec['effect'];
-const mend = (amount: number) => ({ kind: 'mend', amount }) as SkillSpec['effect'];
-const edge = (ability: Ability, bonus: number) => ({ kind: 'edge', ability, bonus }) as SkillSpec['effect'];
-
 /* -------------------------------------------------------------------------- */
 /* The classes                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -235,10 +228,10 @@ export function subclassSkill(sub: Subclass, language: 'th' | 'en'): ActiveSkill
     id: `subclass_${sub.id}`,
     name: sub.grants.name[language],
     description: sub.grants.description[language],
-    kind: sub.grants.kind,
-    ability: sub.grants.effect.kind === 'edge' ? sub.grants.effect.ability : 'str',
-    effect: sub.grants.effect,
+    // The stat its island runs on is the stat it checks against; the grant was
+    // composed from that stat's grammar in the first place.
+    ability: sub.opens,
+    effects: sub.grants.effects,
     range: sub.grants.range,
-    usesPerRest: sub.grants.usesPerRest,
   };
 }

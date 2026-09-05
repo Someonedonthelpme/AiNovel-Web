@@ -24,16 +24,12 @@ import type { Persona, Status } from '../character/persona.ts';
  * creation matter.
  */
 
-export const SKILL_KINDS = ['combat', 'social', 'utility'] as const;
-export type SkillKind = (typeof SKILL_KINDS)[number];
-
 export type Skill = {
   id: string;
   /** Generated in the play language, so a Thai character gets Thai skill names. */
   name: string;
   description: string;
   ability: Ability;
-  kind: SkillKind;
 };
 
 /** Re-exported so existing importers keep working; the type lives in items/. */

@@ -1,6 +1,5 @@
 import { ABILITIES } from '../combat/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
-import { SKILL_KINDS } from './sheet.ts';
 
 /**
  * JSON Schemas for the generation calls.
@@ -36,9 +35,8 @@ const skill = obj(
     name: str,
     description: str,
     ability: { type: 'string', enum: [...ABILITIES] },
-    kind: { type: 'string', enum: [...SKILL_KINDS] },
   },
-  ['id', 'name', 'description', 'ability', 'kind'],
+  ['id', 'name', 'description', 'ability'],
 );
 
 const item = obj({ id: str, name: str, description: str }, ['id', 'name', 'description']);

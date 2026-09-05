@@ -1,7 +1,10 @@
 import type { Ability, Condition } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
-import type { ActiveEffect, ActiveKind, ActiveSkill } from './active.ts';
+import type { ActiveSkill } from './active.ts';
+import { costs, flat, instant, magnitudeOf, purposes, self, single, usableInCombat } from './effect.ts';
+import type { Channel, Effect } from './effect.ts';
+import { MAX_COST, MIN_COST, poolFor } from './pools.ts';
 
 /**
  * Building a skill out of priced parts.
@@ -61,36 +64,75 @@ const CONDITION_PRICE: Record<string, number> = {
   stunned: 4,
   restrained: 2.5,
   blinded: 2,
+  /*
+   * `frightened` was missing from this table entirely, so every CHA hinder
+   * fell through to the `?? 1` default and was priced as the cheapest thing in
+   * the game — which is backwards, since taking somebody OUT of a fight is
+   * worth more than knocking them over. It sits between blinded and poisoned:
+   * it impairs their own attacks without exposing them to everyone else.
+   */
+  frightened: 1.75,
   poisoned: 1.5,
   grappled: 1.5,
   prone: 1,
 };
 
-const priceOf = (effect: ActiveEffect): number => {
-  switch (effect.kind) {
-    case 'strike':
-      return effect.damage / 2;
-    case 'hinder':
-      return (CONDITION_PRICE[effect.condition] ?? 1) * effect.rounds;
-    case 'mend':
-      return effect.amount / 3;
-    case 'rally':
-      return 1.5;
-    case 'drain':
-      return effect.damage / 2 + effect.heal / 3;
-    case 'burst':
-      // Everything within the radius, so it scales with what it can catch.
-      return (effect.damage / 2) * (1 + effect.radius * 0.8);
-    case 'hex':
-      return effect.damage / 2 + (CONDITION_PRICE[effect.condition] ?? 1) * effect.rounds;
-    case 'edge':
-      // Always on and never spent, so it is dear for what it looks like.
-      return effect.bonus * 2.5;
+/**
+ * What a channel is worth per point.
+ *
+ * One table instead of the eight-arm switch this replaced, and adding a channel
+ * no longer means editing a price list in two files that could disagree.
+ */
+const CHANNEL_WEIGHT: Record<Channel, number> = {
+  hp: 0.5,
+  stamina: 0.3,
+  mana: 0.3,
+  condition: 1,
+  // Always on and never spent, so it is dear for what it looks like.
+  stat: 2.5,
+  special: 2,
+};
+
+/** Reaching more people is worth more than reaching further. */
+const spread = (shape: Effect['shape']): number => {
+  switch (shape.kind) {
+    case 'burst': return 1 + shape.radius * 0.8;
+    case 'cone':
+    case 'line': return 1 + shape.length * 0.4;
+    default: return 1;
   }
 };
 
-export const priceSkill = (skill: ActiveSkill): number =>
-  priceOf(skill.effect) * Math.max(1, skill.usesPerRest || 1);
+const held = (duration: Effect['duration']): number => {
+  switch (duration.kind) {
+    case 'rounds': return Math.max(1, duration.rounds);
+    case 'sustained': return 3;
+    default: return 1;
+  }
+};
+
+/** Catching everybody is worth more than catching one of them. */
+const reach = (who: Effect['who']): number => (who === 'everyone' ? 1.5 : 1);
+
+export function priceEffect(effect: Effect): number {
+  const per = effect.channel === 'condition'
+    ? CONDITION_PRICE[effect.condition] ?? 1
+    : CHANNEL_WEIGHT[effect.channel];
+  return per * magnitudeOf(effect) * spread(effect.shape) * held(effect.duration) * reach(effect.who);
+}
+
+/**
+ * What the whole thing is worth: what it does, less what it takes out of you.
+ *
+ * Costs SUBTRACT, which is what makes a severe cost a real design lever rather
+ * than flavour — blood magic is cheap for what it does precisely because it is
+ * paid for in something that hurts.
+ */
+export const priceOf = (effects: readonly Effect[]): number =>
+  purposes(effects).reduce((total, e) => total + priceEffect(e), 0)
+  - costs(effects).reduce((total, e) => total + priceEffect(e) * 0.5, 0);
+
+export const priceSkill = (skill: ActiveSkill): number => priceOf(skill.effects);
 
 /** Reaching further is worth something, but far less than the payload. */
 const rangePrice = (range: number): number => Math.max(0, range) * 0.25;
@@ -122,77 +164,164 @@ function conditionFor(rng: Rng, grammar: Grammar, budget: number): Condition {
 }
 
 /**
- * Draw one payload sized to roughly a third of the budget.
+ * Draw the PURPOSES for one payload kind, as components.
  *
- * A third rather than the whole of it, because the remainder is what buys
- * repeat uses — a skill worth its budget in a single use is a worse thing to
- * own than one you can use three times.
+ * The kinds survive as the GENERATOR'S vocabulary — "make me a strike" is a
+ * good handle for a grammar to hold — but nothing stores one. What comes back
+ * is components, which is why `drain` and `hex` return two effects each rather
+ * than needing a fused union arm.
  */
-function payloadFor(rng: Rng, kind: PayloadKind, grammar: Grammar, budget: number, ability: Ability): ActiveEffect {
+function payloadFor(rng: Rng, kind: PayloadKind, grammar: Grammar, budget: number, ability: Ability): Effect[] {
   /*
-   * Sized to about a third of the budget, WITH JITTER.
+   * SIZED TO WHAT IS LEFT, not to a third of it.
    *
-   * A third rather than the whole of it, because the remainder buys repeat
-   * uses — a skill worth its budget in one use is a worse thing to own than one
-   * you can use three times.
+   * A third was right while the remainder bought repeat uses. `usesPerRest` is
+   * gone, so there is no second sink and a budget that only ever bought a third
+   * of itself would make every deep book a shallow one. What absorbs the
+   * remainder now is ANOTHER EFFECT — see `composeSkill`.
    *
    * The jitter matters more than it looks. Without it the magnitude is a pure
    * function of the budget, so every strike found on floor nine did exactly
    * seven damage and only the KIND of payload varied — twelve books at a depth
    * produced six distinct skills between them, which is the duplication this
-   * whole system exists to end. Spread costs nothing: the price moves with the
-   * magnitude, and uses absorb the difference.
+   * whole system exists to end.
+   *
+   * Each arm below turns `target` into roughly `target` worth of price, so the
+   * budget arithmetic in `composeSkill` can be done in one currency.
    */
-  const target = Math.max(1, (budget / 3) * (0.75 + rng() * 0.6));
+  const target = Math.max(1, budget * (0.55 + rng() * 0.4));
+
+  const hurt = (amount: number, shape: Effect['shape'] = single): Effect => ({
+    role: 'purpose', sign: 'minus', channel: 'hp', who: 'foe', shape, duration: instant, formula: flat(amount),
+  });
 
   switch (kind) {
     case 'strike':
-      return { kind: 'strike', damage: Math.max(2, Math.round(target * 2)) };
+      return [hurt(Math.max(2, Math.round(target * 2)))];  // 0.5 per point
 
     case 'hinder': {
       const condition = conditionFor(rng, grammar, budget);
       const price = CONDITION_PRICE[condition] ?? 1;
-      return { kind: 'hinder', condition, rounds: Math.max(1, Math.min(3, Math.round(target / price))) };
+      return [{
+        role: 'purpose', sign: 'minus', channel: 'condition', condition, who: 'foe', shape: single,
+        duration: { kind: 'rounds', rounds: Math.max(1, Math.min(3, Math.round(target / price))) },
+        formula: flat(1),
+      }];
     }
 
     case 'mend':
-      return { kind: 'mend', amount: Math.max(3, Math.round(target * 3)) };
+      return [{
+        role: 'purpose', sign: 'plus', channel: 'hp', who: 'own', shape: self, duration: instant,
+        formula: flat(Math.max(3, Math.round(target * 2))),
+      }];
 
     case 'rally':
-      return { kind: 'rally', condition: pick(rng, grammar.conditions) };
+      return [{
+        role: 'purpose', sign: 'plus', channel: 'condition', condition: pick(rng, grammar.conditions),
+        who: 'own', shape: self, duration: instant, formula: flat(1),
+      }];
 
     case 'drain': {
-      const damage = Math.max(2, Math.round(target * 1.2));
-      return { kind: 'drain', damage, heal: Math.max(1, Math.round(damage / 2)) };
+      // Two effects, which is what it always was.
+      // 0.5 on the damage plus 0.5 on half of it back = 0.75 per point.
+      const damage = Math.max(2, Math.round(target * 1.33));
+      return [
+        hurt(damage),
+        {
+          role: 'purpose', sign: 'plus', channel: 'hp', who: 'own', shape: self, duration: instant,
+          formula: flat(Math.max(1, Math.round(damage / 2))),
+        },
+      ];
     }
 
     case 'burst': {
       const radius = 1 + Math.floor(rng() * 2);
-      return { kind: 'burst', damage: Math.max(2, Math.round((target * 2) / (1 + radius * 0.8))), radius };
+      return [hurt(
+        Math.max(2, Math.round((target * 2) / (1 + radius * 0.8))),
+        { kind: 'burst', radius },
+      )];
     }
 
     case 'hex': {
+      // And so was this one.
       const condition = conditionFor(rng, grammar, budget);
-      return { kind: 'hex', damage: Math.max(2, Math.round(target)), condition, rounds: 1 + Math.floor(rng() * 2) };
+      return [
+        hurt(Math.max(2, Math.round(target))),
+        {
+          role: 'purpose', sign: 'minus', channel: 'condition', condition, who: 'foe', shape: single,
+          duration: { kind: 'rounds', rounds: 1 + Math.floor(rng() * 2) }, formula: flat(1),
+        },
+      ];
     }
 
     case 'edge':
-      return { kind: 'edge', ability, bonus: Math.max(1, Math.min(3, Math.round(target / 2.5))) };
+      return [{
+        role: 'purpose', sign: 'plus', channel: 'stat', stat: ability, who: 'own', shape: self,
+        duration: { kind: 'sustained' },
+        formula: flat(Math.max(1, Math.min(3, Math.round(target / 2.5)))),
+      }];
   }
 }
 
 /** Which effects only ever touch the person using them. */
 const REACHES = new Set<PayloadKind>(['strike', 'hinder', 'drain', 'burst', 'hex']);
 
+/* -------------------------------------------------------------------------- */
+/* The allow-list, per axis                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which channels each generator kind can put on the board.
+ *
+ * The bridge from the grammar — which still speaks in kinds, because "make me a
+ * strike" is a good handle for one to hold — to the COMPONENTS, which are what
+ * actually gets stored. It is what lets a grammar be checked against a finished
+ * skill rather than against a kind the composer has already thrown away.
+ */
+const KIND_CHANNELS: Record<PayloadKind, Channel[]> = {
+  strike: ['hp'],
+  burst: ['hp'],
+  mend: ['hp'],
+  drain: ['hp'],
+  hinder: ['condition'],
+  rally: ['condition'],
+  hex: ['hp', 'condition'],
+  edge: ['stat'],
+};
+
+/** The channels a stat is allowed to touch at all. */
+export const channelsOf = (grammar: Grammar): Set<Channel> =>
+  new Set(grammar.payloads.flatMap((p) => KIND_CHANNELS[p]));
+
+/**
+ * Whether a finished skill is one this grammar could have produced.
+ *
+ * Three checks, and all of them are on the components: the channel is one the
+ * stat may touch, any condition is one it may inflict, and it does not reach
+ * further than the stat reaches. Costs are exempt — what a skill takes out of
+ * YOU is not something the grammar has an opinion about.
+ */
+export function obeys(skill: ActiveSkill, grammar: Grammar): string | null {
+  const channels = channelsOf(grammar);
+  for (const e of purposes(skill.effects)) {
+    if (!channels.has(e.channel)) return `touches ${e.channel}`;
+    if (e.channel === 'condition' && !grammar.conditions.includes(e.condition)) {
+      return `inflicts ${e.condition}`;
+    }
+  }
+  return skill.range > grammar.maxRange ? `reaches ${skill.range}` : null;
+}
+
 export type ComposeInput = {
   id: string;
   name: string;
   description: string;
-  kind: ActiveKind;
   ability: Ability;
   grammar: Grammar;
   /** What there is to spend. Deeper sources are richer. */
   budget: number;
+  /** Which words to name it with, when `name` is blank. */
+  language?: 'th' | 'en';
 };
 
 /**
@@ -204,53 +333,127 @@ export type ComposeInput = {
 export function composeSkill(rng: Rng, input: ComposeInput): ActiveSkill {
   const { grammar, budget } = input;
 
-  // Utility and social skills are the standing bonuses; combat draws widely.
-  let allowed: PayloadKind[] = input.kind === 'combat'
-    ? grammar.payloads.filter((p) => p !== 'edge')
-    : grammar.payloads.filter((p) => p === 'edge');
+  /*
+   * A STANDING BONUS IS A DIFFERENT KIND OF THING, and that is now the only
+   * split — `ActiveKind` is gone, because a skill is used as you please.
+   *
+   * Something held is drawn only when the budget is too thin to buy an action
+   * worth having: a permanent +1 is a fine consolation and a poor headline.
+   */
+  const thin = budget < 6;
+  let allowed: PayloadKind[] = thin
+    ? grammar.payloads.filter((p) => p === 'edge')
+    : grammar.payloads.filter((p) => p !== 'edge');
+  if (allowed.length === 0) allowed = [...grammar.payloads];
 
   /*
-   * `rally` is a flat price whatever it costs to buy, so a rich budget spent on
-   * one is mostly wasted — it caps at four uses and stops. Dropped once there
-   * is real money to spend, which is what lifted the measured floor from 0.51.
+   * `rally` is flat-priced however much is spent on it, so a rich budget goes
+   * mostly to waste on one. Dropped once there is real money about.
    */
-  if (input.kind === 'combat' && budget >= 12 && allowed.length > 1) {
-    allowed = allowed.filter((p) => p !== 'rally');
+  if (budget >= 12 && allowed.length > 1) allowed = allowed.filter((p) => p !== 'rally');
+
+  /*
+   * DRAW UNTIL THE BUDGET IS SPENT, rather than once.
+   *
+   * The remainder used to buy repeat uses; with `usesPerRest` gone it buys
+   * another EFFECT. That is what stops a deep book being priced like a shallow
+   * one when its payload caps out — a condition holds for three rounds at most,
+   * so a rich hinder becomes a hinder AND a blow rather than a longer hold.
+   *
+   * It is also the shape the component model was argued for: `drain` and `hex`
+   * were compound all along, and now anything can be.
+   */
+  const from = allowed.length > 0 ? allowed : grammar.payloads;
+  const kinds: PayloadKind[] = [];
+  const purpose: Effect[] = [];
+  let left = budget;
+
+  for (let part = 0; part < 3; part++) {
+    const kind = pick(rng, from);
+    let drawn = payloadFor(rng, kind, grammar, left, input.ability);
+    let price = priceOf(drawn);
+
+    /*
+     * A PART THAT BUSTS WHAT IS LEFT IS REDRAWN AGAINST A BUDGET SCALED TO FIT.
+     *
+     * Not every arm turns `target` into `target` worth of price — `hex` puts a
+     * condition on top of a blow and can come in half again over. Scaling the
+     * budget by how far it overshot and drawing once more converges without
+     * needing each arm to be exactly calibrated.
+     */
+    if (price > left && price > 0) {
+      drawn = payloadFor(rng, kind, grammar, (left * left) / price, input.ability);
+      price = priceOf(drawn);
+    }
+
+    // A later part may not take the whole thing over what it was given.
+    if (part > 0 && price > left) break;
+    purpose.push(...drawn);
+    kinds.push(kind);
+    left -= price;
+    if (left < budget * 0.25) break;
   }
 
-  const kind = pick(rng, allowed.length > 0 ? allowed : grammar.payloads);
-  const effect = payloadFor(rng, kind, grammar, budget, input.ability);
-
-  const range = REACHES.has(kind) ? Math.max(1, Math.round(rng() * grammar.maxRange)) : 0;
-  const unit = priceOf(effect) + rangePrice(range);
+  const reaches = kinds.some((k) => REACHES.has(k));
+  const range = reaches ? Math.max(1, Math.round(rng() * grammar.maxRange)) : 0;
 
   /*
-   * The budget buys repeats. An `edge` is always on and never spent, so it has
-   * no uses at all — which is also why it is priced so much higher per point.
+   * THE COST IS AN EFFECT, drawn from what the purpose is worth.
+   *
+   * It used to be implied — a number derived from the payload every time
+   * anybody asked. Declaring it means a skill can cost something other than a
+   * pool, which is the whole reason blood magic needs no special case.
+   *
+   * A sustained bonus is never spent, so it carries no cost at all; that is
+   * why it is priced so much higher per point.
    */
   /*
-   * FLOOR, not round.
+   * A STANDING BONUS IS THE ONE THING THAT IS FREE, because it is held rather
+   * than thrown — charging for it would mean charging every round for ever.
    *
-   * Rounding bought a third use out of two and a half, so a twenty-point
-   * budget could walk away with twenty-four points of skill. Flooring can only
-   * ever leave budget unspent, which is the safe direction to be wrong in — a
-   * source that hands out more than it was given is how generation quietly
-   * inflates.
-   *
-   * The floor of one is deliberate: a payload dearer than the whole budget is
-   * still allowed, as a single formidable use.
+   * Keyed on what the skill DOES, not on whether the budget was thin. Keying it
+   * on `thin` meant a shallow STR book, whose grammar has no standing bonus to
+   * fall back on, composed a real blow and then cost nothing at all.
    */
-  const usesPerRest = kind === 'edge' ? 0 : Math.max(1, Math.min(4, Math.floor(budget / Math.max(1, unit))));
+  const worth = priceOf(purpose) + rangePrice(range);
+  const effects: Effect[] = usableInCombat(purpose)
+    ? [...purpose, costFor(input.ability, worth)]
+    : purpose;
 
+  /*
+   * NAMED HERE, because only here is the payload kind known.
+   *
+   * Every caller used to compose and then name in a second step, which meant
+   * each of them had to be handed a kind that `composeSkill` had already
+   * chosen and thrown away — `classbuild` passed a hardcoded `'strike'` for
+   * want of anything better.
+   */
   return {
     id: input.id,
-    name: input.name,
+    name: input.name || nameFor(rng, kinds[0], input.language ?? 'en'),
     description: input.description,
-    kind: input.kind,
     ability: input.ability,
-    effect,
+    effects,
     range,
-    usesPerRest,
+  };
+}
+
+/**
+ * What throwing it takes out of you.
+ *
+ * Which pool follows the STAT, not the payload — a strike on STR is exertion
+ * and a strike on INT is concentration. Floored and capped so nothing is free
+ * and nothing found deep is unusable at the level it is found.
+ */
+function costFor(ability: Ability, worth: number): Effect {
+  return {
+    role: 'cost',
+    sign: 'minus',
+    channel: poolFor(ability),
+    who: 'own',
+    shape: self,
+    duration: instant,
+    formula: flat(Math.max(MIN_COST, Math.min(MAX_COST, Math.round(worth / 2)))),
   };
 }
 
@@ -292,8 +495,8 @@ const QUALIFIER = {
   th: ['เงียบ', 'ยาว', 'ต่ำ', 'ฉับพลัน', 'อดทน', 'ประชิด', 'ขม', 'เย็น', 'แม่นยำ', 'ที่สอง'],
 } as const;
 
-export function nameFor(rng: Rng, effect: ActiveEffect, language: 'th' | 'en'): string {
-  const shape = pick(rng, SHAPE[language][effect.kind]);
+export function nameFor(rng: Rng, kind: PayloadKind, language: 'th' | 'en'): string {
+  const shape = pick(rng, SHAPE[language][kind]);
   const qualifier = pick(rng, QUALIFIER[language]);
   return language === 'th' ? `${shape}${qualifier}` : `The ${qualifier} ${shape}`;
 }

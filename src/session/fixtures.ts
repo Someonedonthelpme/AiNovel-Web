@@ -5,7 +5,7 @@ import type { Background, CharacterSheet, Skill } from './sheet.ts';
 import { defaultAbilities } from './sheet.ts';
 
 export function skill(id: string, over: Partial<Skill> = {}): Skill {
-  return { id, name: id, description: '', ability: 'str', kind: 'utility', ...over };
+  return { id, name: id, description: '', ability: 'str', ...over };
 }
 
 export function background(id: string, over: Partial<Background> = {}): Background {
@@ -27,8 +27,8 @@ export const soldier = background('soldier', {
   name: 'Soldier',
   grantsStats: { str: 1, con: 1 },
   grantsSkills: [
-    skill('shield-wall', { name: 'Shield Wall', ability: 'con', kind: 'combat' }),
-    skill('read-terrain', { name: 'Read the Ground', ability: 'wis', kind: 'utility' }),
+    skill('shield-wall', { name: 'Shield Wall', ability: 'con' }),
+    skill('read-terrain', { name: 'Read the Ground', ability: 'wis' }),
   ],
   socialStanding: 'peer',
 });
@@ -37,8 +37,8 @@ export const scholar = background('scholar', {
   name: 'Scholar',
   grantsStats: { int: 2 },
   grantsSkills: [
-    skill('recall-lore', { name: 'Recall Lore', ability: 'int', kind: 'utility' }),
-    skill('read-people', { name: 'Read the Room', ability: 'wis', kind: 'social' }),
+    skill('recall-lore', { name: 'Recall Lore', ability: 'int' }),
+    skill('read-people', { name: 'Read the Room', ability: 'wis' }),
   ],
   socialStanding: 'superior',
 });

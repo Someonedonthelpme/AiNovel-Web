@@ -2,6 +2,8 @@ import type { Ability, Combatant, Condition } from '../combat/types.ts';
 import { addCondition, removeCondition } from '../combat/conditions.ts';
 import { applyDamage } from '../combat/resolve.ts';
 import type { TraitCondition } from '../play/traits.ts';
+import { magnitudeOf, purposes, radiusOf as spreadOf, reachesOut, standingBonus, usableInCombat } from './effect.ts';
+import type { Effect } from './effect.ts';
 
 /**
  * Active skills — the things a character DOES.
@@ -16,100 +18,46 @@ import type { TraitCondition } from '../play/traits.ts';
  * "Shield Wall" written on their sheet and no way to raise a shield.
  *
  * The usual rule holds: the model names the skill and writes what it feels
- * like; the code decides what it does. `ActiveEffect` is a closed union
- * resolved by the engine, never free text.
- */
-
-export const ACTIVE_KINDS = ['combat', 'social', 'utility'] as const;
-export type ActiveKind = (typeof ACTIVE_KINDS)[number];
-
-/**
- * What using a skill does.
+ * like; the code decides what it does. An effect is built from components the
+ * engine resolves, never free text — see `effect.ts`.
  *
- * Deliberately built only from primitives the combat engine already has —
- * conditions, hit points, advantage — so nothing here needs the resolver
- * rewritten to support it.
+ * `ActiveKind` (combat / social / utility) is GONE. A skill is used as you
+ * please, the way it is at a table: what it can do comes from its effects, not
+ * from a category somebody filed it under.
+ *
+ * `usesPerRest` is gone with it. Pools and the tick budget are the resource
+ * economy; per-skill allowances had stopped gating anything in play and
+ * survived only as an input to the composer's own pricing.
  */
-export type ActiveEffect =
-  /** Put a condition on somebody else. The engine already knows what each costs them. */
-  | { kind: 'hinder'; condition: Condition; rounds: number }
-  /** Close a wound. */
-  | { kind: 'mend'; amount: number }
-  /** Shake something off yourself. */
-  | { kind: 'rally'; condition: Condition }
-  /** Out of combat: a standing bonus on checks of one ability. */
-  | { kind: 'edge'; ability: Ability; bonus: number }
-  /** Straight damage that does not roll to hit. Short range, few uses. */
-  | { kind: 'strike'; damage: number }
-  /** Damage that feeds you. The signature of anything that costs something. */
-  | { kind: 'drain'; damage: number; heal: number }
-  /** Everything within `radius` of the target. */
-  | { kind: 'burst'; damage: number; radius: number }
-  /** Damage AND a condition. The expensive combination. */
-  | { kind: 'hex'; damage: number; condition: Condition; rounds: number };
 
 export type ActiveSkill = {
   id: string;
   /** Generated in the play language, so a Thai character reads Thai skill names. */
   name: string;
   description: string;
-  kind: ActiveKind;
   ability: Ability;
-  effect: ActiveEffect;
+  /**
+   * What it does, and what it costs, as components.
+   *
+   * A LIST because `drain` and `hex` were always two effects fused into one
+   * union arm, and because a cost is just another effect — which is what lets
+   * blood magic pay in hp rather than needing its own mechanism.
+   */
+  effects: Effect[];
   /** Squares. 1 is reach; 0 means it only ever touches you. */
   range: number;
-  /**
-   * How often it can be used before a rest.
-   *
-   * The reason actives are a resource rather than a button: an unlimited
-   * ability is just a better basic attack, and the fight becomes a rotation.
-   * Rest refreshes them, which puts them on the same supply economy as healing.
-   */
-  usesPerRest: number;
   /** Gates a skill learned from a book behind being ready for it. */
   requires?: TraitCondition[];
 };
 
-/** Which effects can be used mid-fight at all. */
-export const isCombatUsable = (skill: ActiveSkill): boolean => skill.effect.kind !== 'edge';
-
-/** Whether a skill needs somebody on the other end. */
-export const needsTarget = (skill: ActiveSkill): boolean =>
-  ['hinder', 'strike', 'drain', 'burst', 'hex'].includes(skill.effect.kind);
-
-/** How far the effect spreads from whoever it lands on. */
-export const radiusOf = (skill: ActiveSkill): number =>
-  skill.effect.kind === 'burst' ? skill.effect.radius : 0;
-
-/* -------------------------------------------------------------------------- */
-/* Uses                                                                        */
-/* -------------------------------------------------------------------------- */
-
-/** Uses spent since the last rest, keyed by skill id. */
-export type SkillUses = Record<string, number>;
-
 /*
- * `spent` is defaulted, and that is not belt-and-braces.
- *
- * A save written before `skillUses` existed restores a `pc` without it, and
- * indexing the missing map threw on the SERVER while rendering the play page —
- * the whole session became a 500 with no way back in. The same shape of failure
- * as every other "state added later vanished on an old save": the field is
- * fine going forward and absent behind you.
- *
- * A skill with nothing recorded against it has spent nothing, which is exactly
- * what an older save means.
+ * These three used to switch on the payload kind, which is exactly the kind of
+ * table that had to be edited every time a payload was added. They are reads
+ * off the components now, so a new channel or shape needs no entry anywhere.
  */
-export const usesLeft = (skill: ActiveSkill, spent: SkillUses | undefined): number =>
-  Math.max(0, skill.usesPerRest - (spent?.[skill.id] ?? 0));
-
-export const spendUse = (spent: SkillUses, id: string): SkillUses => ({
-  ...spent,
-  [id]: (spent[id] ?? 0) + 1,
-});
-
-/** A rest gives them all back. Short and long alike — that is what rest is for. */
-export const refreshUses = (): SkillUses => ({});
+export const isCombatUsable = (skill: ActiveSkill): boolean => usableInCombat(skill.effects);
+export const needsTarget = (skill: ActiveSkill): boolean => reachesOut(skill.effects);
+export const radiusOf = (skill: ActiveSkill): number => spreadOf(skill.effects);
 
 /* -------------------------------------------------------------------------- */
 /* Resolution                                                                  */
@@ -137,70 +85,87 @@ export type SkillOutcome = {
  * rules to keep in step.
  */
 export function resolveSkill(skill: ActiveSkill, actor: Combatant, targets: readonly Combatant[]): SkillOutcome {
-  const effect = skill.effect;
-  const first = targets[0] ?? null;
+  let self = actor;
+  const hit = new Map<string, Combatant>();
+  const notes: string[] = [];
 
-  switch (effect.kind) {
-    case 'hinder':
-      return first
-        ? {
-            actor,
-            affected: [addCondition(first, effect.condition, effect.rounds)],
-            note: `${actor.name} leaves ${first.name} ${effect.condition}`,
-          }
-        : { actor, affected: [], note: `${actor.name} finds nothing to reach` };
+  for (const effect of purposes(skill.effects)) {
+    // Who this particular effect lands on. A list means one action can hurt
+    // them and heal you, which the old union could only do as a special case.
+    const recipients = effect.who === 'own' ? [self] : [...targets];
+    if (recipients.length === 0) continue;
 
-    case 'strike':
-      return first
-        ? {
-            actor,
-            affected: [applyDamage(first, effect.damage)],
-            note: `${actor.name} strikes ${first.name} for ${effect.damage}`,
-          }
-        : { actor, affected: [], note: `${actor.name} strikes nothing` };
-
-    case 'drain': {
-      if (!first) return { actor, affected: [], note: `${actor.name} draws on nothing` };
-      return {
-        actor: { ...actor, hp: Math.min(actor.maxHp, actor.hp + effect.heal) },
-        affected: [applyDamage(first, effect.damage)],
-        note: `${actor.name} takes ${effect.damage} out of ${first.name}, and keeps some of it`,
-      };
+    const amount = magnitudeOf(effect);
+    for (const raw of recipients) {
+      const before = effect.who === 'own' ? self : hit.get(raw.id) ?? raw;
+      const after = applyOne(effect, before, amount);
+      if (effect.who === 'own') self = after;
+      else hit.set(raw.id, after);
     }
+    notes.push(noteFor(effect, actor, recipients[0], amount));
+  }
 
-    case 'burst':
-      return {
-        actor,
-        affected: targets.map((t) => applyDamage(t, effect.damage)),
-        note: `${actor.name} catches ${targets.length} of them for ${effect.damage}`,
-      };
+  return {
+    actor: self,
+    affected: [...hit.values()],
+    note: notes.join('; ') || `${actor.name} does nothing much`,
+  };
+}
 
-    case 'hex':
-      return first
-        ? {
-            actor,
-            affected: [addCondition(applyDamage(first, effect.damage), effect.condition, effect.rounds)],
-            note: `${actor.name} leaves ${first.name} hurt and ${effect.condition}`,
-          }
-        : { actor, affected: [], note: `${actor.name} finds nothing to curse` };
+/** One effect against one recipient. Nothing here rolls; see the docblock. */
+function applyOne(effect: Effect, who: Combatant, amount: number): Combatant {
+  switch (effect.channel) {
+    case 'hp':
+      return effect.sign === 'minus'
+        ? applyDamage(who, amount)
+        : { ...who, hp: Math.min(who.maxHp, who.hp + amount) };
 
-    case 'mend':
-      return {
-        actor: { ...actor, hp: Math.min(actor.maxHp, actor.hp + effect.amount) },
-        affected: [],
-        note: `${actor.name} closes a wound`,
-      };
+    case 'stamina':
+      return effect.sign === 'minus'
+        ? { ...who, stamina: Math.max(0, who.stamina - amount) }
+        : { ...who, stamina: Math.min(who.maxStamina, who.stamina + amount) };
 
-    case 'rally':
-      return {
-        actor: removeCondition(actor, effect.condition),
-        affected: [],
-        note: `${actor.name} shakes off being ${effect.condition}`,
-      };
+    case 'mana':
+      return effect.sign === 'minus'
+        ? { ...who, mana: Math.max(0, who.mana - amount) }
+        : { ...who, mana: Math.min(who.maxMana, who.mana + amount) };
 
-    // An `edge` has no meaning inside a fight; it applies to checks outside one.
-    case 'edge':
-      return { actor, affected: [], note: `${actor.name} steadies` };
+    case 'condition':
+      // Sign is from the recipient's side: `minus` lands it, `plus` clears it.
+      // That convention is what makes hinder and rally one shape.
+      return effect.sign === 'minus'
+        ? addCondition(who, effect.condition, effect.duration.kind === 'rounds' ? effect.duration.rounds : null)
+        : removeCondition(who, effect.condition);
+
+    case 'stat':
+      // A sustained bonus is held, not applied — `standingBonus` reads it off
+      // the skill. Temporary in-combat modifiers need a timer on `Combatant`,
+      // which is the next piece of machinery this wants.
+      return who;
+
+    case 'special':
+      // The registry is declared and the resolvers land with the verbs; until
+      // then a special is inert rather than silently pretending to work.
+      return who;
+  }
+}
+
+function noteFor(effect: Effect, actor: Combatant, target: Combatant, amount: number): string {
+  const who = effect.who === 'own' ? actor.name : target.name;
+  switch (effect.channel) {
+    case 'hp':
+      return effect.sign === 'minus'
+        ? `${actor.name} hurts ${who} for ${amount}`
+        : `${actor.name} closes a wound on ${who}`;
+    case 'condition':
+      return effect.sign === 'minus'
+        ? `${actor.name} leaves ${who} ${effect.condition}`
+        : `${who} shakes off being ${effect.condition}`;
+    case 'stamina':
+    case 'mana':
+      return `${who} is ${effect.sign === 'minus' ? 'drained' : 'restored'}`;
+    default:
+      return `${actor.name} steadies`;
   }
 }
 
@@ -212,11 +177,7 @@ export function resolveSkill(skill: ActiveSkill, actor: Combatant, targets: read
  * when the Director calls for wisdom.
  */
 export function edgeFor(skills: readonly ActiveSkill[], ability: Ability): number {
-  let bonus = 0;
-  for (const skill of skills) {
-    if (skill.effect.kind === 'edge' && skill.effect.ability === ability) bonus += skill.effect.bonus;
-  }
-  return bonus;
+  return skills.reduce((bonus, skill) => bonus + standingBonus(skill.effects, ability), 0);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -236,8 +197,6 @@ export type Bilingual = { en: string; th: string };
 export type SkillSpec = {
   name: Bilingual;
   description: Bilingual;
-  kind: ActiveKind;
-  effect: ActiveEffect;
+  effects: Effect[];
   range: number;
-  usesPerRest: number;
 };

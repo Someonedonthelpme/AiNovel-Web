@@ -68,19 +68,17 @@ export function subclassGrant(sub: SubclassShape, language: 'th' | 'en'): SkillS
     id: `subclass_${sub.id}`,
     name: '',
     description: '',
-    kind: sub.grant.kind,
     ability: sub.opens,
     grammar,
     budget: sub.grant.budget,
+    language,
   });
 
   return {
-    name: both(nameFor(rng, composed.effect, language)),
+    name: both(composed.name),
     description: both(composed.description || PATH_WORDS[sub.opens].keystone),
-    kind: composed.kind,
-    effect: composed.effect,
+    effects: composed.effects,
     range: composed.range,
-    usesPerRest: composed.usesPerRest,
   };
 }
 

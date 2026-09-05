@@ -77,7 +77,7 @@ async function main() {
   console.log(`  hp ${d.maxHp}  ac ${d.ac}  prof +${d.proficiency}`);
   console.log(`  voice: self "${sheet.voice.selfPronoun}", stressed "${sheet.voice.underStress}"`);
   console.log(`  traits: ${sheet.traits.join(', ')}`);
-  for (const s of d.skills) console.log(`  skill: ${s.name} (${s.ability}, ${s.kind}) — ${s.description}`);
+  for (const s of d.skills) console.log(`  skill: ${s.name} (${s.ability}) — ${s.description}`);
   for (const a of sheet.background.startingAttacks) {
     console.log(`  attack: ${a.name} ${a.damage.count}d${a.damage.sides}+${a.damage.bonusAbility} range ${a.range}`);
   }

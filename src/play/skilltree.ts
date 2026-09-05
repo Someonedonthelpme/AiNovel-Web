@@ -211,13 +211,13 @@ function teachFor(path: PathShape, nodeId: string, ring: number, language: Lang)
     id: `node_${nodeId}`,
     name: '',
     description: '',
-    kind: 'combat',
     ability: path.primary,
     grammar: STAT_GRAMMAR[path.primary],
     // Deeper nodes are richer, the same way a deeper book is.
     budget: budgetForFloor(ring * 2),
+    language,
   });
-  return { ...skill, name: nameFor(rng, skill.effect, language) };
+  return skill;
 }
 
 type Placed = { node: SkillNode; ring: number };

@@ -219,12 +219,12 @@ export function graftFor(rng: Rng, input: GraftInput): SkillNode[] {
         id: `skill_${node.id}`,
         name: '',
         description: '',
-        kind: 'combat',
         ability: stat,
         grammar: STAT_GRAMMAR[stat],
         budget: budgetFor(source, size),
+        language,
       });
-      node.teaches = { ...composed, name: nameFor(own, composed.effect, language) };
+      node.teaches = composed;
       taught += 1;
     }
 
