@@ -1,6 +1,7 @@
 import { describeMental, describePersonality } from '../character/persona.ts';
 import { subjectById, subjectsOf } from '../world/subjects.ts';
-import { trustToward } from '../social/edge.ts';
+import { PLAYER, trustToward } from '../social/edge.ts';
+import { owedBy, permittedBy, rolesHeld, rolesOf } from '../social/roles.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
@@ -207,13 +208,24 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     return `  - ${stack.item.id} "${stack.item.name}" x${stack.count} (${stack.item.kind}${worn})`;
   });
 
-  const people = (place?.people ?? [])
+  const present = (place?.people ?? [])
     .map((id) => state.world.people[id])
-    .filter((p): p is NonNullable<typeof p> => Boolean(p))
-    .map((p) => {
-      const notes = [...describePersonality(dispositionOf(p)), ...describeMental(p.needs)];
-      return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
-    });
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+  const people = present.map((p) => {
+    const notes = [...describePersonality(dispositionOf(p)), ...describeMental(p.needs)];
+    return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
+  });
+
+  /*
+   * WHO THESE PEOPLE ARE TO EACH OTHER, AND TO YOU.
+   *
+   * The reader that makes a role more than a label. A relationship changes what
+   * is POSSIBLE — being somebody's captain is being able to give them an order
+   * at all — so the Director is told what each bond allows and obliges, in this
+   * world's own words, and can offer or refuse accordingly.
+   */
+  const bonds = relationships(state, present.map((p) => p.id));
 
   return [
     `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0})`,
@@ -221,6 +233,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',
+    bonds.length ? `What they are to each other:\n${bonds.join('\n')}` : '',
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
     /*
      * WHO THE PLAYER IS.
@@ -272,6 +285,38 @@ const SYSTEM = [
   'time), IMPOSSIBLE if the character could not do it (reframe it in-fiction,',
   'never refuse out-of-fiction).',
 ].join('\n');
+
+/**
+ * Every bond among the people present, and between them and the player.
+ *
+ * One line per direction, because the directions differ: a master may command
+ * a servant and the servant may not command back, and a Director told only
+ * "they are master and servant" would have to guess which way that runs.
+ */
+function relationships(state: PlayState, present: readonly string[]): string[] {
+  const roles = rolesOf(state.world);
+  const edges = state.world.edges;
+  const named = (id: string) => (id === PLAYER ? 'you' : state.world.people[id]?.name ?? id);
+
+  const out: string[] = [];
+  for (const from of [...present, PLAYER]) {
+    for (const to of [...present, PLAYER]) {
+      if (from === to) continue;
+      const held = rolesHeld(edges, roles, from, to);
+      if (held.length === 0) continue;
+
+      const owes = owedBy(edges, roles, from, to);
+      const may = permittedBy(edges, roles, from, to);
+      const notes = [
+        owes.length ? `owes ${owes.join(', ')}` : '',
+        may.length ? `may ${may.join(', ')}` : '',
+      ].filter(Boolean);
+
+      out.push(`  - ${named(from)} is ${held.join(' and ')} to ${named(to)}${notes.length ? ` (${notes.join('; ')})` : ''}`);
+    }
+  }
+  return out;
+}
 
 export async function runDirector(
   provider: Provider,

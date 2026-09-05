@@ -5,6 +5,7 @@ import type { CharacterSheet } from '../session/sheet.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Subject } from './subjects.ts';
 import type { Edges } from '../social/edge.ts';
+import type { Role } from '../social/roles.ts';
 /**
  * The world model.
  *
@@ -147,6 +148,15 @@ export type World = {
    * and the fallback words stand.
    */
   subjects?: Subject[];
+  /**
+   * What people in this world can be to one another.
+   *
+   * Stored for the same reason `subjects` is: the SHAPES come from the seed,
+   * but the words are the model's, and a word not stored is lost the next time
+   * anything is derived. Absent means nobody has named them and the fallbacks
+   * stand.
+   */
+  roles?: Role[];
   /**
    * The rules this world plays by. Absent means `STANDARD`.
    *

@@ -15,6 +15,7 @@ import { isFull } from './types.ts';
 const pc = sheet();
 
 const generated = (over: Partial<GeneratedFloor> = {}): GeneratedFloor => ({
+  bonds: [],
   name: 'The Grey Grove',
   biome: 'dead forest',
   culture: 'poachers and worse',

@@ -1,5 +1,36 @@
 import { openingEdges } from '../social/edge.ts';
 import type { Edges } from '../social/edge.ts';
+import { formRole, refFor, roleById, rolesOf } from '../social/roles.ts';
+import type { Role } from '../social/roles.ts';
+
+/**
+ * Fold the model's proposed relationships in, dropping anything it invented.
+ *
+ * Shared by both generators, because both face the same two ways a bond can be
+ * wrong: naming somebody who was never created, and naming a relationship this
+ * world does not have. Neither is worth failing a floor over.
+ */
+export function bondsAmong(
+  edges: Edges,
+  roles: readonly Role[],
+  people: Record<string, unknown>,
+  bonds: readonly { a: string; b: string; role: string }[],
+  repairs: string[],
+): Edges {
+  let next = edges;
+  for (const bond of bonds) {
+    if (!people[bond.a] || !people[bond.b]) {
+      repairs.push(`dropped bond naming nobody: ${bond.a}/${bond.b}`);
+      continue;
+    }
+    if (!roleById(roles, bond.role)) {
+      repairs.push(`dropped bond with unknown relationship "${bond.role}"`);
+      continue;
+    }
+    next = formRole(next, roles, bond.a, bond.b, refFor(bond.role, 'a'));
+  }
+  return next;
+}
 import type { Provider } from '../llm/provider.ts';
 import { clampTemperament, neutralTemperament, metNeeds } from '../character/persona.ts';
 import { repairRegion, repairVoice } from '../session/repair.ts';
@@ -87,8 +118,14 @@ export function floorSchema(floor: number) {
       people: { type: 'array', items: personSchema, minItems: 0, maxItems: people.max },
       /** Local ecology — names only; the numbers come from `statblock.ts`. */
       creatures: { type: 'array', items: str, minItems: 1, maxItems: 4 },
+      /** Who these people already are to each other. The template decides what that COSTS. */
+      bonds: {
+        type: 'array',
+        maxItems: 4,
+        items: obj({ a: str, b: str, role: str }, ['a', 'b', 'role']),
+      },
     },
-    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures'],
+    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds'],
   );
 }
 
@@ -109,6 +146,7 @@ export type GeneratedFloor = {
     intuition: number; feeling: number; nerve: number; discipline: number;
   }[];
   creatures: string[];
+  bonds: { a: string; b: string; role: string }[];
 };
 
 export type FloorResult = {
@@ -156,15 +194,19 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
       : `At most ${settlements.max} place(s) may have kind "settlement".`,
     'Every id in a place\'s people list must be an id in the people array.',
     '"creatures" names what lives and hunts here. Names only, no statistics.',
-    'Every person needs a disposition, each from -3 to +3:',
+    // Asked for `candour` and `loyalty` long after both were deleted, and never
+    // for the two that replaced them. A model answering fields that are thrown
+    // away is a model spending its attention on nothing.
+    'Every person needs a temperament — how they are WIRED, not how they feel today — from -3 to +3:',
     '  intuition: literal and concrete (-3) to imaginative and abstract (+3)',
     '  feeling: coldly logical (-3) to led by what matters to them (+3)',
     '  nerve: easily frightened (-3) to fearless (+3)',
     '  discipline: impulsive (-3) to rigidly controlled (+3)',
-    '  candour: evasive and deceitful (-3) to blunt to a fault (+3)',
-    '  loyalty: would sell you out (-3) to would die for a friend (+3)',
-    'Make them differ from each other. A town of identical dispositions is a town of nobody.',
+    'Make them differ from each other. A floor of identical temperaments is a floor of nobody.',
     'underStress is what they call themselves when frightened or furious.',
+    'In "bonds", say who these people already are to each other, using only the',
+    'relationship ids you are given and ids from the people array. Two is plenty,',
+    'and none is better than a pairing that makes no sense.',
   ].join('\n');
 }
 
@@ -351,7 +393,7 @@ export async function generateFloor(
   return {
     region,
     people,
-    edges: openingEdges({}, arrivals),
+    edges: bondsAmong(openingEdges({}, arrivals), rolesOf(world), people, generated.bonds ?? [], repairs),
     creatures: generated.creatures,
     repairs,
     warnings: check.warnings.map((w) => w.message),

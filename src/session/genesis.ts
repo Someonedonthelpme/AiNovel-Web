@@ -5,6 +5,10 @@ import { nameSubjects } from '../world/subjectnames.ts';
 import type { Subject } from '../world/subjects.ts';
 import type { Drive } from '../character/persona.ts';
 import { openingEdges } from '../social/edge.ts';
+import { rolesFor } from '../social/roles.ts';
+import { bondsAmong } from '../world/floorgen.ts';
+import { nameRoles } from '../social/rolenames.ts';
+import type { Role } from '../social/roles.ts';
 import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { keepsake, stripMechanics } from '../items/catalogue.ts';
@@ -277,6 +281,7 @@ export async function generateGroundFloor(
   provider: Provider,
   interview: Interview,
   sheet: CharacterSheet,
+  roles: readonly Role[] = [],
 ): Promise<WorldGenesis> {
   const { language } = interview;
 
@@ -303,13 +308,15 @@ export async function generateGroundFloor(
           'addressDistant and particleDistant are how they speak to a stranger;',
           'addressWarm and particleWarm are how they speak once they trust someone.',
           'The two pairs must differ - that shift is how the player hears trust change.',
-          'Every person needs a disposition, each from -3 to +3:',
-          '  warmth: cold and guarded (-3) to open and generous (+3)',
+          // The prompt had gone stale against its own schema: it asked for
+          // warmth, candour and loyalty, none of which are stored any more, and
+          // never mentioned intuition or feeling, which are.
+          'Every person needs a temperament — how they are WIRED, not how they feel today — from -3 to +3:',
+          '  intuition: concrete and literal (-3) to abstract and associative (+3)',
+          '  feeling: decides by logic (-3) to decides by values (+3)',
           '  nerve: easily frightened (-3) to fearless (+3)',
           '  discipline: impulsive (-3) to rigidly controlled (+3)',
-          '  candour: evasive and deceitful (-3) to blunt to a fault (+3)',
-          '  loyalty: would sell you out (-3) to would die for a friend (+3)',
-          'Make them differ from each other. A town of identical dispositions is a town of nobody.',
+          'Make them differ from each other. A town of identical temperaments is a town of nobody.',
           'underStress is what they call themselves when frightened or furious.',
           'Each of these is ONE word. Never a pair, never a slash, never alternatives.',
         ].join('\n'),
@@ -322,6 +329,9 @@ export async function generateGroundFloor(
           transcript(interview),
           '',
           `The player character is ${sheet.name}, ${sheet.background.name}. ${sheet.background.description}`,
+          '',
+          'Relationships available in this world:',
+          ...roles.map((r) => `  ${r.id}: a="${r.names[0]}", b="${r.names[1]}"`),
           '',
           'Build the town they are starting in.',
         ].join('\n'),
@@ -457,12 +467,23 @@ export async function generateGroundFloor(
     throw new Error(`generated ground floor is unplayable: ${check.errors.map((e) => e.message).join('; ')}`);
   }
 
+  /*
+   * The bonds, applied last — after the cast is settled, so a bond naming
+   * somebody the generator never created is dropped rather than minting an
+   * edge to a person who does not exist.
+   *
+   * The model chose the pair and the relationship; the template decided what
+   * that relationship obliges, allows and opens the axes at. Both directions
+   * are written at once, because half a relationship reads as a bug.
+   */
+  const edges = bondsAmong(openingEdges({}, generated.people), roles, people, generated.bonds ?? [], repairs);
+
   return {
     region,
     people,
     // What each of them already thinks of you, as an edge rather than a field
     // on the person — a relationship belongs to neither end of it.
-    edges: openingEdges({}, generated.people),
+    edges,
     premise: generated.premise,
     startPlace,
     repairs,
@@ -499,12 +520,23 @@ export async function runGenesis(
   );
 
   const character = await generateCharacter(provider, interview, seed, subjects);
-  const ground = await generateGroundFloor(provider, interview, character.sheet);
+
+  /*
+   * And the roles, for the same reason: the ground floor is asked who its
+   * people already are to each other, and it can only answer in words this
+   * world has. The shapes come from the seed; only the nouns are asked for.
+   */
+  const roles = await nameRoles(
+    provider, rolesFor(seed), interview.answers.world ?? '', interview.language,
+  );
+
+  const ground = await generateGroundFloor(provider, interview, character.sheet, roles);
 
   const world: World = {
     seed,
     language: interview.language,
     subjects,
+    roles,
     regions: { 'floor-0': ground.region },
     people: ground.people,
     edges: ground.edges,

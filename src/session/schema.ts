@@ -168,8 +168,20 @@ export const GROUND_FLOOR_SCHEMA = obj(
       ['name', 'biome', 'culture', 'places', 'entrance', 'exit'],
     ),
     people: { type: 'array', items: personSchema, minItems: 1, maxItems: 4 },
+    /*
+     * Who these people already are to each other.
+     *
+     * The model picks WHICH pair and WHICH relationship; what that relationship
+     * obliges, allows and opens at is the template's business. So a town can be
+     * full of debts and oaths without a model ever deciding what a debt costs.
+     */
+    bonds: {
+      type: 'array',
+      maxItems: 4,
+      items: obj({ a: str, b: str, role: str }, ['a', 'b', 'role']),
+    },
   },
-  ['premise', 'region', 'people'],
+  ['premise', 'region', 'people', 'bonds'],
 );
 
 /* -------------------------------------------------------------------------- */
@@ -238,4 +250,5 @@ export type GeneratedGroundFloor = {
     nerve: number;
     discipline: number;
   }[];
+  bonds: { a: string; b: string; role: string }[];
 };

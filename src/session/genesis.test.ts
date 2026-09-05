@@ -43,6 +43,7 @@ const character = (over: Partial<GeneratedCharacter> = {}): GeneratedCharacter =
 
 const ground = (over: Partial<GeneratedGroundFloor> = {}): GeneratedGroundFloor => ({
   premise: 'The tower opened again last winter.',
+  bonds: [],
   region: {
     name: 'Ashfall',
     biome: 'ash plain',
@@ -74,12 +75,17 @@ const ground = (over: Partial<GeneratedGroundFloor> = {}): GeneratedGroundFloor 
  * exercise the path a world takes when the model has nothing useful to say.
  */
 const noNames = { subjects: [] as { id: string; name: string }[] };
+const noRoleNames = { roles: [] as { id: string; a: string; b: string }[] };
 
 const provider = (c = character(), g = ground()) => new FakeProvider({ structured: [c, g] });
 
-/** `runGenesis` names the subjects first; a direct `generateCharacter` does not. */
+/**
+ * `runGenesis` makes two NAMING calls the direct generators do not — the
+ * subjects before the character, and the roles before the ground floor, which
+ * has to be told what a bond can be before it can propose one.
+ */
 const wholeGenesis = (c = character(), g = ground()) =>
-  new FakeProvider({ structured: [noNames, c, g] });
+  new FakeProvider({ structured: [noNames, c, noRoleNames, g] });
 
 test('Session Zero produces a valid character and a playable ground floor', async () => {
   const result = await runGenesis(wholeGenesis(), completed(), 42);
