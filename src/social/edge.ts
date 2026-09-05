@@ -19,10 +19,11 @@
  * dozen numbers all hovering near zero because nothing ever pushes one of them
  * hard enough — which is this codebase's signature bug wearing a new hat. So an
  * axis is DECLARED ONLY ONCE SOMETHING WRITES IT, and `edge.test.ts` proves the
- * list still holds. `obligation`, `guilt`, `desire` and `envy` arrive with the
- * deed-and-witness system that writes them; `loyalty` arrives with companions,
- * and it moves off the persona when it does — "devoted" was never a property of
- * somebody on their own, which is exactly why it never had a reader there.
+ * list still holds. `guilt` and `obligation` arrived exactly this way, with the
+ * deeds that write them. `desire` and `envy` are still absent for want of one;
+ * `loyalty` arrives with companions, and it moves off the persona when it does
+ * — "devoted" was never a property of somebody on their own, which is exactly
+ * why it never had a reader there.
  *
  * Person ids are plain strings, and this module imports nothing, so `world` may
  * hold edges without a cycle — the same arrangement `character/belief.ts` uses.
@@ -37,8 +38,12 @@ export type EdgeAxis = (typeof EDGE_AXES)[number];
  *  respect       whether you observe what is owed — the register mechanic's axis
  *  resentment    what they are holding against you, whatever they say
  *  fear          whether they would rather you were elsewhere
+ *  guilt         what YOU carry for what you did to them
+ *  obligation    what you owe them for what they did for you
  */
-export const EDGE_AXES = ['trust', 'familiarity', 'regard', 'respect', 'resentment', 'fear'] as const;
+export const EDGE_AXES = [
+  'trust', 'familiarity', 'regard', 'respect', 'resentment', 'fear', 'guilt', 'obligation',
+] as const;
 
 /**
  * One range for every axis, and it is the range the game already speaks in.

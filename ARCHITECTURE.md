@@ -457,7 +457,7 @@ needs and temperament; **nothing yet proves the reader half.**
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
 `Signet.hint` · `Gazetteer.openThreads` (read by the rehydration prompt, written
-by nothing — always `[]`) · `Gazetteer.reputation` · `Gazetteer.compressedAtTurn` ·
+by nothing — always `[]`) · `Gazetteer.compressedAtTurn` ·
 `Person.agenda` / `agendaPace` (and [agenda.ts](src/world/agenda.ts) itself,
 which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `Person.tags` / `homeRegion` · `Fact.people` (no column — dropped on write) ·
@@ -470,6 +470,15 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `Skill.kind` are all DELETED rather than given readers, because none of them
 had a job left once pools and the tick budget became the resource economy. The
 sidebar shows what a skill will cost you instead of a permanent `n/n`.
+
+**Cleared by the relationship work** — `Person.trust` is deleted and replaced by
+a directional edge. `registerConsequence` was a whole dead MECHANISM, not merely
+a dead field: zero callers outside its own file, computing a `suspicion` nobody
+read, while its docstring claimed "the language is the gameplay, so it has to
+move the numbers". It writes four edge axes now. `Gazetteer.reputation` has its
+first writer in the life of the codebase — deeds move `World.reputation`, and
+compression copies it into the gazetteer, where the rehydration brief reads it
+back so a floor that hates you is WRITTEN as one.
 
 ### The mirror image
 
@@ -555,15 +564,36 @@ build. `skillgen.ts` measures components; the two embedder scripts call
 `rankFacts`, which is what `rankClues` was renamed to when the mystery engine
 became the tower.
 
-**`WorldDelta` is still ten hand-written verbs, deliberately.** The design calls
-for it to become a list of effects sharing the skill vocabulary — but six of
-those verbs (`moveTo`, `revealExit`, `startCombat`, `useItem`, `equipItem`,
-`rest`) are COMMANDS rather than consequences, and of the channels the shared
-vocabulary would need — trust, temperament, needs, knowledge, quest progress,
-control — only `trust` has a reader today. Converting one arm to a list buys a
-shape and no behaviour, and would put effect components in the Director's
-schema, which is the one thing this codebase does not let a model author. It
-lands with the relationship edges, where the other channels get their readers.
+**`WorldDelta` is still ten hand-written verbs, and the question is now SETTLED
+rather than deferred.** The design called for it to become a list of `Effect`s
+sharing the skill vocabulary. Having built the second producer — deeds — the
+answer is that it should not, for three reasons that are now evidence rather
+than prediction.
+
+*The shared vocabulary already exists, and it is not `Effect`.* Both producers
+— the private exchange in `edgesAfter` and the deed chain in `afterDeeds` —
+express consequence as `Partial<Record<EdgeAxis, number>>` applied through
+`nudgeAll`. That is one closed vocabulary and one resolver, which is what the
+unification was for.
+
+*The `Effect` components are dead weight HERE and valuable elsewhere.* `shape`,
+`duration` and `formula` pay off when a SKILL causes a social consequence — a
+social `burst` is everybody who saw it, and a formula can scale off the caster's
+nerve. They carry nothing for a Director's flat answer. So the `edge` channel
+belongs to `Effect` on the day a skill can produce one, and not before; adding
+it now is a channel `resolveSkill` cannot resolve, which is the bug
+`verbs.test.ts` exists to catch.
+
+*And `delta.trust` being trust-ONLY turns out to be correct rather than
+limiting.* Trust is the single axis a model is competent to judge — "does this
+person trust you more after that exchange". Respect, resentment, fear, guilt and
+obligation are EARNED mechanically, by the register and by deeds. Letting the
+Director set them would be a model deciding an effect, which is the one thing
+this codebase does not allow.
+
+Six of the ten verbs (`moveTo`, `revealExit`, `startCombat`, `useItem`,
+`equipItem`, `rest`) are COMMANDS rather than consequences and were never
+effect-shaped in the first place.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
 The seed falls back to `Date.now()` when the client does not supply one; the

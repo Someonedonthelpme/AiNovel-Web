@@ -20,6 +20,10 @@ import { resolveSkill } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { priceOfUse } from '../skills/pools.ts';
 import { referencePc } from '../combat/statblock.ts';
+import { applyTurn } from '../play/delta.ts';
+import { nudge } from '../social/edge.ts';
+import type { Edges } from '../social/edge.ts';
+import { spreadOf } from '../social/deed.ts';
 
 const tuned = (over: Parameters<typeof withOverrides>[1]): Ruleset => withOverrides(STANDARD, over);
 
@@ -188,6 +192,37 @@ test('persona.suitSwing reaches what a skill costs AND what it does', () => {
   assert.ok(hitBy(bold, on) < hitBy(timid, on), 'what suits you should land harder');
 });
 
+test('knowledge.spreadDepth reaches how far a deed actually gets', () => {
+  /*
+   * Degrees of separation, not a headcount. At the identity value a deed stops
+   * with the people who saw it, which is a world where nothing gets around —
+   * and it is the same walk either way, with the chain length set to nought.
+   */
+  const chain = ['a', 'b', 'c'].reduce(
+    (edges, from, i, all) => (all[i + 1] ? nudge(edges, from, all[i + 1], 'familiarity', 1) : edges),
+    {} as Edges,
+  );
+  const deed = { kind: 'insulted' as const, doer: 'x', victim: 'a', at: 'town' };
+
+  const reach = (rules: Ruleset) => spreadOf(chain, deed, ['a'], rules.knowledge.spreadDepth).size;
+  assert.equal(reach(tuned({ knowledge: { spreadDepth: 0 } })), 1, 'nothing leaves the room');
+  assert.ok(reach(tuned({ knowledge: { spreadDepth: 2 } })) > 1);
+});
+
+test('knowledge.reputationWeight reaches what a place holds against you', () => {
+  const base = playState();
+  const record = {
+    kind: 'turn' as const, input: 'มึงเอาอะไรวะ', mode: 'conversation' as const,
+    classification: 'NEUTRAL' as const, addressed: 'smith', roll: null,
+    delta: {}, rejected: [], prose: '',
+  };
+  const under = (rules: Ruleset) =>
+    applyTurn({ ...base, world: { ...base.world, rules } }, record).state.world.reputation?.['floor-0'] ?? 0;
+
+  assert.equal(under(tuned({ knowledge: { reputationWeight: 0 } })), 0, 'nobody keeps score');
+  assert.ok(under(tuned({ knowledge: { reputationWeight: 2 } })) < under(tuned({ knowledge: { reputationWeight: 1 } })));
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -215,6 +250,7 @@ const PROVEN = [
   'combat.soakCeiling', 'combat.soakShare', 'combat.minHit', 'combat.conditionFloor',
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
+  'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'rest.shortTurns', 'rest.longTurns',
   'world.dangerBase', 'world.dangerPerFloor',
 ];

@@ -5,6 +5,7 @@ import {
   openingEdges, PLAYER, reachedBy, regardedBy, setRoles, trustToward,
 } from './edge.ts';
 import type { EdgeAxis, Edges } from './edge.ts';
+import { witnessDeed } from './deed.ts';
 import { applyDelta, applyTurn } from '../play/delta.ts';
 import { playState } from '../play/fixtures.ts';
 import type { TurnRecord } from '../play/state.ts';
@@ -80,9 +81,9 @@ test('who you regard and who regards you are different sets', () => {
  * codebase's signature bug in a new hat. So an axis is declared only once
  * something writes it, and the list below names what does the writing.
  *
- * `obligation`, `guilt`, `desire` and `envy` are NOT declared yet: they arrive
- * with the deed-and-witness system that writes them. `loyalty` arrives with
- * companions, and moves off the persona when it does.
+ * `guilt` and `obligation` arrived exactly that way, with the deeds that write
+ * them. `desire` and `envy` are still absent for want of one, and `loyalty`
+ * arrives with companions.
  */
 const WRITERS: Record<EdgeAxis, string> = {
   trust: 'the Director delta, and the register',
@@ -91,6 +92,8 @@ const WRITERS: Record<EdgeAxis, string> = {
   respect: 'the register: observing what is owed',
   resentment: 'the register: roughness to a superior',
   fear: 'the register: roughness from somebody above you',
+  guilt: 'harming somebody you thought well of',
+  obligation: 'being spared by somebody who could have finished it',
 };
 
 const turn = (over: Partial<TurnRecord> = {}): TurnRecord => ({
@@ -121,6 +124,18 @@ function written(): Set<EdgeAxis> {
     };
     const after = applyTurn({ ...base, world }, turn({ input: 'มึงเอาอะไรวะ' })).state.world.edges;
     for (const axis of EDGE_AXES) if (axisOf(after, 'smith', PLAYER, axis) !== 0) moved.add(axis);
+  }
+
+  /*
+   * `guilt` and `obligation` are written by DEEDS rather than by a turn's
+   * exchange, so they are driven here through the same public entry point.
+   */
+  const fond = nudge(base.world.edges, PLAYER, 'smith', 'regard', 3);
+  const hurt = witnessDeed(fond, { kind: 'killed', doer: PLAYER, victim: 'smith', at: 'town' }, ['smith', 'warden'], 1);
+  const spared = witnessDeed({}, { kind: 'spared', doer: PLAYER, victim: 'smith', at: 'town' }, ['smith'], 1);
+  for (const axis of EDGE_AXES) {
+    if (axisOf(hurt.edges, PLAYER, 'smith', axis) !== 0) moved.add(axis);
+    if (axisOf(spared.edges, 'smith', PLAYER, axis) !== 0) moved.add(axis);
   }
 
   return moved;
@@ -176,16 +191,23 @@ test('THE REGISTER MOVES THE NUMBERS, which for its whole life it did not', () =
   assert.ok(axisOf(rude, 'smith', PLAYER, 'resentment') > 0, 'and is held against you');
 });
 
-test('roughness DOWNWARD frightens instead, which is what makes standing mean something', () => {
-  const base = playState();
-  const world = {
-    ...base.world,
-    people: { ...base.world.people, smith: { ...base.world.people['smith'], status: 'inferior' as const } },
+test('roughness DOWNWARD frightens, which is what makes standing mean something', () => {
+  // Fear is the axis the direction decides. (Resentment comes too, once the
+  // deed layer lands on top — being threatened by somebody above you is both
+  // frightening AND resented, and `register.test.ts` proves the register's own
+  // half of that separately.)
+  const feared = (status: 'superior' | 'inferior') => {
+    const base = playState();
+    const world = {
+      ...base.world,
+      people: { ...base.world.people, smith: { ...base.world.people['smith'], status } },
+    };
+    const after = applyTurn({ ...base, world }, turn({ input: 'มึงเอาอะไรวะ' })).state.world.edges;
+    return axisOf(after, 'smith', PLAYER, 'fear');
   };
-  const after = applyTurn({ ...base, world }, turn({ input: 'มึงเอาอะไรวะ' })).state.world.edges;
 
-  assert.ok(axisOf(after, 'smith', PLAYER, 'fear') > 0);
-  assert.equal(axisOf(after, 'smith', PLAYER, 'resentment'), 0, 'a peer resents; somebody below is afraid');
+  assert.ok(feared('inferior') > 0, 'somebody below you is frightened');
+  assert.equal(feared('superior'), 0, 'somebody above you is not');
 });
 
 test('relationships are folded, so a replayed session has the same ones', () => {

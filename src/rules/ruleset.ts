@@ -82,10 +82,27 @@ export type WorldRules = {
   dangerPerFloor: number;
 };
 
+export type KnowledgeRules = {
+  /**
+   * DEGREES OF SEPARATION a deed travels, not a headcount.
+   *
+   * "Seven person theory": what you did spreads along the chain of acquaintance
+   * and stops after so many hops, so who hears about it follows the story
+   * rather than the map — and nobody has to be evicted to make room.
+   *
+   * ZERO IS THE IDENTITY VALUE: a deed reaches the people who saw it and goes
+   * no further, which is a world where nothing gets around.
+   */
+  spreadDepth: number;
+  /** How hard a deed moves the standing of the place it happened in. */
+  reputationWeight: number;
+};
+
 export type Ruleset = {
   body: BodyRules;
   combat: CombatRules;
   persona: PersonaRules;
+  knowledge: KnowledgeRules;
   rest: RestRules;
   world: WorldRules;
 };
@@ -101,6 +118,7 @@ export const STANDARD: Ruleset = {
   body: { carryBase: 20, carryPerStr: 2, overloadStep: 8, baseSpeed: 6, minSpeed: 3 },
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
   persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
+  knowledge: { spreadDepth: 2, reputationWeight: 1 },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };
@@ -110,6 +128,7 @@ const copy = (rules: Ruleset): Ruleset => ({
   body: { ...rules.body },
   combat: { ...rules.combat },
   persona: { ...rules.persona },
+  knowledge: { ...rules.knowledge },
   rest: { ...rules.rest },
   world: { ...rules.world },
 });
@@ -127,6 +146,7 @@ export const PLAIN: Ruleset = {
   body: { ...STANDARD.body, carryPerStr: 1e6, overloadStep: 1e6 },
   combat: { ...STANDARD.combat, soakCeiling: 0 },
   persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
+  knowledge: { spreadDepth: 0, reputationWeight: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -136,6 +156,7 @@ export const HARSH: Ruleset = {
   body: { ...STANDARD.body, carryBase: 12, overloadStep: 5 },
   combat: { ...STANDARD.combat, soakCeiling: 1 },
   persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
+  knowledge: { spreadDepth: 4, reputationWeight: 1.5 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };

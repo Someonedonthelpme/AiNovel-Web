@@ -176,6 +176,16 @@ export type World = {
    * has met anybody yet.
    */
   edges?: Edges;
+  /**
+   * How each region regards the player.
+   *
+   * On the World rather than on a region because a region is not always a
+   * region: it compresses to a gazetteer and is REBUILT by a model when you
+   * come back, and standing you earned would not survive either. The gazetteer
+   * keeps a copy for the rehydration brief — which is what finally gives
+   * `Gazetteer.reputation` a writer, after a life of defaulting to nought.
+   */
+  reputation?: Record<RegionId, number>;
   facts: Fact[];
   currentRegion: RegionId;
   currentPlace: PlaceId;

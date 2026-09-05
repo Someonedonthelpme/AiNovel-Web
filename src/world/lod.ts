@@ -60,7 +60,10 @@ export function compressExcept(world: World, keep: RegionId[], turn: number): Wo
   const regions = { ...world.regions };
   for (const [id, record] of Object.entries(world.regions)) {
     if (kept.has(id) || !isFull(record)) continue;
-    regions[id] = compressRegion(record, turn);
+    // The standing you earned here travels with the summary. It lives on the
+    // World so it survives rehydration too; this copy is what the returning
+    // brief reads, and it is `Gazetteer.reputation`'s first writer ever.
+    regions[id] = compressRegion(record, turn, { reputation: world.reputation?.[id] ?? 0 });
   }
   return { ...world, regions };
 }

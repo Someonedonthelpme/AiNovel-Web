@@ -210,6 +210,14 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
   ].join('\n');
 }
 
+/** How a place greets somebody it remembers, in a phrase the model can write to. */
+export function standingLine(reputation: number): string {
+  if (reputation <= -6) return 'They know what you did here. Expect closed doors and worse.';
+  if (reputation <= -2) return 'You are not welcome here, and people remember why.';
+  if (reputation >= 6) return 'You are well thought of here, and it shows.';
+  return 'People here have heard of you, and think reasonably well of it.';
+}
+
 function userPrompt(
   floor: number,
   world: World,
@@ -227,6 +235,10 @@ function userPrompt(
       `Biome: ${gazetteer.biome}`,
       `Known: ${gazetteer.summary}`,
       gazetteer.openThreads.length ? `Unfinished business: ${gazetteer.openThreads.join('; ')}` : '',
+      // How the place remembers the climber. The reader that makes a
+      // reputation felt rather than merely tallied: a floor that hates you
+      // should be WRITTEN as a floor that hates you.
+      gazetteer.reputation === 0 ? '' : standingLine(gazetteer.reputation),
       canon.people.length ? `People who belong here: ${canon.people.join('; ')}` : '',
       canon.facts.length ? `Established facts:\n${canon.facts.map((f) => `- ${f}`).join('\n')}` : '',
       '',

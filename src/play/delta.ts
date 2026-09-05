@@ -10,6 +10,10 @@ import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
 import { readPlayerRegister, registerConsequence } from '../llm/register.ts';
 import { nudge, nudgeAll, PLAYER } from '../social/edge.ts';
+import { beliefsAfter, witnessDeed } from '../social/deed.ts';
+import type { Deed } from '../social/deed.ts';
+import { rulesOf } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
 import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
@@ -298,30 +302,107 @@ function causesFor(state: PlayState, record: TurnRecord): { npc: DriftCause[]; p
  * resumed session that quietly lost every relationship change would break the
  * contract that the log is truth.
  *
- * Only the person the player actually addressed. Who else was standing there
- * and what they made of it is the witness system, which is a separate thing.
+ * Two different things happen here, and keeping them apart matters. What passes
+ * between the player and the person they SPOKE TO is a private exchange. What
+ * everybody standing there SAW is a deed, and deeds travel.
  */
 function edgesAfter(state: PlayState, record: TurnRecord): Edges | undefined {
-  if (!record.addressed) return state.world.edges;
-  const person = state.world.people[record.addressed];
-  if (!person) return state.world.edges;
+  const person = record.addressed ? state.world.people[record.addressed] : undefined;
+  let edges = state.world.edges;
 
-  // Having dealt with somebody at all is what forms an edge, and it is why
-  // the graph stays as small as the story that actually happened.
-  let edges = nudge(state.world.edges, person.id, PLAYER, 'familiarity', 1);
+  if (person) {
+    // Having dealt with somebody at all is what forms an edge, and it is why
+    // the graph stays as small as the story that actually happened.
+    edges = nudge(edges, person.id, PLAYER, 'familiarity', 1);
 
-  // HOW the player spoke, which until now was computed and thrown away.
-  const { tone } = readPlayerRegister(record.input);
-  edges = nudgeAll(edges, person.id, PLAYER, registerConsequence(tone, person.status).nudges);
+    // HOW the player spoke, which until now was computed and thrown away.
+    const { tone } = readPlayerRegister(record.input);
+    edges = nudgeAll(edges, person.id, PLAYER, registerConsequence(tone, person.status).nudges);
 
-  // And how the exchange actually went. A check they lost raises what they
-  // think you are worth; one they won lowers it.
-  if (record.roll) {
-    const by = record.roll.tier === 'hit' ? 1 : record.roll.tier === 'miss' ? -1 : 0;
-    edges = nudge(edges, person.id, PLAYER, 'regard', by);
+    // And how the exchange actually went. A check they lost raises what they
+    // think you are worth; one they won lowers it.
+    if (record.roll) {
+      const by = record.roll.tier === 'hit' ? 1 : record.roll.tier === 'miss' ? -1 : 0;
+      edges = nudge(edges, person.id, PLAYER, 'regard', by);
+    }
   }
 
   return edges;
+}
+
+/**
+ * What this turn did that other people could SEE.
+ *
+ * Deliberately conservative: only acts the engine can be certain happened, from
+ * things it already resolves. A deed inferred from prose would be a model
+ * deciding a consequence, which is the one thing this codebase does not allow.
+ */
+function deedsIn(state: PlayState, record: TurnRecord): Deed[] {
+  const at = state.world.currentPlace;
+  const out: Deed[] = [];
+
+  // Speaking roughly to somebody is an act, and it is an act with an audience.
+  if (record.addressed && state.world.people[record.addressed]) {
+    const { tone } = readPlayerRegister(record.input);
+    const status = state.world.people[record.addressed].status;
+    if (tone === 'crude') {
+      out.push({
+        // The same words are an insult upward and a threat downward — the
+        // asymmetry the register already prices, read as a deed.
+        kind: status === 'inferior' ? 'threatened' : 'insulted',
+        doer: PLAYER,
+        victim: record.addressed,
+        at,
+      });
+    }
+  }
+
+  // Drawing on somebody is the plainest deed there is.
+  if (record.delta.startCombat) out.push({ kind: 'drewOn', doer: PLAYER, at });
+
+  return out;
+}
+
+/**
+ * Apply every deed of a turn: who saw it, how far it got, what it cost.
+ *
+ * Returns the world, because a deed touches three things that live in different
+ * places — the edges, what each person now BELIEVES, and how the place regards
+ * you.
+ */
+function afterDeeds(world: World, deeds: readonly Deed[], rules: Ruleset): World {
+  if (deeds.length === 0) return world;
+
+  const region = world.regions[world.currentRegion];
+  const place = region?.detail === 'full'
+    ? region.places.find((p) => p.id === world.currentPlace)
+    : undefined;
+  const present = place?.people ?? [];
+
+  let edges = world.edges;
+  let people = world.people;
+  let standing = 0;
+
+  for (const deed of deeds) {
+    const after = witnessDeed(edges, deed, present, rules.knowledge.spreadDepth);
+    edges = after.edges;
+    standing += after.standing;
+
+    // What each of them now holds true. This is where the belief model stops
+    // being a tested island and starts being something a turn produces.
+    for (const [who, belief] of after.knowers) {
+      const person = people[who];
+      if (!person) continue;
+      people = { ...people, [who]: { ...person, beliefs: beliefsAfter(person.beliefs, belief) } };
+    }
+  }
+
+  const moved = Math.round(standing * rules.knowledge.reputationWeight);
+  const reputation = moved === 0
+    ? world.reputation
+    : { ...world.reputation, [world.currentRegion]: (world.reputation?.[world.currentRegion] ?? 0) + moved };
+
+  return { ...world, edges, people, reputation };
 }
 
 export type TurnOutcome = {
@@ -357,7 +438,11 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   const causes = causesFor(moved, record);
   const player = applyDrift(moved.sheet, causes.pc);
 
-  let world = { ...moved.world, edges: edgesAfter(moved, record) };
+  let world = afterDeeds(
+    { ...moved.world, edges: edgesAfter(moved, record) },
+    deedsIn(moved, record),
+    rulesOf(moved.world),
+  );
   let shifts: AxisChange[] = [];
 
   const person = record.addressed ? world.people[record.addressed] : undefined;
