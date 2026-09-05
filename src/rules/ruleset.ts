@@ -122,6 +122,14 @@ export type GearRules = {
    */
   refineRisk: number;
   refineLoss: number;
+  /**
+   * How much a mending takes off what a piece can be mended TO.
+   *
+   * ZERO IS THE IDENTITY VALUE — a world where a smith can always make a thing
+   * as good as new, and the same code runs over it. Above nought, gear has a
+   * lifespan and the blade you find on floor twelve eventually matters.
+   */
+  repairLoss: number;
 };
 
 export type RestRules = {
@@ -212,7 +220,7 @@ export const STANDARD: Ruleset = {
   knowledge: { spreadDepth: 2, reputationWeight: 1, ambientHops: 1, ambientFade: 0.1 },
   gear: {
     wearPerFight: 2, slots: [...BODY_SLOTS], rotateInBags: true,
-    maxRefine: 10, refineRisk: 0.25, refineLoss: 1,
+    maxRefine: 10, refineRisk: 0.25, refineLoss: 1, repairLoss: 8,
   },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
@@ -243,7 +251,7 @@ export const PLAIN: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 0 },
   persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
   knowledge: { spreadDepth: 0, reputationWeight: 0, ambientHops: 0, ambientFade: 0 },
-  gear: { ...STANDARD.gear, wearPerFight: 0, refineRisk: 0 },
+  gear: { ...STANDARD.gear, wearPerFight: 0, refineRisk: 0, repairLoss: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -254,7 +262,7 @@ export const HARSH: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 1 },
   persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
   knowledge: { spreadDepth: 4, reputationWeight: 1.5, ambientHops: 2, ambientFade: 0.05 },
-  gear: { ...STANDARD.gear, wearPerFight: 5, refineRisk: 0.4, refineLoss: 99 },
+  gear: { ...STANDARD.gear, wearPerFight: 5, refineRisk: 0.4, refineLoss: 99, repairLoss: 15 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };

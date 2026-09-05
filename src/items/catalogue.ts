@@ -1,4 +1,5 @@
 import type { Rng } from '../engine/roll.ts';
+import { PART_TYPES } from './parts.ts';
 import type { Attack } from '../combat/types.ts';
 import { chainedBook, CHAIN_LENGTH, provableChain, skillBook, volumeFloor } from '../skills/book.ts';
 import type { Item } from './types.ts';
@@ -231,6 +232,15 @@ export function rollLoot(rng: Rng, floor: number): Drop[] {
   // Rare, because a pack is a lasting upgrade rather than a consumable — and
   // finding the first one should be a moment rather than a Tuesday.
   if (rng() < 0.07) drops.push({ item: pack(rng, floor), count: 1 });
+  /*
+   * A loose piece, so a failed handle can be REPLACED rather than only mended.
+   * Without these, `attachPart` is reachable only by taking something off and
+   * putting the same thing back on, which is no decision at all.
+   */
+  if (rng() < 0.14) {
+    const names = Object.keys(PART_TYPES);
+    drops.push({ item: PART_TYPES[names[Math.floor(rng() * names.length)]], count: 1 });
+  }
   if (rng() < 0.18) drops.push({ item: material(rng, floor), count: 1 });
   /*
    * Uncommon on purpose: a book is a permanent new verb, not a consumable.

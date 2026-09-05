@@ -20,8 +20,8 @@ import { resolveSkill } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { priceOfUse } from '../skills/pools.ts';
 import { referencePc } from '../combat/statblock.ts';
-import { refine } from '../items/refine.ts';
-import { instanceOf } from '../items/instance.ts';
+import { refine, repair } from '../items/refine.ts';
+import { instanceOf, PRISTINE } from '../items/instance.ts';
 import { applyTurn } from '../play/delta.ts';
 import { nudge } from '../social/edge.ts';
 import type { Edges } from '../social/edge.ts';
@@ -369,6 +369,18 @@ test('refineRisk and refineLoss reach whether it can go wrong, and how badly', (
   assert.equal(refine(at4, { ...risky, refineLoss: 99 }).item, null, 'and past the ceiling it is gone');
 });
 
+test('gear.repairLoss reaches how much a mending gives back', () => {
+  /*
+   * Nought is a world where a smith can always make a thing as good as new —
+   * the identity value, and the same code runs over it. Above nought, gear has
+   * a lifespan and the blade you find on floor twelve eventually matters.
+   */
+  const battered = { ...instanceOf('a', 'w'), condition: 10, repairs: 3 };
+
+  assert.equal(repair(battered, 0).item?.condition, PRISTINE, 'as good as new, for ever');
+  assert.ok((repair(battered, 10).item?.condition ?? 0) < PRISTINE, 'and not, once mendings cost something');
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -397,7 +409,7 @@ const PROVEN = [
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
   'gear.wearPerFight', 'gear.slots', 'gear.rotateInBags',
-  'gear.maxRefine', 'gear.refineRisk', 'gear.refineLoss',
+  'gear.maxRefine', 'gear.refineRisk', 'gear.refineLoss', 'gear.repairLoss',
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',

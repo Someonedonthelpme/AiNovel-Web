@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { instanceOf, RARITIES } from './instance.ts';
+import { conditionOfInstance, instanceOf, PRISTINE, RARITIES, walk } from './instance.ts';
+import type { ItemInstance } from './instance.ts';
 import {
   bonusOf, canEnchant, enchant, ENCHANT_EVERY, enhance, milestonesAt,
-  nextRarity, refine, refineBonus, stepOf,
+  nextRarity, refine, refineBonus, repair, repairCost, stepOf,
 } from './refine.ts';
 import type { RefineRules } from './refine.ts';
 import { STANDARD } from '../rules/ruleset.ts';
-import { addItem, emptyInventory, equip, equippedArmour, equippedGrants, withInstance } from './types.ts';
+import { addItem, emptyInventory, equip, equippedArmour, equippedAttack, equippedGrants, withInstance } from './types.ts';
 import type { Item } from './types.ts';
 import { applySheetAction } from '../play/sheetaction.ts';
 import { playState } from '../play/fixtures.ts';
@@ -229,4 +230,114 @@ test('refining is FOLDED, so a replayed session lands on the same levels', () =>
   const once = applySheetAction(rich, { type: 'refine', item: id }).state.pc.inventory;
   const twice = applySheetAction(rich, { type: 'refine', item: id }).state.pc.inventory;
   assert.deepEqual(once, twice);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Repair — mending the piece, and never quite all the way                     */
+/* -------------------------------------------------------------------------- */
+
+const worn = (over: Partial<ItemInstance> = {}): ItemInstance => ({
+  ...instanceOf('sword', 'w'),
+  parts: [
+    { at: { x: 0, y: 0 }, item: { ...instanceOf('sword/0', 'head_blade'), condition: 90 } },
+    { at: { x: 0, y: 2 }, item: { ...instanceOf('sword/1', 'grip'), condition: 20 } },
+  ],
+  ...over,
+});
+
+test('IT MENDS THE PIECE THAT FAILED, not the thing', () => {
+  /*
+   * `weakestPart` has said since it was written that this is what it is for,
+   * and nothing ever called it. A handle that has failed on a blade still true
+   * is a different object from a worn-out sword, and only one of them is worth
+   * carrying to a smith.
+   */
+  const fixed = repair(worn(), 0).item!;
+  const pieces = walk(fixed).slice(1);
+
+  assert.equal(pieces.find((p) => p.typeId === 'grip')?.condition, PRISTINE, 'the grip is put right');
+  assert.equal(pieces.find((p) => p.typeId === 'head_blade')?.condition, 90, 'the blade is left alone');
+});
+
+test('A MENDING NEVER QUITE GETS IT BACK', () => {
+  /*
+   * Without this, repair is "pay coin, it is new again" for ever and no blade
+   * is ever replaced.
+   *
+   * One piece, and it is broken down again between mendings — otherwise the
+   * OTHER piece is the weakest and gets the smith's attention instead, which is
+   * correct behaviour and tests nothing about ceilings.
+   */
+  let inst: ItemInstance = {
+    ...instanceOf('sword', 'w'),
+    parts: [{ at: { x: 0, y: 0 }, item: { ...instanceOf('sword/0', 'grip'), condition: 5 } }],
+  };
+
+  const reached: number[] = [];
+  for (let n = 0; n < 4; n++) {
+    inst = repair(inst, 8).item!;
+    reached.push(conditionOfInstance(inst));
+    inst = { ...inst, parts: inst.parts!.map((p) => ({ ...p, item: { ...p.item, condition: 5 } })) };
+  }
+
+  assert.equal(reached[0], PRISTINE, 'the first mending is a full one');
+  assert.ok(reached[3] < reached[0], `mendings gave back ${reached.join(' then ')}`);
+});
+
+test('but a thing never becomes nothing while you are still carrying it', () => {
+  // Worn past use should mean unreliable, not vanished.
+  const ancient = { ...instanceOf('a', 'w'), condition: 0, repairs: 99 };
+  assert.ok((repair(ancient, 20).item?.condition ?? 0) > 0);
+});
+
+test('a smith who can do nothing more says so, and it is free', () => {
+  const fine = { ...instanceOf('a', 'w'), condition: PRISTINE };
+  const tried = repair(fine, 8);
+  assert.equal(tried.attempted, false);
+  assert.equal(tried.item, fine);
+});
+
+test('what it costs follows how far gone it is', () => {
+  const bad = { ...instanceOf('a', 'w'), condition: 5 };
+  const nearly = { ...instanceOf('a', 'w'), condition: 90 };
+  assert.ok(repairCost(bad, 100, 0) > repairCost(nearly, 100, 0));
+});
+
+test('a repaired weapon works again', () => {
+  // The reader that matters: `equippedAttack` refuses a broken thing, so a
+  // mending has to be what puts it back in your hand.
+  const blade: Item = {
+    id: 'w_blade', name: 'sword', description: '', kind: 'equipment', slot: 'main',
+    stackable: false, value: 5,
+    attack: { id: 'atk', name: 'sword', ability: 'str', proficient: true, range: 1,
+              damage: { count: 1, sides: 6, bonusAbility: 'str', type: 'slashing' } },
+  };
+  let inv = equip(addItem(emptyInventory(), blade), blade.id).inventory;
+  const id = inv.held[0].instance.id;
+
+  inv = withInstance(inv, id, { ...inv.held[0].instance, condition: 0 });
+  assert.equal(equippedAttack(inv), null, 'a weapon worn through is an empty hand');
+
+  inv = withInstance(inv, id, repair(inv.held[0].instance, 8).item!);
+  assert.ok(equippedAttack(inv), 'and a mended one is a weapon again');
+});
+
+test('mending is FOLDED, and costs coin like everything else at a smith', () => {
+  const base = playState();
+  const id = base.pc.inventory.held[0].instance.id;
+  const battered = {
+    ...base,
+    pc: {
+      ...base.pc,
+      coin: 500,
+      inventory: withInstance(base.pc.inventory, id, {
+        ...base.pc.inventory.held[0].instance, condition: 10,
+      }),
+    },
+  };
+
+  const done = applySheetAction(battered, { type: 'repair', item: id });
+  assert.equal(done.error, null, done.error ?? '');
+  assert.ok(done.state.pc.coin < 500, 'a smith is not free');
+  assert.deepEqual(done.state, applySheetAction(battered, { type: 'repair', item: id }).state);
 });

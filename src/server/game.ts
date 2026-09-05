@@ -41,9 +41,9 @@ import type { Effect } from '../skills/effect.ts';
 import { priceOfUse } from '../skills/pools.ts';
 import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
-import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
+import { ceilingOf, conditionOfInstance, PRISTINE, weakestPart } from '../items/instance.ts';
 import { partTypeOf } from '../items/parts.ts';
-import { canEnchant, enchantCost, enhanceCost, ENCHANT_NAMES, nextRarity, refineCost } from '../items/refine.ts';
+import { canEnchant, enchantCost, enhanceCost, ENCHANT_NAMES, nextRarity, refineCost, repairCost } from '../items/refine.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Item } from '../items/types.ts';
 import { boardOf, findHolding, isContainer, placementsIn, spaceIn } from '../items/types.ts';
@@ -196,6 +196,10 @@ export type GameView = {
       enchantCost: number;
       enhanceCost: number;
       enhanceResets: boolean;
+      canRepair: boolean;
+      repairCost: number;
+      /** What a smith could bring it back to, 0..1. Falls with every mending. */
+      repairCeiling: number;
       /** Whether it has a history, and whether this character has read it. */
       hasLore: boolean; read: boolean;
     }[];
@@ -660,11 +664,14 @@ function improvementView(holding: Holding | undefined, rules: Ruleset) {
     return {
       refine: null, rarity: null, enchants: [], canRefine: false, canEnchant: false,
       canEnhance: false, refineCost: 0, enchantCost: 0, enhanceCost: 0, enhanceResets: false,
+      canRepair: false, repairCost: 0, repairCeiling: 1,
     };
   }
 
   const inst = holding.instance;
   const level = inst.refine ?? 0;
+  const failing = weakestPart(inst);
+  const ceiling = ceilingOf(failing, rules.gear.repairLoss);
   return {
     refine: level,
     rarity: inst.rarity ?? 'common',
@@ -678,6 +685,9 @@ function improvementView(holding: Holding | undefined, rules: Ruleset) {
     // What enhancing would throw away, so the trade can be shown rather than
     // discovered.
     enhanceResets: level > 0 || (inst.enchants?.length ?? 0) > 0,
+    canRepair: failing.condition < ceiling,
+    repairCost: repairCost(inst, holding.item.value, rules.gear.repairLoss),
+    repairCeiling: ceiling / PRISTINE,
   };
 }
 

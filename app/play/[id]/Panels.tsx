@@ -299,6 +299,20 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
             {item.wearable && !item.equipped && (
               <button className="mini" disabled={busy} onClick={() => act({ type: 'equip', item: item.id })}>equip</button>
             )}
+            {item.canRepair && (
+              <button
+                className="mini"
+                disabled={busy || c.coin < item.repairCost}
+                // What a smith could actually bring it back to, said plainly:
+                // "mend" that quietly stops short of whole is a lie.
+                title={item.repairCeiling < 1
+                  ? `${item.repairCost} coin — back to ${Math.round(item.repairCeiling * 100)}%, which is as far as it goes now`
+                  : `${item.repairCost} coin`}
+                onClick={() => act({ type: 'repair', item: item.id })}
+              >
+                mend {item.repairCost}
+              </button>
+            )}
             {item.canRefine && (
               <button
                 className="mini"

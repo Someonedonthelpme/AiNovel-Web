@@ -1,6 +1,6 @@
 import { mulberry32 } from '../engine/roll.ts';
 import type { Ability } from '../combat/types.ts';
-import { instanceOf, PRISTINE, RARITIES } from './instance.ts';
+import { ceilingOf, instanceOf, PRISTINE, RARITIES, weakestPart } from './instance.ts';
 import type { ItemInstance, Rarity } from './instance.ts';
 
 /**
@@ -266,6 +266,50 @@ export function enhance(inst: ItemInstance): Attempt {
     item: { ...inst, rarity: next, refine: 0, enchants: [] },
     attempted: true,
     note: `${next} now — and everything it carried is gone`,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Repair                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** What putting one piece right would cost, by how far gone it is. */
+export const repairCost = (inst: ItemInstance, value: number, lossPerRepair: number): number => {
+  const piece = weakestPart(inst);
+  const missing = ceilingOf(piece, lossPerRepair) - piece.condition;
+  return Math.max(1, Math.round((missing / PRISTINE) * Math.max(20, value)));
+};
+
+/**
+ * Put right the piece that is letting the rest down.
+ *
+ * `weakestPart` has said since it was written that this is what it is for, and
+ * nothing has ever called it. MENDING THE PART RATHER THAN THE THING is what
+ * makes an assembly worth having: a handle that has failed four times on a
+ * blade that is still true is a different object from a worn-out sword, and
+ * only one of them is worth carrying to a smith.
+ *
+ * And a mending never quite gets it back — see `ceilingOf`. Without that, gear
+ * lasts for ever and finding a better blade never matters.
+ */
+export function repair(inst: ItemInstance, lossPerRepair: number): Attempt {
+  const piece = weakestPart(inst);
+  const ceiling = ceilingOf(piece, lossPerRepair);
+  if (piece.condition >= ceiling) {
+    return { item: inst, attempted: false, note: 'there is nothing more a smith could do for it' };
+  }
+
+  const mended = (node: ItemInstance): ItemInstance => ({
+    ...node,
+    condition: node.id === piece.id ? ceiling : node.condition,
+    repairs: node.id === piece.id ? (node.repairs ?? 0) + 1 : node.repairs,
+    parts: (node.parts ?? []).map((p) => ({ ...p, item: mended(p.item) })),
+  });
+
+  return {
+    item: mended(inst),
+    attempted: true,
+    note: ceiling < PRISTINE ? `mended, as far as it will go now` : 'mended',
   };
 }
 

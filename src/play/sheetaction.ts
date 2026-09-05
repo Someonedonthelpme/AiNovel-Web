@@ -1,6 +1,6 @@
 import { rulesOf } from '../rules/ruleset.ts';
 import { attachPart, detachPart, findHolding, putIn, removeItem, takeOut, withInstance } from '../items/types.ts';
-import { enchant, enchantCost, enhance, enhanceCost, refine, refineCost } from '../items/refine.ts';
+import { enchant, enchantCost, enhance, enhanceCost, refine, refineCost, repair, repairCost } from '../items/refine.ts';
 import type { Attempt } from '../items/refine.ts';
 import type { ItemInstance } from '../items/instance.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -58,6 +58,8 @@ export type SheetAction =
   | { type: 'refine'; item: string }
   | { type: 'enchant'; item: string; working: string }
   | { type: 'enhance'; item: string }
+  /** Put right the piece that failed. Never quite all the way. */
+  | { type: 'repair'; item: string }
   | { type: 'use'; item: string }
   /** Taken once, at level three. It reshapes the tree by opening an island. */
   | { type: 'chooseSubclass'; id: string }
@@ -213,6 +215,15 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
 
     case 'enhance':
       return improve(state, action.item, (inst) => enhance(inst), (inst) => enhanceCost(inst.rarity));
+
+    case 'repair':
+      return improve(
+        state,
+        action.item,
+        (inst, rules) => repair(inst, rules.gear.repairLoss),
+        (inst) => repairCost(inst, findHolding(state.pc.inventory, action.item)?.item.value ?? 20,
+          rulesOf(state.world).gear.repairLoss),
+      );
 
     case 'unequip':
       return settle(

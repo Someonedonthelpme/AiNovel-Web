@@ -51,6 +51,16 @@ export type ItemInstance = {
    * the object; only the attempt is fresh.
    */
   tries?: number;
+  /**
+   * How many times this piece has been put back together.
+   *
+   * A REPAIR NEVER QUITE GETS IT BACK. Each one lowers what the piece can be
+   * mended TO, so a thing has a lifespan and finding a better one eventually
+   * matters — without that, repair is "pay coin, it is new again" for ever and
+   * no blade is ever replaced. Stored per piece, because it is the handle that
+   * has been rewound four times, not the sword.
+   */
+  repairs?: number;
   /** Bought at refine milestones. */
   enchants?: string[];
   rarity?: Rarity;
@@ -257,3 +267,12 @@ export function wear(inst: ItemInstance, partId: string, amount: number): ItemIn
 }
 
 export const isBroken = (inst: ItemInstance): boolean => conditionOfInstance(inst) <= 0;
+
+/**
+ * The best this piece can be made again.
+ *
+ * Falls with every mending, and never below a floor — a thing worn past use
+ * should become unreliable, not become nothing while you still carry it.
+ */
+export const ceilingOf = (inst: ItemInstance, lossPerRepair: number): number =>
+  Math.max(Math.round(PRISTINE * 0.2), PRISTINE - (inst.repairs ?? 0) * lossPerRepair);

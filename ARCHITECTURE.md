@@ -481,6 +481,16 @@ of one, so wielding the sharp axe instead of the notched one is a thing a player
 can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
 which were tested islands reachable from nothing.
 
+**A mending never quite gets it back.** Repair targets the piece that failed —
+`weakestPart` said since it was written that this was its job and nothing ever
+called it — and every mending lowers what that piece can be mended TO. Without
+that, repair is "pay coin, it is new again" for ever and no blade is ever
+replaced; with it gear has a lifespan and finding a better one eventually
+matters. `gear.repairLoss` at nought is a world whose smiths can always make a
+thing as good as new. Loose pieces drop, so a failed handle can be REPLACED
+rather than only mended — otherwise `attachPart` is reachable only by taking
+something off and putting the same thing back on, which is no decision at all.
+
 **Refine, work, enhance — and the reset is the design.** `ItemInstance.refine`,
 `.enchants` and `.rarity` were stored from the day instances existed and read by
 nobody. Refining adds a level whose worth is fixed by the OBJECT (so two swords
