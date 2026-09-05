@@ -210,7 +210,7 @@ level, hitDie, plus optionals: `spentAbilities`, `abilityPoints`, `xp`,
 they cannot drift ([sheet.ts:82](src/session/sheet.ts:82)).
 
 **`PlayState`** ([play/state.ts:23](src/play/state.ts:23)) — `world`, `sheet`,
-`pc {hp, maxHp, conditions, coin, inventory, stamina, mana, skillUses}`,
+`pc {hp, maxHp, conditions, coin, inventory, stamina, mana}`,
 `combat` (never persisted), `ended`.
 
 **`PlayEvent`** = `{kind:'start'} | TurnRecord | SheetRecord | ClimbRecord`.
@@ -463,9 +463,13 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `Person.tags` / `homeRegion` · `Fact.people` (no column — dropped on write) ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
-`CharacterSheet.hitDie` (read by no formula since HP moved to VIT) ·
-`usesPerRest` / `skillUses` (`spendUse` has zero callers, so the sidebar
-permanently shows `n/n`; survives only as a pricing input in the composer).
+`CharacterSheet.hitDie` (read by no formula since HP moved to VIT).
+
+**Cleared by the component conversion** — `usesPerRest`, `skillUses`,
+`usesLeft`, `spendUse`, `refreshUses`, `SkillUses`, `ActiveKind` and
+`Skill.kind` are all DELETED rather than given readers, because none of them
+had a job left once pools and the tick budget became the resource economy. The
+sidebar shows what a skill will cost you instead of a permanent `n/n`.
 
 ### The mirror image
 
@@ -496,9 +500,13 @@ dials neutral. `PLAIN` proves it — nobody soaks, nothing is heavy, nobody
 changes, every floor is the first, and not one `if` was added.
 
 Converted so far: `body` (carry, speed) · `combat` (soak, condition floor,
-tempo) · `persona` (drift) · `rest` · `world` (the danger curve, which was
-hardcoded to `danger === floor`). Everything below not marked is still a
-constant awaiting conversion.
+tempo) · `persona` (drift, and the suitability swing) · `rest` · `world` (the
+danger curve, which was hardcoded to `danger === floor`). Everything below not
+marked is still a constant awaiting conversion.
+
+`ruleset.test.ts` holds a `PROVEN` list and asserts it still covers every field
+on the type, so ADDING a dial without proving a reader fails there rather than
+shipping quietly. It caught `persona.suitSwing` the moment it was added.
 
 Every balance number, and where it lives.
 
@@ -510,6 +518,9 @@ Every balance number, and where it lives.
 | skill cost floor / ceiling | 1 / 12 | [pools.ts:49](src/skills/pools.ts:49) |
 | turn length in ticks / min action | 6 / 2 | [tempo.ts:20](src/combat/tempo.ts:20) |
 | drift threshold / decay | 6 / 1 | [drift.ts:35](src/character/drift.ts:35) |
+| **suitability swing** | ±25% on cost, magnitude and ticks | [suit.ts](src/skills/suit.ts), [ruleset.ts](src/rules/ruleset.ts) |
+| skill budget per floor | `4 + floor × 0.8` | [book.ts](src/skills/book.ts) |
+| effects drawn per skill | up to 3, until 75% of the budget is spent | [compose.ts](src/skills/compose.ts) |
 | temperament range | −10..+10 | [persona.ts:82](src/character/persona.ts:82) |
 | need range | 0..10 | [persona.ts:123](src/character/persona.ts:123) |
 | trust range / max swing per turn | −3..+4 / ±3 | [types.ts:84](src/world/types.ts:84), [delta.ts](src/play/delta.ts) |
@@ -537,15 +548,22 @@ Every balance number, and where it lives.
 
 ## 14. Known deviations
 
-**Three of eight scripts are broken**, and the root cause is one line:
-`tsconfig.json`'s `include` covers `src/**` and `app/**` only, so
-`npm run typecheck` **never looks at `scripts/`**.
+**~~Three of eight scripts are broken~~ — FIXED.** The root cause was one line:
+`tsconfig.json`'s `include` covered `src/**` and `app/**` only, so
+`npm run typecheck` never looked at `scripts/`. It does now, and all eight
+build. `skillgen.ts` measures components; the two embedder scripts call
+`rankFacts`, which is what `rankClues` was renamed to when the mystery engine
+became the tower.
 
-- `scripts/skillgen.ts` — imports `ARCHETYPES` from a file deleted in the
-  disciplines→paths migration. This is the balance harness `compose.ts` cites as
-  live tooling.
-- `scripts/check-local.ts`, `scripts/compare-embedders.ts` — import `rankClues`,
-  renamed to `rankFacts` when the mystery engine became the tower.
+**`WorldDelta` is still ten hand-written verbs, deliberately.** The design calls
+for it to become a list of effects sharing the skill vocabulary — but six of
+those verbs (`moveTo`, `revealExit`, `startCombat`, `useItem`, `equipItem`,
+`rest`) are COMMANDS rather than consequences, and of the channels the shared
+vocabulary would need — trust, temperament, needs, knowledge, quest progress,
+control — only `trust` has a reader today. Converting one arm to a list buys a
+shape and no behaviour, and would put effect components in the Director's
+schema, which is the one thing this codebase does not let a model author. It
+lands with the relationship edges, where the other channels get their readers.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
 The seed falls back to `Date.now()` when the client does not supply one; the
