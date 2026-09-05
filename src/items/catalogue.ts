@@ -111,6 +111,38 @@ const ARMOURS = [
   { name: 'scale harness', base: 13 },
 ];
 
+/**
+ * What you carry it all in.
+ *
+ * Deeper floors give better packs, the same way they give better blades — a
+ * bag is loot, and the first good one is a find rather than a stat.
+ */
+const PACKS: { name: string; capacity: number }[] = [
+  { name: 'a satchel', capacity: 8 },
+  { name: 'a shoulder bag', capacity: 14 },
+  { name: 'a climbing pack', capacity: 22 },
+  { name: 'a hauler\u2019s frame', capacity: 32 },
+];
+
+export function pack(rng: Rng, floor: number): Item {
+  const at = Math.min(PACKS.length - 1, Math.floor(rng() * 2) + Math.floor(Math.max(0, floor) / 7));
+  const base = PACKS[at];
+
+  return {
+    id: `pack_${base.capacity}`,
+    name: base.name,
+    description: 'Room for what you cannot bear to leave.',
+    kind: 'equipment',
+    slot: 'back',
+    capacity: base.capacity,
+    // The bag itself is light; what goes in it is not.
+    weight: 2,
+    stackable: false,
+    value: 20 + base.capacity * 4,
+    foundOn: floor,
+  };
+}
+
 export function armour(rng: Rng, floor: number): Item {
   const base = ARMOURS[Math.min(ARMOURS.length - 1, Math.floor(rng() * ARMOURS.length) + Math.floor(floor / 10))];
   const plus = Math.floor(Math.max(0, floor - 1) / 6);
@@ -192,6 +224,9 @@ export function rollLoot(rng: Rng, floor: number): Drop[] {
   if (rng() < 0.3) drops.push({ item: draught(floor), count: 1 });
   if (rng() < 0.16) drops.push({ item: weapon(rng, floor), count: 1 });
   if (rng() < 0.12) drops.push({ item: armour(rng, floor), count: 1 });
+  // Rare, because a pack is a lasting upgrade rather than a consumable — and
+  // finding the first one should be a moment rather than a Tuesday.
+  if (rng() < 0.07) drops.push({ item: pack(rng, floor), count: 1 });
   if (rng() < 0.18) drops.push({ item: material(rng, floor), count: 1 });
   /*
    * Uncommon on purpose: a book is a permanent new verb, not a consumable.

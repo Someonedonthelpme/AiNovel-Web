@@ -66,6 +66,14 @@ export type Item = {
   attack?: Attack;
   /** Armour: the base it sets, before dexterity. */
   armour?: number;
+  /**
+   * A CONTAINER, and how much it holds.
+   *
+   * Capacity used to be `carryBase + STR`, which meant it was a fact about your
+   * body and nothing else — a pack was not a thing you could own, find, fill or
+   * lose. A container is an item, so it can be all four.
+   */
+  capacity?: number;
   /** Trinkets and armour may nudge a score; traits gate on the total. */
   grants?: Partial<Record<Ability, number>>;
   /**
@@ -127,7 +135,19 @@ export type ItemStack = { item: Item; count: number };
  * no global list, and regenerating one to resolve an id would let a change to
  * the generator silently rewrite what an object IS mid-run.
  */
-export type Holding = { instance: ItemInstance; item: Item };
+export type Holding = {
+  instance: ItemInstance;
+  item: Item;
+  /**
+   * What is inside it, if it is a container.
+   *
+   * An `Inventory` again, so a bag inside a bag needs no second shape and no
+   * depth limit — loot is a container you open rather than a list you are
+   * handed. `putIn` refuses a cycle, which is the only thing that could make
+   * the tree infinite.
+   */
+  contents?: Inventory;
+};
 
 /** Slot to INSTANCE id — a specific object, not a kind of one. */
 export type Equipped = Partial<Record<Slot, string>>;
@@ -146,8 +166,21 @@ export const allItems = (inv: Inventory): Item[] =>
   [...inv.stacks.map((s) => s.item), ...inv.held.map((h) => h.item)];
 
 /** By instance id first, then by kind — most callers only know the kind. */
-export const findHolding = (inv: Inventory, id: string): Holding | null =>
-  inv.held.find((h) => h.instance.id === id) ?? inv.held.find((h) => h.item.id === id) ?? null;
+/**
+ * By instance id first, then by kind — most callers only know the kind.
+ *
+ * Searches inside containers too, so a thing in a bag is a thing you have.
+ */
+export function findHolding(inv: Inventory, id: string): Holding | null {
+  const byInstance = inv.held.find((h) => h.instance.id === id);
+  if (byInstance) return byInstance;
+
+  for (const h of inv.held) {
+    const inner = h.contents ? findHolding(h.contents, id) : null;
+    if (inner) return inner;
+  }
+  return inv.held.find((h) => h.item.id === id) ?? null;
+}
 
 /**
  * The next free id for a thing of this type.
@@ -425,10 +458,132 @@ export const weightOf = (item: Item): number =>
   // world may call that slot anything, and a breastplate is heavy regardless.
   item.weight ?? (typeof item.armour === 'number' ? 8 : DEFAULT_WEIGHT[item.kind]);
 
+/**
+ * What all of it weighs, all the way down.
+ *
+ * A full pack is heavy. Containers buy SPACE, never weightlessness — a bag that
+ * made its contents free would make carrying a decision about bags rather than
+ * about what you are carrying.
+ */
 export const carriedWeight = (inventory: Inventory): number =>
   inventory.stacks.reduce((total, stack) => total + weightOf(stack.item) * stack.count, 0)
-  // An assembly weighs what it is made of, so a longer haft is heavier.
-  + inventory.held.reduce((total, h) => total + weightOfInstance(h.instance, () => h.item, weightOf), 0);
+  + inventory.held.reduce(
+    // An assembly weighs what it is made of, so a longer haft is heavier.
+    (total, h) => total + weightOfInstance(h.instance, () => h.item, weightOf)
+      + (h.contents ? carriedWeight(h.contents) : 0),
+    0,
+  );
+
+/* -------------------------------------------------------------------------- */
+/* Containers                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export const isContainer = (item: Item): boolean => (item.capacity ?? 0) > 0;
+
+/** What is still free inside one. */
+export const spaceIn = (holding: Holding): number =>
+  (holding.item.capacity ?? 0) - carriedWeight(holding.contents ?? emptyInventory());
+
+/** Every container carried, at any depth, so a bag inside a bag is findable. */
+export function containersIn(inv: Inventory): Holding[] {
+  return inv.held.flatMap((h) => (
+    isContainer(h.item) ? [h, ...containersIn(h.contents ?? emptyInventory())] : []
+  ));
+}
+
+/** Whether `id` is this container or anything inside it — the cycle guard. */
+function within(holding: Holding, id: string): boolean {
+  if (holding.instance.id === id) return true;
+  return (holding.contents?.held ?? []).some((h) => within(h, id));
+}
+
+/**
+ * Rebuild the tree with one container replaced.
+ *
+ * The whole of the recursion, in one place: everything else here says WHAT to
+ * change and this says how to put the tree back together around it.
+ */
+function replacing(inv: Inventory, id: string, change: (h: Holding) => Holding): Inventory {
+  return {
+    ...inv,
+    held: inv.held.map((h) => {
+      if (h.instance.id === id) return change(h);
+      if (!h.contents) return h;
+      return { ...h, contents: replacing(h.contents, id, change) };
+    }),
+  };
+}
+
+/** Take one thing out of wherever it is, anywhere in the tree. */
+function lift(inv: Inventory, id: string): { inventory: Inventory; taken: Holding | null } {
+  const at = inv.held.findIndex((h) => h.instance.id === id);
+  if (at >= 0) {
+    return {
+      inventory: { ...inv, held: inv.held.filter((_, i) => i !== at) },
+      taken: inv.held[at],
+    };
+  }
+  for (const [i, h] of inv.held.entries()) {
+    if (!h.contents) continue;
+    const inner = lift(h.contents, id);
+    if (!inner.taken) continue;
+    const held = [...inv.held];
+    held[i] = { ...h, contents: inner.inventory };
+    return { inventory: { ...inv, held }, taken: inner.taken };
+  }
+  return { inventory: inv, taken: null };
+}
+
+export type MoveResult = { inventory: Inventory; error: string | null };
+
+/**
+ * Put something into a container.
+ *
+ * Refuses three things, each of which would otherwise produce a bag that is
+ * wrong rather than full: something that will not fit, a bag put inside itself,
+ * and a bag put inside one of its own pockets.
+ */
+export function putIn(inv: Inventory, itemId: string, containerId: string): MoveResult {
+  const container = findHolding(inv, containerId);
+  if (!container || !isContainer(container.item)) {
+    return { inventory: inv, error: 'that is not something you can put things in' };
+  }
+  const moving = findHolding(inv, itemId);
+  if (!moving) return { inventory: inv, error: 'you are not carrying that' };
+  if (within(moving, container.instance.id)) {
+    return { inventory: inv, error: container.item.name + ' will not go inside itself' };
+  }
+  if (Object.values(inv.equipped).includes(moving.instance.id)) {
+    return { inventory: inv, error: 'take ' + moving.item.name + ' off first' };
+  }
+
+  const bulk = weightOfInstance(moving.instance, () => moving.item, weightOf)
+    + (moving.contents ? carriedWeight(moving.contents) : 0);
+  if (bulk > spaceIn(container)) {
+    return { inventory: inv, error: moving.item.name + ' will not fit in ' + container.item.name };
+  }
+
+  const { inventory: without, taken } = lift(inv, moving.instance.id);
+  if (!taken) return { inventory: inv, error: 'you are not carrying that' };
+
+  return {
+    inventory: replacing(without, container.instance.id, (h) => ({
+      ...h,
+      contents: { ...(h.contents ?? emptyInventory()), held: [...(h.contents?.held ?? []), taken] },
+    })),
+    error: null,
+  };
+}
+
+/** Take something back out, into your own hands. */
+export function takeOut(inv: Inventory, itemId: string): MoveResult {
+  const at = inv.held.findIndex((h) => h.instance.id === itemId);
+  if (at >= 0) return { inventory: inv, error: 'that is already in your hands' };
+
+  const { inventory, taken } = lift(inv, itemId);
+  if (!taken) return { inventory: inv, error: 'you are not carrying that' };
+  return { inventory: { ...inventory, held: [...inventory.held, taken] }, error: null };
+}
 
 /* -------------------------------------------------------------------------- */
 /* Silhouette                                                                  */

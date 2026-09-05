@@ -481,6 +481,14 @@ of one, so wielding the sharp axe instead of the notched one is a thing a player
 can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
 which were tested islands reachable from nothing.
 
+**Capacity is something you own.** It used to be `carryBase + STR` and nothing
+else, so a pack was not a thing you could find, fill or lose. A container is an
+item with a `capacity`, a `Holding` may have `contents` — an `Inventory` again,
+so a bag inside a bag needs no second shape and no depth limit — and a worn
+container raises what you can carry. Containers buy SPACE, never weightlessness:
+weight counts all the way down, or carrying would become a decision about bags
+rather than about what you are carrying.
+
 **The world declares where you can wear things.** `Slot` is a plain string
 checked against `gear.slots`, not a union of three. A fixed enum could not say
 that a world has no boots in it, that this one lets you wear two rings, or that

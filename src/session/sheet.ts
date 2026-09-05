@@ -4,7 +4,7 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import { metNeeds, unmet } from '../character/persona.ts';
 import { ABILITIES, abilityMod } from '../combat/types.ts';
 import type { Inventory } from '../items/types.ts';
-import { carriedWeight, emptyInventory, equippedArmour, equippedAttack, equippedGrants } from '../items/types.ts';
+import { carriedWeight, emptyInventory, equippedArmour, equippedAttack, equippedGrants, equippedHoldings } from '../items/types.ts';
 import { activate } from '../skills/book.ts';
 import type { Item } from '../items/types.ts';
 import type { ActiveSkill } from '../skills/active.ts';
@@ -375,10 +375,20 @@ export function activeSkills(sheet: CharacterSheet): ActiveSkill[] {
   return [...sheet.background.grantsSkills.map(activate), ...(sheet.learned ?? [])];
 }
 
+/**
+ * What you can carry: your back, and whatever is on it.
+ *
+ * This used to be `carryBase + STR` and nothing else, which made capacity a
+ * fact about your body — a pack was not a thing you could find, fill or lose.
+ * A worn container raises the ceiling, so the first good bag is loot worth
+ * having and losing it is felt.
+ */
 export function carryCapacityFor(
   sheet: CharacterSheet, inventory?: Inventory, rules: Ruleset = STANDARD,
 ): number {
-  return rules.body.carryBase + finalAbilities(sheet, inventory).str * rules.body.carryPerStr;
+  const own = rules.body.carryBase + finalAbilities(sheet, inventory).str * rules.body.carryPerStr;
+  if (!inventory) return own;
+  return own + equippedHoldings(inventory).reduce((extra, h) => extra + (h.item.capacity ?? 0), 0);
 }
 
 /**

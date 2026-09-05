@@ -43,7 +43,8 @@ import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
 import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
 import type { Item } from '../items/types.ts';
-import { findHolding } from '../items/types.ts';
+import { findHolding, isContainer, spaceIn } from '../items/types.ts';
+import type { Holding, Inventory } from '../items/types.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -153,6 +154,11 @@ export type GameView = {
       equipped: boolean; slot: string | null; usable: boolean; wearable: boolean;
       /** 1 is whole. A specific object can be worn through; a stack cannot. */
       condition: number;
+      /** Which bag it is in, if it is in one. Null means in your own hands. */
+      inside: string | null;
+      /** A container, and what is left in it. Null when it is not one. */
+      capacity: number | null;
+      space: number | null;
       /** Whether it has a history, and whether this character has read it. */
       hasLore: boolean; read: boolean;
     }[];
@@ -587,7 +593,10 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
    * looking at — it needs an id it can act on, and for a holding that has to be
    * the INSTANCE id, or equipping "an axe" could never mean the sharp one.
    */
-  const line = (item: Item, id: string, count: number, condition: number) => ({
+  const line = (
+    item: Item, id: string, count: number, condition: number,
+    inside: string | null = null, holding?: Holding,
+  ) => ({
     id,
     name: item.name,
     description: item.description,
@@ -598,16 +607,26 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
     usable: item.kind === 'consumable' && Boolean(item.effect),
     wearable: item.kind === 'equipment' && Boolean(item.slot),
     condition,
+    inside,
+    capacity: holding && isContainer(item) ? (item.capacity ?? 0) : null,
+    space: holding && isContainer(item) ? spaceIn(holding) : null,
     // A history is not advertised until it exists, and once read the button
     // goes rather than sitting there offering nothing.
     hasLore: Boolean(loreFor(item, state.world, state.sheet.language)),
     read: knowsLore(state.sheet, `lore_${item.id}`),
   });
 
+  /** Everything held, at any depth, each knowing which bag it came out of. */
+  const heldLines = (from: Inventory, inside: string | null): ReturnType<typeof line>[] =>
+    from.held.flatMap((h) => [
+      line(h.item, h.instance.id, 1, conditionOfInstance(h.instance) / PRISTINE, inside, h),
+      ...(h.contents ? heldLines(h.contents, h.instance.id) : []),
+    ]);
+
   return {
     stacks: [
       ...inv.stacks.map((stack) => line(stack.item, stack.item.id, stack.count, 1)),
-      ...inv.held.map((h) => line(h.item, h.instance.id, 1, conditionOfInstance(h.instance) / PRISTINE)),
+      ...heldLines(inv, null),
     ],
     equipped: { ...inv.equipped } as Record<string, string>,
     slots: rulesOf(state.world).gear.slots.map((slot) => {

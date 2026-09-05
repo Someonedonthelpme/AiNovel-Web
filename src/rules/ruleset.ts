@@ -168,6 +168,7 @@ export const BODY_SLOTS: SlotSpec[] = [
   { id: 'offhand', takes: 'offhand', name: 'off hand' },
   { id: 'head', takes: 'head', name: 'head' },
   { id: 'body', takes: 'body', name: 'body' },
+  { id: 'back', takes: 'back', name: 'back' },
   { id: 'leg', takes: 'leg', name: 'legs' },
   { id: 'foot', takes: 'foot', name: 'feet' },
   { id: 'neck', takes: 'neck', name: 'neck' },

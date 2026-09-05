@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
   addItem, countOf, emptyInventory, equip, equippedArmour, equippedAttack,
   equippedGrants, isEquipped, removeItem, unequip, conditionIn, wearEquipped,
+  carriedWeight, findHolding, isContainer, putIn, spaceIn, takeOut,
 } from './types.ts';
-import type { Item } from './types.ts';
+import type { Inventory, Item } from './types.ts';
 import { rations, weapon, armour, namesTheSameThing, stripMechanics, weaponFromAttack } from './catalogue.ts';
+import { carryCapacityFor } from '../session/sheet.ts';
 import { sword } from '../combat/fixtures.ts';
 import { startingInventory } from '../play/state.ts';
 import { sheet } from '../session/fixtures.ts';
@@ -230,4 +232,112 @@ test('nothing in the pack wears — only what you are actually using', () => {
 test('a stack has no condition to speak of, and reads as whole', () => {
   const inv = addItem(emptyInventory(), { ...blade, id: 'r', stackable: true, kind: 'consumable' }, 3);
   assert.equal(conditionIn(inv, 'r'), 1);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Containers — capacity becomes a thing you own                               */
+/* -------------------------------------------------------------------------- */
+
+const bag = (id: string, capacity: number): Item => ({
+  id, name: 'a bag', description: '', kind: 'equipment', slot: 'back',
+  capacity, weight: 2, stackable: false, value: 1,
+});
+
+const brick = (id: string, weight: number): Item => ({
+  id, name: 'a brick', description: '', kind: 'material', weight, stackable: false, value: 1,
+});
+
+const first = (inv: Inventory, typeId: string) =>
+  inv.held.find((h) => h.item.id === typeId)!.instance.id;
+
+test('CAPACITY BECOMES SOMETHING YOU OWN, not a fact about your body', () => {
+  /*
+   * It used to be `carryBase + STR` and nothing else, so a pack was not a thing
+   * you could find, fill or lose. This is the whole point of containers: the
+   * first good bag is loot worth having.
+   */
+  const bare = sheet();
+  const withBag = equip(addItem(emptyInventory(), bag('b', 20)), 'b').inventory;
+
+  assert.ok(carryCapacityFor(bare, withBag) > carryCapacityFor(bare, emptyInventory()));
+});
+
+test('and losing it costs you the room', () => {
+  const who = sheet();
+  const packed = equip(addItem(emptyInventory(), bag('b', 20)), 'b').inventory;
+  const dropped = removeItem(packed, first(packed, 'b'));
+  assert.equal(carryCapacityFor(who, dropped), carryCapacityFor(who, emptyInventory()));
+});
+
+test('a bag holds things, and they go in and come back out', () => {
+  let inv = addItem(addItem(emptyInventory(), bag('b', 20)), brick('r', 3));
+  const bagId = first(inv, 'b');
+  const rock = first(inv, 'r');
+
+  const stowed = putIn(inv, rock, bagId);
+  assert.equal(stowed.error, null);
+  assert.equal(stowed.inventory.held.length, 1, 'only the bag is in your hands now');
+  assert.equal(findHolding(stowed.inventory, rock)?.item.id, 'r', 'but the rock is still yours');
+
+  const out = takeOut(stowed.inventory, rock);
+  assert.equal(out.error, null);
+  assert.equal(out.inventory.held.length, 2);
+});
+
+test('CONTAINERS BUY SPACE, NEVER WEIGHTLESSNESS', () => {
+  // A bag that made its contents free would make carrying a decision about
+  // bags rather than about what you are carrying.
+  let inv = addItem(addItem(emptyInventory(), bag('b', 20)), brick('r', 3));
+  const before = carriedWeight(inv);
+  const stowed = putIn(inv, first(inv, 'r'), first(inv, 'b')).inventory;
+
+  assert.equal(carriedWeight(stowed), before, 'a full pack weighs what a full pack weighs');
+});
+
+test('what will not fit is refused, and says so', () => {
+  const inv = addItem(addItem(emptyInventory(), bag('b', 2)), brick('r', 9));
+  const tried = putIn(inv, first(inv, 'r'), first(inv, 'b'));
+  assert.match(tried.error ?? '', /will not fit/);
+  assert.deepEqual(tried.inventory, inv, 'and nothing moved');
+});
+
+test('A BAG INSIDE A BAG, but never inside itself', () => {
+  let inv = addItem(addItem(emptyInventory(), bag('big', 30)), bag('small', 6));
+  const big = first(inv, 'big');
+  const small = first(inv, 'small');
+
+  const nested = putIn(inv, small, big);
+  assert.equal(nested.error, null, 'a bag inside a bag is fine');
+
+  assert.match(putIn(nested.inventory, big, big).error ?? '', /inside itself/);
+  // And not inside one of its own pockets, which is the same cycle a step out.
+  assert.match(putIn(nested.inventory, big, small).error ?? '', /inside itself/);
+});
+
+test('something in a bag inside a bag is still findable, and still weighs', () => {
+  let inv = addItem(addItem(addItem(emptyInventory(), bag('big', 30)), bag('small', 10)), brick('r', 3));
+  const before = carriedWeight(inv);
+
+  inv = putIn(inv, first(inv, 'r'), first(inv, 'small')).inventory;
+  inv = putIn(inv, first(inv, 'small'), first(inv, 'big')).inventory;
+
+  assert.equal(inv.held.length, 1, 'one bag in your hands');
+  assert.ok(findHolding(inv, 'r'), 'and the rock two layers down is still yours');
+  assert.equal(carriedWeight(inv), before);
+});
+
+test('you cannot stow what you are wearing without taking it off', () => {
+  let inv = addItem(addItem(emptyInventory(), bag('b', 20)), blade);
+  inv = equip(inv, blade.id).inventory;
+  assert.match(putIn(inv, first(inv, blade.id), first(inv, 'b')).error ?? '', /take .* off first/);
+});
+
+test('a bag that fills up stops having room', () => {
+  let inv = addItem(addItem(emptyInventory(), bag('b', 4)), brick('r', 3));
+  const bagId = first(inv, 'b');
+  inv = putIn(inv, first(inv, 'r'), bagId).inventory;
+
+  assert.equal(spaceIn(findHolding(inv, bagId)!), 1);
+  assert.equal(isContainer(bag('b', 4)), true);
+  assert.equal(isContainer(brick('r', 3)), false);
 });

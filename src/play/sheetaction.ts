@@ -1,4 +1,5 @@
 import { rulesOf } from '../rules/ruleset.ts';
+import { putIn, takeOut } from '../items/types.ts';
 import type { Abilities } from '../combat/types.ts';
 import { loreFor } from './lorebook.ts';
 import { knowsLore, learn } from './lore.ts';
@@ -38,6 +39,9 @@ export type SheetAction =
   | { type: 'allocate'; node: string }
   | { type: 'equip'; item: string }
   | { type: 'unequip'; slot: Slot }
+  /** Stow something in a bag, or take it back out into your hands. */
+  | { type: 'stow'; item: string; container: string }
+  | { type: 'takeOut'; item: string }
   | { type: 'use'; item: string }
   /** Taken once, at level three. It reshapes the tree by opening an island. */
   | { type: 'chooseSubclass'; id: string }
@@ -116,6 +120,18 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       const worn = equip(state.pc.inventory, action.item, rulesOf(state.world));
       if (worn.error) return { state, error: worn.error, note: null };
       return settle({ ...state, pc: { ...state.pc, inventory: worn.inventory } }, state, 'equipped');
+    }
+
+    case 'stow': {
+      const stowed = putIn(state.pc.inventory, action.item, action.container);
+      if (stowed.error) return { state, error: stowed.error, note: null };
+      return settle({ ...state, pc: { ...state.pc, inventory: stowed.inventory } }, state, 'packed');
+    }
+
+    case 'takeOut': {
+      const out = takeOut(state.pc.inventory, action.item);
+      if (out.error) return { state, error: out.error, note: null };
+      return settle({ ...state, pc: { ...state.pc, inventory: out.inventory } }, state, 'unpacked');
     }
 
     case 'unequip':

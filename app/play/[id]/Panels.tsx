@@ -116,6 +116,20 @@ function StatusTab({ view, act, busy }: { view: GameView; act: Act; busy: boolea
 /* Inventory: the paper-doll, and what is in the pack                          */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A bag with room for this, if there is one.
+ *
+ * The panel offers a move only when it would be allowed — a "stow" button that
+ * always answers "it will not fit" is worse than no button. Nothing here
+ * decides whether it fits; `putIn` does, and this asks the same question.
+ */
+function bagFor(view: GameView, itemId: string): string | null {
+  const bag = view.inventory.stacks.find((i) => (
+    i.id !== itemId && i.space !== null && i.space > 0 && !i.inside
+  ));
+  return bag?.id ?? null;
+}
+
 function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   const c = view.character;
 
@@ -171,16 +185,45 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
       </div>
       {view.inventory.stacks.length === 0 && <p className="muted">Nothing else but what you stand in.</p>}
       {view.inventory.stacks.map((item) => (
-        <div className="row" key={item.id}>
+        // Indented when it is inside a bag, so the pack reads as a tree rather
+        // than as one long list that happens to contain a bag.
+        <div className="row" key={item.id} style={item.inside ? { paddingLeft: '1.2rem' } : undefined}>
           <div>
             <strong>{item.name}</strong>
             {item.count > 1 && <span className="muted"> ×{item.count}</span>}{' '}
             <span className="tag">{item.kind}</span>
             {item.equipped && <span className="tag" style={{ color: 'var(--amber)' }}>worn</span>}
             {item.read && <span className="tag" style={{ color: 'var(--muted)' }}>read</span>}
+            {item.capacity !== null && (
+              <span className="tag" title="what is still free inside it">
+                {item.capacity - (item.space ?? 0)}/{item.capacity}
+              </span>
+            )}
+            {item.condition < 1 && (
+              <span className="tag" style={{ color: item.condition < 0.25 ? 'var(--danger)' : 'var(--amber)' }}>
+                {Math.round(item.condition * 100)}%
+              </span>
+            )}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{item.description}</p>
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
+            {item.inside && (
+              <button className="mini" disabled={busy} onClick={() => act({ type: 'takeOut', item: item.id })}>
+                take out
+              </button>
+            )}
+            {/* Stowing needs somewhere to stow it, so the button only exists
+                once there is a bag with room — offering a move that would
+                always be refused is worse than not offering it. */}
+            {!item.inside && !item.equipped && bagFor(view, item.id) && (
+              <button
+                className="mini"
+                disabled={busy}
+                onClick={() => act({ type: 'stow', item: item.id, container: bagFor(view, item.id)! })}
+              >
+                stow
+              </button>
+            )}
             {item.usable && (
               <button className="mini" disabled={busy} onClick={() => act({ type: 'use', item: item.id })}>use</button>
             )}
