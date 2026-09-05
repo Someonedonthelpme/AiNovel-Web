@@ -7,6 +7,30 @@ changes is built on top of it. Every claim carries a `file:line`.
 `--experimental-strip-types` (no build step for scripts or tests) · Drizzle +
 Postgres/pgvector · LM Studio as the model provider.
 
+## How to change this file
+
+Every claim carries a `file:line`. A claim you cannot cite does not belong here
+yet — it belongs in `HANDOFF.md` until it settles.
+
+**§4, §11, §12 and §13 are four views of the same facts** — what is stored, what
+must hold, what nothing reads, what can be dialled. A change to one is not done
+until it has been checked against the other three. Grep this file for the field,
+function or constant you are changing and read every hit; a single decision
+routinely lands in three sections at once. A stale view is worse than a missing
+one: §12 exists to catch fields that nothing reads, and it hides them the moment
+it goes out of date.
+
+**What lives elsewhere.** `DESIGN.md` holds intent that is not built yet — it
+has no `file:line` to cite, so it does not belong here until it ships. When it
+does, mark it shipped there and document it here in the same pass.
+`statmean.md` and `5D_Human_Psychology_Model.md` are reference and working
+notes, not claims the code must match, and are out of scope for reconciliation.
+
+**Amend a superseded claim in place, carrying the evidence that reversed it.**
+Never delete one. §14 is where a deferred question becomes a settled one, and
+that history — the reasoning, not just the verdict — is the most valuable thing
+in this document.
+
 ---
 
 ## Contents
@@ -43,8 +67,8 @@ change are pure code.
 The governing rule, repeated in a dozen file headers:
 **the code supplies structure, the model supplies flavour** — and *every field
 the model does not have to produce is a field it cannot get wrong*
-([schema.ts:10](src/session/schema.ts:10),
-[classnames.ts:6](src/character/classnames.ts:6),
+([schema.ts:13](src/session/schema.ts:13),
+[classnames.ts:11](src/character/classnames.ts:11),
 [floorgen.ts:14](src/world/floorgen.ts:14),
 [director.ts:12](src/llm/director.ts:12)).
 
@@ -166,6 +190,24 @@ in-memory fight store) · seven thin route handlers under `app/api/`.
 
 ---
 
+### `src/world/subjects.ts` + `src/play/lore.ts` — what a world is about
+A world mints 10–14 `Subject`s from its seed ([subjects.ts:74](src/world/subjects.ts:74)),
+in kinds like a war, a house, a craft. Within one world the set is **CLOSED**,
+and that is the whole trick: a piece of lore names the subjects it is `about`
+([lore.ts:26](src/play/lore.ts:26)), a persona's `drive` names a want and a fear
+in the same vocabulary, so **the match is a set intersection**
+([lore.ts:65](src/play/lore.ts:65)). The engine never judges whether a history
+would move somebody — it checks whether they were talking about the same thing.
+
+A want is worth twice a fear (`WANT_WEIGHT` 2, `FEAR_WEIGHT` 1,
+[lore.ts:53](src/play/lore.ts:53)); at `MOVING_DEPTH` 3 a match is deep enough to
+push on who somebody is rather than just land. Knowing a piece of lore **is**
+holding a belief — `loreClaim` builds an ordinary `Claim`
+([lore.ts:99](src/play/lore.ts:99)) — so `belief.ts` carries it, `learn` and
+`tell` move it between people, and nothing needed a second knowledge system.
+Reading is a turn action and works once ([sheetaction.ts:241](src/play/sheetaction.ts:241)):
+a paragraph cannot be re-read for the same comfort.
+
 ## 4. Stored data
 
 Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
@@ -187,7 +229,7 @@ floor is one region is one integer.
 
 **`Region`** (full detail) — places, entrance, exit, danger, creatures.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
-known people survive ([lod.ts:36](src/world/lod.ts:36)).
+known people survive ([lod.ts:37](src/world/lod.ts:37)).
 
 **`Persona`** ([character/persona.ts:269](src/character/persona.ts:269)) — the
 core every villager and the player share:
@@ -207,9 +249,9 @@ level, hitDie, plus optionals: `spentAbilities`, `abilityPoints`, `xp`,
 `learned`, `classId`, `classSpec`, `subclassId`, `library`.
 
 † **denormalised caches**, written only alongside the list they summarise so
-they cannot drift ([sheet.ts:82](src/session/sheet.ts:82)).
+they cannot drift ([sheet.ts:83](src/session/sheet.ts:83)).
 
-**`PlayState`** ([play/state.ts:23](src/play/state.ts:23)) — `world`, `sheet`,
+**`PlayState`** ([play/state.ts:25](src/play/state.ts:25)) — `world`, `sheet`,
 `pc {hp, maxHp, conditions, coin, inventory, stamina, mana}`,
 `combat` (never persisted), `ended`.
 
@@ -227,7 +269,7 @@ come from?"
 | function | reads | produces |
 |---|---|---|
 | `dispositionOf` ([persona.ts:182](src/character/persona.ts:182)) | temperament + needs | `warmth·candour·nerve·discipline·intuition·feeling` on ±3. Circumstance colours wiring: warmth needs company, nerve is worn by being unsafe, discipline frays unrested |
-| `describeMental` ([persona.ts:234](src/character/persona.ts:234)) | needs | rattled / exhausted / starving / lonely / adrift, and the upside `in good heart` |
+| `describeMental` ([persona.ts:260](src/character/persona.ts:260)) | needs | rattled / exhausted / starving / lonely / adrift, and the upside `in good heart` |
 | `registerTrust` ([persona.ts:257](src/character/persona.ts:257)) | trust + persona | the trust value a relationship is actually *read* at |
 | `finalAbilities` ([sheet.ts:224](src/session/sheet.ts:224)) | base + background + spent + tree + traits + equipment | `Abilities`. **Everything that moves a score must land here** or trait gates read a number the player never sees |
 | `maxHpFor` ([sheet.ts:248](src/session/sheet.ts:248)) | VIT, level, tree | `10 + vitMod + (level−1)(6+vitMod)`. **CON and the hit die are deliberately excluded** |
@@ -235,6 +277,8 @@ come from?"
 | `soakOf` ([resolve.ts](src/combat/resolve.ts)) | VIT, the incoming blow | VIT's physical defence. Capped by the stat AND a third of the hit — flat reduction was measured and rejected |
 | `resistedRounds` ([conditions.ts](src/combat/conditions.ts)) | VIT or CON, duration | shortens a condition rather than rolling a save. Never reaches immunity |
 | `speedFor` / `overloadFor` / `carryCapacityFor` | AGI, STR, carried weight | movement, and what hauling a hoard costs |
+| `loreFor` ([lorebook.ts:74](src/play/lorebook.ts:74)) | item id + world seed | the history a thing carries, or nothing — `LORE_CHANCE` 0.35. Depth comes off *floor* depth, so a deep find is worth reading and not merely worth more |
+| `resonanceOf` ([lore.ts:65](src/play/lore.ts:65)) | lore `about` ∩ drive want/fear | `Resonance` — whether it touched them at all, and what it moved |
 | `maxStaminaFor` / `maxManaFor` ([sheet.ts:308](src/session/sheet.ts:308)) | VIT/CON, level, unmet rest/safety, tree | pool ceilings — the body is docked by going unrested, the mind by feeling unsafe |
 | `toCombatant` ([sheet.ts:374](src/session/sheet.ts:374)) | derive + equipped attack | a `Combatant` at full HP and full pools |
 | `conditionMet` / `progressOf` ([traits.ts:198](src/play/traits.ts:198)) | `TraitContext` | whether a trait condition holds, and its progress bar |
@@ -262,6 +306,16 @@ seed, so the same thing is always the same thing: node grants
 `mulberry32(hash(nodeId))` ([skilltree.ts:209](src/play/skilltree.ts:209)),
 subclass grants `hash(sub.id)`, book volumes, composed skill names. A node taken
 at level 4 still teaches the same thing at level 12.
+A lorebook keys the same way ([lorebook.ts:74](src/play/lorebook.ts:74)): a sword
+found on floor nine carries the same history on a replay, and none of it travels
+in the save.
+
+**Seeded shape, stored words** — `subjects` are drawn from the seed, but the
+names the model gives them are stored on the `World`
+([types.ts:151](src/world/types.ts:151), [subjects.ts:111](src/world/subjects.ts:111)),
+because a word derived from nothing would be lost on the next derivation. The
+same split as `classSpec` on the sheet. **The ids never change**, so anything that
+matched before naming still matches after it.
 
 **Authored** — the pieces that must not vary: `ROLES`, `SHAPES` (the nine
 emergent play-patterns), `PATH_WORDS`, the condition price table.
@@ -277,17 +331,18 @@ emergent play-patterns), `PATH_WORDS`, the condition price table.
 
 ## 7. The LLM contract
 
-Seven calls, all behind `Provider` ([llm/provider.ts:33](src/llm/provider.ts:33)).
+Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)).
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
 | **Director** ([director.ts:255](src/llm/director.ts:255)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist** | indirectly — only the validated delta and the refusal reasons |
-| **Writer** ([writer.ts:229](src/llm/writer.ts:229)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
+| **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:209](src/world/floorgen.ts:209)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture | **yes, in full** — inside `ClimbRecord.built` |
 | **Character** ([genesis.ts:93](src/session/genesis.ts:93)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
 | **Ground floor** ([genesis.ts:237](src/session/genesis.ts:237)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
+| **Subject naming** ([subjectnames.ts:50](src/world/subjectnames.ts:50)) | `SUBJECT_NAMING_SCHEMA`, t=0.9 | **words only** — the ids are given to it and it invents none | stored on `World.subjects` |
 
 **Zero model calls** for: combat, panel actions, suggested actions, interview
 questions, loot, or any trait/Signet/tree generation.
@@ -397,7 +452,7 @@ the whole climb. This is where the difficulty curve lives.
 **Climb** — a crossing is a **logged event**. `ClimbRecord.built` carries the
 generated region and its people, because `foldPlay` is synchronous and holds no
 `Provider`. `applyClimb` is pure and drives **both** the live path and replay,
-so the two cannot drift apart ([climb.ts:22](src/play/climb.ts:22)).
+so the two cannot drift apart ([climb.ts:21](src/play/climb.ts:21)).
 
 **Panel actions** — equipping a helmet is bookkeeping, not a story beat, so
 there is no model call. Every action is a `{kind:'sheet'}` event, and each one
@@ -410,7 +465,7 @@ move from a panel without a turn ever being taken.
 
 **1. The log is truth; state is a fold; snapshots are a cache.**
 *Deleting every snapshot must change nothing except how long loading takes*
-([sessions.ts:15](src/db/sessions.ts:15)), and a test says so. This has been
+([sessions.ts:18](src/db/sessions.ts:18)), and a test says so. This has been
 broken twice: once by omitting `sheet`/`ended` from snapshots (fixed by
 migration 0001), once by climbing (fixed by making the climb an event).
 
@@ -617,13 +672,13 @@ Every balance number, and where it lives.
 | pool base / per level | 8 / 2 | [sheet.ts:295](src/session/sheet.ts:295) |
 | skill cost floor / ceiling | 1 / 12 | [pools.ts:49](src/skills/pools.ts:49) |
 | turn length in ticks / min action | 6 / 2 | [tempo.ts:20](src/combat/tempo.ts:20) |
-| drift threshold / decay | 6 / 1 | [drift.ts:35](src/character/drift.ts:35) |
+| drift threshold / decay | 6 / 1 | [drift.ts:42](src/character/drift.ts:42) |
 | **suitability swing** | ±25% on cost, magnitude and ticks | [suit.ts](src/skills/suit.ts), [ruleset.ts](src/rules/ruleset.ts) |
 | skill budget per floor | `4 + floor × 0.8` | [book.ts](src/skills/book.ts) |
 | effects drawn per skill | up to 3, until 75% of the budget is spent | [compose.ts](src/skills/compose.ts) |
 | temperament range | −10..+10 | [persona.ts:82](src/character/persona.ts:82) |
 | need range | 0..10 | [persona.ts:123](src/character/persona.ts:123) |
-| trust range / max swing per turn | −3..+4 / ±3 | [types.ts:84](src/world/types.ts:84), [delta.ts](src/play/delta.ts) |
+| trust range / max swing per turn | −3..+4 / ±3 | [types.ts:94](src/world/types.ts:94), [delta.ts](src/play/delta.ts) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |
 | short / long rest turns | 1 / 8 | [rest.ts:22](src/play/rest.ts:22) |
 | base speed / floor | 6 (+AGI mod) / 3 | [sheet.ts](src/session/sheet.ts) |
@@ -632,9 +687,9 @@ Every balance number, and where it lives.
 | condition resistance floor | 1 round | [conditions.ts](src/combat/conditions.ts) |
 | default item weight (equipment/consumable/material/armour) | 3 / 1 / 1 / 8 | [items/types.ts](src/items/types.ts) |
 | snapshot cadence | every 20 events | [sessions.ts:23](src/db/sessions.ts:23) |
-| **danger** | `= floor`, exactly | [budget.ts:23](src/world/budget.ts:23) |
-| places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:12](src/world/budget.ts:12) |
-| people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:18](src/world/budget.ts:18) |
+| **danger** | `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [budget.ts:32](src/world/budget.ts:32) |
+| places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:14](src/world/budget.ts:14) |
+| people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:20](src/world/budget.ts:20) |
 | XP to next level | `100 × level` | [progress.ts:20](src/play/progress.ts:20) |
 | depth fall-off | `min(1, floor/level)²` | [progress.ts:35](src/play/progress.ts:35) |
 | new-depth XP | `60 × floor`, no fall-off | [progress.ts:50](src/play/progress.ts:50) |
@@ -700,7 +755,7 @@ the next draw identically seeded.
 
 **Vestigial mystery engine** — `candidateReveals` still exists; two broken
 scripts still carry Thai murder-mystery fixtures.
-[validate.ts:4](src/world/validate.ts:4) names its own ancestry.
+[validate.ts:7](src/world/validate.ts:7) names its own ancestry.
 
 **Hand-maintained couplings, pinned only by test** — `DROPPABLE_FAMILIES` is
 derived from the item catalogue by hand; `TOWER_DEPTH` duplicates

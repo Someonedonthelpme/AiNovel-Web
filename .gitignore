@@ -6,3 +6,6 @@ node_modules/
 .env.local
 scratch/
 tsconfig.tsbuildinfo
+
+# personal session state, rewritten every session; DESIGN.md is tracked
+HANDOFF.md
