@@ -2,6 +2,7 @@ import type { Persona } from '../character/persona.ts';
 export type { NpcVoice, Persona, Status } from '../character/persona.ts';
 export { STATUSES } from '../character/persona.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 /**
  * The world model.
  *
@@ -134,6 +135,14 @@ export type Fact = {
 export type World = {
   seed: number;
   language: 'th' | 'en';
+  /**
+   * The rules this world plays by. Absent means `STANDARD`.
+   *
+   * On the World because it is jsonb — it replays for free and needs no
+   * migration — and because rules must be able to change mid-run, which
+   * anything resolved at generation time could never do.
+   */
+  rules?: Ruleset;
   regions: Record<RegionId, RegionRecord>;
   people: Record<PersonId, Person>;
   facts: Fact[];

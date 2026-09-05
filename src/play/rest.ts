@@ -1,4 +1,6 @@
 import type { ActiveCondition } from '../combat/types.ts';
+import { rulesOf, STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import { NEED_MAX, dispositionOf } from '../character/persona.ts';
 import { RATION_ID } from '../items/catalogue.ts';
 import { countOf, findItem, removeItem } from '../items/types.ts';
@@ -21,8 +23,8 @@ import type { PlayState } from './state.ts';
  * before you have to go home?
  */
 
-export const SHORT_REST_TURNS = 1;
-export const LONG_REST_TURNS = 8;
+export const SHORT_REST_TURNS = STANDARD.rest.shortTurns;
+export const LONG_REST_TURNS = STANDARD.rest.longTurns;
 
 export type RestKind = 'short' | 'long';
 
@@ -70,6 +72,7 @@ export type RestResult = {
  * world has moved on when you wake.
  */
 export function takeRest(state: PlayState, kind: RestKind): RestResult {
+  const { shortTurns, longTurns } = rulesOf(state.world).rest;
   const check = canRest(state, kind);
   if (!check.ok) return { state, healed: 0, error: check.reason, turnsSpent: 0 };
 
@@ -111,11 +114,11 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
           skillUses: refreshUses(),
         },
         sheet: { ...state.sheet, needs: easedShort(state.sheet.needs) },
-        world: { ...state.world, turn: state.world.turn + SHORT_REST_TURNS },
+        world: { ...state.world, turn: state.world.turn + shortTurns },
       },
       healed: Math.min(maxHp, before + healed) - before,
       error: null,
-      turnsSpent: SHORT_REST_TURNS,
+      turnsSpent: shortTurns,
     };
   }
 
@@ -128,11 +131,11 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
       // are not things sleeping fixes.
       pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], stamina: maxStamina, mana: maxMana, skillUses: refreshUses() },
       sheet: { ...state.sheet, needs: { ...state.sheet.needs, rest: NEED_MAX, safety: NEED_MAX } },
-      world: { ...state.world, turn: state.world.turn + LONG_REST_TURNS },
+      world: { ...state.world, turn: state.world.turn + longTurns },
     },
     healed: maxHp - before,
     error: null,
-    turnsSpent: LONG_REST_TURNS,
+    turnsSpent: longTurns,
   };
 }
 

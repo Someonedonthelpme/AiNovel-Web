@@ -1,4 +1,6 @@
 import type { AdvantageState, Combatant, Condition } from './types.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import { abilityMod } from './types.ts';
 import { combineAdvantage } from './dice.ts';
 
@@ -24,20 +26,24 @@ const RESISTED_BY: Partial<Record<Condition, 'vit' | 'con'>> = {
   poisoned: 'con', frightened: 'con', blinded: 'con',
 };
 
-/** Never immunity: something always lands for at least `MIN_ROUNDS`. */
-export const MIN_ROUNDS = 1;
+/** Never immunity: something always lands for at least this long. */
+export const MIN_ROUNDS = STANDARD.combat.conditionFloor;
 
-export function resistedRounds(c: Combatant, kind: Condition, rounds: number): number {
+export function resistedRounds(
+  c: Combatant, kind: Condition, rounds: number, rules: Ruleset = STANDARD,
+): number {
   const stat = RESISTED_BY[kind];
   if (!stat) return rounds;
   const shrug = Math.max(0, abilityMod(c.abilities[stat]));
-  return Math.max(MIN_ROUNDS, rounds - shrug);
+  return Math.max(rules.combat.conditionFloor, rounds - shrug);
 }
 
-export function addCondition(c: Combatant, kind: Condition, roundsLeft: number | null = null): Combatant {
+export function addCondition(
+  c: Combatant, kind: Condition, roundsLeft: number | null = null, rules: Ruleset = STANDARD,
+): Combatant {
   // A permanent condition is not shortened — being unconscious is a state, not
   // a timer somebody tough gets less of.
-  const rounds = roundsLeft === null ? null : resistedRounds(c, kind, roundsLeft);
+  const rounds = roundsLeft === null ? null : resistedRounds(c, kind, roundsLeft, rules);
   if (hasCondition(c, kind)) {
     // Re-applying refreshes the duration; a permanent one stays permanent.
     return {

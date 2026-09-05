@@ -1,4 +1,6 @@
 import type { Rng } from '../engine/roll.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import { d20, rollDamage } from './dice.ts';
 import { breakCast } from './cast.ts';
 import { attackModifiers, addCondition, hasCondition, removeCondition } from './conditions.ts';
@@ -50,20 +52,22 @@ export function attackBonus(attacker: Combatant, attackId: string): number {
  *
  * VIT's headline is hit points. This is a nudge on top, not a second HP bar.
  */
-export const MAX_REDUCTION = 2;
-export const MIN_HIT = 1;
+export const MAX_REDUCTION = STANDARD.combat.soakCeiling;
+export const MIN_HIT = STANDARD.combat.minHit;
 /** The most of any single blow that VIT may absorb. */
-export const SOAK_SHARE = 1 / 3;
+export const SOAK_SHARE = STANDARD.combat.soakShare;
 
-export const damageReduction = (who: Combatant): number =>
-  Math.max(0, Math.min(MAX_REDUCTION, abilityMod(who.abilities.vit)));
+export const damageReduction = (who: Combatant, rules: Ruleset = STANDARD): number =>
+  Math.max(0, Math.min(rules.combat.soakCeiling, abilityMod(who.abilities.vit)));
 
 /** What this particular blow actually loses to the body it lands on. */
-export const soakOf = (target: Combatant, amount: number): number =>
-  Math.min(damageReduction(target), Math.floor(amount * SOAK_SHARE));
+export const soakOf = (target: Combatant, amount: number, rules: Ruleset = STANDARD): number =>
+  Math.min(damageReduction(target, rules), Math.floor(amount * rules.combat.soakShare));
 
-export function applyDamage(target: Combatant, amount: number): Combatant {
-  const soaked = amount > 0 ? Math.max(MIN_HIT, amount - soakOf(target, amount)) : amount;
+export function applyDamage(target: Combatant, amount: number, rules: Ruleset = STANDARD): Combatant {
+  const soaked = amount > 0
+    ? Math.max(rules.combat.minHit, amount - soakOf(target, amount, rules))
+    : amount;
   const hp = Math.max(0, target.hp - soaked);
   if (hp > 0) return { ...target, hp };
 

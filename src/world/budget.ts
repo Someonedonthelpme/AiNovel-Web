@@ -1,3 +1,5 @@
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 /**
  * Generation budgets by depth.
  *
@@ -20,9 +22,15 @@ export function peopleBudget(floor: number): { min: number; max: number } {
   return { min: 1, max: target + 2 };
 }
 
-/** Encounter difficulty for the floor. Floor 0 is the safe ground town. */
-export function dangerFor(floor: number): number {
-  return Math.max(0, floor);
+/**
+ * Encounter difficulty for the floor. Floor 0 is the safe ground town.
+ *
+ * `danger === floor` was hardcoded, which meant difficulty could never be
+ * decoupled from depth — no quiet story band deep in a tower, no brutal early
+ * gauntlet. It is a curve now, and today's numbers are its identity values.
+ */
+export function dangerFor(floor: number, rules: Ruleset = STANDARD): number {
+  return Math.max(0, Math.round(rules.world.dangerBase + floor * rules.world.dangerPerFloor));
 }
 
 /**

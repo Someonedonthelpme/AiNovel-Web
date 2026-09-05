@@ -1,4 +1,6 @@
 import type { Ability, Abilities, Attack, Combatant } from '../combat/types.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import { metNeeds, unmet } from '../character/persona.ts';
 import { ABILITIES, abilityMod } from '../combat/types.ts';
 import type { Inventory } from '../items/types.ts';
@@ -292,9 +294,9 @@ export const HP_PER_LEVEL = 6;
  * `poolFor` in skills/pools.ts. One rule, and it makes the physical and mental
  * halves of the stat sheet structural rather than thematic.
  */
-export const BASE_SPEED = 6;
+export const BASE_SPEED = STANDARD.body.baseSpeed;
 /** Nobody is rooted to the spot by being quick or slow alone. */
-export const MIN_SPEED = 3;
+export const MIN_SPEED = STANDARD.body.minSpeed;
 
 /*
  * CARRYING, which STR has claimed since the nine stats were written and which
@@ -305,10 +307,10 @@ export const MIN_SPEED = 3;
  * place where being a little stronger should help a little, rather than only
  * mattering every second point.
  */
-export const CARRY_BASE = 20;
-export const CARRY_PER_STR = 2;
+export const CARRY_BASE = STANDARD.body.carryBase;
+export const CARRY_PER_STR = STANDARD.body.carryPerStr;
 /** How much overload costs a square of movement. */
-export const OVERLOAD_STEP = 8;
+export const OVERLOAD_STEP = STANDARD.body.overloadStep;
 export const POOL_BASE = 8;
 export const POOL_PER_LEVEL = 2;
 
@@ -377,8 +379,10 @@ export function activeSkills(sheet: CharacterSheet): ActiveSkill[] {
   return [...sheet.background.grantsSkills.map(activate), ...(sheet.learned ?? [])];
 }
 
-export function carryCapacityFor(sheet: CharacterSheet, inventory?: Inventory): number {
-  return CARRY_BASE + finalAbilities(sheet, inventory).str * CARRY_PER_STR;
+export function carryCapacityFor(
+  sheet: CharacterSheet, inventory?: Inventory, rules: Ruleset = STANDARD,
+): number {
+  return rules.body.carryBase + finalAbilities(sheet, inventory).str * rules.body.carryPerStr;
 }
 
 /**
@@ -389,16 +393,20 @@ export function carryCapacityFor(sheet: CharacterSheet, inventory?: Inventory): 
  * cost of hauling a hoard up a tower is that you move like somebody hauling a
  * hoard up a tower.
  */
-export function overloadFor(sheet: CharacterSheet, inventory?: Inventory): number {
+export function overloadFor(
+  sheet: CharacterSheet, inventory?: Inventory, rules: Ruleset = STANDARD,
+): number {
   if (!inventory) return 0;
-  const over = carriedWeight(inventory) - carryCapacityFor(sheet, inventory);
-  return over <= 0 ? 0 : Math.ceil(over / OVERLOAD_STEP);
+  const over = carriedWeight(inventory) - carryCapacityFor(sheet, inventory, rules);
+  return over <= 0 ? 0 : Math.ceil(over / rules.body.overloadStep);
 }
 
-export function speedFor(sheet: CharacterSheet, inventory?: Inventory): number {
-  const quick = BASE_SPEED + abilityMod(finalAbilities(sheet, inventory).agi);
-  const load = overloadFor(sheet, inventory);
-  return load > 0 ? Math.max(1, quick - load) : Math.max(MIN_SPEED, quick);
+export function speedFor(
+  sheet: CharacterSheet, inventory?: Inventory, rules: Ruleset = STANDARD,
+): number {
+  const quick = rules.body.baseSpeed + abilityMod(finalAbilities(sheet, inventory).agi);
+  const load = overloadFor(sheet, inventory, rules);
+  return load > 0 ? Math.max(1, quick - load) : Math.max(rules.body.minSpeed, quick);
 }
 
 export function derive(sheet: CharacterSheet, inventory: Inventory = emptyInventory()): DerivedSheet {

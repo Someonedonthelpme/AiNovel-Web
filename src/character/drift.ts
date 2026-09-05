@@ -1,4 +1,6 @@
 import type { Tier } from '../engine/roll.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import type { Tone } from '../llm/register.ts';
 import { NEEDS, NEED_MAX, TEMPERAMENT, TEMPER_MAX, TEMPER_MIN } from './persona.ts';
 import type { Needs, Persona, Temperament, TemperamentAxis } from './persona.ts';
@@ -37,10 +39,10 @@ export type DriftCause =
  * scene; too high and nobody ever changes. Six is roughly "this kept happening"
  * rather than "this happened once".
  */
-export const PERSONALITY_THRESHOLD = 6;
+export const PERSONALITY_THRESHOLD = STANDARD.persona.driftThreshold;
 
 /** Pressure bleeds off, so isolated moments never accumulate into a change. */
-export const PRESSURE_DECAY = 1;
+export const PRESSURE_DECAY = STANDARD.persona.pressureDecay;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(n)));
 
@@ -118,7 +120,9 @@ export type DriftResult = {
  * pressure; it shifts a single step when that pressure crosses the threshold,
  * and never more than one step at a time however bad the day was.
  */
-export function applyDrift(persona: Persona, causes: DriftCause[]): DriftResult {
+export function applyDrift(
+  persona: Persona, causes: DriftCause[], rules: Ruleset = STANDARD,
+): DriftResult {
   const needs: Needs = { ...persona.needs };
   const pressure: Temperament = { ...persona.pressure };
   // Which axes were actually pushed this turn. Decay must only touch the rest,
@@ -142,7 +146,7 @@ export function applyDrift(persona: Persona, causes: DriftCause[]): DriftResult 
   const changed: AxisChange[] = [];
 
   for (const axis of TEMPERAMENT) {
-    if (Math.abs(pressure[axis]) >= PERSONALITY_THRESHOLD) {
+    if (Math.abs(pressure[axis]) >= rules.persona.driftThreshold) {
       const step = Math.sign(pressure[axis]);
       const from = temperament[axis];
       const to = clamp(from + step, TEMPER_MIN, TEMPER_MAX);
@@ -150,11 +154,11 @@ export function applyDrift(persona: Persona, causes: DriftCause[]): DriftResult 
       temperament[axis] = to;
       // Spend the pressure whether or not the axis could move, so someone
       // already at the extreme does not fire a change every single turn.
-      pressure[axis] -= step * PERSONALITY_THRESHOLD;
+      pressure[axis] -= step * rules.persona.driftThreshold;
     } else if (pressure[axis] !== 0 && !pushed.has(axis)) {
       // Bleed off only what nothing reinforced, so one bad exchange fades but a
       // pattern of them still builds.
-      const decay = Math.sign(pressure[axis]) * Math.min(PRESSURE_DECAY, Math.abs(pressure[axis]));
+      const decay = Math.sign(pressure[axis]) * Math.min(rules.persona.pressureDecay, Math.abs(pressure[axis]));
       pressure[axis] -= decay;
     }
   }

@@ -1,4 +1,6 @@
 import { abilityMod } from './types.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import type { Combatant } from './types.ts';
 
 /**
@@ -20,10 +22,10 @@ import type { Combatant } from './types.ts';
  */
 
 /** What a round is worth. The one number the whole tempo system turns on. */
-export const TURN_LENGTH = 6;
+export const TURN_LENGTH = STANDARD.combat.turnLength;
 
 /** Nothing is instant, however quick you are. */
-export const MIN_ACTION_TICKS = 2;
+export const MIN_ACTION_TICKS = STANDARD.combat.minActionTicks;
 
 /**
  * What one swing costs you.
@@ -32,8 +34,8 @@ export const MIN_ACTION_TICKS = 2;
  * that no score makes an action free. At AGI 10 a round is exactly one action,
  * which keeps the old behaviour as the baseline everything is measured from.
  */
-export function actionTicks(who: Combatant): number {
-  return Math.max(MIN_ACTION_TICKS, TURN_LENGTH - abilityMod(who.abilities.agi));
+export function actionTicks(who: Combatant, rules: Ruleset = STANDARD): number {
+  return Math.max(rules.combat.minActionTicks, rules.combat.turnLength - abilityMod(who.abilities.agi));
 }
 
 /**
@@ -44,8 +46,8 @@ export function actionTicks(who: Combatant): number {
  * "reduces magic casting time" as TURNS rather than seconds is what finally
  * gives it a home in an engine where a turn is a turn.
  */
-export function castTicks(who: Combatant, base: number): number {
-  return Math.max(MIN_ACTION_TICKS, base - abilityMod(who.abilities.dex));
+export function castTicks(who: Combatant, base: number, rules: Ruleset = STANDARD): number {
+  return Math.max(rules.combat.minActionTicks, base - abilityMod(who.abilities.dex));
 }
 
 /**
@@ -69,5 +71,7 @@ export const spendTicks = (who: Combatant, ticks: number): Combatant =>
  * careful combatant banks a little toward an extra action later. Capped at one
  * spare round so nothing can save up indefinitely and open with four swings.
  */
-export const refillTicks = (who: Combatant): Combatant =>
-  ({ ...who, ticks: Math.min(TURN_LENGTH * 2, who.ticks + TURN_LENGTH) });
+export const refillTicks = (who: Combatant, rules: Ruleset = STANDARD): Combatant => ({
+  ...who,
+  ticks: Math.min(rules.combat.turnLength * 2, who.ticks + rules.combat.turnLength),
+});

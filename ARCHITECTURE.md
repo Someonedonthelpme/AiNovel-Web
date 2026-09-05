@@ -484,6 +484,22 @@ would have worked.
 
 ## 13. Tuning knobs
 
+**Some of these now live in the `Ruleset`** ([src/rules/ruleset.ts](src/rules/ruleset.ts)),
+which is the master config a world plays by. It sits on the `World` (jsonb, so
+it replays for free) and every consumer takes it as an OPTIONAL parameter
+defaulting to `STANDARD` — today's exact values — so converting a constant into
+a lookup is provably a refactor.
+
+The principle is **identity values, one code path**: never branch on a rule, run
+the deepest implementation always, and let "simple" be that same code with its
+dials neutral. `PLAIN` proves it — nobody soaks, nothing is heavy, nobody
+changes, every floor is the first, and not one `if` was added.
+
+Converted so far: `body` (carry, speed) · `combat` (soak, condition floor,
+tempo) · `persona` (drift) · `rest` · `world` (the danger curve, which was
+hardcoded to `danger === floor`). Everything below not marked is still a
+constant awaiting conversion.
+
 Every balance number, and where it lives.
 
 | knob | value | file |
