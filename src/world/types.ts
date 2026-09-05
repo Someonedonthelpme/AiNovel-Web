@@ -5,6 +5,7 @@ import type { CharacterSheet } from '../session/sheet.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Subject } from './subjects.ts';
 import type { Edges } from '../social/edge.ts';
+import type { Ambient } from '../social/ambient.ts';
 import type { Role } from '../social/roles.ts';
 /**
  * The world model.
@@ -186,6 +187,15 @@ export type World = {
    * `Gazetteer.reputation` a writer, after a life of defaulting to nought.
    */
   reputation?: Record<RegionId, number>;
+  /**
+   * What is going around, per place.
+   *
+   * The cheap half of rumour: a place knows a thing to a degree, with no people
+   * involved, and anybody standing there who does not know it themselves picks
+   * it up. Keyed by place rather than region because the square hearing
+   * something and the gate not yet is the whole point — see `ambient.ts`.
+   */
+  ambient?: Ambient;
   facts: Fact[];
   currentRegion: RegionId;
   currentPlace: PlaceId;

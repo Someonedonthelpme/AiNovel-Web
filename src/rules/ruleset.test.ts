@@ -24,6 +24,8 @@ import { applyTurn } from '../play/delta.ts';
 import { nudge } from '../social/edge.ts';
 import type { Edges } from '../social/edge.ts';
 import { spreadOf } from '../social/deed.ts';
+import { carry, seed } from '../social/ambient.ts';
+import { firsthand } from '../character/belief.ts';
 
 const tuned = (over: Parameters<typeof withOverrides>[1]): Ruleset => withOverrides(STANDARD, over);
 
@@ -223,6 +225,34 @@ test('knowledge.reputationWeight reaches what a place holds against you', () => 
   assert.ok(under(tuned({ knowledge: { reputationWeight: 2 } })) < under(tuned({ knowledge: { reputationWeight: 1 } })));
 });
 
+test('knowledge.ambientHops reaches how far news gets across the MAP', () => {
+  // A different axis from `spreadDepth`: that one is degrees of acquaintance,
+  // this one is streets. At the identity value nothing leaves the room.
+  const places = [
+    { id: 'square', connections: ['market'], people: ['a'] },
+    { id: 'market', connections: ['square', 'gate'], people: ['b'] },
+    { id: 'gate', connections: ['market'], people: ['c'] },
+  ];
+  const started = seed({}, 'square', firsthand({ kind: 'deed', who: 'x', what: 'insulted' }));
+  const reachedIn = (rules: Ruleset) => Object.keys(carry(started, places, rules.knowledge.ambientHops)).sort();
+
+  assert.deepEqual(reachedIn(tuned({ knowledge: { ambientHops: 0 } })), ['square'], 'nothing leaves');
+  assert.deepEqual(reachedIn(tuned({ knowledge: { ambientHops: 1 } })), ['market', 'square']);
+  assert.deepEqual(reachedIn(tuned({ knowledge: { ambientHops: 4 } })), ['gate', 'market', 'square']);
+});
+
+test('knowledge.ambientFade reaches how long talk stays worth repeating', () => {
+  // Gossip is not memory. Zero is the identity value: a world that never
+  // forgets, running the same code with nothing pressing on it.
+  const places = [{ id: 'square', connections: [], people: ['a'] }];
+  const air = seed({}, 'square', firsthand({ kind: 'deed', who: 'x', what: 'insulted' }));
+  const after = (rules: Ruleset) =>
+    carry(air, places, rules.knowledge.ambientHops, rules.knowledge.ambientFade)['square']?.[0].confidence ?? 0;
+
+  assert.equal(after(tuned({ knowledge: { ambientFade: 0 } })), 1, 'nothing is ever forgotten');
+  assert.ok(after(tuned({ knowledge: { ambientFade: 0.5 } })) < 1);
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -251,6 +281,7 @@ const PROVEN = [
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
+  'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',
   'world.dangerBase', 'world.dangerPerFloor',
 ];

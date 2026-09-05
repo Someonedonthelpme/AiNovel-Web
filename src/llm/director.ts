@@ -3,6 +3,7 @@ import { subjectById, subjectsOf } from '../world/subjects.ts';
 import { PLAYER, trustToward } from '../social/edge.ts';
 import { owedBy, permittedBy, rolesHeld, rolesOf } from '../social/roles.ts';
 import { beliefsAbout, DIRECTOR_DEEDS, isDirectorDeed } from '../social/deed.ts';
+import { inherited } from '../social/ambient.ts';
 import type { DirectorDeed } from '../social/deed.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
@@ -253,7 +254,11 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
   const heard = present.flatMap((p) =>
     // "X believes: <the whole claim>" — stripping the doer out of the claim and
     // prefixing the believer read as though the BELIEVER had done it.
-    beliefsAbout(p.beliefs, PLAYER, named).map((line) => `  - ${p.name} believes: ${line}`));
+    //
+    // Their own belief plus whatever is simply IN THE AIR here, because
+    // somebody who saw nothing still knows what everyone around them knows.
+    beliefsAbout(inherited(p.beliefs, state.world.ambient, place?.id ?? ''), PLAYER, named)
+      .map((line) => `  - ${p.name} believes: ${line}`));
 
   /*
    * WHO THESE PEOPLE ARE TO EACH OTHER, AND TO YOU.

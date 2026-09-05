@@ -8,6 +8,7 @@ import { displayNames, humanise } from '../world/naming.ts';
 import { registerForPerson } from './register.ts';
 import { PLAYER, trustToward } from '../social/edge.ts';
 import { beliefsAbout } from '../social/deed.ts';
+import { inherited } from '../social/ambient.ts';
 import type { RegisterInstruction } from './register.ts';
 
 /**
@@ -122,7 +123,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       disposition: describePersonality(dispositionOf(p)),
       condition: describeMental(p.needs),
       register: registerForPerson(p, trustToward(state.world.edges, p.id)),
-      believes: beliefsAbout(p.beliefs, PLAYER, nameOf),
+      believes: beliefsAbout(inherited(p.beliefs, state.world.ambient, place?.id ?? ''), PLAYER, nameOf),
     }));
 
   return {

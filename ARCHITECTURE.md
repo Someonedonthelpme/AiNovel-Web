@@ -471,6 +471,19 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 had a job left once pools and the tick budget became the resource economy. The
 sidebar shows what a skill will cost you instead of a permanent `n/n`.
 
+**Rumour has two layers, and they meet.** `deed.ts` is the DRAMATIC one —
+people telling each other along the social graph, bounded by degrees of
+separation, where who told whom matters. `ambient.ts` is the cheap one: a PLACE
+knows a thing to a degree, with nobody modelled to hold it, and anyone standing
+there who does not know it themselves inherits from it. That is what lets a
+market know something without a market's worth of people being simulated, and
+it is exactly the shape region LOD already has — ambient knowledge is the
+gazetteer of rumour. News creeps along the map's own connections, so geography
+decides what has got around; a place with nobody in it carries nothing onward,
+which makes a cut road felt rather than announced; and the air CLEARS, because
+gossip is not memory — what somebody saw stays with them for good while talk
+thins until it is not worth repeating.
+
 **Beliefs have a reader.** `Person.beliefs` was written by deeds and consulted
 by nobody for two commits — a fresh instance of the signature bug, introduced by
 the deed work itself. The Director and the Writer are now both told what each

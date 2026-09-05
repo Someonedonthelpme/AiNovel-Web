@@ -96,6 +96,22 @@ export type KnowledgeRules = {
   spreadDepth: number;
   /** How hard a deed moves the standing of the place it happened in. */
   reputationWeight: number;
+  /**
+   * How far news creeps across the MAP in one turn, in places.
+   *
+   * The other half of propagation, and a different axis from `spreadDepth`:
+   * that one is degrees of acquaintance, this one is streets. ZERO IS THE
+   * IDENTITY VALUE — nothing ever leaves the room it happened in.
+   */
+  ambientHops: number;
+  /**
+   * How much of what is merely going around is lost each turn.
+   *
+   * GOSSIP IS NOT MEMORY: what somebody SAW stays with them for good, while
+   * what is in the air thins until it is not worth repeating. Zero is the
+   * identity value — a world that never forgets a thing.
+   */
+  ambientFade: number;
 };
 
 export type Ruleset = {
@@ -118,7 +134,7 @@ export const STANDARD: Ruleset = {
   body: { carryBase: 20, carryPerStr: 2, overloadStep: 8, baseSpeed: 6, minSpeed: 3 },
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
   persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
-  knowledge: { spreadDepth: 2, reputationWeight: 1 },
+  knowledge: { spreadDepth: 2, reputationWeight: 1, ambientHops: 1, ambientFade: 0.1 },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };
@@ -146,7 +162,7 @@ export const PLAIN: Ruleset = {
   body: { ...STANDARD.body, carryPerStr: 1e6, overloadStep: 1e6 },
   combat: { ...STANDARD.combat, soakCeiling: 0 },
   persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
-  knowledge: { spreadDepth: 0, reputationWeight: 0 },
+  knowledge: { spreadDepth: 0, reputationWeight: 0, ambientHops: 0, ambientFade: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -156,7 +172,7 @@ export const HARSH: Ruleset = {
   body: { ...STANDARD.body, carryBase: 12, overloadStep: 5 },
   combat: { ...STANDARD.combat, soakCeiling: 1 },
   persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
-  knowledge: { spreadDepth: 4, reputationWeight: 1.5 },
+  knowledge: { spreadDepth: 4, reputationWeight: 1.5, ambientHops: 2, ambientFade: 0.05 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };

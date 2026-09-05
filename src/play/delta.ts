@@ -10,7 +10,9 @@ import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
 import { readPlayerRegister, registerConsequence } from '../llm/register.ts';
 import { nudge, nudgeAll, PLAYER } from '../social/edge.ts';
-import { beliefsAfter, witnessDeed } from '../social/deed.ts';
+import { beliefsAfter, claimOf, witnessDeed } from '../social/deed.ts';
+import { carry, seed } from '../social/ambient.ts';
+import { firsthand } from '../character/belief.ts';
 import type { Deed } from '../social/deed.ts';
 import { rulesOf } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -409,6 +411,7 @@ function afterDeeds(world: World, deeds: readonly Deed[], rules: Ruleset): World
 
   let edges = world.edges;
   let people = world.people;
+  let ambient = world.ambient;
   let standing = 0;
 
   for (const deed of deeds) {
@@ -423,6 +426,11 @@ function afterDeeds(world: World, deeds: readonly Deed[], rules: Ruleset): World
       if (!person) continue;
       people = { ...people, [who]: { ...person, beliefs: beliefsAfter(person.beliefs, belief) } };
     }
+
+    // And it is in the air here, whether or not anybody modelled was standing
+    // in it — which is what lets a market know a thing without a market's worth
+    // of people being simulated.
+    ambient = seed(ambient, world.currentPlace, firsthand(claimOf(deed)));
   }
 
   const moved = Math.round(standing * rules.knowledge.reputationWeight);
@@ -430,7 +438,24 @@ function afterDeeds(world: World, deeds: readonly Deed[], rules: Ruleset): World
     ? world.reputation
     : { ...world.reputation, [world.currentRegion]: (world.reputation?.[world.currentRegion] ?? 0) + moved };
 
-  return { ...world, edges, people, reputation };
+  return { ...world, edges, people, ambient, reputation };
+}
+
+/**
+ * News moving across the map, once per turn.
+ *
+ * In the fold like everything else that changes the world between turns, and
+ * deterministic, so a replayed session hears the same things in the same places.
+ */
+function afterTraffic(world: World, rules: Ruleset): World {
+  if (!world.ambient) return world;
+  const region = world.regions[world.currentRegion];
+  if (region?.detail !== 'full') return world;
+
+  return {
+    ...world,
+    ambient: carry(world.ambient, region.places, rules.knowledge.ambientHops, rules.knowledge.ambientFade),
+  };
 }
 
 export type TurnOutcome = {
@@ -466,10 +491,10 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   const causes = causesFor(moved, record);
   const player = applyDrift(moved.sheet, causes.pc);
 
-  let world = afterDeeds(
-    { ...moved.world, edges: edgesAfter(moved, record) },
-    deedsIn(moved, record),
-    rulesOf(moved.world),
+  const rules = rulesOf(moved.world);
+  let world = afterTraffic(
+    afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record), rules),
+    rules,
   );
   let shifts: AxisChange[] = [];
 
