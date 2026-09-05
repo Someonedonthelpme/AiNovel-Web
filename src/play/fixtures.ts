@@ -14,8 +14,8 @@ export function playState(over: Partial<World> = {}): PlayState {
     currentPlace: 'town',
     regions: { 'floor-0': { ...groundFloor(), exit: null } },
     people: {
-      smith: person('smith', { name: 'Ora the smith', oneLine: 'sells iron, trusts no one', trust: 0 }),
-      warden: person('warden', { name: 'Warden Bex', oneLine: 'keeps the gate', trust: -2, status: 'superior' }),
+      smith: person('smith', { name: 'Ora the smith', oneLine: 'sells iron, trusts no one' }),
+      warden: person('warden', { name: 'Warden Bex', oneLine: 'keeps the gate', status: 'superior' }),
     },
     ...over,
   });

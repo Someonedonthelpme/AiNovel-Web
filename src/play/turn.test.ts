@@ -1,3 +1,4 @@
+import { openingEdges, trustToward } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
@@ -31,7 +32,7 @@ test('a forced miss applies the consequences the Director committed to for missi
   const r = await playTurn(deps(checkedOutput(), alwaysLow), s, 'ask about the forge', 'conversation');
 
   assert.equal(r.record.roll?.tier, 'miss');
-  assert.equal(r.state.world.people['smith'].trust, -1, 'the onMiss trust change, not onHit');
+  assert.equal(trustToward(r.state.world.edges, 'smith'), -1, 'the onMiss trust change, not onHit');
   assert.equal(r.state.world.facts.length, 0, 'the onHit fact was never learned');
 });
 
@@ -40,7 +41,7 @@ test('a forced hit applies the hit branch instead', async () => {
   const r = await playTurn(deps(checkedOutput(), alwaysHigh), s, 'ask about the forge', 'conversation');
 
   assert.equal(r.record.roll?.tier, 'hit');
-  assert.equal(r.state.world.people['smith'].trust, 2);
+  assert.equal(trustToward(r.state.world.edges, 'smith'), 2);
   assert.equal(r.state.world.facts[0]?.text, 'the forge runs at night');
 });
 
@@ -52,7 +53,7 @@ test('the same Director output yields different worlds under different dice', as
   const miss = await playTurn(deps(output, alwaysLow), s, 'ask', 'conversation');
   const hit = await playTurn(deps(output, alwaysHigh), s, 'ask', 'conversation');
 
-  assert.notEqual(miss.state.world.people['smith'].trust, hit.state.world.people['smith'].trust);
+  assert.notEqual(trustToward(miss.state.world.edges, 'smith'), trustToward(hit.state.world.edges, 'smith'));
 });
 
 test('the writer is told the tier as a fact it must honour', async () => {
@@ -307,18 +308,23 @@ test('a warm person and a cold one are addressed differently at the same trust',
   const voice = { selfPronoun: 'ฉัน', underStress: 'กู', addressBands: bands, particleBands: { '-3': 'ค่ะ', '2': 'นะ' }, tics: [] };
 
   const base = playState();
+  // The same trust, held as an EDGE — so the only difference between these two
+  // worlds is who the smith is.
+  const edges = openingEdges({}, [{ id: 'smith', trust: 1 }]);
   const warmWorld = {
     ...base.world,
+    edges,
     people: {
       ...base.world.people,
-      smith: { ...base.world.people['smith'], trust: 1, voice, temperament: { intuition: 0, feeling: 9, nerve: 0, discipline: 0 } },
+      smith: { ...base.world.people['smith'], voice, temperament: { intuition: 0, feeling: 9, nerve: 0, discipline: 0 } },
     },
   };
   const coldWorld = {
     ...base.world,
+    edges,
     people: {
       ...base.world.people,
-      smith: { ...base.world.people['smith'], trust: 1, voice, temperament: { intuition: 0, feeling: -9, nerve: 0, discipline: 0 } },
+      smith: { ...base.world.people['smith'], voice, temperament: { intuition: 0, feeling: -9, nerve: 0, discipline: 0 } },
     },
   };
 

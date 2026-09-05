@@ -1,4 +1,5 @@
 import type { Needs, NpcVoice, Status, Temperament } from '../character/persona.ts';
+import type { EdgeAxis } from '../social/edge.ts';
 import { registerTrust } from '../character/persona.ts';
 
 /**
@@ -49,9 +50,10 @@ export type Speaker = { id: string; voice: NpcVoice };
  * something the player HEARS rather than a number on a sheet.
  */
 export function registerForPerson(
-  who: Speaker & { trust: number; temperament: Temperament; needs: Needs },
+  who: Speaker & { temperament: Temperament; needs: Needs },
+  trust: number,
 ): RegisterInstruction {
-  return registerFor(who, registerTrust(who.trust, who));
+  return registerFor(who, registerTrust(trust, who));
 }
 
 export function registerFor(who: Speaker, trust: number): RegisterInstruction {
@@ -111,25 +113,50 @@ export function readPlayerRegister(text: string): PlayerRegister {
   return { detected, tone };
 }
 
-export type RegisterConsequence = { trust: number; suspicion: number; note: string | null };
+export type RegisterConsequence = {
+  /** How this lands on the listener's edge toward the player. */
+  nudges: Partial<Record<EdgeAxis, number>>;
+  note: string | null;
+};
 
 /**
  * Addressing a superior with the crude form costs you; softening to the
- * self-diminutive buys you something. The language is the gameplay, so it has to
- * move the numbers.
+ * self-diminutive buys you something. The language is the gameplay, so it has
+ * to move the numbers.
+ *
+ * IT DID NOT MOVE ANY. This function had zero callers outside its own file, and
+ * its `suspicion` was a number computed for nobody — so the flagship register
+ * mechanic was, for its whole life, a docstring. It writes four relationship
+ * axes now, and `delta.ts` calls it inside the fold so it replays.
+ *
+ * Which axis each tone touches is the point of having more than one:
+ *
+ *   respect      whether you observe what is owed. The register IS this axis.
+ *   trust        whether they will take your word, which roughness costs.
+ *   resentment   what they hold against you regardless of what they say —
+ *                which is where `suspicion` should have been going all along.
+ *   fear         roughness from somebody ABOVE you is not rude, it is
+ *                frightening, and that asymmetry is the whole of a status
+ *                system that means anything.
  */
 export function registerConsequence(tone: Tone, status: Status): RegisterConsequence {
   if (tone === 'crude') {
-    if (status === 'superior') return { trust: -2, suspicion: 1, note: 'crude address to a superior' };
-    return { trust: -1, suspicion: 0, note: 'crude address' };
+    if (status === 'superior') {
+      return { nudges: { trust: -2, respect: -2, resentment: 1 }, note: 'crude address to a superior' };
+    }
+    // Spoken roughly to by somebody who outranks them.
+    if (status === 'inferior') {
+      return { nudges: { trust: -1, respect: -1, fear: 1 }, note: 'crude address to an inferior' };
+    }
+    return { nudges: { trust: -1, respect: -1 }, note: 'crude address' };
   }
   if (tone === 'deferential' && status === 'superior') {
-    return { trust: 1, suspicion: 0, note: 'deference to a superior' };
+    return { nudges: { trust: 1, respect: 1 }, note: 'deference to a superior' };
   }
   if (tone === 'formal' && status === 'superior') {
-    return { trust: 1, suspicion: 0, note: 'proper formality to a superior' };
+    return { nudges: { trust: 1, respect: 1 }, note: 'proper formality to a superior' };
   }
-  return { trust: 0, suspicion: 0, note: null };
+  return { nudges: {}, note: null };
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,5 +1,6 @@
 import { describeMental, describePersonality } from '../character/persona.ts';
 import { subjectById, subjectsOf } from '../world/subjects.ts';
+import { trustToward } from '../social/edge.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
@@ -211,7 +212,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     .filter((p): p is NonNullable<typeof p> => Boolean(p))
     .map((p) => {
       const notes = [...describePersonality(dispositionOf(p)), ...describeMental(p.needs)];
-      return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${p.trust}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
+      return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
     });
 
   return [

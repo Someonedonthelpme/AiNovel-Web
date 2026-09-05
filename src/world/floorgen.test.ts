@@ -1,3 +1,4 @@
+import { openingEdges, trustToward } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
@@ -114,20 +115,23 @@ test('a revisited floor keeps its name and biome, whatever the model says', asyn
 
 test('a person you already know keeps the relationship you built with them', async () => {
   // The whole point of persistence: come back at trust 3 and they remember you.
-  const kell = person('kell', { name: 'Kell', trust: 3, homeRegion: 'floor-1', oneLine: 'owes you a debt' });
+  const kell = person('kell', { name: 'Kell', homeRegion: 'floor-1', oneLine: 'owes you a debt' });
   const gaz = { ...compressRegion(firstFloor(), 5), knownPeople: ['kell'] };
-  const w = world({ regions: { 'floor-1': gaz }, people: { kell } });
+  const w = world({ regions: { 'floor-1': gaz }, people: { kell }, edges: openingEdges({}, [{ id: 'kell', trust: 3 }]) });
 
   const reset = generated();
   reset.people = [{ ...reset.people[0], trust: 0, oneLine: 'a stranger' }];
 
   const r = await generateFloor(provider(reset), w, 1, pc, gaz);
-  assert.equal(r.people['kell'].trust, 3, 'the model does not get to reset your relationships');
   assert.equal(r.people['kell'].oneLine, 'owes you a debt');
+  // A returning face opens NO edge, so what they already felt survives — the
+  // model proposing "a stranger, trust 0" cannot reset it.
+  assert.equal(trustToward(r.edges, 'kell'), 0, 'no fresh edge is minted for somebody you know');
+  assert.equal(trustToward(w.edges, 'kell'), 3, 'and the one you earned is untouched');
 });
 
 test('people the model forgets on a return visit are restored from the registry', async () => {
-  const kell = person('kell', { name: 'Kell', trust: 2, homeRegion: 'floor-1' });
+  const kell = person('kell', { name: 'Kell', homeRegion: 'floor-1' });
   const gaz = { ...compressRegion(firstFloor(), 5), knownPeople: ['kell'] };
   const w = world({ regions: { 'floor-1': gaz }, people: { kell } });
 
@@ -136,7 +140,6 @@ test('people the model forgets on a return visit are restored from the registry'
 
   const r = await generateFloor(provider(forgot), w, 1, pc, gaz);
   assert.ok(r.people['kell'], 'a known person does not vanish because the model omitted them');
-  assert.equal(r.people['kell'].trust, 2);
 });
 
 test('the rehydration brief puts the established canon in front of the model', async () => {

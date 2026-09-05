@@ -1,3 +1,5 @@
+import { openingEdges } from '../social/edge.ts';
+import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { clampTemperament, neutralTemperament, metNeeds } from '../character/persona.ts';
 import { repairRegion, repairVoice } from '../session/repair.ts';
@@ -112,6 +114,13 @@ export type GeneratedFloor = {
 export type FloorResult = {
   region: Region;
   people: Record<string, Person>;
+  /**
+   * What everyone newly arrived on this floor already thinks of the player.
+   *
+   * Only the ARRIVALS' edges, not the whole graph — merging beats replacing,
+   * or a crossing would wipe out every relationship earned before it.
+   */
+  edges: Edges;
   /** Names for whatever lives here; encounters take their numbers from depth. */
   creatures: string[];
   repairs: string[];
@@ -255,17 +264,19 @@ export async function generateFloor(
 
   // People who already exist keep their real state; only new ones are created.
   const people: Record<string, Person> = {};
+  // And only NEW people open an edge — a returning face keeps what it earned.
+  const arrivals: { id: string; trust: number }[] = [];
   for (const p of generated.people) {
     const existing = world.people[p.id];
     if (existing) {
       people[p.id] = existing;
       continue;
     }
+    arrivals.push({ id: p.id, trust: p.trust });
     people[p.id] = {
       id: p.id,
       name: p.name,
       homeRegion: regionId,
-      trust: p.trust,
       oneLine: p.oneLine,
       tags: p.tags,
       alive: true,
@@ -340,6 +351,7 @@ export async function generateFloor(
   return {
     region,
     people,
+    edges: openingEdges({}, arrivals),
     creatures: generated.creatures,
     repairs,
     warnings: check.warnings.map((w) => w.message),

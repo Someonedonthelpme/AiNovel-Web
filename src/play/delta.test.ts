@@ -1,3 +1,4 @@
+import { axisOf, PLAYER, trustToward } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, foldPlay, validateDelta } from './delta.ts';
@@ -85,16 +86,24 @@ test('every turn advances the clock exactly once, with or without a move', () =>
   assert.equal(applyDelta(s, {}).world.turn, s.world.turn + 1, 'a turn without a move still costs a turn');
 });
 
-test('trust changes are relative and clamp to the band', () => {
+test('trust changes are relative, land on the EDGE, and clamp to the band', () => {
   const s = playState();
   const up = applyDelta(s, { trust: { smith: 2 } });
-  assert.equal(up.world.people['smith'].trust, 2);
+  assert.equal(trustToward(up.world.edges, 'smith'), 2);
 
   const capped = applyDelta(up, { trust: { smith: 99 } });
-  assert.equal(capped.world.people['smith'].trust, 4, 'cannot exceed the top band');
+  assert.equal(trustToward(capped.world.edges, 'smith'), 4, 'cannot exceed the top band');
 
   const floored = applyDelta(s, { trust: { warden: -99 } });
-  assert.equal(floored.world.people['warden'].trust, -3);
+  assert.equal(trustToward(floored.world.edges, 'warden'), -3);
+});
+
+test("a trust change moves THEIR edge and leaves the player's own view alone", () => {
+  // The thing one number could never say. She may think well of him while he
+  // has not formed an opinion at all.
+  const after = applyDelta(playState(), { trust: { smith: 3 } });
+  assert.equal(axisOf(after.world.edges, 'smith', PLAYER, 'trust'), 3);
+  assert.equal(axisOf(after.world.edges, PLAYER, 'smith', 'trust'), 0, 'the other direction is its own edge');
 });
 
 test('learned facts become canon, once', () => {

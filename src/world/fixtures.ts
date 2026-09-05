@@ -42,7 +42,6 @@ export function person(id: string, over: Partial<Person> = {}): Person {
     id,
     name: id,
     homeRegion: 'floor-0',
-    trust: 0,
     oneLine: 'a face in the crowd',
     tags: [],
     alive: true,

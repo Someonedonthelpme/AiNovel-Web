@@ -8,13 +8,14 @@ import type { ClimbRecord } from './climb.ts';
 import { applySheetAction } from './sheetaction.ts';
 import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
-import { readPlayerRegister } from '../llm/register.ts';
+import { readPlayerRegister, registerConsequence } from '../llm/register.ts';
+import { nudge, nudgeAll, PLAYER } from '../social/edge.ts';
+import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
 import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
-import { TRUST_MAX, TRUST_MIN } from '../world/types.ts';
 import type { Fact, World } from '../world/types.ts';
 
 /**
@@ -124,8 +125,6 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
   return { delta, rejected };
 }
 
-const clampTrust = (n: number) => Math.max(TRUST_MIN, Math.min(TRUST_MAX, n));
-
 /**
  * Apply an already-validated delta.
  *
@@ -152,12 +151,17 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 
   if (delta.trust) {
     const people = { ...world.people };
+    let edges = world.edges;
     for (const [id, change] of Object.entries(delta.trust)) {
       const person = people[id];
       if (!person) continue;
-      people[id] = { ...person, trust: clampTrust(person.trust + change), lastSeenTurn: world.turn };
+      // The change lands on THEIR edge toward the player, which is the
+      // direction it always meant — the player's own view of them is a
+      // separate edge that nothing has had a way to move until now.
+      edges = nudge(edges, id, PLAYER, 'trust', change);
+      people[id] = { ...person, lastSeenTurn: world.turn };
     }
-    world = { ...world, people };
+    world = { ...world, people, edges };
   }
 
   if (delta.revealExit) {
@@ -287,6 +291,39 @@ function causesFor(state: PlayState, record: TurnRecord): { npc: DriftCause[]; p
   return { npc, pc };
 }
 
+/**
+ * What a turn did to the relationships in it.
+ *
+ * In the FOLD rather than the live loop, for the same reason drift is: a
+ * resumed session that quietly lost every relationship change would break the
+ * contract that the log is truth.
+ *
+ * Only the person the player actually addressed. Who else was standing there
+ * and what they made of it is the witness system, which is a separate thing.
+ */
+function edgesAfter(state: PlayState, record: TurnRecord): Edges | undefined {
+  if (!record.addressed) return state.world.edges;
+  const person = state.world.people[record.addressed];
+  if (!person) return state.world.edges;
+
+  // Having dealt with somebody at all is what forms an edge, and it is why
+  // the graph stays as small as the story that actually happened.
+  let edges = nudge(state.world.edges, person.id, PLAYER, 'familiarity', 1);
+
+  // HOW the player spoke, which until now was computed and thrown away.
+  const { tone } = readPlayerRegister(record.input);
+  edges = nudgeAll(edges, person.id, PLAYER, registerConsequence(tone, person.status).nudges);
+
+  // And how the exchange actually went. A check they lost raises what they
+  // think you are worth; one they won lowers it.
+  if (record.roll) {
+    const by = record.roll.tier === 'hit' ? 1 : record.roll.tier === 'miss' ? -1 : 0;
+    edges = nudge(edges, person.id, PLAYER, 'regard', by);
+  }
+
+  return edges;
+}
+
 export type TurnOutcome = {
   state: PlayState;
   /** Dispositions that actually shifted. Worth narrating; most turns have none. */
@@ -320,7 +357,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   const causes = causesFor(moved, record);
   const player = applyDrift(moved.sheet, causes.pc);
 
-  let world = moved.world;
+  let world = { ...moved.world, edges: edgesAfter(moved, record) };
   let shifts: AxisChange[] = [];
 
   const person = record.addressed ? world.people[record.addressed] : undefined;

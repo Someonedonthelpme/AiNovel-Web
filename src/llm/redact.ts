@@ -6,6 +6,7 @@ import { activeRegion } from '../world/travel.ts';
 import type { World } from '../world/types.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { registerForPerson } from './register.ts';
+import { trustToward } from '../social/edge.ts';
 import type { RegisterInstruction } from './register.ts';
 
 /**
@@ -109,7 +110,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       oneLine: p.oneLine,
       disposition: describePersonality(dispositionOf(p)),
       condition: describeMental(p.needs),
-      register: registerForPerson(p),
+      register: registerForPerson(p, trustToward(state.world.edges, p.id)),
     }));
 
   return {

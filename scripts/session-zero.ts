@@ -10,6 +10,7 @@
  *
  *   node --experimental-strip-types scripts/session-zero.ts [th|en]
  */
+import { trustToward } from '../src/social/edge.ts';
 import { LocalProvider, smallLocalProvider } from '../src/llm/localProvider.ts';
 import { isLocalUp, LOCAL_MODELS } from '../src/llm/local.ts';
 import { runGenesis } from '../src/session/genesis.ts';
@@ -98,7 +99,7 @@ async function main() {
     console.log(`      can: ${p.affordances.join('; ')}`);
   }
   for (const person of Object.values(world.people)) {
-    console.log(`  person ${person.id}: ${person.name} — ${person.oneLine} (trust ${person.trust})`);
+    console.log(`  person ${person.id}: ${person.name} — ${person.oneLine} (trust ${trustToward(world.edges, person.id)})`);
   }
 
   console.log('\n--- checks ---');

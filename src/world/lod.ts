@@ -1,3 +1,4 @@
+import { trustToward } from '../social/edge.ts';
 import type { Gazetteer, PersonId, Region, RegionId, World } from './types.ts';
 import { isFull } from './types.ts';
 
@@ -89,7 +90,7 @@ export function rehydrationBrief(world: World, gazetteer: Gazetteer): Rehydratio
     people: gazetteer.knownPeople
       .map((id) => world.people[id])
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
-      .map((p) => ({ id: p.id, name: p.name, oneLine: p.oneLine, trust: p.trust, alive: p.alive })),
+      .map((p) => ({ id: p.id, name: p.name, oneLine: p.oneLine, trust: trustToward(world.edges, p.id), alive: p.alive })),
     facts: world.facts.filter((f) => f.region === gazetteer.id).map((f) => f.text),
   };
 }

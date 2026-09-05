@@ -4,6 +4,8 @@ import { subjectsFor } from '../world/subjects.ts';
 import { nameSubjects } from '../world/subjectnames.ts';
 import type { Subject } from '../world/subjects.ts';
 import type { Drive } from '../character/persona.ts';
+import { openingEdges } from '../social/edge.ts';
+import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { keepsake, stripMechanics } from '../items/catalogue.ts';
 import { classOf } from '../character/classes.ts';
@@ -244,6 +246,8 @@ const asPlaceKind = (v: string): PlaceKind =>
 export type WorldGenesis = {
   region: Region;
   people: Record<string, Person>;
+  /** What the opening cast already thinks of the player. */
+  edges: Edges;
   premise: string;
   /** Where the player opens the game. Not necessarily the entrance. */
   startPlace: string;
@@ -362,7 +366,6 @@ export async function generateGroundFloor(
       id: p.id,
       name: p.name,
       homeRegion: 'floor-0',
-      trust: p.trust,
       oneLine: p.oneLine,
       tags: p.tags,
       alive: true,
@@ -457,6 +460,9 @@ export async function generateGroundFloor(
   return {
     region,
     people,
+    // What each of them already thinks of you, as an edge rather than a field
+    // on the person — a relationship belongs to neither end of it.
+    edges: openingEdges({}, generated.people),
     premise: generated.premise,
     startPlace,
     repairs,
@@ -501,6 +507,7 @@ export async function runGenesis(
     subjects,
     regions: { 'floor-0': ground.region },
     people: ground.people,
+    edges: ground.edges,
     facts: [],
     currentRegion: 'floor-0',
     currentPlace: ground.startPlace,

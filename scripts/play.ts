@@ -10,6 +10,7 @@
  * Everything runs on LM Studio and the local Postgres, so a whole session costs
  * nothing and survives the process exiting.
  */
+import { trustToward } from '../src/social/edge.ts';
 import { createInterface } from 'node:readline/promises';
 import { mulberry32 } from '../src/engine/roll.ts';
 import { pgFactRetriever } from '../src/db/facts.ts';
@@ -64,7 +65,7 @@ function describe(state: PlayState): string {
   const people = (place?.people ?? [])
     .map((id) => state.world.people[id])
     .filter(Boolean)
-    .map((p) => `${p.name} (trust ${p.trust})`);
+    .map((p) => `${p.name} (trust ${trustToward(state.world.edges, p.id)})`);
 
   return [
     `\n[turn ${state.world.turn}] floor ${region?.floor} · ${region?.name} — ${place?.name}`,
@@ -221,7 +222,7 @@ async function main() {
 
       for (const f of failed) {
         const who = Object.values(state.world.people).find((p) => p.name === f.person);
-        const want = who ? registerFor(who, who.trust) : null;
+        const want = who ? registerFor(who, trustToward(state.world.edges, who.id)) : null;
         const missing = [
           f.check.usedSelfPronoun ? '' : `self "${want?.selfPronoun}"`,
           f.check.usedAddress ? '' : `address "${want?.addressesPlayerAs}"`,
@@ -242,7 +243,7 @@ async function main() {
   console.log('\n--- session ---');
   console.log(`turns: ${state.world.turn}  facts: ${state.world.facts.length}  deepest floor: ${state.world.deepestFloor}`);
   for (const person of Object.values(state.world.people)) {
-    console.log(`  ${person.name}: trust ${person.trust}`);
+    console.log(`  ${person.name}: trust ${trustToward(state.world.edges, person.id)}`);
   }
   if (sessionId) console.log(`\nresume with:\n  node --experimental-strip-types scripts/play.ts --resume ${sessionId}`);
   await closeDb();

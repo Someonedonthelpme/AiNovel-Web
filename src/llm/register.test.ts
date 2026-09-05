@@ -67,15 +67,26 @@ test('crude wins over polite when both appear', () => {
 });
 
 test('addressing a superior crudely costs trust and raises suspicion', () => {
-  assert.deepEqual(registerConsequence('crude', 'superior'), { trust: -2, suspicion: 1, note: 'crude address to a superior' });
+  assert.deepEqual(registerConsequence('crude', 'superior'), {
+    nudges: { trust: -2, respect: -2, resentment: 1 },
+    note: 'crude address to a superior',
+  });
 });
 
 test('deference to a superior buys trust; to a peer it buys nothing', () => {
-  assert.equal(registerConsequence('deferential', 'superior').trust, 1);
-  assert.equal(registerConsequence('deferential', 'peer').trust, 0);
+  assert.equal(registerConsequence('deferential', 'superior').nudges.trust, 1);
+  assert.equal(registerConsequence('deferential', 'peer').nudges.trust ?? 0, 0);
+});
+
+test('roughness DOWNWARD frightens rather than offends', () => {
+  // The asymmetry is the whole of a status system that means anything: the
+  // same words cost you respect either way, and only one direction is scary.
+  assert.equal(registerConsequence('crude', 'inferior').nudges.fear, 1);
+  assert.equal(registerConsequence('crude', 'superior').nudges.fear ?? 0, 0);
+  assert.equal(registerConsequence('crude', 'superior').nudges.resentment, 1);
 });
 
 test('plain politeness is free in both directions', () => {
-  assert.deepEqual(registerConsequence('polite', 'superior'), { trust: 0, suspicion: 0, note: null });
-  assert.deepEqual(registerConsequence('unknown', 'peer'), { trust: 0, suspicion: 0, note: null });
+  assert.deepEqual(registerConsequence('polite', 'superior'), { nudges: {}, note: null });
+  assert.deepEqual(registerConsequence('unknown', 'peer'), { nudges: {}, note: null });
 });

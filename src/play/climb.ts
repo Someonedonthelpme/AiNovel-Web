@@ -1,3 +1,4 @@
+import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import type { FloorResult } from '../world/floorgen.ts';
@@ -44,7 +45,7 @@ export type ClimbRecord = {
    * The generated floor. Null when the region already existed in full detail,
    * because travel is pure in that case and replays from the world alone.
    */
-  built: { region: Region; people: Record<PersonId, Person> } | null;
+  built: { region: Region; people: Record<PersonId, Person>; edges?: Edges } | null;
 };
 
 export type ClimbResult = {
@@ -77,8 +78,14 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   // none either. Failing loudly beats folding to a state travel already refused.
   if (!record.built) return failed(state, `floor ${attempt.floor} was never built`);
 
-  const { region, people } = record.built;
-  const withPeople: World = { ...state.world, people: { ...state.world.people, ...people } };
+  const { region, people, edges } = record.built;
+  // MERGED, never replaced: a crossing brings new faces and their first
+  // impressions, and must not touch what the floors below already earned.
+  const withPeople: World = {
+    ...state.world,
+    people: { ...state.world.people, ...people },
+    edges: { ...state.world.edges, ...edges },
+  };
   return {
     ...arrive(state, installRegion(withPeople, region, region.entrance)),
     generated: null,
@@ -100,7 +107,7 @@ async function cross(provider: Provider, state: PlayState, direction: 'up' | 'do
   const record: ClimbRecord = {
     kind: 'climb',
     direction,
-    built: generated ? { region: generated.region, people: generated.people } : null,
+    built: generated ? { region: generated.region, people: generated.people, edges: generated.edges } : null,
   };
 
   return { ...applyClimb(state, record), generated };

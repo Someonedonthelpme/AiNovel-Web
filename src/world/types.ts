@@ -4,6 +4,7 @@ export { STATUSES } from '../character/persona.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Subject } from './subjects.ts';
+import type { Edges } from '../social/edge.ts';
 /**
  * The world model.
  *
@@ -82,9 +83,13 @@ export type Gazetteer = {
 
 export type RegionRecord = Region | Gazetteer;
 
-/** Trust runs across these bounds; the bands in NpcVoice key off it. */
-export const TRUST_MIN = -3;
-export const TRUST_MAX = 4;
+/**
+ * Trust runs across these bounds; the bands in NpcVoice key off it.
+ *
+ * Re-exported from `social/edge.ts`, where it is one range shared by every
+ * relationship axis rather than a number that belongs to trust alone.
+ */
+export { EDGE_MIN as TRUST_MIN, EDGE_MAX as TRUST_MAX } from '../social/edge.ts';
 
 /** How a companion is meant to behave. Whether they comply is another matter. */
 export const STANCES = ['hold', 'press', 'protect', 'free'] as const;
@@ -105,8 +110,6 @@ export type Person = Persona & {
   id: PersonId;
   name: string;
   homeRegion: RegionId;
-  /** Read through the persona: warmth and stress shift the band actually used. */
-  trust: number;
   /** One line, so a long-forgotten NPC can still be written in voice. */
   oneLine: string;
   tags: string[];
@@ -154,6 +157,15 @@ export type World = {
   rules?: Ruleset;
   regions: Record<RegionId, RegionRecord>;
   people: Record<PersonId, Person>;
+  /**
+   * Who feels what about whom, sparsely.
+   *
+   * On the World rather than on a Person because an edge belongs to neither
+   * end of it — and because `Person.trust` living on the person is exactly why
+   * the player could be regarded and never regard back. Absent means nobody
+   * has met anybody yet.
+   */
+  edges?: Edges;
   facts: Fact[];
   currentRegion: RegionId;
   currentPlace: PlaceId;

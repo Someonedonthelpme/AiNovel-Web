@@ -1,3 +1,4 @@
+import { trustToward } from '../social/edge.ts';
 import { abilityMod } from '../combat/types.ts';
 import { edgeFor } from '../skills/active.ts';
 import { activeSkills } from '../session/sheet.ts';
@@ -87,7 +88,8 @@ export function suggestedActions(state: PlayState): string[] {
 function oppositionOf(state: PlayState, personId: string): { id: string; ability: string; modifier: number } | null {
   const person = state.world.people[personId];
   if (!person) return null;
-  return { id: person.id, ability: 'resolve', modifier: Math.max(0, -person.trust) };
+  const trust = trustToward(state.world.edges, person.id);
+  return { id: person.id, ability: 'resolve', modifier: Math.max(0, -trust) };
 }
 
 /** Pick the branch the Director committed to before the dice were thrown. */

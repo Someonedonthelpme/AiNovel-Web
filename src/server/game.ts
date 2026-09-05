@@ -40,6 +40,7 @@ import { magnitudeOf, purposes } from '../skills/effect.ts';
 import type { Effect } from '../skills/effect.ts';
 import { priceOfUse } from '../skills/pools.ts';
 import { rulesOf } from '../rules/ruleset.ts';
+import { trustToward } from '../social/edge.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -306,7 +307,7 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
         id: p.id,
         name: p.name,
         oneLine: p.oneLine,
-        trust: p.trust,
+        trust: trustToward(state.world.edges, p.id),
         disposition: describePersonality(dispositionOf(p)),
         condition: describeMental(p.needs),
       })),
