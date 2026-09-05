@@ -1,6 +1,7 @@
 import type { Attack } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import { subjectsFor } from '../world/subjects.ts';
+import { nameSubjects } from '../world/subjectnames.ts';
 import type { Subject } from '../world/subjects.ts';
 import type { Drive } from '../character/persona.ts';
 import type { Provider } from '../llm/provider.ts';
@@ -110,13 +111,14 @@ export async function generateCharacter(
   provider: Provider,
   interview: Interview,
   seed = 0,
+  named?: readonly Subject[],
 ): Promise<CharacterGenesis> {
   if (!isComplete(interview)) throw new Error('the interview is not finished');
 
   const { language, draft } = interview;
-  // Derived from the seed rather than stored, like every other catalogue —
-  // traits, paths, Signets and the class roster all work this way.
-  const subjects = subjectsFor(seed);
+  // The world's subjects, named if naming has run. Ids and kinds come from the
+  // seed either way, so the drive matches the same things regardless.
+  const subjects = named ?? subjectsFor(seed);
   const held = classOf(draft);
   const pinned = [
     draft.name ? `The character is named "${draft.name}".` : '',
@@ -481,12 +483,24 @@ export async function runGenesis(
   interview: Interview,
   seed = Date.now(),
 ): Promise<GenesisResult> {
-  const character = await generateCharacter(provider, interview, seed);
+  /*
+   * Named FIRST, because the character call lists them and asks which two this
+   * person is climbing for and away from. Fallback words are setting-neutral
+   * by design, so an unnamed world offers "the long quarrel" where a drowned
+   * coast should offer "the flood" — and the drive is only as evocative as the
+   * palette it chose from.
+   */
+  const subjects = await nameSubjects(
+    provider, subjectsFor(seed), interview.answers.world ?? '', interview.language,
+  );
+
+  const character = await generateCharacter(provider, interview, seed, subjects);
   const ground = await generateGroundFloor(provider, interview, character.sheet);
 
   const world: World = {
     seed,
     language: interview.language,
+    subjects,
     regions: { 'floor-0': ground.region },
     people: ground.people,
     facts: [],

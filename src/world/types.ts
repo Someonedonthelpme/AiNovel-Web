@@ -3,6 +3,7 @@ export type { NpcVoice, Persona, Status } from '../character/persona.ts';
 export { STATUSES } from '../character/persona.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
+import type { Subject } from './subjects.ts';
 /**
  * The world model.
  *
@@ -135,6 +136,14 @@ export type Fact = {
 export type World = {
   seed: number;
   language: 'th' | 'en';
+  /**
+   * What this world turns on, in its own words.
+   *
+   * Stored rather than derived because the model supplies the WORDS — the ids
+   * and kinds still come from the seed. Absent means nobody has named them yet
+   * and the fallback words stand.
+   */
+  subjects?: Subject[];
   /**
    * The rules this world plays by. Absent means `STANDARD`.
    *

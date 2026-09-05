@@ -1,5 +1,5 @@
 import { mulberry32 } from '../engine/roll.ts';
-import { subjectsFor } from '../world/subjects.ts';
+import { subjectsOf } from '../world/subjects.ts';
 import type { Subject } from '../world/subjects.ts';
 import type { Item } from '../items/types.ts';
 import type { Lore } from './lore.ts';
@@ -71,12 +71,21 @@ function hash(text: string): number {
  * a story than something found in the first room, which is what makes a deep
  * find worth reading rather than just worth more.
  */
-export function loreFor(item: Item, seed: number, language: 'th' | 'en' = 'en'): Lore | null {
-  const subjects = subjectsFor(seed);
+export function loreFor(
+  item: Item,
+  world: { seed: number; subjects?: Subject[] },
+  language: 'th' | 'en' = 'en',
+): Lore | null {
+  const subjects = subjectsOf(world);
   if (subjects.length === 0) return null;
 
-  const rng = mulberry32((hash(item.id) ^ seed) >>> 0);
-  if (rng() > LORE_CHANCE) return null;
+  // Seeded on the item and the world, never on the NAMES — so naming a world's
+  // subjects changes what a history says and not which things it is about.
+  const rng = mulberry32((hash(item.id) ^ world.seed) >>> 0);
+  // The roll still happens for everything, so a storied thing gets the same
+  // history it would have had — it simply is not turned away by the result.
+  const rolled = rng();
+  if (!item.storied && rolled > LORE_CHANCE) return null;
 
   const floor = item.foundOn ?? 0;
   const depth = Math.max(1, Math.min(3, 1 + Math.floor(floor / 8) + (rng() < 0.2 ? 1 : 0)));
@@ -101,4 +110,5 @@ export function loreFor(item: Item, seed: number, language: 'th' | 'en' = 'en'):
   };
 }
 
-export const hasLore = (item: Item, seed: number): boolean => loreFor(item, seed) !== null;
+export const hasLore = (item: Item, world: { seed: number; subjects?: Subject[] }): boolean =>
+  loreFor(item, world) !== null;

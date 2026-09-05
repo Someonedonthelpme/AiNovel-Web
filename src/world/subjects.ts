@@ -98,3 +98,15 @@ export function subjectsFor(seed: number): Subject[] {
 
 export const subjectById = (subjects: readonly Subject[], id: SubjectId): Subject | null =>
   subjects.find((s) => s.id === id) ?? null;
+
+/**
+ * This world's subjects, named if they have been named.
+ *
+ * Naming has to be STORED — subjects are drawn from the seed, so a word the
+ * model supplied would otherwise be lost on the next derivation. Same reason
+ * `classSpec` is carried on the sheet: a generated thing exists in no global
+ * list. The ids never change, so anything that matched before naming still
+ * matches after it.
+ */
+export const subjectsOf = (world: { seed: number; subjects?: Subject[] }): Subject[] =>
+  world.subjects ?? subjectsFor(world.seed);

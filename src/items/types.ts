@@ -70,6 +70,13 @@ export type Item = {
    * ever shapeless. Set it only to override.
    */
   shape?: string;
+  /**
+   * This thing certainly came from somewhere.
+   *
+   * Most objects roll for a history and most do not get one. A keepsake is by
+   * definition a thing kept for a reason, so it skips the roll.
+   */
+  storied?: boolean;
   /** Whether several of these collapse into one line. */
   stackable: boolean;
   /** Rough worth, for shops and for sorting. */

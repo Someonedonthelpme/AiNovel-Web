@@ -64,10 +64,25 @@ const ground = (over: Partial<GeneratedGroundFloor> = {}): GeneratedGroundFloor 
   ...over,
 });
 
+/**
+ * Naming the world's subjects is the FIRST structured call now, ahead of the
+ * character — because the character prompt lists them and asks which two this
+ * person climbs for and away from.
+ *
+ * An empty list is a legitimate answer: `nameSubjects` swallows anything
+ * unusable and every subject keeps its fallback word, so these fixtures
+ * exercise the path a world takes when the model has nothing useful to say.
+ */
+const noNames = { subjects: [] as { id: string; name: string }[] };
+
 const provider = (c = character(), g = ground()) => new FakeProvider({ structured: [c, g] });
 
+/** `runGenesis` names the subjects first; a direct `generateCharacter` does not. */
+const wholeGenesis = (c = character(), g = ground()) =>
+  new FakeProvider({ structured: [noNames, c, g] });
+
 test('Session Zero produces a valid character and a playable ground floor', async () => {
-  const result = await runGenesis(provider(), completed(), 42);
+  const result = await runGenesis(wholeGenesis(), completed(), 42);
 
   assert.equal(validateSheet(result.sheet).ok, true);
   assert.equal(result.sheet.name, 'Anan');
@@ -85,7 +100,7 @@ test('Session Zero produces a valid character and a playable ground floor', asyn
 });
 
 test('the code fills in what the model should not decide', async () => {
-  const region = (await runGenesis(provider(), completed())).world.regions['floor-0'];
+  const region = (await runGenesis(wholeGenesis(), completed())).world.regions['floor-0'];
   if (region.detail !== 'full') return assert.fail('expected a full region');
   assert.equal(region.id, 'floor-0');
   assert.equal(region.floor, 0);
@@ -160,7 +175,7 @@ test('a reference to a person the model never defined is dropped, not fatal', as
 });
 
 test('people from the ground floor land in the registry', async () => {
-  const result = await runGenesis(provider(), completed());
+  const result = await runGenesis(wholeGenesis(), completed());
   assert.equal(result.world.people['ora'].name, 'Ora');
   assert.equal(result.world.people['ora'].homeRegion, 'floor-0');
   assert.equal(result.world.people['ora'].alive, true);
@@ -209,7 +224,7 @@ test('an implausible hit die is replaced rather than failing the sheet', async (
 test('the game opens in the settlement, not standing in a gateway', async () => {
   // A gate is deserted by nature. Opening there gave a first turn with nobody to
   // talk to, nothing worth doing, and no way to climb.
-  const r = await runGenesis(provider(), completed());
+  const r = await runGenesis(wholeGenesis(), completed());
   const region = r.world.regions['floor-0'];
   if (region.detail !== 'full') return assert.fail('expected a full region');
 

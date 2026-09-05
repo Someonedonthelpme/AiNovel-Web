@@ -1,5 +1,5 @@
 import { describeMental, describePersonality } from '../character/persona.ts';
-import { subjectById, subjectsFor } from '../world/subjects.ts';
+import { subjectById, subjectsOf } from '../world/subjects.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
@@ -188,7 +188,7 @@ export function mergeDeltas(base: WorldDelta, outcome: WorldDelta): WorldDelta {
 function driveLine(state: PlayState): string {
   const drive = state.sheet.drive;
   if (!drive) return '';
-  const subjects = subjectsFor(state.world.seed);
+  const subjects = subjectsOf(state.world);
   const named = (id: string) => subjectById(subjects, id)?.name ?? null;
   const want = named(drive.want);
   const fear = named(drive.fear);

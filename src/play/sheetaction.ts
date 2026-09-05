@@ -134,7 +134,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       const found = findItem(state.pc.inventory, action.item);
       if (!found) return { state, error: 'you are not carrying that', note: null };
 
-      const lore = loreFor(found, state.world.seed, state.sheet.language);
+      const lore = loreFor(found, state.world, state.sheet.language);
       if (!lore) return { state, error: 'there is nothing to it', note: null };
       if (knowsLore(state.sheet, lore.id)) return { state, error: 'you have read it', note: null };
 

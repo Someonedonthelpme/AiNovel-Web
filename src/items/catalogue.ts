@@ -154,11 +154,21 @@ export function material(rng: Rng, floor: number): Item {
  * smooth" and has no business deciding that it grants +2 to hit — the code
  * grants the kit that has numbers on it.
  */
+/**
+ * Something you set out holding.
+ *
+ * `storied` because a keepsake is BY DEFINITION a thing kept for a reason. Most
+ * objects roll for a history and most do not get one, which is right — but the
+ * things a character owns at the start are the ones that should always have
+ * come from somewhere, and it means a new player meets the reading of them
+ * rather than meeting an absence.
+ */
 export const keepsake = (id: string, name: string, description: string): Item => ({
   id: id.trim() || `keepsake_${name.replace(/[^a-z]/gi, '').toLowerCase()}`,
   name,
   description,
   kind: 'material',
+  storied: true,
   stackable: false,
   value: 1,
 });

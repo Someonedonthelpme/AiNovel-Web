@@ -581,7 +581,7 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
       wearable: stack.item.kind === 'equipment' && Boolean(stack.item.slot),
       // A history is not advertised until it exists, and once read the button
       // goes rather than sitting there offering nothing.
-      hasLore: Boolean(loreFor(stack.item, state.world.seed, state.sheet.language)),
+      hasLore: Boolean(loreFor(stack.item, state.world, state.sheet.language)),
       read: knowsLore(state.sheet, `lore_${stack.item.id}`),
     })),
     equipped: { ...inv.equipped } as Record<string, string>,
