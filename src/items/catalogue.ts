@@ -117,11 +117,14 @@ const ARMOURS = [
  * Deeper floors give better packs, the same way they give better blades — a
  * bag is loot, and the first good one is a find rather than a stat.
  */
-const PACKS: { name: string; capacity: number }[] = [
-  { name: 'a satchel', capacity: 8 },
-  { name: 'a shoulder bag', capacity: 14 },
-  { name: 'a climbing pack', capacity: 22 },
-  { name: 'a hauler\u2019s frame', capacity: 32 },
+const PACKS: { name: string; capacity: number; grid: string }[] = [
+  // The board is what makes a long thing awkward rather than merely heavy: a
+  // satchel is wide and shallow, so a spear does not go in it at any weight.
+  { name: 'a satchel', capacity: 8, grid: 'xxx/xxx' },
+  { name: 'a shoulder bag', capacity: 14, grid: 'xxxx/xxxx/xxxx' },
+  // A notch, because a board is not a rectangle and a frame has a shape.
+  { name: 'a climbing pack', capacity: 22, grid: 'xxxx/xxxx/xxxx/xx..' },
+  { name: 'a hauler\u2019s frame', capacity: 32, grid: 'xxxxx/xxxxx/xxxxx/xxxxx' },
 ];
 
 export function pack(rng: Rng, floor: number): Item {
@@ -135,6 +138,7 @@ export function pack(rng: Rng, floor: number): Item {
     kind: 'equipment',
     slot: 'back',
     capacity: base.capacity,
+    grid: base.grid,
     // The bag itself is light; what goes in it is not.
     weight: 2,
     stackable: false,

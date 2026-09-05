@@ -1,11 +1,11 @@
 import type { Ability, Attack } from '../combat/types.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset, SlotSpec } from '../rules/ruleset.ts';
-import { join, rect, shapeFrom } from './shape.ts';
-import { conditionOfInstance, grantsOfInstance, instanceOf, isBroken, wear, weakestPart, weightOfInstance } from './instance.ts';
+import { firstFit, join, rect, shapeFrom } from './shape.ts';
+import { conditionOfInstance, grantsOfInstance, instanceOf, isBroken, shapeOfInstance, wear, weakestPart, weightOfInstance } from './instance.ts';
 import type { ItemInstance } from './instance.ts';
 import { PRISTINE } from './instance.ts';
-import type { Shape } from './shape.ts';
+import type { Board, Cell, Placement, Shape } from './shape.ts';
 
 /**
  * Things you carry.
@@ -74,6 +74,19 @@ export type Item = {
    * lose. A container is an item, so it can be all four.
    */
   capacity?: number;
+  /**
+   * The BOARD inside it, as a mask — see `shape.ts`.
+   *
+   * Two inventory models, one code path, exactly as the ruleset principle
+   * says. A container with only a `capacity` is the weight model (Fallout,
+   * Cyberpunk); one with only a `grid` is the slot model (PoE, RE, Tarkov);
+   * one with both is checked against both, and a world that sets neither has a
+   * bag that swallows anything. No branch anywhere asks which model this is.
+   *
+   * A board is not a rectangle. A saddlebag with a notch out of it is a mask
+   * with a hole, and `firstFit` searches the cells it actually has.
+   */
+  grid?: string;
   /** Trinkets and armour may nudge a score; traits gate on the total. */
   grants?: Partial<Record<Ability, number>>;
   /**
@@ -147,6 +160,14 @@ export type Holding = {
    * the tree infinite.
    */
   contents?: Inventory;
+  /**
+   * Where it sits on its parent's board, if the parent has one.
+   *
+   * On the child rather than in a map on the parent, so lifting a thing out
+   * takes its position with it and nothing can be left pointing at a square
+   * that no longer holds anything.
+   */
+  at?: Cell;
 };
 
 /** Slot to INSTANCE id — a specific object, not a kind of one. */
@@ -478,7 +499,33 @@ export const carriedWeight = (inventory: Inventory): number =>
 /* Containers                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export const isContainer = (item: Item): boolean => (item.capacity ?? 0) > 0;
+export const isContainer = (item: Item): boolean =>
+  (item.capacity ?? 0) > 0 || Boolean(item.grid);
+
+/** The board inside a container, or null when it goes by weight alone. */
+export const boardOf = (item: Item): Board | null => (item.grid ? shapeFrom(item.grid) : null);
+
+/** What is already laid out inside one, as placements `shape.ts` understands. */
+export const placementsIn = (holding: Holding): Placement[] =>
+  (holding.contents?.held ?? [])
+    .filter((h) => h.at)
+    .map((h) => ({ id: h.instance.id, shape: shapeOfHolding(h), at: h.at! }));
+
+/** A thing's silhouette, assembled from its parts if it has any. */
+export const shapeOfHolding = (h: Holding): Shape => shapeOfInstance(h.instance, () => h.item);
+
+/**
+ * Where a thing would go inside a container, or null if it will not.
+ *
+ * Rotation is a RULE rather than an assumption: a world may say a pack is
+ * packed as things come, and then a long spear simply does not go in a short
+ * bag however you turn it.
+ */
+export function fitIn(container: Holding, moving: Holding, canRotate = true): Cell | null {
+  const board = boardOf(container.item);
+  if (!board) return null;
+  return firstFit(board, placementsIn(container), shapeOfHolding(moving), canRotate)?.at ?? null;
+}
 
 /** What is still free inside one. */
 export const spaceIn = (holding: Holding): number =>
@@ -543,7 +590,12 @@ export type MoveResult = { inventory: Inventory; error: string | null };
  * wrong rather than full: something that will not fit, a bag put inside itself,
  * and a bag put inside one of its own pockets.
  */
-export function putIn(inv: Inventory, itemId: string, containerId: string): MoveResult {
+export function putIn(
+  inv: Inventory,
+  itemId: string,
+  containerId: string,
+  rules: Ruleset = STANDARD,
+): MoveResult {
   const container = findHolding(inv, containerId);
   if (!container || !isContainer(container.item)) {
     return { inventory: inv, error: 'that is not something you can put things in' };
@@ -557,19 +609,34 @@ export function putIn(inv: Inventory, itemId: string, containerId: string): Move
     return { inventory: inv, error: 'take ' + moving.item.name + ' off first' };
   }
 
-  const bulk = weightOfInstance(moving.instance, () => moving.item, weightOf)
-    + (moving.contents ? carriedWeight(moving.contents) : 0);
-  if (bulk > spaceIn(container)) {
-    return { inventory: inv, error: moving.item.name + ' will not fit in ' + container.item.name };
+  // BOTH LIMITS, and a container may set either, both or neither. Weight first,
+  // because "too heavy" is the answer a player can act on without seeing a
+  // board.
+  if (container.item.capacity !== undefined) {
+    const bulk = weightOfInstance(moving.instance, () => moving.item, weightOf)
+      + (moving.contents ? carriedWeight(moving.contents) : 0);
+    if (bulk > spaceIn(container)) {
+      return { inventory: inv, error: moving.item.name + ' will not fit in ' + container.item.name };
+    }
+  }
+
+  let at: Cell | undefined;
+  if (boardOf(container.item)) {
+    const spot = fitIn(container, moving, rules.gear.rotateInBags);
+    if (!spot) {
+      return { inventory: inv, error: 'there is no room the shape of ' + moving.item.name + ' in ' + container.item.name };
+    }
+    at = spot;
   }
 
   const { inventory: without, taken } = lift(inv, moving.instance.id);
   if (!taken) return { inventory: inv, error: 'you are not carrying that' };
 
+  const placed = at ? { ...taken, at } : { ...taken, at: undefined };
   return {
     inventory: replacing(without, container.instance.id, (h) => ({
       ...h,
-      contents: { ...(h.contents ?? emptyInventory()), held: [...(h.contents?.held ?? []), taken] },
+      contents: { ...(h.contents ?? emptyInventory()), held: [...(h.contents?.held ?? []), placed] },
     })),
     error: null,
   };
@@ -582,7 +649,8 @@ export function takeOut(inv: Inventory, itemId: string): MoveResult {
 
   const { inventory, taken } = lift(inv, itemId);
   if (!taken) return { inventory: inv, error: 'you are not carrying that' };
-  return { inventory: { ...inventory, held: [...inventory.held, taken] }, error: null };
+  // Out of a board and into your hands: it has no square any more.
+  return { inventory: { ...inventory, held: [...inventory.held, { ...taken, at: undefined }] }, error: null };
 }
 
 /* -------------------------------------------------------------------------- */

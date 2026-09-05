@@ -123,7 +123,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
     }
 
     case 'stow': {
-      const stowed = putIn(state.pc.inventory, action.item, action.container);
+      const stowed = putIn(state.pc.inventory, action.item, action.container, rulesOf(state.world));
       if (stowed.error) return { state, error: stowed.error, note: null };
       return settle({ ...state, pc: { ...state.pc, inventory: stowed.inventory } }, state, 'packed');
     }

@@ -116,6 +116,43 @@ function StatusTab({ view, act, busy }: { view: GameView; act: Act; busy: boolea
 /* Inventory: the paper-doll, and what is in the pack                          */
 /* -------------------------------------------------------------------------- */
 
+type BoardShape = NonNullable<GameView['inventory']['stacks'][number]['board']>;
+type Placed = GameView['inventory']['stacks'][number]['placed'];
+
+/**
+ * What a bag looks like inside.
+ *
+ * A board is NOT a rectangle — a frame with a notch has cells missing — so this
+ * draws the grid it actually has rather than a w×h block, and a square that is
+ * not there is simply not drawn.
+ */
+function Board({ board, placed }: { board: BoardShape; placed: Placed }) {
+  const real = new Set(board.cells.map(([x, y]) => `${x},${y}`));
+  const filled = new Map<string, string>();
+  for (const item of placed) for (const [x, y] of item.cells) filled.set(`${x},${y}`, item.name);
+
+  const squares = [];
+  for (let y = 0; y < board.h; y++) {
+    for (let x = 0; x < board.w; x++) {
+      const key = `${x},${y}`;
+      const name = filled.get(key);
+      squares.push(
+        <span
+          key={key}
+          className={!real.has(key) ? 'cell gone' : name ? 'cell full' : 'cell'}
+          title={name ?? undefined}
+        />,
+      );
+    }
+  }
+
+  return (
+    <div className="board" style={{ gridTemplateColumns: `repeat(${board.w}, 12px)` }}>
+      {squares}
+    </div>
+  );
+}
+
 /**
  * A bag with room for this, if there is one.
  *
@@ -205,6 +242,7 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
               </span>
             )}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{item.description}</p>
+            {item.board && <Board board={item.board} placed={item.placed} />}
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
             {item.inside && (

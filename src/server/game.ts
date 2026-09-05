@@ -43,7 +43,7 @@ import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
 import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
 import type { Item } from '../items/types.ts';
-import { findHolding, isContainer, spaceIn } from '../items/types.ts';
+import { boardOf, findHolding, isContainer, placementsIn, spaceIn } from '../items/types.ts';
 import type { Holding, Inventory } from '../items/types.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
@@ -159,6 +159,15 @@ export type GameView = {
       /** A container, and what is left in it. Null when it is not one. */
       capacity: number | null;
       space: number | null;
+      /**
+       * The board inside it, and what is laid out on it.
+       *
+       * Sent as cells rather than as a mask, because the browser has no shape
+       * module and should not grow one — this is the only place that needs to
+       * know a board is not a rectangle.
+       */
+      board: { w: number; h: number; cells: [number, number][] } | null;
+      placed: { id: string; name: string; cells: [number, number][] }[];
       /** Whether it has a history, and whether this character has read it. */
       hasLore: boolean; read: boolean;
     }[];
@@ -581,6 +590,30 @@ export const hasActiveFight = (id: string): boolean => fights.has(id);
 /* The panels                                                                  */
 /* -------------------------------------------------------------------------- */
 
+const extent = (cells: readonly { x: number; y: number }[]) => ({
+  w: cells.reduce((most, c) => Math.max(most, c.x + 1), 0),
+  h: cells.reduce((most, c) => Math.max(most, c.y + 1), 0),
+});
+
+/** A container's board, flattened to what a browser can draw. */
+function boardView(item: Item): GameView['inventory']['stacks'][number]['board'] {
+  const board = boardOf(item);
+  if (!board) return null;
+  return { ...extent(board.cells), cells: board.cells.map((c) => [c.x, c.y] as [number, number]) };
+}
+
+/** What is laid out on it, in the squares it actually covers. */
+function placedView(holding: Holding): GameView['inventory']['stacks'][number]['placed'] {
+  return placementsIn(holding).map((p) => {
+    const inside = (holding.contents?.held ?? []).find((h) => h.instance.id === p.id);
+    return {
+      id: p.id,
+      name: inside?.item.name ?? p.id,
+      cells: p.shape.cells.map((c) => [c.x + p.at.x, c.y + p.at.y] as [number, number]),
+    };
+  });
+}
+
 function inventoryViewOf(state: PlayState): GameView['inventory'] {
   const inv = state.pc.inventory;
   const worn = new Set(Object.values(inv.equipped));
@@ -608,8 +641,10 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
     wearable: item.kind === 'equipment' && Boolean(item.slot),
     condition,
     inside,
-    capacity: holding && isContainer(item) ? (item.capacity ?? 0) : null,
-    space: holding && isContainer(item) ? spaceIn(holding) : null,
+    capacity: holding && isContainer(item) && item.capacity !== undefined ? item.capacity : null,
+    space: holding && isContainer(item) && item.capacity !== undefined ? spaceIn(holding) : null,
+    board: holding ? boardView(item) : null,
+    placed: holding ? placedView(holding) : [],
     // A history is not advertised until it exists, and once read the button
     // goes rather than sitting there offering nothing.
     hasLore: Boolean(loreFor(item, state.world, state.sheet.language)),

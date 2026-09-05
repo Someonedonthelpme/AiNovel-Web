@@ -12,7 +12,7 @@ import { abilities, combatant } from '../combat/fixtures.ts';
 import { emptyPersona } from '../character/persona.ts';
 import { defaultVoice, world } from '../world/fixtures.ts';
 import { abilitiesOf, background, sheet } from '../session/fixtures.ts';
-import { addItem, conditionIn, emptyInventory, equip, equippedHoldings, unequip, wearEquipped } from '../items/types.ts';
+import { addItem, conditionIn, emptyInventory, equip, equippedHoldings, putIn, unequip, wearEquipped } from '../items/types.ts';
 import type { Item } from '../items/types.ts';
 import { takeRest } from '../play/rest.ts';
 import { playState } from '../play/fixtures.ts';
@@ -320,6 +320,30 @@ test('a two-hander fills both hands, and taking either off puts it down', () => 
   assert.equal(inv.equipped.main, undefined, 'you cannot hold a greatspear one-handed');
 });
 
+test('gear.rotateInBags reaches whether a long thing can be turned to fit', () => {
+  /*
+   * A rule rather than an assumption. With it off a pack is packed as things
+   * come, and a spear does not go in a wide shallow bag however you hold it —
+   * a different game, not a broken one.
+   */
+  const satchel: Item = {
+    id: 'bag', name: 'a satchel', description: '', kind: 'equipment', slot: 'back',
+    grid: 'xxxx/xx..', stackable: false, value: 1,
+  };
+  const pole: Item = {
+    id: 'pole', name: 'a pole', description: '', kind: 'material',
+    shape: 'x/x/x/x', stackable: false, value: 1,
+  };
+  const carrying = addItem(addItem(emptyInventory(), satchel), pole);
+  const [bagId, poleId] = carrying.held.map((h) => h.instance.id);
+
+  assert.equal(putIn(carrying, poleId, bagId, tuned({ gear: { rotateInBags: true } })).error, null);
+  assert.match(
+    putIn(carrying, poleId, bagId, tuned({ gear: { rotateInBags: false } })).error ?? '',
+    /no room the shape of/,
+  );
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -347,7 +371,7 @@ const PROVEN = [
   'combat.soakCeiling', 'combat.soakShare', 'combat.minHit', 'combat.conditionFloor',
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
-  'gear.wearPerFight', 'gear.slots',
+  'gear.wearPerFight', 'gear.slots', 'gear.rotateInBags',
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',

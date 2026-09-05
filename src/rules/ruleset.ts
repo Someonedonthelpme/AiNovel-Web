@@ -101,6 +101,14 @@ export type GearRules = {
    * through the dozen places that merely look.
    */
   slots: SlotSpec[];
+  /**
+   * Whether a thing may be turned to make it fit.
+   *
+   * A rule rather than an assumption. With it off a pack is packed as things
+   * come, and a long spear does not go in a short bag however you hold it —
+   * which is a different game, not a broken one.
+   */
+  rotateInBags: boolean;
 };
 
 export type RestRules = {
@@ -189,7 +197,7 @@ export const STANDARD: Ruleset = {
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
   persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
   knowledge: { spreadDepth: 2, reputationWeight: 1, ambientHops: 1, ambientFade: 0.1 },
-  gear: { wearPerFight: 2, slots: [...BODY_SLOTS] },
+  gear: { wearPerFight: 2, slots: [...BODY_SLOTS], rotateInBags: true },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };

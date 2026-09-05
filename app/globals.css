@@ -653,3 +653,14 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
   border-radius: var(--radius);
   background: var(--panel-2);
 }
+
+/* A bag's board. Not a rectangle: a missing square is drawn as nothing. */
+.board { display: grid; gap: 1px; margin-top: 0.35rem; }
+.board .cell {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.board .cell.full { background: var(--amber); border-color: var(--amber); }
+.board .cell.gone { border-color: transparent; }

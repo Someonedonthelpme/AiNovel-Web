@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {
   addItem, countOf, emptyInventory, equip, equippedArmour, equippedAttack,
   equippedGrants, isEquipped, removeItem, unequip, conditionIn, wearEquipped,
-  carriedWeight, findHolding, isContainer, putIn, spaceIn, takeOut,
+  carriedWeight, findHolding, isContainer, putIn, spaceIn, takeOut, boardOf,
 } from './types.ts';
 import type { Inventory, Item } from './types.ts';
-import { rations, weapon, armour, namesTheSameThing, stripMechanics, weaponFromAttack } from './catalogue.ts';
+import { rations, weapon, armour, pack, namesTheSameThing, stripMechanics, weaponFromAttack } from './catalogue.ts';
 import { carryCapacityFor } from '../session/sheet.ts';
 import { sword } from '../combat/fixtures.ts';
 import { startingInventory } from '../play/state.ts';
@@ -340,4 +340,95 @@ test('a bag that fills up stops having room', () => {
   assert.equal(spaceIn(findHolding(inv, bagId)!), 1);
   assert.equal(isContainer(bag('b', 4)), true);
   assert.equal(isContainer(brick('r', 3)), false);
+});
+
+/* -------------------------------------------------------------------------- */
+/* The board — space, not just weight                                          */
+/* -------------------------------------------------------------------------- */
+
+const boarded = (id: string, grid: string, capacity?: number): Item => ({
+  id, name: 'a case', description: '', kind: 'equipment', slot: 'back',
+  grid, capacity, weight: 2, stackable: false, value: 1,
+});
+
+const shaped = (id: string, shape: string): Item =>
+  ({ id, name: 'a thing', description: '', kind: 'material', shape, weight: 1, stackable: false, value: 1 });
+
+test('TWO MODELS, ONE CODE PATH: weight, board, both, or neither', () => {
+  /*
+   * The ruleset principle applied to bags. A container with only a capacity is
+   * the weight model; one with only a grid is the slot model; one with both is
+   * checked against both. No branch anywhere asks which kind of game this is.
+   */
+  const heavy = shaped('h', 'x');
+  const byWeight = addItem(addItem(emptyInventory(), bag('w', 0.5)), { ...heavy, weight: 9 });
+  assert.match(putIn(byWeight, first(byWeight, 'h'), first(byWeight, 'w')).error ?? '', /will not fit/);
+
+  const byBoard = addItem(addItem(emptyInventory(), boarded('g', 'x')), shaped('big', 'xx/xx'));
+  assert.match(putIn(byBoard, first(byBoard, 'big'), first(byBoard, 'g')).error ?? '', /no room the shape of/);
+
+  // Neither set is a bag that swallows anything, and that is legal.
+  const anything = addItem(addItem(emptyInventory(), { ...bag('n', 0), capacity: undefined, grid: undefined, id: 'n' }), heavy);
+  assert.equal(isContainer(findHolding(anything, 'n')!.item), false, 'though it is then not a container at all');
+});
+
+test('a thing on a board KNOWS WHERE IT SITS', () => {
+  const inv = addItem(addItem(emptyInventory(), boarded('g', 'xxx/xxx')), shaped('t', 'xx'));
+  const stowed = putIn(inv, first(inv, 't'), first(inv, 'g')).inventory;
+
+  const inside = findHolding(stowed, 't');
+  assert.ok(inside?.at, 'it has a square');
+  assert.deepEqual(inside!.at, { x: 0, y: 0 }, 'the first one that fits, scanning top-left');
+});
+
+test('two things do not sit on the same squares', () => {
+  let inv = addItem(addItem(addItem(emptyInventory(), boarded('g', 'xxxx/xxxx')), shaped('a', 'xx')), shaped('b', 'xx'));
+  const g = first(inv, 'g');
+  inv = putIn(inv, first(inv, 'a'), g).inventory;
+  inv = putIn(inv, first(inv, 'b'), g).inventory;
+
+  const held = findHolding(inv, g)!.contents!.held;
+  assert.equal(held.length, 2);
+  assert.notDeepEqual(held[0].at, held[1].at);
+});
+
+test('a board fills up, and then refuses — however light the thing is', () => {
+  // The whole difference between a grid and a weight limit: a full bag is full
+  // even when what you are holding weighs nothing at all.
+  let inv = addItem(addItem(addItem(emptyInventory(), boarded('g', 'xx')), shaped('a', 'xx')), { ...shaped('b', 'x'), weight: 0 });
+  const g = first(inv, 'g');
+  inv = putIn(inv, first(inv, 'a'), g).inventory;
+
+  assert.match(putIn(inv, first(inv, 'b'), g).error ?? '', /no room the shape of/);
+});
+
+test('AN IRREGULAR CONTAINER IS SEARCHED WHERE IT ACTUALLY HAS ROOM', () => {
+  // A board is not a rectangle. A frame with a notch out of it takes a small
+  // thing and refuses a wide one, and neither answer needs a special case.
+  const notched = addItem(emptyInventory(), boarded('g', 'xxx/x..'));
+  let inv = addItem(notched, shaped('wide', 'xxx'));
+  assert.equal(putIn(inv, first(inv, 'wide'), first(inv, 'g')).error, null);
+
+  const square = addItem(notched, shaped('sq', 'xx/xx'));
+  assert.match(putIn(square, first(square, 'sq'), first(square, 'g')).error ?? '', /no room/);
+});
+
+test('taking a thing back out gives up its square', () => {
+  const inv = addItem(addItem(emptyInventory(), boarded('g', 'xxx/xxx')), shaped('t', 'xx'));
+  // Held before stowing, because once it is in the bag it is no longer one of
+  // the things in your hands — which is the point.
+  const thing = first(inv, 't');
+  const stowed = putIn(inv, thing, first(inv, 'g')).inventory;
+  assert.ok(findHolding(stowed, thing)?.at, 'it has a square while it is in there');
+
+  const out = takeOut(stowed, thing).inventory;
+  assert.equal(findHolding(out, thing)?.at, undefined, 'and none once it is in your hands');
+});
+
+test('A GENERATED PACK HAS A BOARD, so the shape module is reached from play', () => {
+  // `shape.ts` was green, tested and reachable from nothing since it was
+  // written. A real pack, generated from the catalogue, is what reaches it.
+  const found = pack(mulberry32(4), 14);
+  assert.ok(found.grid, 'a pack has a board');
+  assert.ok(boardOf(found)!.cells.length > 0);
 });

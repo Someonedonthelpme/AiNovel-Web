@@ -481,6 +481,15 @@ of one, so wielding the sharp axe instead of the notched one is a thing a player
 can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
 which were tested islands reachable from nothing.
 
+**A container may have a board, a weight limit, both, or neither — one code
+path.** That is the ruleset principle applied to bags: capacity alone is the
+weight model (Fallout, Cyberpunk), a grid alone is the slot model (PoE, RE,
+Tarkov), both are checked against both, and no branch anywhere asks which kind
+of game this is. A board is not a rectangle — a frame with a notch is a mask
+with a hole, and `firstFit` searches the cells it actually has. This is what
+finally reaches `items/shape.ts`, which had been green, tested and called by
+nothing since it was written.
+
 **Capacity is something you own.** It used to be `carryBase + STR` and nothing
 else, so a pack was not a thing you could find, fill or lose. A container is an
 item with a `capacity`, a `Holding` may have `contents` — an `Inventory` again,
