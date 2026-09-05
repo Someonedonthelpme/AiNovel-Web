@@ -1,3 +1,4 @@
+import { rulesOf } from '../rules/ruleset.ts';
 import type { Abilities } from '../combat/types.ts';
 import { loreFor } from './lorebook.ts';
 import { knowsLore, learn } from './lore.ts';
@@ -112,7 +113,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
     }
 
     case 'equip': {
-      const worn = equip(state.pc.inventory, action.item);
+      const worn = equip(state.pc.inventory, action.item, rulesOf(state.world));
       if (worn.error) return { state, error: worn.error, note: null };
       return settle({ ...state, pc: { ...state.pc, inventory: worn.inventory } }, state, 'equipped');
     }

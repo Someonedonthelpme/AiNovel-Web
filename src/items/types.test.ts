@@ -14,7 +14,7 @@ import { PRISTINE } from './instance.ts';
 
 const ring: Item = {
   id: 'ring_of_note', name: 'a plain ring', description: '',
-  kind: 'equipment', slot: 'trinket', grants: { int: 2 }, stackable: false, value: 10,
+  kind: 'equipment', slot: 'ring', grants: { int: 2 }, stackable: false, value: 10,
 };
 
 test('stackable things collapse into one line', () => {
@@ -62,7 +62,7 @@ test('equipping wields a SPECIFIC object, not a kind of one', () => {
   const sword = weapon(rng, 3);
   const inv = equip(addItem(addItem(emptyInventory(), sword), sword), sword.id).inventory;
 
-  assert.equal(inv.equipped.weapon, inv.held[0].instance.id);
+  assert.equal(inv.equipped.main, inv.held[0].instance.id);
   assert.equal(isEquipped(inv, sword.id), true, 'and the kind still reads as worn');
 });
 
@@ -112,7 +112,7 @@ test('a wielded weapon offers its attack', () => {
 
 test('taking off a slot leaves the item in the pack', () => {
   let inv = equip(addItem(emptyInventory(), ring), ring.id).inventory;
-  inv = unequip(inv, 'trinket');
+  inv = unequip(inv, 'ring_l');
   assert.equal(isEquipped(inv, ring.id), false);
   assert.equal(countOf(inv, ring.id), 1, 'you still own it');
 });
@@ -147,7 +147,7 @@ test('the starting weapon carries the attack the background declares', () => {
   // going to use.
   const made = weaponFromAttack(sword);
   assert.equal(made.kind, 'equipment');
-  assert.equal(made.slot, 'weapon');
+  assert.equal(made.slot, 'main');
   assert.deepEqual(made.attack, sword);
 });
 
@@ -171,7 +171,7 @@ test('a character starts with a weapon in hand, not a souvenir', () => {
   const inv = startingInventory(sheet());
   const wielded = equippedAttack(inv);
   assert.ok(wielded, 'something should be equipped');
-  assert.equal(inv.held.filter((h) => h.item.slot === 'weapon').length, 1, 'and only one of it');
+  assert.equal(inv.held.filter((h) => h.item.slot === 'main').length, 1, 'and only one of it');
 });
 
 /* -------------------------------------------------------------------------- */
@@ -179,14 +179,14 @@ test('a character starts with a weapon in hand, not a souvenir', () => {
 /* -------------------------------------------------------------------------- */
 
 const blade: Item = {
-  id: 'w_blade', name: 'a plain sword', description: '', kind: 'equipment', slot: 'weapon',
+  id: 'w_blade', name: 'a plain sword', description: '', kind: 'equipment', slot: 'main',
   stackable: false, value: 5,
   attack: { id: 'atk', name: 'sword', ability: 'str', proficient: true, range: 1,
             damage: { count: 1, sides: 6, bonusAbility: 'str', type: 'slashing' } },
 };
 
 const mail: Item = {
-  id: 'a_mail', name: 'mail', description: '', kind: 'equipment', slot: 'armour',
+  id: 'a_mail', name: 'mail', description: '', kind: 'equipment', slot: 'body',
   stackable: false, value: 5, armour: 15,
 };
 

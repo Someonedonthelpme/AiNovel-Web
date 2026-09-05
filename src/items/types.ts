@@ -1,4 +1,6 @@
 import type { Ability, Attack } from '../combat/types.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset, SlotSpec } from '../rules/ruleset.ts';
 import { join, rect, shapeFrom } from './shape.ts';
 import { conditionOfInstance, grantsOfInstance, instanceOf, isBroken, wear, weakestPart, weightOfInstance } from './instance.ts';
 import type { ItemInstance } from './instance.ts';
@@ -19,8 +21,15 @@ import type { Shape } from './shape.ts';
 export const ITEM_KINDS = ['consumable', 'equipment', 'material', 'key'] as const;
 export type ItemKind = (typeof ITEM_KINDS)[number];
 
-export const SLOTS = ['weapon', 'armour', 'trinket'] as const;
-export type Slot = (typeof SLOTS)[number];
+/**
+ * Where a thing is worn — a plain string, checked against the WORLD's slots.
+ *
+ * A fixed union of three could not say that this world has no boots in it, that
+ * that one lets you wear two rings, or that a greatsword takes both hands. The
+ * ruleset declares what a body has; an item declares what it needs; `equip` is
+ * the one place the two meet.
+ */
+export type Slot = string;
 
 /**
  * What using a consumable does.
@@ -39,8 +48,18 @@ export type Item = {
   name: string;
   description: string;
   kind: ItemKind;
-  /** Equipment only: where it goes. */
+  /** Equipment only: which kind of slot it needs. */
   slot?: Slot;
+  /**
+   * Other slots it fills as well as its own.
+   *
+   * How a two-hander is expressed, and generally rather than as a special case:
+   * a greatsword is `slot: 'main', occupies: ['offhand']`, and a suit of plate
+   * that covers the legs is `slot: 'body', occupies: ['leg']`. The engine fills
+   * every one of them with the same object, so taking any of them off takes the
+   * whole thing off.
+   */
+  occupies?: Slot[];
   /** Consumables only. */
   effect?: ItemEffect;
   /** Weapons: what swinging it does. Replaces the background's starting attack. */
@@ -224,15 +243,37 @@ export function removeItem(inv: Inventory, id: string, count = 1): Inventory {
   // Leaving a dangling equipped id would make the character wield something
   // they no longer own, and `equippedAttack` would silently fall back to bare
   // hands — a bug that looks like bad luck.
-  const equipped = { ...inv.equipped };
-  for (const slot of Object.keys(equipped) as Slot[]) {
-    if (dropped.includes(equipped[slot] ?? '')) delete equipped[slot];
-  }
+  let equipped = inv.equipped;
+  for (const gone of dropped) equipped = clearInstance(equipped, gone);
   return { ...inv, held, equipped };
 }
 
 /** Put something on. Only equipment, only what you actually hold. */
-export function equip(inv: Inventory, id: string): { inventory: Inventory; error: string | null } {
+/** Take one object off every slot it happens to fill. */
+const clearInstance = (equipped: Equipped, instanceId: string): Equipped => {
+  const out: Equipped = {};
+  for (const [slot, held] of Object.entries(equipped)) if (held !== instanceId) out[slot] = held;
+  return out;
+};
+
+/**
+ * The slot a thing of this kind should go in, preferring an empty one.
+ *
+ * Preferring rather than requiring, because a second ring should go on the
+ * other hand and a third should replace one rather than being refused — being
+ * told "both your hands are full" when you asked to put a ring on is a worse
+ * game than quietly swapping.
+ */
+const slotFor = (equipped: Equipped, slots: readonly SlotSpec[], takes: string): SlotSpec | null => {
+  const fitting = slots.filter((s) => s.takes === takes);
+  return fitting.find((s) => !equipped[s.id]) ?? fitting[0] ?? null;
+};
+
+export function equip(
+  inv: Inventory,
+  id: string,
+  rules: Ruleset = STANDARD,
+): { inventory: Inventory; error: string | null } {
   const holding = findHolding(inv, id);
   if (!holding) {
     // A stackable thing is never equipment, and saying so is more use than
@@ -246,24 +287,61 @@ export function equip(inv: Inventory, id: string): { inventory: Inventory; error
   if (item.kind !== 'equipment' || !item.slot) {
     return { inventory: inv, error: item.name + ' is not something you can wear or wield' };
   }
+
+  const wanted = [item.slot, ...(item.occupies ?? [])];
+  const going: SlotSpec[] = [];
+  for (const takes of wanted) {
+    const slot = slotFor(inv.equipped, rules.gear.slots, takes);
+    // A world with no head has no helmets, and says so rather than silently
+    // dropping one into nowhere.
+    if (!slot) return { inventory: inv, error: 'there is nowhere on you to wear ' + item.name };
+    going.push(slot);
+  }
+
+  let equipped = inv.equipped;
+  // Whatever is displaced comes off ENTIRELY — a two-hander being put down by
+  // the shield taking its off-hand back would otherwise stay half-wielded.
+  for (const slot of going) {
+    const displaced = equipped[slot.id];
+    if (displaced) equipped = clearInstance(equipped, displaced);
+  }
   // The SPECIFIC object, so wielding the sharp axe rather than the notched one
   // is a thing a player can do.
-  return { inventory: { ...inv, equipped: { ...inv.equipped, [item.slot]: instance.id } }, error: null };
+  for (const slot of going) equipped = { ...equipped, [slot.id]: instance.id };
+
+  return { inventory: { ...inv, equipped }, error: null };
 }
 
+/** Take it off — and off every other slot the same object was filling. */
 export function unequip(inv: Inventory, slot: Slot): Inventory {
-  const equipped = { ...inv.equipped };
-  delete equipped[slot];
-  return { ...inv, equipped };
+  const held = inv.equipped[slot];
+  if (!held) return inv;
+  return { ...inv, equipped: clearInstance(inv.equipped, held) };
 }
 
 /* -------------------------------------------------------------------------- */
 /* What being equipped is worth                                               */
 /* -------------------------------------------------------------------------- */
 
-export const equippedHoldings = (inv: Inventory): Holding[] =>
-  SLOTS.map((slot) => (inv.equipped[slot] ? findHolding(inv, inv.equipped[slot]!) : null))
-    .filter((h): h is Holding => Boolean(h));
+/**
+ * Everything worn, once each.
+ *
+ * Reads the equipped map rather than the world's slot list, which is what keeps
+ * a world's slots out of the dozen places that merely LOOK at what is worn. The
+ * dedupe matters: a two-hander fills two slots with one object, and counting it
+ * twice would double its stats.
+ */
+export const equippedHoldings = (inv: Inventory): Holding[] => {
+  const seen = new Set<string>();
+  const out: Holding[] = [];
+  for (const instanceId of Object.values(inv.equipped)) {
+    if (!instanceId || seen.has(instanceId)) continue;
+    seen.add(instanceId);
+    const holding = findHolding(inv, instanceId);
+    if (holding) out.push(holding);
+  }
+  return out;
+};
 
 const equippedItems = (inv: Inventory): Item[] => equippedHoldings(inv).map((h) => h.item);
 
@@ -343,7 +421,9 @@ const DEFAULT_WEIGHT: Record<ItemKind, number> = {
 
 /** Armour is the heavy exception; everything else follows its kind. */
 export const weightOf = (item: Item): number =>
-  item.weight ?? (item.slot === 'armour' ? 8 : DEFAULT_WEIGHT[item.kind]);
+  // Keyed on what MAKES a thing armour rather than on where it is worn: a
+  // world may call that slot anything, and a breastplate is heavy regardless.
+  item.weight ?? (typeof item.armour === 'number' ? 8 : DEFAULT_WEIGHT[item.kind]);
 
 export const carriedWeight = (inventory: Inventory): number =>
   inventory.stacks.reduce((total, stack) => total + weightOf(stack.item) * stack.count, 0)
@@ -412,6 +492,6 @@ export function shapeOf(item: Item): Shape {
   if (item.shape) return shapeFrom(item.shape);
   const named = archetypeOf(item.id);
   if (named) return named;
-  if (item.slot === 'armour') return rect(2, 3);
+  if (typeof item.armour === 'number') return rect(2, 3);
   return KIND_SHAPES[item.kind];
 }

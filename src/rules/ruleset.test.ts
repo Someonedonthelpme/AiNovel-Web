@@ -12,7 +12,7 @@ import { abilities, combatant } from '../combat/fixtures.ts';
 import { emptyPersona } from '../character/persona.ts';
 import { defaultVoice, world } from '../world/fixtures.ts';
 import { abilitiesOf, background, sheet } from '../session/fixtures.ts';
-import { addItem, conditionIn, emptyInventory, equip, wearEquipped } from '../items/types.ts';
+import { addItem, conditionIn, emptyInventory, equip, equippedHoldings, unequip, wearEquipped } from '../items/types.ts';
 import type { Item } from '../items/types.ts';
 import { takeRest } from '../play/rest.ts';
 import { playState } from '../play/fixtures.ts';
@@ -257,7 +257,7 @@ test('gear.wearPerFight reaches what a fight takes out of your kit', () => {
   // Zero is the identity value: gear never degrades and the same code runs
   // over it. A world with no smiths is a dial, not a missing system.
   const sword: Item = {
-    id: 'w', name: 'sword', description: '', kind: 'equipment', slot: 'weapon',
+    id: 'w', name: 'sword', description: '', kind: 'equipment', slot: 'main',
     stackable: false, value: 1,
   };
   const kitted = equip(addItem(emptyInventory(), sword), 'w').inventory;
@@ -265,6 +265,59 @@ test('gear.wearPerFight reaches what a fight takes out of your kit', () => {
 
   assert.equal(after(tuned({ gear: { wearPerFight: 0 } })), 1, 'nothing ever wears out');
   assert.ok(after(tuned({ gear: { wearPerFight: 20 } })) < 1);
+});
+
+test('gear.slots reaches where a world lets you wear things', () => {
+  /*
+   * A fixed enum of three could not say that this world has no boots in it or
+   * that that one lets you wear two rings. Unlike the numeric dials it is a
+   * CONTENT choice rather than a difficulty one, so the presets share a set and
+   * the point is that a world may declare its own.
+   */
+  const helm: Item = {
+    id: 'h', name: 'a helm', description: '', kind: 'equipment', slot: 'head',
+    stackable: false, value: 1,
+  };
+  const carrying = addItem(emptyInventory(), helm);
+
+  const bare = tuned({ gear: { slots: [{ id: 'main', takes: 'main', name: 'in hand' }] } });
+  assert.match(equip(carrying, 'h', bare).error ?? '', /nowhere on you/);
+  assert.equal(equip(carrying, 'h', STANDARD).error, null, 'and a world with a head has helmets');
+});
+
+test('a second ring goes on the OTHER hand, without the code counting rings', () => {
+  // Both ring slots simply `take` a ring; an item never says which hand.
+  const ring: Item = {
+    id: 'r', name: 'a ring', description: '', kind: 'equipment', slot: 'ring',
+    stackable: false, value: 1,
+  };
+  const two = addItem(addItem(emptyInventory(), ring), ring);
+  const worn = equip(equip(two, two.held[0].instance.id).inventory, two.held[1].instance.id).inventory;
+
+  assert.equal(new Set(Object.values(worn.equipped)).size, 2, 'two rings, two hands');
+});
+
+test('a two-hander fills both hands, and taking either off puts it down', () => {
+  const great: Item = {
+    id: 'g', name: 'a greatspear', description: '', kind: 'equipment', slot: 'main',
+    occupies: ['offhand'], stackable: false, value: 1,
+  };
+  const shield: Item = {
+    id: 's', name: 'a shield', description: '', kind: 'equipment', slot: 'offhand',
+    stackable: false, value: 1,
+  };
+
+  let inv = equip(addItem(addItem(emptyInventory(), great), shield), 'g').inventory;
+  assert.equal(inv.equipped.main, inv.equipped.offhand, 'one object, both hands');
+  assert.equal(equippedHoldings(inv).length, 1, 'and it is counted once, not twice');
+
+  // Taking the off hand back puts the whole thing down, rather than leaving it
+  // half-wielded.
+  assert.equal(unequip(inv, 'offhand').equipped.main, undefined);
+
+  // And raising a shield does the same.
+  inv = equip(inv, 's').inventory;
+  assert.equal(inv.equipped.main, undefined, 'you cannot hold a greatspear one-handed');
 });
 
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
@@ -294,7 +347,7 @@ const PROVEN = [
   'combat.soakCeiling', 'combat.soakShare', 'combat.minHit', 'combat.conditionFloor',
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
-  'gear.wearPerFight',
+  'gear.wearPerFight', 'gear.slots',
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',

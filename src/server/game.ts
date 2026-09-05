@@ -43,6 +43,7 @@ import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
 import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
 import type { Item } from '../items/types.ts';
+import { findHolding } from '../items/types.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -156,6 +157,12 @@ export type GameView = {
       hasLore: boolean; read: boolean;
     }[];
     equipped: Record<string, string>;
+    /**
+     * The paper-doll: every place THIS WORLD lets you wear something, filled or
+     * not. Sent whole rather than derived in the panel, because the slot set is
+     * a property of the world and the browser has no ruleset.
+     */
+    slots: { id: string; name: string; itemId: string | null; itemName: string | null; condition: number }[];
   };
   /** What the skills panel shows. Hidden nodes and Signets are absent, not greyed. */
   tree: {
@@ -603,6 +610,16 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
       ...inv.held.map((h) => line(h.item, h.instance.id, 1, conditionOfInstance(h.instance) / PRISTINE)),
     ],
     equipped: { ...inv.equipped } as Record<string, string>,
+    slots: rulesOf(state.world).gear.slots.map((slot) => {
+      const holding = inv.equipped[slot.id] ? findHolding(inv, inv.equipped[slot.id]!) : null;
+      return {
+        id: slot.id,
+        name: slot.name,
+        itemId: holding?.instance.id ?? null,
+        itemName: holding?.item.name ?? null,
+        condition: holding ? conditionOfInstance(holding.instance) / PRISTINE : 1,
+      };
+    }),
   };
 }
 

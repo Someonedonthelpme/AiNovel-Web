@@ -481,6 +481,15 @@ of one, so wielding the sharp axe instead of the notched one is a thing a player
 can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
 which were tested islands reachable from nothing.
 
+**The world declares where you can wear things.** `Slot` is a plain string
+checked against `gear.slots`, not a union of three. A fixed enum could not say
+that a world has no boots in it, that this one lets you wear two rings, or that
+a greatspear takes both hands. Two-handers are `occupies: ['offhand']` — general
+rather than a special case, and a suit of plate covering the legs uses the same
+field. Only `equip` reads the slot set; everything that asks what is WORN reads
+the equipped map, which already says, so a world's slots never have to be
+threaded through the dozen places that merely look.
+
 **Rumour has two layers, and they meet.** `deed.ts` is the DRAMATIC one —
 people telling each other along the social graph, bounded by degrees of
 separation, where who told whom matters. `ambient.ts` is the cheap one: a PLACE

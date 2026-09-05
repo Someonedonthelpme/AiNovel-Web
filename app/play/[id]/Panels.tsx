@@ -118,26 +118,38 @@ function StatusTab({ view, act, busy }: { view: GameView; act: Act; busy: boolea
 
 function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boolean }) {
   const c = view.character;
-  const worn = view.inventory.stacks.filter((i) => i.equipped);
 
   return (
     <div className="sheet-split">
-      {/* The equipment paper-doll. One entry per filled slot for now; when the
-          ruleset defines slots this becomes the full doll whether filled or not. */}
+      {/*
+        The paper-doll: every place this world lets you wear something, EMPTY
+        ONES INCLUDED. An empty slot is the useful half — it is what tells a
+        player they have nothing on their head.
+      */}
       <aside className="sheet-aside">
         <p className="label">Equipment</p>
-        {worn.length === 0 && <p className="muted">Nothing worn.</p>}
-        {worn.map((item) => (
-          <div className="doll-slot" key={item.id}>
-            <span className="muted">{item.slot}</span>
-            <strong>{item.name}</strong>
-            <button
-              className="mini"
-              disabled={busy}
-              onClick={() => act({ type: 'unequip', slot: item.slot as Slot })}
-            >
-              remove
-            </button>
+        {view.inventory.slots.map((slot) => (
+          <div className={slot.itemId ? 'doll-slot' : 'doll-slot empty'} key={slot.id}>
+            <span className="muted">{slot.name}</span>
+            {slot.itemId ? (
+              <>
+                <strong>{slot.itemName}</strong>
+                {slot.condition < 1 && (
+                  <span className="tag" style={{ color: slot.condition < 0.25 ? 'var(--danger)' : 'var(--amber)' }}>
+                    {Math.round(slot.condition * 100)}%
+                  </span>
+                )}
+                <button
+                  className="mini"
+                  disabled={busy}
+                  onClick={() => act({ type: 'unequip', slot: slot.id as Slot })}
+                >
+                  remove
+                </button>
+              </>
+            ) : (
+              <span className="muted">—</span>
+            )}
           </div>
         ))}
       </aside>

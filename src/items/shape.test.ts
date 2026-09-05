@@ -209,12 +209,12 @@ test('nothing is ever shapeless', () => {
   // The same guarantee `weightOf` gives: an anonymous generated item still has
   // a silhouette, so it can never be free to carry in a slot world.
   assert.ok(area(shapeOf(item())) > 0);
-  assert.ok(area(shapeOf(item({ kind: 'equipment', slot: 'armour' }))) > 0);
+  assert.ok(area(shapeOf(item({ kind: 'equipment', slot: 'body' }))) > 0);
   assert.ok(area(shapeOf(item({ kind: 'consumable' }))) > 0);
 });
 
 test('armour is bulkier than a phial', () => {
-  const plate = shapeOf(item({ id: 'armour_scale', kind: 'equipment', slot: 'armour' }));
+  const plate = shapeOf(item({ id: 'armour_scale', kind: 'equipment', slot: 'body' }));
   const phial = shapeOf(item({ id: 'draught_t1', kind: 'consumable' }));
   assert.ok(area(plate) > area(phial));
 });

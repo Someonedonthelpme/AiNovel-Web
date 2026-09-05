@@ -1,4 +1,6 @@
 import type { DirectorDeed } from '../social/deed.ts';
+import { rulesOf, STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
 import type { SheetRecord } from './sheetaction.ts';
@@ -128,7 +130,7 @@ export type TurnRecord = {
 export type PlayEvent = { kind: 'start' } | TurnRecord | SheetRecord | ClimbRecord;
 
 export function initialPlayState(world: World, sheet: CharacterSheet): PlayState {
-  const inventory = startingInventory(sheet);
+  const inventory = startingInventory(sheet, rulesOf(world));
   // One point in hand at level one, so the tree is something to engage with
   // from the first screen rather than a picture of what might happen later.
   sheet = { ...sheet, skillPoints: sheet.skillPoints ?? 1 };
@@ -149,7 +151,7 @@ export function initialPlayState(world: World, sheet: CharacterSheet): PlayState
  * spends one, so a character who starts with none cannot use the only healing
  * available outside town until the tower happens to drop some.
  */
-export function startingInventory(sheet: CharacterSheet): Inventory {
+export function startingInventory(sheet: CharacterSheet, rules: Ruleset = STANDARD): Inventory {
   let inventory = emptyInventory();
 
   /*
@@ -176,7 +178,7 @@ export function startingInventory(sheet: CharacterSheet): Inventory {
   if (attack) {
     const weapon = weaponFromAttack(attack, named ? { name: named.name, description: named.description } : undefined);
     inventory = addItem(inventory, weapon);
-    inventory = equip(inventory, weapon.id).inventory;
+    inventory = equip(inventory, weapon.id, rules).inventory;
   }
 
   const food = rations(3);
@@ -184,7 +186,7 @@ export function startingInventory(sheet: CharacterSheet): Inventory {
 
   // Wear anything else that came with a slot on it.
   for (const item of sheet.background.startingGear) {
-    if (item.kind === 'equipment' && item.slot) inventory = equip(inventory, item.id).inventory;
+    if (item.kind === 'equipment' && item.slot) inventory = equip(inventory, item.id, rules).inventory;
   }
   return inventory;
 }

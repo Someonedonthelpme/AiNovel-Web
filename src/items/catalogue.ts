@@ -52,9 +52,10 @@ export function draught(floor: number): Item {
   };
 }
 
-const WEAPONS: { name: string; ability: 'str' | 'dex'; range: number; sides: number }[] = [
+const WEAPONS: { name: string; ability: 'str' | 'dex'; range: number; sides: number; hands?: 2 }[] = [
   { name: 'shortsword', ability: 'str', range: 1, sides: 6 },
-  { name: 'spear', ability: 'str', range: 2, sides: 6 },
+  // Reach and a shaft need both hands, which is what an off-hand slot is for.
+  { name: 'spear', ability: 'str', range: 2, sides: 6, hands: 2 },
   { name: 'axe', ability: 'str', range: 1, sides: 8 },
   { name: 'long knife', ability: 'dex', range: 1, sides: 6 },
   { name: 'sling', ability: 'dex', range: 6, sides: 4 },
@@ -88,7 +89,8 @@ export function weapon(rng: Rng, floor: number): Item {
     name,
     description: 'Someone carried this before you did.',
     kind: 'equipment',
-    slot: 'weapon',
+    slot: 'main',
+    occupies: base.hands === 2 ? ['offhand'] : undefined,
     attack: {
       id: `atk_${slug}_d${sides}`,
       name,
@@ -119,7 +121,7 @@ export function armour(rng: Rng, floor: number): Item {
     name,
     description: 'Battered, and better than nothing.',
     kind: 'equipment',
-    slot: 'armour',
+    slot: 'body',
     armour: base.base + plus,
     stackable: false,
     value: 40 + plus * 50,
@@ -247,7 +249,7 @@ export function weaponFromAttack(attack: Attack, flavour?: { name: string; descr
     name: flavour?.name ?? attack.name,
     description: flavour ? stripMechanics(flavour.description) : 'Yours, and familiar.',
     kind: 'equipment',
-    slot: 'weapon',
+    slot: 'main',
     attack,
     stackable: false,
     value: 25,

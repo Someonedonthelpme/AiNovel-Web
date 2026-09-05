@@ -634,7 +634,15 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
   border-bottom: 1px solid var(--line);
 }
 .doll-slot:last-child { border-bottom: none; }
-.doll-slot span { grid-column: 1 / -1; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+/* Only the slot's NAME takes its own row; a condition tag sits beside the item. */
+.doll-slot > span:first-child {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+/* An empty slot is the useful half — it says what you have nothing on. */
+.doll-slot.empty { opacity: 0.45; }
 
 .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
 

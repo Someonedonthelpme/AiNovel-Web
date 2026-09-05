@@ -71,6 +71,15 @@ export type PersonaRules = {
   suitSwing: number;
 };
 
+/**
+ * One place a thing can be worn.
+ *
+ * `takes` is what an ITEM declares, and `id` is the place it goes — which is
+ * how a world gets two rings without any code learning to count them. Both
+ * ring slots take `ring`; an item never says which hand.
+ */
+export type SlotSpec = { id: string; takes: string; name: string };
+
 export type GearRules = {
   /**
    * How much condition a fight takes out of everything you are wearing.
@@ -79,6 +88,19 @@ export type GearRules = {
    * over it. A world with no smiths in it is a dial, not a missing system.
    */
   wearPerFight: number;
+  /**
+   * WHERE THIS WORLD LETS YOU WEAR THINGS.
+   *
+   * A fixed enum of three could not say that a world has no boots in it, or
+   * that this one lets you wear two rings. Unlike the numeric dials it is a
+   * content choice rather than a difficulty one, so the presets share a set and
+   * the point is that a WORLD may declare its own.
+   *
+   * Only `equip` reads it. Everything that asks what is WORN reads the equipped
+   * map, which already says — so a world's slot set never has to be threaded
+   * through the dozen places that merely look.
+   */
+  slots: SlotSpec[];
 };
 
 export type RestRules = {
@@ -135,6 +157,26 @@ export type Ruleset = {
 };
 
 /**
+ * The places a person can wear something, as most worlds have them.
+ *
+ * Two rings, because a second ring is the case a fixed enum cannot express
+ * without the code learning to count — and it does not have to, since both
+ * slots simply `take` a ring.
+ */
+export const BODY_SLOTS: SlotSpec[] = [
+  { id: 'main', takes: 'main', name: 'in hand' },
+  { id: 'offhand', takes: 'offhand', name: 'off hand' },
+  { id: 'head', takes: 'head', name: 'head' },
+  { id: 'body', takes: 'body', name: 'body' },
+  { id: 'leg', takes: 'leg', name: 'legs' },
+  { id: 'foot', takes: 'foot', name: 'feet' },
+  { id: 'neck', takes: 'neck', name: 'neck' },
+  { id: 'wrist', takes: 'wrist', name: 'wrist' },
+  { id: 'ring_l', takes: 'ring', name: 'left ring' },
+  { id: 'ring_r', takes: 'ring', name: 'right ring' },
+];
+
+/**
  * Today's numbers, exactly.
  *
  * The default preset is not "a sensible starting point" — it is the values the
@@ -146,7 +188,7 @@ export const STANDARD: Ruleset = {
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
   persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
   knowledge: { spreadDepth: 2, reputationWeight: 1, ambientHops: 1, ambientFade: 0.1 },
-  gear: { wearPerFight: 2 },
+  gear: { wearPerFight: 2, slots: [...BODY_SLOTS] },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };
@@ -157,7 +199,7 @@ const copy = (rules: Ruleset): Ruleset => ({
   combat: { ...rules.combat },
   persona: { ...rules.persona },
   knowledge: { ...rules.knowledge },
-  gear: { ...rules.gear },
+  gear: { ...rules.gear, slots: rules.gear.slots.map((slot) => ({ ...slot })) },
   rest: { ...rules.rest },
   world: { ...rules.world },
 });
@@ -176,7 +218,7 @@ export const PLAIN: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 0 },
   persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
   knowledge: { spreadDepth: 0, reputationWeight: 0, ambientHops: 0, ambientFade: 0 },
-  gear: { wearPerFight: 0 },
+  gear: { ...STANDARD.gear, wearPerFight: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -187,7 +229,7 @@ export const HARSH: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 1 },
   persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
   knowledge: { spreadDepth: 4, reputationWeight: 1.5, ambientHops: 2, ambientFade: 0.05 },
-  gear: { wearPerFight: 5 },
+  gear: { ...STANDARD.gear, wearPerFight: 5 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };
