@@ -20,6 +20,8 @@ import { resolveSkill } from '../skills/active.ts';
 import type { ActiveSkill } from '../skills/active.ts';
 import { priceOfUse } from '../skills/pools.ts';
 import { referencePc } from '../combat/statblock.ts';
+import { refine } from '../items/refine.ts';
+import { instanceOf } from '../items/instance.ts';
 import { applyTurn } from '../play/delta.ts';
 import { nudge } from '../social/edge.ts';
 import type { Edges } from '../social/edge.ts';
@@ -344,6 +346,29 @@ test('gear.rotateInBags reaches whether a long thing can be turned to fit', () =
   );
 });
 
+test('gear.maxRefine reaches how far a thing can be taken', () => {
+  const axe = instanceOf('a', 'w');
+  assert.equal(refine(axe, tuned({ gear: { maxRefine: 0 } }).gear).attempted, false, 'a world with no smiths');
+  assert.equal(refine(axe, tuned({ gear: { maxRefine: 5 } }).gear).attempted, true);
+});
+
+test('refineRisk and refineLoss reach whether it can go wrong, and how badly', () => {
+  /*
+   * TWO NUMBERS RATHER THAN A MODE, so there is one code path and no switch on
+   * a rule. Risk at nought never fails, which is Genshin; a loss of nought is a
+   * stall; one level is the middle case; a loss past the ceiling destroys the
+   * thing, which is what RO does.
+   */
+  const at4 = { ...instanceOf('a', 'w'), refine: 4 };
+  const safe = tuned({ gear: { refineRisk: 0 } });
+  assert.equal(refine(at4, safe.gear).item?.refine, 5, 'it never goes wrong');
+
+  const risky = { ...STANDARD.gear, refineRisk: 1 };
+  assert.equal(refine(at4, { ...risky, refineLoss: 0 }).item?.refine, 4, 'a stall keeps the level');
+  assert.equal(refine(at4, { ...risky, refineLoss: 1 }).item?.refine, 3, 'and a slip loses one');
+  assert.equal(refine(at4, { ...risky, refineLoss: 99 }).item, null, 'and past the ceiling it is gone');
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -372,6 +397,7 @@ const PROVEN = [
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
   'gear.wearPerFight', 'gear.slots', 'gear.rotateInBags',
+  'gear.maxRefine', 'gear.refineRisk', 'gear.refineLoss',
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',

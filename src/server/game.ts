@@ -43,6 +43,8 @@ import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
 import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
 import { partTypeOf } from '../items/parts.ts';
+import { canEnchant, enchantCost, enhanceCost, ENCHANT_NAMES, nextRarity, refineCost } from '../items/refine.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import type { Item } from '../items/types.ts';
 import { boardOf, findHolding, isContainer, placementsIn, spaceIn } from '../items/types.ts';
 import type { Holding, Inventory } from '../items/types.ts';
@@ -177,6 +179,23 @@ export type GameView = {
        * discover it by being refused.
        */
       parts: { id: string; name: string; condition: number; fused: boolean }[];
+      /**
+       * What has been put INTO it, and what the next step would cost.
+       *
+       * `enhanceResets` is sent so the panel can say what enhancing throws
+       * away. The whole decision is that trade, and a button that quietly
+       * discarded a +9 would be the worst kind of surprise.
+       */
+      refine: number | null;
+      rarity: string | null;
+      enchants: string[];
+      canRefine: boolean;
+      canEnchant: boolean;
+      canEnhance: boolean;
+      refineCost: number;
+      enchantCost: number;
+      enhanceCost: number;
+      enhanceResets: boolean;
       /** Whether it has a history, and whether this character has read it. */
       hasLore: boolean; read: boolean;
     }[];
@@ -187,6 +206,8 @@ export type GameView = {
      * a property of the world and the browser has no ruleset.
      */
     slots: { id: string; name: string; itemId: string | null; itemName: string | null; condition: number }[];
+    /** The workings a milestone may buy. A closed list, so the panel offers only these. */
+    workings: string[];
   };
   /** What the skills panel shows. Hidden nodes and Signets are absent, not greyed. */
   tree: {
@@ -633,6 +654,33 @@ function partsView(holding: Holding): GameView['inventory']['stacks'][number]['p
   }));
 }
 
+/** What has gone into a thing, and what the next step would take. */
+function improvementView(holding: Holding | undefined, rules: Ruleset) {
+  if (!holding) {
+    return {
+      refine: null, rarity: null, enchants: [], canRefine: false, canEnchant: false,
+      canEnhance: false, refineCost: 0, enchantCost: 0, enhanceCost: 0, enhanceResets: false,
+    };
+  }
+
+  const inst = holding.instance;
+  const level = inst.refine ?? 0;
+  return {
+    refine: level,
+    rarity: inst.rarity ?? 'common',
+    enchants: [...(inst.enchants ?? [])],
+    canRefine: level < rules.gear.maxRefine,
+    canEnchant: canEnchant(inst),
+    canEnhance: nextRarity(inst.rarity) !== null,
+    refineCost: refineCost(level),
+    enchantCost: enchantCost(inst.enchants?.length ?? 0),
+    enhanceCost: enhanceCost(inst.rarity),
+    // What enhancing would throw away, so the trade can be shown rather than
+    // discovered.
+    enhanceResets: level > 0 || (inst.enchants?.length ?? 0) > 0,
+  };
+}
+
 function inventoryViewOf(state: PlayState): GameView['inventory'] {
   const inv = state.pc.inventory;
   const worn = new Set(Object.values(inv.equipped));
@@ -665,6 +713,7 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
     board: holding ? boardView(item) : null,
     placed: holding ? placedView(holding) : [],
     parts: holding ? partsView(holding) : [],
+    ...improvementView(holding, rulesOf(state.world)),
     // A history is not advertised until it exists, and once read the button
     // goes rather than sitting there offering nothing.
     hasLore: Boolean(loreFor(item, state.world, state.sheet.language)),
@@ -684,6 +733,7 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
       ...heldLines(inv, null),
     ],
     equipped: { ...inv.equipped } as Record<string, string>,
+    workings: [...ENCHANT_NAMES],
     slots: rulesOf(state.world).gear.slots.map((slot) => {
       const holding = inv.equipped[slot.id] ? findHolding(inv, inv.equipped[slot.id]!) : null;
       return {

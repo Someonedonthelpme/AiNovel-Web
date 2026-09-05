@@ -1,5 +1,9 @@
 import { rulesOf } from '../rules/ruleset.ts';
-import { attachPart, detachPart, putIn, takeOut } from '../items/types.ts';
+import { attachPart, detachPart, findHolding, putIn, removeItem, takeOut, withInstance } from '../items/types.ts';
+import { enchant, enchantCost, enhance, enhanceCost, refine, refineCost } from '../items/refine.ts';
+import type { Attempt } from '../items/refine.ts';
+import type { ItemInstance } from '../items/instance.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import type { Abilities } from '../combat/types.ts';
 import { loreFor } from './lorebook.ts';
 import { knowsLore, learn } from './lore.ts';
@@ -45,6 +49,15 @@ export type SheetAction =
   /** Take a piece off a thing, or put a loose piece back on one. */
   | { type: 'strip'; item: string; part: string }
   | { type: 'fit'; item: string; part: string }
+  /**
+   * The three ways a thing gets better, and the trade between them.
+   *
+   * Enhancing RESETS refining and working, which is what makes when to enhance
+   * a decision rather than one more upgrade taken the moment it is affordable.
+   */
+  | { type: 'refine'; item: string }
+  | { type: 'enchant'; item: string; working: string }
+  | { type: 'enhance'; item: string }
   | { type: 'use'; item: string }
   /** Taken once, at level three. It reshapes the tree by opening an island. */
   | { type: 'chooseSubclass'; id: string }
@@ -102,6 +115,46 @@ export const contextOf = (state: PlayState): TraitContext => ({
  * Every branch re-derives hit points afterwards, because a point in
  * constitution, a tree node and a suit of armour can all move the maximum.
  */
+/**
+ * The shared half of refining, working and enhancing.
+ *
+ * All three cost coin, name one object, and either change it or explain why
+ * not. COIN FINALLY HAS A SPENDER — it has been earned from every fight and
+ * spent on nothing at all since it was added.
+ */
+function improve(
+  state: PlayState,
+  itemId: string,
+  attempt: (inst: ItemInstance, rules: Ruleset) => Attempt,
+  priceOf: (inst: ItemInstance) => number,
+): SheetResult {
+  const holding = findHolding(state.pc.inventory, itemId);
+  if (!holding) return { state, error: 'you are not carrying that', note: null };
+
+  const price = priceOf(holding.instance);
+  if (state.pc.coin < price) return { state, error: `that would cost ${price}`, note: null };
+
+  const tried = attempt(holding.instance, rulesOf(state.world));
+  // A refusal is free. Nothing was tried, so nothing is owed.
+  if (!tried.attempted) return { state, error: tried.note, note: null };
+
+  /*
+   * A FAILURE STILL COSTS. The fee is for the attempt, not the outcome, which
+   * is the only thing that makes risk mean anything — and when a thing comes
+   * apart it is GONE, rather than quietly surviving because the outcome had no
+   * object in it.
+   */
+  const inventory = tried.item
+    ? withInstance(state.pc.inventory, holding.instance.id, tried.item)
+    : removeItem(state.pc.inventory, holding.instance.id);
+
+  return settle(
+    { ...state, pc: { ...state.pc, coin: state.pc.coin - price, inventory } },
+    state,
+    tried.note,
+  );
+}
+
 export function applySheetAction(state: PlayState, action: SheetAction): SheetResult {
   if (state.ended) return { state, error: 'this run is over', note: null };
 
@@ -151,6 +204,15 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       if (on.error) return { state, error: on.error, note: null };
       return settle({ ...state, pc: { ...state.pc, inventory: on.inventory } }, state, 'fitted');
     }
+
+    case 'refine':
+      return improve(state, action.item, (inst, rules) => refine(inst, rules.gear), (inst) => refineCost(inst.refine ?? 0));
+
+    case 'enchant':
+      return improve(state, action.item, (inst) => enchant(inst, action.working), (inst) => enchantCost(inst.enchants?.length ?? 0));
+
+    case 'enhance':
+      return improve(state, action.item, (inst) => enhance(inst), (inst) => enhanceCost(inst.rarity));
 
     case 'unequip':
       return settle(

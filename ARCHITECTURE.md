@@ -481,6 +481,18 @@ of one, so wielding the sharp axe instead of the notched one is a thing a player
 can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
 which were tested islands reachable from nothing.
 
+**Refine, work, enhance — and the reset is the design.** `ItemInstance.refine`,
+`.enchants` and `.rarity` were stored from the day instances existed and read by
+nobody. Refining adds a level whose worth is fixed by the OBJECT (so two swords
+of one kind refine differently); a milestone every four levels buys one working
+from a closed list; and enhancing raises rarity, grants something lasting, and
+THROWS AWAY BOTH. That reset is what makes when to enhance a decision rather
+than one more upgrade taken as soon as it is affordable. Failure is two numbers
+rather than a mode — risk and levels-lost — so Genshin (never fails), a stall,
+a slip and RO's destruction are one code path with no switch on a rule. It also
+gives COIN its first spender: it had been earned from every fight and spent on
+nothing at all.
+
 **A thing is made of pieces.** `instance.ts` has known how to walk an assembly,
 weigh it, wear its weakest piece and join its silhouette since the day it was
 written, and nothing ever built one — so every object was a single lump. Weapons

@@ -243,6 +243,13 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
             )}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{item.description}</p>
             {item.board && <Board board={item.board} placed={item.placed} />}
+            {item.refine !== null && (item.refine > 0 || item.rarity !== 'common' || item.enchants.length > 0) && (
+              <div className="parts">
+                {item.refine > 0 && <span className="tag" style={{ color: 'var(--amber)' }}>+{item.refine}</span>}
+                {item.rarity !== 'common' && <span className="tag">{item.rarity}</span>}
+                {item.enchants.map((working) => <span className="tag" key={working}>{working}</span>)}
+              </div>
+            )}
             {item.parts.length > 0 && (
               <div className="parts">
                 {item.parts.map((part) => (
@@ -291,6 +298,46 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
             )}
             {item.wearable && !item.equipped && (
               <button className="mini" disabled={busy} onClick={() => act({ type: 'equip', item: item.id })}>equip</button>
+            )}
+            {item.canRefine && (
+              <button
+                className="mini"
+                disabled={busy || c.coin < item.refineCost}
+                title={`${item.refineCost} coin`}
+                onClick={() => act({ type: 'refine', item: item.id })}
+              >
+                refine {item.refineCost}
+              </button>
+            )}
+            {item.canEnchant && (
+              <button
+                className="mini"
+                disabled={busy || c.coin < item.enchantCost}
+                title={`${item.enchantCost} coin`}
+                onClick={() => act({
+                  type: 'enchant',
+                  item: item.id,
+                  // The first working it does not already carry. A picker is
+                  // the right answer eventually; offering nothing is not.
+                  working: view.inventory.workings.find((w) => !item.enchants.includes(w)) ?? '',
+                })}
+              >
+                work {item.enchantCost}
+              </button>
+            )}
+            {item.canEnhance && (
+              <button
+                className="mini"
+                disabled={busy || c.coin < item.enhanceCost}
+                // The trade, said out loud. A button that quietly discarded a
+                // +9 would be the worst kind of surprise.
+                title={item.enhanceResets
+                  ? `${item.enhanceCost} coin — and this loses +${item.refine} and every working on it`
+                  : `${item.enhanceCost} coin`}
+                onClick={() => act({ type: 'enhance', item: item.id })}
+              >
+                enhance {item.enhanceCost}{item.enhanceResets ? ' ⚠' : ''}
+              </button>
             )}
             {item.equipped && item.slot && (
               <button

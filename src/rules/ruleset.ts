@@ -109,6 +109,19 @@ export type GearRules = {
    * which is a different game, not a broken one.
    */
   rotateInBags: boolean;
+  /** How far a thing can be refined. Nought is a world with no smiths. */
+  maxRefine: number;
+  /**
+   * Failure, as TWO NUMBERS rather than a mode — so there is one code path and
+   * no switch on a rule.
+   *
+   * `refineRisk` at nought never fails, which is Genshin. `refineLoss` at
+   * nought is a stall: the fee is gone and the object untouched. One is the
+   * middle case. A loss larger than `maxRefine` destroys the thing outright,
+   * which is what RO does.
+   */
+  refineRisk: number;
+  refineLoss: number;
 };
 
 export type RestRules = {
@@ -197,7 +210,10 @@ export const STANDARD: Ruleset = {
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
   persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
   knowledge: { spreadDepth: 2, reputationWeight: 1, ambientHops: 1, ambientFade: 0.1 },
-  gear: { wearPerFight: 2, slots: [...BODY_SLOTS], rotateInBags: true },
+  gear: {
+    wearPerFight: 2, slots: [...BODY_SLOTS], rotateInBags: true,
+    maxRefine: 10, refineRisk: 0.25, refineLoss: 1,
+  },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };
@@ -227,7 +243,7 @@ export const PLAIN: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 0 },
   persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
   knowledge: { spreadDepth: 0, reputationWeight: 0, ambientHops: 0, ambientFade: 0 },
-  gear: { ...STANDARD.gear, wearPerFight: 0 },
+  gear: { ...STANDARD.gear, wearPerFight: 0, refineRisk: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -238,7 +254,7 @@ export const HARSH: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 1 },
   persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
   knowledge: { spreadDepth: 4, reputationWeight: 1.5, ambientHops: 2, ambientFade: 0.05 },
-  gear: { ...STANDARD.gear, wearPerFight: 5 },
+  gear: { ...STANDARD.gear, wearPerFight: 5, refineRisk: 0.4, refineLoss: 99 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };

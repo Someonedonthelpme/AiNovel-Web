@@ -5,6 +5,7 @@ import { firstFit, join, rect, shapeFrom } from './shape.ts';
 import { attach, conditionOfInstance, detach, grantsOfInstance, instanceOf, isBroken, shapeOfInstance, wear, wearsFirst, weightOfInstance } from './instance.ts';
 import type { ItemInstance, TypeOf } from './instance.ts';
 import { assemblyFor, partTypeOf } from './parts.ts';
+import { bonusOf } from './refine.ts';
 import type { AssemblyPart } from './parts.ts';
 import { PRISTINE } from './instance.ts';
 import type { Board, Cell, Placement, Shape } from './shape.ts';
@@ -437,7 +438,10 @@ export const conditionIn = (inv: Inventory, id: string): number => {
 export function equippedArmour(inv: Inventory): number | null {
   const armour = equippedHoldings(inv)
     .find((h) => typeof h.item.armour === 'number' && !isBroken(h.instance));
-  return armour?.item.armour ?? null;
+  if (!armour) return null;
+  // Refined and worked armour is better armour, which is the whole point of
+  // refining armour.
+  return (armour.item.armour ?? 0) + bonusOf(armour.instance).armour;
 }
 
 /** Ability bonuses from everything worn, summed. */
@@ -446,7 +450,15 @@ export function equippedGrants(inv: Inventory): Partial<Record<Ability, number>>
   for (const { instance, item } of equippedHoldings(inv)) {
     // Read off the INSTANCE, so a thing assembled from parts is worth what its
     // parts are worth — which is the whole reason parts carry stats.
-    for (const [ability, bonus] of Object.entries(grantsOfInstance(instance, typesFor(item)))) {
+    // What the parts give, plus what refining, working and rarity have added.
+    // ONE reader for all three, folded in where a worn thing's grants are
+    // already asked for.
+    const worth = grantsOfInstance(instance, typesFor(item));
+    for (const [ability, bonus] of Object.entries(worth)) {
+      const key = ability as Ability;
+      out[key] = (out[key] ?? 0) + (bonus ?? 0);
+    }
+    for (const [ability, bonus] of Object.entries(bonusOf(instance).ability)) {
       const key = ability as Ability;
       out[key] = (out[key] ?? 0) + (bonus ?? 0);
     }
@@ -619,6 +631,10 @@ function lift(inv: Inventory, id: string): { inventory: Inventory; taken: Holdin
   }
   return { inventory: inv, taken: null };
 }
+
+/** Put a changed object back where it was, at any depth. */
+export const withInstance = (inv: Inventory, id: string, instance: ItemInstance): Inventory =>
+  replacing(inv, id, (h) => ({ ...h, instance }));
 
 export type MoveResult = { inventory: Inventory; error: string | null };
 

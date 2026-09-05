@@ -41,6 +41,16 @@ export type ItemInstance = {
   condition: number;
   /** How far it has been refined. Stats grow with it; see `refine.ts`. */
   refine?: number;
+  /**
+   * How many times it has been to the smith, successes and failures alike.
+   *
+   * Not bookkeeping: it is what makes each ATTEMPT its own roll. Seeding the
+   * roll from the level alone made a level that failed once fail for ever —
+   * the same input, the same answer — so an object could be permanently stuck
+   * at +2 however much was spent on it. The value of a level is still fixed by
+   * the object; only the attempt is fresh.
+   */
+  tries?: number;
   /** Bought at refine milestones. */
   enchants?: string[];
   rarity?: Rarity;
