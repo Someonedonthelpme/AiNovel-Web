@@ -71,6 +71,25 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     if (Object.keys(trust).length) delta.trust = trust;
   }
 
+  /*
+   * A deed has to have been done to somebody who was THERE.
+   *
+   * Not merely somebody who exists: a deed is the thing witnesses see, and one
+   * done to a person standing on another floor has no witnesses, no spread and
+   * no meaning. The kind is already narrowed to what a model may claim; this is
+   * the other half of the guard.
+   */
+  if (proposed.deed) {
+    const here = new Set(region?.places.find((p) => p.id === state.world.currentPlace)?.people ?? []);
+    if (!state.world.people[proposed.deed.toward]) {
+      rejected.push(`deed "${proposed.deed.kind}": no such person`);
+    } else if (!here.has(proposed.deed.toward)) {
+      rejected.push(`deed "${proposed.deed.kind}": ${proposed.deed.toward} is not here`);
+    } else {
+      delta.deed = proposed.deed;
+    }
+  }
+
   if (proposed.revealExit !== undefined) {
     if (!region) {
       rejected.push('revealExit: the current region is not loaded in full detail');
@@ -351,10 +370,19 @@ function deedsIn(state: PlayState, record: TurnRecord): Deed[] {
         // asymmetry the register already prices, read as a deed.
         kind: status === 'inferior' ? 'threatened' : 'insulted',
         doer: PLAYER,
-        victim: record.addressed,
+        toward: record.addressed,
         at,
       });
     }
+  }
+
+  /*
+   * And what the Director judged, which is the half no rule can see: a favour
+   * done, a slight meant to land in front of people, menace in polite words.
+   * It named the deed; the mark decides everything else about it.
+   */
+  if (record.delta.deed) {
+    out.push({ kind: record.delta.deed.kind, doer: PLAYER, toward: record.delta.deed.toward, at });
   }
 
   // Drawing on somebody is the plainest deed there is.

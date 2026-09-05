@@ -584,12 +584,15 @@ belongs to `Effect` on the day a skill can produce one, and not before; adding
 it now is a channel `resolveSkill` cannot resolve, which is the bug
 `verbs.test.ts` exists to catch.
 
-*And `delta.trust` being trust-ONLY turns out to be correct rather than
-limiting.* Trust is the single axis a model is competent to judge — "does this
-person trust you more after that exchange". Respect, resentment, fear, guilt and
-obligation are EARNED mechanically, by the register and by deeds. Letting the
-Director set them would be a model deciding an effect, which is the one thing
-this codebase does not allow.
+*And the Director's social lever is a NAMED DEED, not a set of axes.* Trust is
+the only axis a model should set directly — "does this person trust you more
+after that exchange". But the engine is blind to a whole class of act: no rule
+can tell handing a man a rope from handing him a rock. So `delta.deed` lets the
+Director name one of `helped · insulted · humiliated · threatened` and the
+deed's own mark decides what it costs, who felt it and how far it went — the
+`useItem` division exactly. `drewOn`, `killed` and `spared` are NOT claimable:
+they are outcomes the engine resolves, and a model able to name one could report
+a killing that never happened.
 
 Six of the ten verbs (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never

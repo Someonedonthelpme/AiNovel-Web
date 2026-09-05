@@ -1,3 +1,4 @@
+import type { DirectorDeed } from '../social/deed.ts';
 import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
 import type { SheetRecord } from './sheetaction.ts';
@@ -60,6 +61,20 @@ export type WorldDelta = {
   learnFacts?: string[];
   /** Per-person trust CHANGES, not absolutes. */
   trust?: Record<PersonId, number>;
+  /**
+   * Something the player visibly DID to somebody, named but not priced.
+   *
+   * The one social lever a model is genuinely better at than a rule: no
+   * mechanism can tell handing a man a rope from handing him a rock, and the
+   * engine sees neither. So the Director NAMES a deed from a closed list and
+   * the deed's own mark decides what it costs, who felt it, and how far it
+   * travelled — the same division as `useItem`.
+   *
+   * Deliberately not "a set of relationship axes": a model that could write
+   * `resentment: 3` would be deciding an effect, which is the line this
+   * codebase does not cross.
+   */
+  deed?: { kind: DirectorDeed; toward: PersonId };
   flags?: Record<string, boolean>;
   timeSpent?: number;
   /** Finding the way up. */

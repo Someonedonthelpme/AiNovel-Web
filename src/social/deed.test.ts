@@ -4,10 +4,10 @@ import { believes } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from './edge.ts';
 import type { Edges } from './edge.ts';
 import {
-  claimOf, DEEDS, guiltFor, markOf, spreadOf, witnessDeed, witnessesOf,
+  claimOf, DEEDS, guiltFor, isDirectorDeed, markOf, spreadOf, witnessDeed, witnessesOf,
 } from './deed.ts';
 import type { Deed } from './deed.ts';
-import { applyTurn } from '../play/delta.ts';
+import { applyTurn, validateDelta } from '../play/delta.ts';
 import { playState } from '../play/fixtures.ts';
 import { compressExcept } from '../world/lod.ts';
 import { standingLine } from '../world/floorgen.ts';
@@ -15,7 +15,7 @@ import { withOverrides, STANDARD } from '../rules/ruleset.ts';
 import type { TurnRecord } from '../play/state.ts';
 
 const deed = (over: Partial<Deed> = {}): Deed =>
-  ({ kind: 'insulted', doer: PLAYER, victim: 'smith', at: 'town', ...over });
+  ({ kind: 'insulted', doer: PLAYER, toward: 'smith', at: 'town', ...over });
 
 /** A chain of acquaintance: a knows b knows c knows d. */
 function chain(): Edges {
@@ -54,7 +54,7 @@ test('a deed nobody saw still happened, and still costs nothing socially', () =>
 test('IT SPREADS ALONG THE SOCIAL GRAPH, not along the map', () => {
   // Who hears about it follows who knows whom, so it follows the story rather
   // than the geography.
-  const held = spreadOf(chain(), deed({ doer: 'x', victim: 'y' }), ['a'], 3);
+  const held = spreadOf(chain(), deed({ doer: 'x', toward: 'y' }), ['a'], 3);
   assert.deepEqual([...held.keys()].sort(), ['a', 'b', 'c', 'd']);
 });
 
@@ -102,7 +102,7 @@ test('the victim and the onlooker do not feel the same thing about the same act'
 });
 
 test('hearsay moves somebody less than what they saw with their own eyes', () => {
-  const out = witnessDeed(chain(), deed({ kind: 'killed', doer: 'x', victim: 'y' }), ['a'], 3);
+  const out = witnessDeed(chain(), deed({ kind: 'killed', doer: 'x', toward: 'y' }), ['a'], 3);
   const saw = Math.abs(axisOf(out.edges, 'a', 'x', 'regard'));
   const heard = Math.abs(axisOf(out.edges, 'c', 'x', 'regard'));
   assert.ok(saw > heard, `seen ${saw} should outweigh third-hand ${heard}`);
@@ -137,7 +137,7 @@ test('every deed in the vocabulary actually costs something', () => {
   // propagated, believed and felt by nobody.
   for (const kind of DEEDS) {
     const mark = markOf(kind);
-    const moves = Object.keys(mark.onWitness).length + Object.keys(mark.onVictim).length;
+    const moves = Object.keys(mark.onWitness).length + Object.keys(mark.onToward).length;
     assert.ok(moves > 0, `"${kind}" is declared and lands on nobody`);
     assert.notEqual(mark.standing, 0, `"${kind}" does not move a place's standing`);
   }
@@ -225,4 +225,57 @@ test('a place that remembers you says so to whoever rebuilds it', () => {
   assert.match(standingLine(-7), /closed doors|worse/i);
   assert.match(standingLine(-3), /not welcome/i);
   assert.match(standingLine(7), /well thought of/i);
+});
+
+/* -------------------------------------------------------------------------- */
+/* The one social lever a model is better at than a rule                       */
+/* -------------------------------------------------------------------------- */
+
+test('the model NAMES a deed and never prices it', () => {
+  /*
+   * No mechanism can tell handing a man a rope from handing him a rock, and the
+   * engine sees neither — which is exactly why the Director is allowed to say
+   * which. It is the `useItem` division: name the draught, and the item decides
+   * what drinking it does.
+   *
+   * `helped` is `obligation`'s other writer, and the one that could only ever
+   * have come from a judgement.
+   */
+  const after = applyTurn(playState(), turn({ delta: { deed: { kind: 'helped', toward: 'smith' } } })).state;
+
+  assert.ok(axisOf(after.world.edges, 'smith', PLAYER, 'obligation') > 0, 'they owe you now');
+  assert.ok(axisOf(after.world.edges, 'warden', PLAYER, 'regard') > 0, 'and the room saw it');
+  assert.ok((after.world.reputation?.['floor-0'] ?? 0) > 0, 'a place thinks better of you');
+});
+
+test('the ENGINE keeps its own outcomes: a model cannot claim a killing', () => {
+  // `drewOn`, `killed` and `spared` are resolved by the engine. A model able to
+  // name one could report a death that never happened.
+  for (const kind of DEEDS) {
+    const claimable = isDirectorDeed(kind);
+    assert.equal(claimable, !['drewOn', 'killed', 'spared'].includes(kind), kind);
+  }
+});
+
+test('a deed done to somebody who is not here is refused', () => {
+  // A deed is what witnesses SEE. One done to a person on another floor has no
+  // witnesses, no spread, and no meaning.
+  const state = playState();
+  const away = validateDelta(state, { deed: { kind: 'helped', toward: 'hunter' } });
+  assert.match(away.rejected.join(' '), /not here|no such person/);
+
+  const ghost = validateDelta(state, { deed: { kind: 'helped', toward: 'nobody_at_all' } });
+  assert.match(ghost.rejected.join(' '), /no such person/);
+});
+
+test('humiliating somebody is not merely insulting them', () => {
+  // Distinct marks, or it is a second word for one mechanic.
+  const insult = witnessDeed({}, deed({ kind: 'insulted' }), ['smith', 'warden'], 0);
+  const shame = witnessDeed({}, deed({ kind: 'humiliated' }), ['smith', 'warden'], 0);
+
+  assert.ok(
+    axisOf(shame.edges, 'smith', PLAYER, 'resentment') > axisOf(insult.edges, 'smith', PLAYER, 'resentment'),
+    'it is meant to land, and it does',
+  );
+  assert.ok(shame.standing < insult.standing, 'and the room holds it against you harder');
 });

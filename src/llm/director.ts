@@ -2,6 +2,8 @@ import { describeMental, describePersonality } from '../character/persona.ts';
 import { subjectById, subjectsOf } from '../world/subjects.ts';
 import { PLAYER, trustToward } from '../social/edge.ts';
 import { owedBy, permittedBy, rolesHeld, rolesOf } from '../social/roles.ts';
+import { DIRECTOR_DEEDS, isDirectorDeed } from '../social/deed.ts';
+import type { DirectorDeed } from '../social/deed.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
@@ -39,6 +41,15 @@ const deltaSchema = obj(
     learnFacts: { type: 'array', items: str, maxItems: 3 },
     trustPerson: str,
     trustChange: { type: 'integer', minimum: -3, maximum: 3 },
+    /**
+     * A DEED, named rather than priced.
+     *
+     * The model says which of a closed list happened; the deed's own mark
+     * decides what it costs, who feels it and how far it gets. Same division as
+     * `useItem`: name the draught, and the item decides what drinking it does.
+     */
+    deed: { type: 'string', enum: ['none', ...DIRECTOR_DEEDS] },
+    deedPerson: str,
     timeSpent: { type: 'integer', minimum: 0, maximum: 3 },
     revealExit: str,
     /** Whether a fight breaks out. What shows up is decided by depth, not here. */
@@ -49,8 +60,8 @@ const deltaSchema = obj(
     rest: { type: 'string', enum: ['none', 'short', 'long'] },
   },
   [
-    'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'timeSpent', 'revealExit',
-    'startCombat', 'useItem', 'equipItem', 'rest',
+    'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
+    'timeSpent', 'revealExit', 'startCombat', 'useItem', 'equipItem', 'rest',
   ],
 );
 
@@ -91,6 +102,8 @@ export type FlatDelta = {
   learnFacts: string[];
   trustPerson: string;
   trustChange: number;
+  deed: string;
+  deedPerson: string;
   timeSpent: number;
   revealExit: string;
   startCombat: boolean;
@@ -144,6 +157,14 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
     if (facts.length) delta.learnFacts = facts;
   }
   if (trustPerson && flat.trustChange) delta.trust = { [trustPerson]: flat.trustChange };
+
+  // The engine keeps `drewOn`, `killed` and `spared` to itself: those are
+  // outcomes it resolves, and a model able to claim one could report a killing
+  // that never happened.
+  const deedPerson = meaningful(flat.deedPerson);
+  if (isDirectorDeed(flat.deed ?? '') && deedPerson) {
+    delta.deed = { kind: flat.deed as DirectorDeed, toward: deedPerson };
+  }
   if (typeof flat.timeSpent === 'number') delta.timeSpent = flat.timeSpent;
   if (flat.startCombat) delta.startCombat = true;
 
@@ -170,6 +191,8 @@ export function mergeDeltas(base: WorldDelta, outcome: WorldDelta): WorldDelta {
     flags: { ...(base.flags ?? {}), ...(outcome.flags ?? {}) },
     timeSpent: Math.max(base.timeSpent ?? 0, outcome.timeSpent ?? 0),
     startCombat: base.startCombat || outcome.startCombat,
+    // The branch the dice picked wins: what happened is one thing, not both.
+    deed: outcome.deed ?? base.deed,
     useItem: outcome.useItem ?? base.useItem,
     equipItem: outcome.equipItem ?? base.equipItem,
     rest: outcome.rest ?? base.rest,

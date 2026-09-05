@@ -38,15 +38,35 @@ import type { EdgeAxis, Edges } from './edge.ts';
  * turn can currently produce either, and a deed nothing emits is a row in a
  * table pretending to be a mechanic.
  */
-export const DEEDS = ['insulted', 'threatened', 'drewOn', 'killed', 'spared'] as const;
+export const DEEDS = [
+  'helped', 'insulted', 'humiliated', 'threatened', 'drewOn', 'killed', 'spared',
+] as const;
 export type DeedKind = (typeof DEEDS)[number];
+
+/**
+ * The deeds the DIRECTOR may name, which is deliberately a subset.
+ *
+ * The model says WHICH; the mark below says how much — the same division as
+ * `useItem`, where the model names the draught and the item decides what
+ * drinking it does. That is what lets a model judge "they did that man a real
+ * service", which no rule can see, without ever touching a number.
+ *
+ * `drewOn`, `killed` and `spared` are NOT here. They are combat outcomes the
+ * engine resolves itself, and a model able to claim one could report a killing
+ * that never happened.
+ */
+export const DIRECTOR_DEEDS = ['helped', 'insulted', 'humiliated', 'threatened'] as const;
+export type DirectorDeed = (typeof DIRECTOR_DEEDS)[number];
+
+export const isDirectorDeed = (kind: string): kind is DirectorDeed =>
+  (DIRECTOR_DEEDS as readonly string[]).includes(kind);
 
 export type Deed = {
   kind: DeedKind;
   /** Who did it. */
   doer: string;
-  /** Who it was done to. Absent when it was done to no one in particular. */
-  victim?: string;
+  /** Who it was done to, or for. Absent when it was done to nobody in particular. */
+  toward?: string;
   /** Where, so the place's standing can move. */
   at: string;
 };
@@ -54,8 +74,8 @@ export type Deed = {
 type Mark = {
   /** How it reads to somebody who saw it. */
   onWitness: Partial<Record<EdgeAxis, number>>;
-  /** How it reads to the person it was done TO. */
-  onVictim: Partial<Record<EdgeAxis, number>>;
+  /** How it reads to the person it was done to, or for. */
+  onToward: Partial<Record<EdgeAxis, number>>;
   /** What the doer carries away from it, toward the person they did it to. */
   onDoer: Partial<Record<EdgeAxis, number>>;
   /** What it does to how a place regards you. Negative is notoriety. */
@@ -75,34 +95,54 @@ type Mark = {
  * scales it by what you thought of them.
  */
 const MARKS: Record<DeedKind, Mark> = {
+  /**
+   * A real service, and the writer `obligation` was waiting for.
+   *
+   * Only a model can see this one. No rule can tell the difference between
+   * handing somebody a rope and handing them a rock, and the engine sees
+   * neither — which is precisely why the Director is allowed to name it.
+   */
+  helped: {
+    onWitness: { regard: 1, trust: 1 },
+    onToward: { trust: 2, regard: 1, obligation: 2 },
+    onDoer: {},
+    standing: 1,
+  },
   insulted: {
     onWitness: { regard: -1 },
-    onVictim: { trust: -1, resentment: 1, respect: -1 },
+    onToward: { trust: -1, resentment: 1, respect: -1 },
     onDoer: { guilt: 1 },
     standing: -1,
   },
+  /** Not merely rude: done deliberately, and in front of people. */
+  humiliated: {
+    onWitness: { regard: -2, fear: 1 },
+    onToward: { trust: -2, respect: -2, resentment: 3 },
+    onDoer: { guilt: 2 },
+    standing: -2,
+  },
   threatened: {
     onWitness: { fear: 1, regard: -1 },
-    onVictim: { trust: -2, fear: 2, resentment: 1 },
+    onToward: { trust: -2, fear: 2, resentment: 1 },
     onDoer: { guilt: 1 },
     standing: -2,
   },
   drewOn: {
     onWitness: { fear: 2, regard: -1 },
-    onVictim: { trust: -2, fear: 2, resentment: 2 },
+    onToward: { trust: -2, fear: 2, resentment: 2 },
     onDoer: { guilt: 2 },
     standing: -2,
   },
   killed: {
     onWitness: { fear: 3, regard: -2, trust: -1 },
-    onVictim: {},
+    onToward: {},
     onDoer: { guilt: 3 },
     standing: -3,
   },
   /** The one that reads well. Letting somebody live is seen, and remembered. */
   spared: {
     onWitness: { regard: 2, trust: 1 },
-    onVictim: { trust: 2, respect: 2, obligation: 2 },
+    onToward: { trust: 2, respect: 2, obligation: 2 },
     onDoer: {},
     standing: 2,
   },
@@ -119,7 +159,7 @@ export const witnessesOf = (present: readonly string[], deed: Deed): string[] =>
   present.filter((id) => id !== deed.doer);
 
 export const claimOf = (deed: Deed): Claim =>
-  ({ kind: 'deed', who: deed.doer, what: deed.victim ? `${deed.kind}:${deed.victim}` : deed.kind });
+  ({ kind: 'deed', who: deed.doer, what: deed.toward ? `${deed.kind}:${deed.toward}` : deed.kind });
 
 /* -------------------------------------------------------------------------- */
 /* How far it got                                                              */
@@ -235,16 +275,16 @@ export function witnessDeed(
   for (const [who, belief] of knowers) {
     // The person it was done TO feels it as the victim, not as an onlooker,
     // however they came to know — though only somebody who was there is sure.
-    const felt = who === deed.victim ? mark.onVictim : mark.onWitness;
+    const felt = who === deed.toward ? mark.onToward : mark.onWitness;
     next = nudgeAll(next, who, deed.doer, weighted(felt, belief.confidence));
     reach += belief.confidence;
   }
 
   // And what the doer carries away, scaled by what they thought of the victim.
-  if (deed.victim && mark.onDoer.guilt) {
-    const regardHeld = next[`${deed.doer}>${deed.victim}`]?.axes.regard ?? 0;
+  if (deed.toward && mark.onDoer.guilt) {
+    const regardHeld = next[`${deed.doer}>${deed.toward}`]?.axes.regard ?? 0;
     const guilt = guiltFor(regardHeld, mark.onDoer.guilt);
-    if (guilt > 0) next = nudgeAll(next, deed.doer, deed.victim, { guilt });
+    if (guilt > 0) next = nudgeAll(next, deed.doer, deed.toward, { guilt });
   }
 
   // Guarded rather than multiplied through: `-1 * 0` is NEGATIVE zero, which

@@ -27,6 +27,8 @@ export const emptyDelta = (): FlatDelta => ({
   learnFacts: [],
   trustPerson: '',
   trustChange: 0,
+  deed: 'none',
+  deedPerson: '',
   timeSpent: 1,
   revealExit: '',
   startCombat: false, useItem: '', equipItem: '', rest: 'none',

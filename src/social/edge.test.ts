@@ -131,8 +131,8 @@ function written(): Set<EdgeAxis> {
    * exchange, so they are driven here through the same public entry point.
    */
   const fond = nudge(base.world.edges, PLAYER, 'smith', 'regard', 3);
-  const hurt = witnessDeed(fond, { kind: 'killed', doer: PLAYER, victim: 'smith', at: 'town' }, ['smith', 'warden'], 1);
-  const spared = witnessDeed({}, { kind: 'spared', doer: PLAYER, victim: 'smith', at: 'town' }, ['smith'], 1);
+  const hurt = witnessDeed(fond, { kind: 'killed', doer: PLAYER, toward: 'smith', at: 'town' }, ['smith', 'warden'], 1);
+  const spared = witnessDeed({}, { kind: 'spared', doer: PLAYER, toward: 'smith', at: 'town' }, ['smith'], 1);
   for (const axis of EDGE_AXES) {
     if (axisOf(hurt.edges, PLAYER, 'smith', axis) !== 0) moved.add(axis);
     if (axisOf(spared.edges, 'smith', PLAYER, axis) !== 0) moved.add(axis);
