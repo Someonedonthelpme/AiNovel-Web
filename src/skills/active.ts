@@ -1,9 +1,10 @@
 import type { Ability, Combatant, Condition } from '../combat/types.ts';
 import { addCondition, removeCondition } from '../combat/conditions.ts';
+import { finishCast } from '../combat/cast.ts';
 import { applyDamage } from '../combat/resolve.ts';
 import type { TraitCondition } from '../play/traits.ts';
 import { magnitudeOf, purposes, radiusOf as spreadOf, reachesOut, standingBonus, usableInCombat } from './effect.ts';
-import type { Effect } from './effect.ts';
+import type { Effect, SpecialVerb } from './effect.ts';
 import { scaleBy, suitOf } from './suit.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -112,7 +113,7 @@ export function resolveSkill(
     const amount = Math.max(1, Math.round(scaleBy(magnitudeOf(effect), suit, rules.persona.suitSwing)));
     for (const raw of recipients) {
       const before = effect.who === 'own' ? self : hit.get(raw.id) ?? raw;
-      const after = applyOne(effect, before, amount);
+      const after = applyOne(effect, before, amount, actor);
       if (effect.who === 'own') self = after;
       else hit.set(raw.id, after);
     }
@@ -127,7 +128,7 @@ export function resolveSkill(
 }
 
 /** One effect against one recipient. Nothing here rolls; see the docblock. */
-function applyOne(effect: Effect, who: Combatant, amount: number): Combatant {
+function applyOne(effect: Effect, who: Combatant, amount: number, actor: Combatant): Combatant {
   switch (effect.channel) {
     case 'hp':
       return effect.sign === 'minus'
@@ -158,9 +159,39 @@ function applyOne(effect: Effect, who: Combatant, amount: number): Combatant {
       return who;
 
     case 'special':
-      // The registry is declared and the resolvers land with the verbs; until
-      // then a special is inert rather than silently pretending to work.
-      return who;
+      return applyVerb(effect.verb, who, amount, actor);
+  }
+}
+
+/**
+ * The verbs, for the things that are not a number moving.
+ *
+ * Each one is here because the engine could already do it and nothing could
+ * ask for it — `pendingCast`, the condition list and the AI's target choice
+ * all existed with no way to reach them from a skill.
+ */
+function applyVerb(verb: SpecialVerb, who: Combatant, amount: number, actor: Combatant): Combatant {
+  switch (verb) {
+    case 'interrupt':
+      /*
+       * BREAKING A WIND-UP OUTRIGHT, with no roll to hold it.
+       *
+       * `breakCast` is the other route: a blow lands and CON decides whether
+       * it survives. A skill built to interrupt does not ask — that is what
+       * makes it worth a turn rather than being a worse attack. Nothing is
+       * refunded, exactly as when a cast completes: it was spent as intended.
+       */
+      return who.pendingCast ? finishCast(who) : who;
+
+    case 'cleanse':
+      // Everything, rather than one named thing. Naming one is what the
+      // condition channel already does, so the verb has to be the wider move.
+      return who.conditions.reduce((c, x) => removeCondition(c, x.kind), who);
+
+    case 'taunt':
+      // Who did it is the whole content of a taunt, so it is stored rather
+      // than derived — the AI reads it in `pickTarget`.
+      return { ...who, taunt: { by: actor.id, roundsLeft: Math.max(1, amount) } };
   }
 }
 
@@ -178,6 +209,10 @@ function noteFor(effect: Effect, actor: Combatant, target: Combatant, amount: nu
     case 'stamina':
     case 'mana':
       return `${who} is ${effect.sign === 'minus' ? 'drained' : 'restored'}`;
+    case 'special':
+      return effect.verb === 'cleanse' ? `${who} is clear of it`
+        : effect.verb === 'interrupt' ? `${actor.name} breaks what ${who} was building`
+          : `${who} can look at nothing but ${actor.name}`;
     default:
       return `${actor.name} steadies`;
   }

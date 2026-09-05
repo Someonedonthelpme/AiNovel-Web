@@ -65,7 +65,12 @@ export function tickConditions(c: Combatant): Combatant {
   const next = c.conditions
     .map((x) => (x.roundsLeft === null ? x : { ...x, roundsLeft: x.roundsLeft - 1 }))
     .filter((x) => x.roundsLeft === null || x.roundsLeft > 0);
-  return { ...c, conditions: next };
+
+  // A taunt is not a condition — it names WHO — but it wears off on the same
+  // clock, because two countdowns that could drift apart is one too many.
+  const { taunt, ...rest } = c;
+  const held = taunt && taunt.roundsLeft > 1 ? { ...taunt, roundsLeft: taunt.roundsLeft - 1 } : undefined;
+  return held ? { ...rest, conditions: next, taunt: held } : { ...(rest as Combatant), conditions: next };
 }
 
 /** Incapacitated creatures take no actions at all. */

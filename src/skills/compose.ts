@@ -3,7 +3,7 @@ import { mulberry32 } from '../engine/roll.ts';
 import type { Rng } from '../engine/roll.ts';
 import type { ActiveSkill } from './active.ts';
 import { costs, flat, instant, magnitudeOf, purposes, self, single, usableInCombat } from './effect.ts';
-import type { Channel, Effect } from './effect.ts';
+import type { Channel, Effect, Sign, SpecialVerb, Who } from './effect.ts';
 import { MAX_COST, MIN_COST, poolFor } from './pools.ts';
 
 /**
@@ -37,7 +37,7 @@ import { MAX_COST, MIN_COST, poolFor } from './pools.ts';
 /* What a discipline is allowed to draw                                        */
 /* -------------------------------------------------------------------------- */
 
-export const PAYLOADS = ['strike', 'hinder', 'mend', 'rally', 'drain', 'burst', 'hex', 'edge'] as const;
+export const PAYLOADS = ['strike', 'hinder', 'mend', 'rally', 'drain', 'burst', 'hex', 'edge', 'special'] as const;
 export type PayloadKind = (typeof PAYLOADS)[number];
 
 export type Grammar = {
@@ -45,6 +45,14 @@ export type Grammar = {
   payloads: PayloadKind[];
   /** Conditions it is allowed to inflict, if it inflicts any. */
   conditions: Condition[];
+  /**
+   * Verbs it may reach for, if `special` is among its payloads.
+   *
+   * Separate from `conditions` for the same reason the channel is: a verb is
+   * not a number moving, and which stat may break a cast is a different
+   * question from which may leave somebody prone.
+   */
+  verbs?: SpecialVerb[];
   /** The furthest it reaches. Nought means it only ever touches you. */
   maxRange: number;
 };
@@ -93,6 +101,27 @@ const CHANNEL_WEIGHT: Record<Channel, number> = {
   special: 2,
 };
 
+/**
+ * What each verb is worth, per round it holds for.
+ *
+ * Priced against the channel table's flat 2 rather than replacing it, because
+ * they differ: breaking a wind-up outright is worth more than clearing what is
+ * already on you, and taking somebody's choice away is worth most of all.
+ */
+const VERB_PRICE: Record<SpecialVerb, number> = {
+  taunt: 2.5,
+  interrupt: 2,
+  cleanse: 1.5,
+};
+
+/** Which way a verb points, since that is not a thing the caller may choose. */
+const VERB_AIM: Record<SpecialVerb, { sign: Sign; who: Who }> = {
+  // Sign is from the recipient's side: losing your turn's work is a minus.
+  interrupt: { sign: 'minus', who: 'foe' },
+  taunt: { sign: 'minus', who: 'foe' },
+  cleanse: { sign: 'plus', who: 'own' },
+};
+
 /** Reaching more people is worth more than reaching further. */
 const spread = (shape: Effect['shape']): number => {
   switch (shape.kind) {
@@ -117,7 +146,9 @@ const reach = (who: Effect['who']): number => (who === 'everyone' ? 1.5 : 1);
 export function priceEffect(effect: Effect): number {
   const per = effect.channel === 'condition'
     ? CONDITION_PRICE[effect.condition] ?? 1
-    : CHANNEL_WEIGHT[effect.channel];
+    : effect.channel === 'special'
+      ? VERB_PRICE[effect.verb]
+      : CHANNEL_WEIGHT[effect.channel];
   return per * magnitudeOf(effect) * spread(effect.shape) * held(effect.duration) * reach(effect.who);
 }
 
@@ -260,11 +291,33 @@ function payloadFor(rng: Rng, kind: PayloadKind, grammar: Grammar, budget: numbe
         duration: { kind: 'sustained' },
         formula: flat(Math.max(1, Math.min(3, Math.round(target / 2.5)))),
       }];
+
+    case 'special': {
+      /*
+       * A VERB, not a number. Its magnitude is always one — "half a cleanse"
+       * means nothing — so what the budget buys is how long it holds, and only
+       * for the verb where holding means anything.
+       */
+      const verb = pick(rng, grammar.verbs ?? []);
+      if (!verb) return [];
+      const { sign, who } = VERB_AIM[verb];
+      const rounds = verb === 'taunt'
+        ? { kind: 'rounds' as const, rounds: Math.max(1, Math.min(3, Math.round(target / VERB_PRICE[verb]))) }
+        : instant;
+      return [{
+        role: 'purpose', sign, channel: 'special', verb, who,
+        shape: who === 'own' ? self : single, duration: rounds, formula: flat(1),
+      }];
+    }
   }
 }
 
 /** Which effects only ever touch the person using them. */
 const REACHES = new Set<PayloadKind>(['strike', 'hinder', 'drain', 'burst', 'hex']);
+
+/** A verb reaches iff it points at somebody else — see `VERB_AIM`. */
+const reachesOutward = (effects: readonly Effect[]): boolean =>
+  purposes(effects).some((e) => e.who === 'foe' || e.who === 'friend' || e.who === 'everyone');
 
 /* -------------------------------------------------------------------------- */
 /* The allow-list, per axis                                                    */
@@ -287,6 +340,7 @@ const KIND_CHANNELS: Record<PayloadKind, Channel[]> = {
   rally: ['condition'],
   hex: ['hp', 'condition'],
   edge: ['stat'],
+  special: ['special'],
 };
 
 /** The channels a stat is allowed to touch at all. */
@@ -439,7 +493,7 @@ export function composeSkill(rng: Rng, input: ComposeInput): ActiveSkill {
     if (left < budget * 0.25) break;
   }
 
-  const reaches = kinds.some((k) => REACHES.has(k));
+  const reaches = kinds.some((k) => REACHES.has(k)) || reachesOutward(purpose);
   const range = reaches ? Math.max(1, Math.round(rng() * grammar.maxRange)) : 0;
 
   /*
@@ -522,6 +576,7 @@ const SHAPE = {
     burst: ['Flare', 'Wash', 'Spread', 'Bloom'],
     hex: ['Mark', 'Curse', 'Blight', 'Sign'],
     edge: ['Reading', 'Eye', 'Sense', 'Knack'],
+    special: ['Word', 'Turn', 'Break', 'Answer'],
   },
   th: {
     strike: ['รอยฟัน', 'หมัด', 'การแทง', 'ปาด'],
@@ -532,6 +587,7 @@ const SHAPE = {
     burst: ['การวาบ', 'คลื่น', 'การลาม', 'การบาน'],
     hex: ['รอยหมาย', 'คำสาป', 'ความเหี่ยว', 'เครื่องหมาย'],
     edge: ['การอ่าน', 'สายตา', 'สัมผัส', 'ความชำนาญ'],
+    special: ['ถ้อยคำ', 'การหันเห', 'การหัก', 'คำตอบ'],
   },
 } as const;
 

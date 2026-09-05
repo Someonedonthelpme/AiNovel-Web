@@ -51,10 +51,16 @@ export type Channel = (typeof CHANNELS)[number];
  *
  * A closed registry, deliberately, and seeded with what the engine can already
  * resolve. A free-text "special" would be a field with no reader — this
- * codebase's signature bug — so a verb exists here only once something can
- * carry it out.
+ * codebase's signature bug — so A VERB EXISTS HERE ONLY ONCE SOMETHING CAN
+ * CARRY IT OUT.
+ *
+ * `displace` was named in the design and is NOT here yet, for exactly that
+ * reason: shoving somebody needs the board — where the walls are, who is
+ * standing where — and the resolver is handed a combatant, not a grid. Listing
+ * it before then would have shipped a verb that silently did nothing, which is
+ * the bug this comment exists to prevent.
  */
-export const SPECIAL_VERBS = ['displace', 'interrupt', 'cleanse', 'taunt'] as const;
+export const SPECIAL_VERBS = ['interrupt', 'cleanse', 'taunt'] as const;
 export type SpecialVerb = (typeof SPECIAL_VERBS)[number];
 
 /** What is being touched, and whatever that channel needs to name. */

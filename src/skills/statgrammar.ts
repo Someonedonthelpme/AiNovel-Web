@@ -46,8 +46,10 @@ export const STAT_GRAMMAR: Record<Ability, Grammar> = {
   },
   /** The steady hand: it hits, from anywhere, and it hits where it meant to. */
   dex: {
-    payloads: ['strike', 'hinder'],
+    payloads: ['strike', 'hinder', 'special'],
     conditions: ['restrained', 'blinded'],
+    // Breaking a wind-up is timing, and timing is the steady hand's whole job.
+    verbs: ['interrupt'],
     maxRange: 8,
   },
   /**
@@ -68,8 +70,10 @@ export const STAT_GRAMMAR: Record<Ability, Grammar> = {
    * claims, and only the second one was VIT's to keep.
    */
   con: {
-    payloads: ['mend', 'rally', 'edge'],
+    payloads: ['mend', 'rally', 'edge', 'special'],
     conditions: ['poisoned', 'stunned'],
+    // Shrugging off everything at once is what pushing through IS.
+    verbs: ['cleanse'],
     maxRange: 0,
   },
   /** Speed. Quick strikes, and putting somebody on the floor as you pass. */
@@ -103,8 +107,11 @@ export const STAT_GRAMMAR: Record<Ability, Grammar> = {
   },
   /** Getting under someone's skin, or getting people to hold the line. */
   cha: {
-    payloads: ['rally', 'hinder', 'drain', 'edge'],
+    payloads: ['rally', 'hinder', 'drain', 'edge', 'special'],
     conditions: ['frightened'],
+    // Making yourself the only thing worth looking at. Nothing else in the
+    // game takes somebody's CHOICE away, which is what CHA should be for.
+    verbs: ['taunt'],
     maxRange: 6,
   },
   /** Things going your way. Thin on payloads, because luck is not a technique. */
@@ -121,7 +128,8 @@ export const grammarFor = (stat: Ability): Grammar => STAT_GRAMMAR[stat];
  * Every stat can be built from, and no stat can build everything.
  *
  * Both halves matter. A stat with an empty payload list would be a dead axis —
- * points into it could never buy a skill. A stat with all eight would make the
- * others decorative, and the grammar would stop constraining anything.
+ * points into it could never buy a skill. A stat with every payload there is
+ * would make the others decorative, and the grammar would stop constraining
+ * anything.
  */
 export const STATS_WITH_GRAMMAR = ABILITIES;

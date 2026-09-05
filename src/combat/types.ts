@@ -125,6 +125,15 @@ export type Combatant = {
    * commitment for a slow one, because DEX shortens the tick cost. See cast.ts.
    */
   pendingCast?: PendingCast;
+  /**
+   * Somebody has made themselves the obvious problem.
+   *
+   * On the combatant rather than in `conditions` because a taunt has to know
+   * BY WHOM — a condition is a kind and a countdown, and "held" is only half
+   * of what this means. It ticks down with the conditions all the same, so
+   * there is still one clock.
+   */
+  taunt?: { by: string; roundsLeft: number };
   /** Movement in squares per turn. */
   speed: number;
   proficiency: number;
