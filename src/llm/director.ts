@@ -2,7 +2,7 @@ import { describeMental, describePersonality } from '../character/persona.ts';
 import { subjectById, subjectsOf } from '../world/subjects.ts';
 import { PLAYER, trustToward } from '../social/edge.ts';
 import { owedBy, permittedBy, rolesHeld, rolesOf } from '../social/roles.ts';
-import { DIRECTOR_DEEDS, isDirectorDeed } from '../social/deed.ts';
+import { beliefsAbout, DIRECTOR_DEEDS, isDirectorDeed } from '../social/deed.ts';
 import type { DirectorDeed } from '../social/deed.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
@@ -235,10 +235,25 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     .map((id) => state.world.people[id])
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
+  const named = (id: string) => (id === PLAYER ? state.sheet.name : state.world.people[id]?.name ?? id);
+
   const people = present.map((p) => {
     const notes = [...describePersonality(dispositionOf(p)), ...describeMental(p.needs)];
     return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
   });
+
+  /*
+   * WHAT THEY THINK THE PLAYER HAS DONE, and how sure they are of it.
+   *
+   * Belief rather than fact, and the difference is the point: somebody who saw
+   * it will act on it, somebody who half-heard a story will not — and somebody
+   * can hold a thing that never happened. Without this the beliefs deeds write
+   * are a field nothing consults, which is the bug this codebase keeps having.
+   */
+  const heard = present.flatMap((p) =>
+    // "X believes: <the whole claim>" — stripping the doer out of the claim and
+    // prefixing the believer read as though the BELIEVER had done it.
+    beliefsAbout(p.beliefs, PLAYER, named).map((line) => `  - ${p.name} believes: ${line}`));
 
   /*
    * WHO THESE PEOPLE ARE TO EACH OTHER, AND TO YOU.
@@ -257,6 +272,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',
     bonds.length ? `What they are to each other:\n${bonds.join('\n')}` : '',
+    heard.length ? `What they think you have done (belief, not fact):\n${heard.join('\n')}` : '',
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
     /*
      * WHO THE PLAYER IS.

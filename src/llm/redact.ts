@@ -6,7 +6,8 @@ import { activeRegion } from '../world/travel.ts';
 import type { World } from '../world/types.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { registerForPerson } from './register.ts';
-import { trustToward } from '../social/edge.ts';
+import { PLAYER, trustToward } from '../social/edge.ts';
+import { beliefsAbout } from '../social/deed.ts';
 import type { RegisterInstruction } from './register.ts';
 
 /**
@@ -43,6 +44,14 @@ export type PresentPerson = {
   condition: string[];
   /** Emitted every turn. Register is the first constraint a model drops. */
   register: RegisterInstruction;
+  /**
+   * What this person THINKS the player has done, and how sure they are.
+   *
+   * Belief, never fact. Somebody who half-heard a story should write like
+   * somebody who half-heard a story — and a person holding something FALSE has
+   * to be written holding it, or the correction arc has nowhere to happen.
+   */
+  believes: string[];
 };
 
 export type WriterView = {
@@ -100,6 +109,8 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
    */
   const names = displayNames(region?.places ?? [], state.world.people);
   const say = (text: string) => humanise(text, names);
+  const nameOf = (id: string) =>
+    (id === PLAYER ? state.sheet.name : state.world.people[id]?.name ?? id);
 
   const peoplePresent: PresentPerson[] = (place?.people ?? [])
     .map((id) => state.world.people[id])
@@ -111,6 +122,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       disposition: describePersonality(dispositionOf(p)),
       condition: describeMental(p.needs),
       register: registerForPerson(p, trustToward(state.world.edges, p.id)),
+      believes: beliefsAbout(p.beliefs, PLAYER, nameOf),
     }));
 
   return {

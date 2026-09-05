@@ -1,4 +1,4 @@
-import { adopt, firsthand, retell } from '../character/belief.ts';
+import { adopt, certaintyOf, firsthand, retell } from '../character/belief.ts';
 import type { Belief, Claim } from '../character/belief.ts';
 import { EDGE_AXES, nudgeAll, reachedBy, regardedBy } from './edge.ts';
 import type { EdgeAxis, Edges } from './edge.ts';
@@ -291,6 +291,29 @@ export function witnessDeed(
   // is equal to nought everywhere except `Object.is` — and that is what strict
   // assertions use.
   return { edges: next, knowers, standing: reach === 0 ? 0 : Math.round(mark.standing * reach) };
+}
+
+/**
+ * What somebody holds about another person, said plainly.
+ *
+ * The READER for `Person.beliefs`, which deeds write and nothing has consulted.
+ * Phrased as BELIEF and never as fact — "she is fairly sure you threatened the
+ * smith" — because the whole point of a belief is that it can be wrong, and a
+ * Writer told the truth instead would give the game away in the prose.
+ */
+export function beliefsAbout(held: readonly Belief[] | undefined, who: string, named: (id: string) => string): string[] {
+  const out: string[] = [];
+  for (const belief of held ?? []) {
+    if (belief.claim.kind !== 'deed' || belief.claim.who !== who) continue;
+
+    const [kind, toward] = belief.claim.what.split(':');
+    if (!(DEEDS as readonly string[]).includes(kind)) continue;
+
+    const at = toward ? ` ${named(toward)}` : '';
+    const not = belief.holds ? '' : 'does NOT think ';
+    out.push(`${not}${named(who)} ${kind}${at} — ${certaintyOf(belief)}`);
+  }
+  return out;
 }
 
 /** Fold a deed's beliefs into one person's, leaving anybody else's alone. */

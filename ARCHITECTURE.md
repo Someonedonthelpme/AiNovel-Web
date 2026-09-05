@@ -471,6 +471,15 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 had a job left once pools and the tick budget became the resource economy. The
 sidebar shows what a skill will cost you instead of a permanent `n/n`.
 
+**Beliefs have a reader.** `Person.beliefs` was written by deeds and consulted
+by nobody for two commits — a fresh instance of the signature bug, introduced by
+the deed work itself. The Director and the Writer are now both told what each
+person present THINKS the player has done and how sure they are, phrased as
+belief and never as fact: `Warden Bex believes: Anan insulted Ora the smith —
+saw it themselves`. `certaintyOf` turns `confidence` into words, so seeing a
+thing and half-hearing about it are finally distinguishable downstream, which is
+most of what a rumour system is for.
+
 **Cleared by the relationship work** — `Person.trust` is deleted and replaced by
 a directional edge. `registerConsequence` was a whole dead MECHANISM, not merely
 a dead field: zero callers outside its own file, computing a `suspicion` nobody

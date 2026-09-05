@@ -1,16 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { believes } from '../character/belief.ts';
+import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from './edge.ts';
 import type { Edges } from './edge.ts';
 import {
-  claimOf, DEEDS, guiltFor, isDirectorDeed, markOf, spreadOf, witnessDeed, witnessesOf,
+  beliefsAbout, claimOf, DEEDS, guiltFor, isDirectorDeed, markOf, spreadOf, witnessDeed, witnessesOf,
 } from './deed.ts';
 import type { Deed } from './deed.ts';
 import { applyTurn, validateDelta } from '../play/delta.ts';
 import { playState } from '../play/fixtures.ts';
 import { compressExcept } from '../world/lod.ts';
 import { standingLine } from '../world/floorgen.ts';
+import { runDirector } from '../llm/director.ts';
+import { toWriterView } from '../llm/redact.ts';
+import { runWriter } from '../llm/writer.ts';
+import { FakeProvider } from '../llm/provider.ts';
 import { withOverrides, STANDARD } from '../rules/ruleset.ts';
 import type { TurnRecord } from '../play/state.ts';
 
@@ -278,4 +282,86 @@ test('humiliating somebody is not merely insulting them', () => {
     'it is meant to land, and it does',
   );
   assert.ok(shame.standing < insult.standing, 'and the room holds it against you harder');
+});
+
+/* -------------------------------------------------------------------------- */
+/* WHAT AN NPC IS CERTAIN OF                                                   */
+/* -------------------------------------------------------------------------- */
+
+const named = (id: string) => (id === PLAYER ? 'you' : id);
+
+test('certainty is SAYABLE, or the difference between seeing and hearing is lost', () => {
+  /*
+   * `confidence` scaled an edge nudge once and was then consulted by nothing,
+   * so a woman who SAW you do it and a man who half-heard about it held, to
+   * everything downstream, the same thing. Most of what a rumour system is for
+   * lives in that difference.
+   */
+  const held = spreadOf(chain(), deed({ doer: 'x', toward: 'y' }), ['a'], 3);
+  const said = (who: string) => beliefsAbout([held.get(who)!], 'x', named)[0];
+
+  assert.match(said('a'), /saw it themselves/);
+  assert.notEqual(said('b'), said('a'), 'being told is not the same as seeing');
+  assert.match(said('d'), /heard|remembers/, 'and third-hand hedges');
+});
+
+test('a belief is phrased as BELIEF, never as fact', () => {
+  const out = witnessDeed({}, deed({ kind: 'humiliated' }), ['warden'], 0);
+  const said = beliefsAbout([out.knowers.get('warden')!], PLAYER, named);
+  assert.match(said[0], /humiliated smith/);
+  assert.match(said[0], /—/, 'and always carries how sure they are');
+});
+
+test('somebody can hold that a thing did NOT happen, and it reads that way', () => {
+  // The arc the belief model exists for: acting on something wrong. A story
+  // that came back inverted has to be sayable, or it can never be corrected.
+  const wrong = { ...firsthand(claimOf(deed())), holds: false };
+  assert.match(beliefsAbout([wrong], PLAYER, named)[0], /does NOT think/);
+});
+
+test('beliefs about somebody ELSE are not reported as beliefs about you', () => {
+  const about = firsthand(claimOf(deed({ doer: 'warden' })));
+  assert.deepEqual(beliefsAbout([about], PLAYER, named), []);
+});
+
+test('THE DIRECTOR IS TOLD what they think, and told that it is belief', async () => {
+  // The reader `Person.beliefs` was missing. A field written by deeds and
+  // consulted by nobody is this codebase's signature bug, and I had just
+  // written a fresh one.
+  const after = applyTurn(playState(), turn({ input: 'มึงเอาอะไรวะ' })).state;
+
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, after, 'look', 'exploration', []).catch(() => {});
+  const sent = p.allSentText();
+
+  assert.match(sent, /think you have done/);
+  assert.match(sent, /belief, not fact/, 'and warned not to treat it as true');
+  assert.match(sent, /saw it themselves/, 'with how sure each of them is');
+  // The believer is named as the BELIEVER, not slotted in as the doer.
+  assert.match(sent, /Warden Bex believes: Anan insulted/);
+});
+
+test('THE WRITER is told the same, and told to write them acting on it', async () => {
+  const after = applyTurn(playState(), turn({ input: 'มึงเอาอะไรวะ' })).state;
+  const view = toWriterView(after, {
+    brief: { intent: '', mustInclude: [], mustNotMention: [], tone: '', length: 'short' },
+    speaking: 'warden',
+  });
+
+  const warden = view.peoplePresent.find((x) => x.id === 'warden');
+  assert.ok(warden?.believes.length, 'the onlooker has something to go on');
+  assert.match(warden!.believes[0], /insulted|threatened/);
+
+  // And it survives into the prompt the Writer is actually handed.
+  const p = new FakeProvider({ structured: [] });
+  await runWriter(p, view).catch(() => {});
+  assert.match(p.allSentText(), /may be wrong/);
+});
+
+test('a stranger who saw nothing has nothing to go on', () => {
+  const view = toWriterView(playState(), {
+    brief: { intent: '', mustInclude: [], mustNotMention: [], tone: '', length: 'short' },
+    speaking: 'smith',
+  });
+  assert.deepEqual(view.peoplePresent.find((x) => x.id === 'smith')?.believes, []);
 });

@@ -72,6 +72,22 @@ export type Belief = {
   drift: number;
 };
 
+/**
+ * How sure somebody is, in the words a model can write to.
+ *
+ * `confidence` scaled an edge nudge once and was then consulted by nothing, so
+ * an NPC who SAW you do it and one who half-heard about it were, to everyone
+ * downstream, holding the same thing. The difference between those two is most
+ * of what a rumour system is for, and it has to be sayable.
+ */
+export function certaintyOf(belief: Belief): string {
+  if (belief.drift === 0) return 'saw it themselves';
+  if (belief.confidence >= 0.7) return 'was told by someone who was there';
+  if (belief.confidence >= 0.5) return 'has heard it, and believes it';
+  if (belief.confidence >= 0.3) return 'has heard something like it';
+  return 'half-remembers a story about it';
+}
+
 export const FIRSTHAND = 1;
 /** Each retelling costs this much certainty. */
 export const HOP_COST = 0.15;

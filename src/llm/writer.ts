@@ -108,6 +108,20 @@ function userPrompt(view: WriterView): string {
           return `${p.name} (${p.oneLine}${notes.length ? `; ${notes.join(', ')}` : ''})`;
         }).join('; ')}`
       : 'Present: nobody',
+    /*
+     * WHAT THEY THINK, WHICH IS NOT THE SAME AS WHAT IS TRUE.
+     *
+     * Somebody who saw it should behave like somebody who saw it; somebody who
+     * half-heard a story should hedge. And a person holding something FALSE has
+     * to be written holding it, or being wrong could never be discovered.
+     */
+    ...(() => {
+      const heard = view.peoplePresent.flatMap((p) => p.believes.map((b) => `- ${p.name} believes: ${b}`));
+      return heard.length
+        ? ['', 'What they BELIEVE about the player. Write them acting on it, however sure they are.',
+           'Never state it as fact in the narration — it is what they think, and they may be wrong.', ...heard]
+        : [];
+    })(),
     '',
     `What happens: ${view.brief.intent}`,
   ];
