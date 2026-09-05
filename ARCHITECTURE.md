@@ -178,18 +178,6 @@ mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts`.
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic map positions).
 
-### `src/llm/`
-`provider.ts` (the boundary; implementations never import each other) ·
-`director.ts` · `writer.ts` · `redact.ts` · `register.ts` (**trust IS the
-language**) · `local.ts` / `localProvider.ts` · `similarity.ts` / `canon.ts`.
-
-### `src/db/`, `src/server/`, `app/`
-`db/schema.ts` (four tables) · `db/sessions.ts` (append, fold, snapshot) ·
-`db/facts.ts` (pgvector canon) · `server/game.ts` (every view, plus the
-in-memory fight store) · seven thin route handlers under `app/api/`.
-
----
-
 ### `src/world/subjects.ts` + `src/play/lore.ts` — what a world is about
 A world mints 10–14 `Subject`s from its seed ([subjects.ts:74](src/world/subjects.ts:74)),
 in kinds like a war, a house, a craft. Within one world the set is **CLOSED**,
@@ -207,6 +195,18 @@ holding a belief — `loreClaim` builds an ordinary `Claim`
 `tell` move it between people, and nothing needed a second knowledge system.
 Reading is a turn action and works once ([sheetaction.ts:241](src/play/sheetaction.ts:241)):
 a paragraph cannot be re-read for the same comfort.
+
+### `src/llm/`
+`provider.ts` (the boundary; implementations never import each other) ·
+`director.ts` · `writer.ts` · `redact.ts` · `register.ts` (**trust IS the
+language**) · `local.ts` / `localProvider.ts` · `similarity.ts` / `canon.ts`.
+
+### `src/db/`, `src/server/`, `app/`
+`db/schema.ts` (four tables) · `db/sessions.ts` (append, fold, snapshot) ·
+`db/facts.ts` (pgvector canon) · `server/game.ts` (every view, plus the
+in-memory fight store) · seven thin route handlers under `app/api/`.
+
+---
 
 ## 4. Stored data
 
