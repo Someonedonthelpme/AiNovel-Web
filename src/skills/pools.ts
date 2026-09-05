@@ -1,7 +1,11 @@
 import { abilityMod } from '../combat/types.ts';
 import type { Ability, Combatant } from '../combat/types.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
+import type { Temperament } from '../character/persona.ts';
 import type { ActiveSkill } from './active.ts';
 import { costs, magnitudeOf } from './effect.ts';
+import { shrinkBy, suitOf } from './suit.ts';
 
 /**
  * What a skill costs, and which pool it comes out of.
@@ -60,14 +64,26 @@ export const MAX_COST = 12;
  * declares a cost; this reports it.
  *
  * A skill with no cost effect is free, which is what a standing bonus is.
+ *
+ * `who` is the one place the persona reaches the economy. Something that suits
+ * you comes cheaper, and because the cast length is read off the price, it comes
+ * FASTER by the same number — one budget, two channels, no second dial to keep
+ * in step. The floor is what stops a perfect match ever making a skill free.
  */
-export function priceOfUse(skill: ActiveSkill): { pool: Pool; cost: number } {
+export function priceOfUse(
+  skill: ActiveSkill,
+  who?: { temperament?: Temperament } | null,
+  rules: Ruleset = STANDARD,
+): { pool: Pool; cost: number } {
   const pool = poolFor(skill.ability);
   const paid = costs(skill.effects).find((e) => e.channel === 'stamina' || e.channel === 'mana');
   if (!paid) return { pool, cost: 0 };
+
+  const suit = suitOf(skill.effects, who?.temperament);
+  const asked = shrinkBy(magnitudeOf(paid), suit, rules.persona.suitSwing);
   return {
     pool: paid.channel === 'mana' ? 'mana' : 'stamina',
-    cost: Math.max(0, Math.min(MAX_COST, Math.round(magnitudeOf(paid)))),
+    cost: Math.max(MIN_COST, Math.min(MAX_COST, Math.round(asked))),
   };
 }
 
@@ -75,14 +91,14 @@ export function priceOfUse(skill: ActiveSkill): { pool: Pool; cost: number } {
 /* Spending                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export function canAfford(who: Combatant, skill: ActiveSkill): boolean {
-  const { pool, cost } = priceOfUse(skill);
+export function canAfford(who: Combatant, skill: ActiveSkill, as?: { temperament?: Temperament } | null): boolean {
+  const { pool, cost } = priceOfUse(skill, as);
   if (cost === 0) return true;
   return (pool === 'mana' ? who.mana : who.stamina) >= cost;
 }
 
-export function spend(who: Combatant, skill: ActiveSkill): Combatant {
-  const { pool, cost } = priceOfUse(skill);
+export function spend(who: Combatant, skill: ActiveSkill, as?: { temperament?: Temperament } | null): Combatant {
+  const { pool, cost } = priceOfUse(skill, as);
   if (cost === 0) return who;
   return pool === 'mana'
     ? { ...who, mana: Math.max(0, who.mana - cost) }

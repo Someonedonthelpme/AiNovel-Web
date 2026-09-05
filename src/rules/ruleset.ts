@@ -60,6 +60,15 @@ export type PersonaRules = {
   driftThreshold: number;
   /** How fast unreinforced pressure bleeds away. */
   pressureDecay: number;
+  /**
+   * How far suitability moves a number, as a fraction.
+   *
+   * The signed budget in `skills/suit.ts`: a perfectly suited action costs this
+   * much less, hits this much harder and comes off this much faster, and a
+   * perfectly unsuited one pays the same on every channel. ZERO IS THE IDENTITY
+   * VALUE — the same code runs, and who somebody is presses on nothing.
+   */
+  suitSwing: number;
 };
 
 export type RestRules = {
@@ -91,7 +100,7 @@ export type Ruleset = {
 export const STANDARD: Ruleset = {
   body: { carryBase: 20, carryPerStr: 2, overloadStep: 8, baseSpeed: 6, minSpeed: 3 },
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
-  persona: { driftThreshold: 6, pressureDecay: 1 },
+  persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };
@@ -117,7 +126,7 @@ export const PLAIN: Ruleset = {
   ...copy(STANDARD),
   body: { ...STANDARD.body, carryPerStr: 1e6, overloadStep: 1e6 },
   combat: { ...STANDARD.combat, soakCeiling: 0 },
-  persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY },
+  persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -126,7 +135,7 @@ export const HARSH: Ruleset = {
   ...copy(STANDARD),
   body: { ...STANDARD.body, carryBase: 12, overloadStep: 5 },
   combat: { ...STANDARD.combat, soakCeiling: 1 },
-  persona: { ...STANDARD.persona, driftThreshold: 4 },
+  persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };

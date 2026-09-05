@@ -15,6 +15,7 @@ import type { Rng } from '../engine/roll.ts';
 import { activeSkills, toCombatant } from '../session/sheet.ts';
 import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
 import { canAfford, priceOfUse, spend } from '../skills/pools.ts';
+import { rulesOf } from '../rules/ruleset.ts';
 import { canAct, castTicks, spendTicks } from '../combat/tempo.ts';
 import { advanceCast, beginCast, finishCast } from '../combat/cast.ts';
 import { activeRegion } from '../world/travel.ts';
@@ -166,8 +167,8 @@ export function combatOptions(state: PlayState): CombatOption[] {
   const me = state.combat?.combatants['pc'];
   for (const skill of activeSkills(state.sheet)) {
     if (!isCombatUsable(skill)) continue;
-    if (me && !canAfford(me, skill)) continue;
-    const { pool, cost } = priceOfUse(skill);
+    if (me && !canAfford(me, skill, state.sheet)) continue;
+    const { pool, cost } = priceOfUse(skill, state.sheet, rulesOf(state.world));
     const left = `${cost} ${pool}`;
 
     if (!needsTarget(skill)) {
@@ -263,7 +264,7 @@ function settleCast(state: PlayState, combat: CombatState): CombatState {
     : [];
 
   // The pool was charged when it was declared, so nothing is spent here.
-  const outcome = resolveSkill(skill, cleared, targets);
+  const outcome = resolveSkill(skill, cleared, targets, state.sheet, rulesOf(state.world));
   const combatants: Record<string, Combatant> = { ...combat.combatants, pc: outcome.actor };
   for (const hit of outcome.affected) combatants[hit.id] = hit;
   return { ...combat, combatants };
@@ -293,7 +294,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
     if (!skill) error = 'you do not know that';
     else if (!isCombatUsable(skill)) error = `${skill.name} is not something you use in a fight`;
     else if (!canAct(next.combatants['pc'])) error = 'no time left this round';
-    else if (!canAfford(next.combatants['pc'], skill)) error = `you do not have the ${priceOfUse(skill).pool} for ${skill.name}`;
+    else if (!canAfford(next.combatants['pc'], skill, state.sheet)) error = `you do not have the ${priceOfUse(skill, state.sheet).pool} for ${skill.name}`;
     else {
       const self = next.combatants['pc'];
       const aim = action.target ? next.combatants[action.target] : null;
@@ -319,8 +320,8 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
          * the only reading of "reduces casting time" that means anything in an
          * engine where a turn is a turn.
          */
-        const { pool, cost } = priceOfUse(skill);
-        const needs = castTicks(self, cost);
+        const { pool, cost } = priceOfUse(skill, state.sheet, rulesOf(state.world));
+        const needs = castTicks(self, cost, rulesOf(state.world));
 
         if (needs > self.ticks) {
           /*
@@ -332,15 +333,15 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
            * a property of the skill — the same effect is instant for a deft
            * caster and a two-round commitment for a slow one.
            */
-          const charged = spend(self, skill);
+          const charged = spend(self, skill, state.sheet);
           const started = advanceCast(beginCast(charged, skill.id, aim?.id ?? null, needs, cost, pool), charged.ticks);
           next = endTurn(rng, {
             ...next,
             combatants: { ...next.combatants, pc: spendTicks(started.who, charged.ticks) },
           }).state;
         } else {
-        const outcome = resolveSkill(skill, self, targets);
-        const paid = spendTicks(spend(outcome.actor, skill), needs);
+        const outcome = resolveSkill(skill, self, targets, state.sheet, rulesOf(state.world));
+        const paid = spendTicks(spend(outcome.actor, skill, state.sheet), needs);
         const combatants: typeof next.combatants = { ...next.combatants, pc: paid };
         for (const hit of outcome.affected) combatants[hit.id] = hit;
 

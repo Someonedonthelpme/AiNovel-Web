@@ -16,6 +16,10 @@ import { addItem, emptyInventory } from '../items/types.ts';
 import type { Item } from '../items/types.ts';
 import { takeRest } from '../play/rest.ts';
 import { playState } from '../play/fixtures.ts';
+import { resolveSkill } from '../skills/active.ts';
+import type { ActiveSkill } from '../skills/active.ts';
+import { priceOfUse } from '../skills/pools.ts';
+import { referencePc } from '../combat/statblock.ts';
 
 const tuned = (over: Parameters<typeof withOverrides>[1]): Ruleset => withOverrides(STANDARD, over);
 
@@ -148,6 +152,42 @@ test('persona.pressureDecay reaches how fast a grudge fades', () => {
     Math.abs(slighted.pressure.feeling));
 });
 
+test('persona.suitSwing reaches what a skill costs AND what it does', () => {
+  /*
+   * The signed budget, proved on both channels at once — which is the whole
+   * point of it being one number. A bold character throwing a blow pays less
+   * for it and lands more of it; at the identity value neither moves, and the
+   * same code has run either way.
+   */
+  const blow: ActiveSkill = {
+    id: 'sk', name: 'Blow', description: '', ability: 'str', range: 1,
+    effects: [
+      { role: 'purpose', sign: 'minus', channel: 'hp', who: 'foe', shape: { kind: 'single' },
+        duration: { kind: 'instant' }, formula: { flat: 10 } },
+      { role: 'cost', sign: 'minus', channel: 'stamina', who: 'own', shape: { kind: 'self' },
+        duration: { kind: 'instant' }, formula: { flat: 8 } },
+    ],
+  };
+  const bold = { temperament: { intuition: 0, feeling: 0, nerve: 10, discipline: 0 } };
+  const timid = { temperament: { intuition: 0, feeling: 0, nerve: -10, discipline: 0 } };
+
+  const off = tuned({ persona: { suitSwing: 0 } });
+  assert.equal(priceOfUse(blow, bold, off).cost, priceOfUse(blow, timid, off).cost,
+    'at the identity value, who you are presses on nothing');
+
+  const on = tuned({ persona: { suitSwing: 0.25 } });
+  assert.ok(priceOfUse(blow, bold, on).cost < priceOfUse(blow, timid, on).cost,
+    'what suits you should come cheaper');
+
+  const target = { ...referencePc(3), id: 'foe1', name: 'wolf', side: 'foe' as const, hp: 40, maxHp: 40 };
+  const me = { ...referencePc(3), id: 'pc', name: 'me' };
+  const hitBy = (who: typeof bold, rules: Ruleset) =>
+    resolveSkill(blow, me, [target], who, rules).affected[0].hp;
+
+  assert.equal(hitBy(bold, off), hitBy(timid, off), 'and lands the same');
+  assert.ok(hitBy(bold, on) < hitBy(timid, on), 'what suits you should land harder');
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -174,7 +214,7 @@ const PROVEN = [
   'body.carryBase', 'body.carryPerStr', 'body.overloadStep', 'body.baseSpeed', 'body.minSpeed',
   'combat.soakCeiling', 'combat.soakShare', 'combat.minHit', 'combat.conditionFloor',
   'combat.turnLength', 'combat.minActionTicks',
-  'persona.driftThreshold', 'persona.pressureDecay',
+  'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
   'rest.shortTurns', 'rest.longTurns',
   'world.dangerBase', 'world.dangerPerFloor',
 ];

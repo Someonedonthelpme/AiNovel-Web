@@ -39,6 +39,7 @@ import type { ActiveSkill } from '../skills/active.ts';
 import { magnitudeOf, purposes } from '../skills/effect.ts';
 import type { Effect } from '../skills/effect.ts';
 import { priceOfUse } from '../skills/pools.ts';
+import { rulesOf } from '../rules/ruleset.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -261,7 +262,7 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       // Actives, with what they do and what they take out of you — a skill the
       // player cannot see the cost of is one they will not plan around.
       skills: activeSkills(state.sheet).map((s) => {
-        const { pool, cost } = priceOfUse(s);
+        const { pool, cost } = priceOfUse(s, state.sheet, rulesOf(state.world));
         return { name: s.name, description: s.description, effect: describeEffect(s), cost, pool };
       }),
       personality: dispositionOf(state.sheet),

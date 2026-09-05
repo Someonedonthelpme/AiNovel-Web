@@ -4,6 +4,10 @@ import { applyDamage } from '../combat/resolve.ts';
 import type { TraitCondition } from '../play/traits.ts';
 import { magnitudeOf, purposes, radiusOf as spreadOf, reachesOut, standingBonus, usableInCombat } from './effect.ts';
 import type { Effect } from './effect.ts';
+import { scaleBy, suitOf } from './suit.ts';
+import { STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
+import type { Temperament } from '../character/persona.ts';
 
 /**
  * Active skills — the things a character DOES.
@@ -84,10 +88,20 @@ export type SkillOutcome = {
  * killed somebody by a different route than an attack would be a second set of
  * rules to keep in step.
  */
-export function resolveSkill(skill: ActiveSkill, actor: Combatant, targets: readonly Combatant[]): SkillOutcome {
+export function resolveSkill(
+  skill: ActiveSkill,
+  actor: Combatant,
+  targets: readonly Combatant[],
+  as?: { temperament?: Temperament } | null,
+  rules: Ruleset = STANDARD,
+): SkillOutcome {
   let self = actor;
   const hit = new Map<string, Combatant>();
   const notes: string[] = [];
+
+  // The other half of the signed budget: what suits you lands harder, and what
+  // does not lands softer, off the same number that already moved the price.
+  const suit = suitOf(skill.effects, as?.temperament);
 
   for (const effect of purposes(skill.effects)) {
     // Who this particular effect lands on. A list means one action can hurt
@@ -95,7 +109,7 @@ export function resolveSkill(skill: ActiveSkill, actor: Combatant, targets: read
     const recipients = effect.who === 'own' ? [self] : [...targets];
     if (recipients.length === 0) continue;
 
-    const amount = magnitudeOf(effect);
+    const amount = Math.max(1, Math.round(scaleBy(magnitudeOf(effect), suit, rules.persona.suitSwing)));
     for (const raw of recipients) {
       const before = effect.who === 'own' ? self : hit.get(raw.id) ?? raw;
       const after = applyOne(effect, before, amount);

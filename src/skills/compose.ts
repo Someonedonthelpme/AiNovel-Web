@@ -294,12 +294,56 @@ export const channelsOf = (grammar: Grammar): Set<Channel> =>
   new Set(grammar.payloads.flatMap((p) => KIND_CHANNELS[p]));
 
 /**
+ * Combinations no stat may ever produce, whatever its grammar says.
+ *
+ * The per-axis allow-lists keep each stat coherent; this keeps the COMPOSITION
+ * coherent. They are different jobs: a grammar with both `mend` and a reach can
+ * legally draw "heal" and legally draw "a foe", and the pair is nonsense that
+ * neither list on its own forbids.
+ *
+ * Short by design, and about PURPOSES only. A cost pointed at yourself that
+ * lands a condition is a reckless move, not a violation — that is exactly the
+ * shape the component model was argued for.
+ */
+const FORBIDDEN: { why: string; hits: (e: Effect) => boolean }[] = [
+  {
+    why: 'heals a foe',
+    hits: (e) => e.sign === 'plus' && e.who === 'foe'
+      && (e.channel === 'hp' || e.channel === 'stamina' || e.channel === 'mana'),
+  },
+  {
+    why: 'hinders a friend',
+    hits: (e) => e.sign === 'minus' && (e.who === 'friend' || e.who === 'own')
+      && e.channel === 'condition',
+  },
+  {
+    why: 'wounds a friend',
+    hits: (e) => e.sign === 'minus' && e.who === 'friend' && e.channel === 'hp',
+  },
+  {
+    // Strengthening whoever you are fighting is the same fault as healing them.
+    why: 'sharpens a foe',
+    hits: (e) => e.sign === 'plus' && e.who === 'foe' && e.channel === 'stat',
+  },
+];
+
+/** Whichever forbidden pair a purpose falls into, if any. */
+export const forbidden = (effects: readonly Effect[]): string | null => {
+  for (const e of purposes(effects)) {
+    const broken = FORBIDDEN.find((rule) => rule.hits(e));
+    if (broken) return broken.why;
+  }
+  return null;
+};
+
+/**
  * Whether a finished skill is one this grammar could have produced.
  *
- * Three checks, and all of them are on the components: the channel is one the
- * stat may touch, any condition is one it may inflict, and it does not reach
- * further than the stat reaches. Costs are exempt — what a skill takes out of
- * YOU is not something the grammar has an opinion about.
+ * Four checks, and all of them are on the components: the channel is one the
+ * stat may touch, any condition is one it may inflict, it does not reach
+ * further than the stat reaches, and it is not one of the pairs no stat may
+ * ever produce. Costs are exempt — what a skill takes out of YOU is not
+ * something the grammar has an opinion about.
  */
 export function obeys(skill: ActiveSkill, grammar: Grammar): string | null {
   const channels = channelsOf(grammar);
@@ -309,7 +353,8 @@ export function obeys(skill: ActiveSkill, grammar: Grammar): string | null {
       return `inflicts ${e.condition}`;
     }
   }
-  return skill.range > grammar.maxRange ? `reaches ${skill.range}` : null;
+  if (skill.range > grammar.maxRange) return `reaches ${skill.range}`;
+  return forbidden(skill.effects);
 }
 
 export type ComposeInput = {
