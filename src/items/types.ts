@@ -2,8 +2,10 @@ import type { Ability, Attack } from '../combat/types.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset, SlotSpec } from '../rules/ruleset.ts';
 import { firstFit, join, rect, shapeFrom } from './shape.ts';
-import { conditionOfInstance, grantsOfInstance, instanceOf, isBroken, shapeOfInstance, wear, weakestPart, weightOfInstance } from './instance.ts';
-import type { ItemInstance } from './instance.ts';
+import { attach, conditionOfInstance, detach, grantsOfInstance, instanceOf, isBroken, shapeOfInstance, wear, wearsFirst, weightOfInstance } from './instance.ts';
+import type { ItemInstance, TypeOf } from './instance.ts';
+import { assemblyFor, partTypeOf } from './parts.ts';
+import type { AssemblyPart } from './parts.ts';
 import { PRISTINE } from './instance.ts';
 import type { Board, Cell, Placement, Shape } from './shape.ts';
 
@@ -87,6 +89,13 @@ export type Item = {
    * with a hole, and `firstFit` searches the cells it actually has.
    */
   grid?: string;
+  /**
+   * How one of these is put together, overriding the archetype's recipe.
+   *
+   * Most things have no parts and are the single lump everything used to be —
+   * which is what makes assemblies an addition rather than a migration.
+   */
+  assembly?: AssemblyPart[];
   /** Trinkets and armour may nudge a score; traits gate on the total. */
   grants?: Partial<Record<Ability, number>>;
   /**
@@ -210,6 +219,25 @@ export function findHolding(inv: Inventory, id: string): Holding | null {
  * than a count: with a count, dropping the first of two axes and picking up
  * another would mint a second object with the id the survivor already has.
  */
+/**
+ * Build one specific object, with its pieces on it.
+ *
+ * Part ids hang off the whole thing's id, so they are deterministic — the fold
+ * replays — and unique without a counter.
+ */
+export function assemble(id: string, item: Item): ItemInstance {
+  const recipe = assemblyFor(item);
+  if (!recipe) return instanceOf(id, item.id);
+
+  return {
+    ...instanceOf(id, item.id),
+    parts: recipe.map((p, at) => ({
+      at: p.at,
+      item: { ...instanceOf(`${id}/${at}`, p.typeId), fused: p.fused },
+    })),
+  };
+}
+
 export function nextInstanceId(inv: Inventory, typeId: string): string {
   const taken = new Set(inv.held.map((h) => h.instance.id));
   for (let n = 0; ; n++) {
@@ -248,8 +276,8 @@ export function addItem(inv: Inventory, item: Item, count = 1): Inventory {
     // Each one is its own object, because each one can go on to differ.
     let next = inv;
     for (let n = 0; n < count; n++) {
-      const instance = instanceOf(nextInstanceId(next, item.id), item.id);
-      next = { ...next, held: [...next.held, { instance, item }] };
+      const id = nextInstanceId(next, item.id);
+      next = { ...next, held: [...next.held, { instance: assemble(id, item), item }] };
     }
     return next;
   }
@@ -418,7 +446,7 @@ export function equippedGrants(inv: Inventory): Partial<Record<Ability, number>>
   for (const { instance, item } of equippedHoldings(inv)) {
     // Read off the INSTANCE, so a thing assembled from parts is worth what its
     // parts are worth — which is the whole reason parts carry stats.
-    for (const [ability, bonus] of Object.entries(grantsOfInstance(instance, () => item))) {
+    for (const [ability, bonus] of Object.entries(grantsOfInstance(instance, typesFor(item)))) {
       const key = ability as Ability;
       out[key] = (out[key] ?? 0) + (bonus ?? 0);
     }
@@ -446,10 +474,10 @@ export function wearEquipped(inv: Inventory, amount: number): Inventory {
   return {
     ...inv,
     held: inv.held.map((h) => (worn.has(h.instance.id)
-      // The WEAKEST part takes it, so a handle can fail while the blade is
-      // fine — which is what makes repairing a part rather than a thing mean
-      // something.
-      ? { ...h, instance: wear(h.instance, weakestPart(h.instance).id, amount) }
+      // A PIECE takes it, so a handle can fail while the blade is fine — which
+      // is what makes repairing the part that failed a decision rather than
+      // topping up a bar.
+      ? { ...h, instance: wear(h.instance, wearsFirst(h.instance).id, amount) }
       : h)),
   };
 }
@@ -490,7 +518,7 @@ export const carriedWeight = (inventory: Inventory): number =>
   inventory.stacks.reduce((total, stack) => total + weightOf(stack.item) * stack.count, 0)
   + inventory.held.reduce(
     // An assembly weighs what it is made of, so a longer haft is heavier.
-    (total, h) => total + weightOfInstance(h.instance, () => h.item, weightOf)
+    (total, h) => total + weightOfInstance(h.instance, typesFor(h.item), weightOf)
       + (h.contents ? carriedWeight(h.contents) : 0),
     0,
   );
@@ -512,7 +540,18 @@ export const placementsIn = (holding: Holding): Placement[] =>
     .map((h) => ({ id: h.instance.id, shape: shapeOfHolding(h), at: h.at! }));
 
 /** A thing's silhouette, assembled from its parts if it has any. */
-export const shapeOfHolding = (h: Holding): Shape => shapeOfInstance(h.instance, () => h.item);
+/**
+ * Where a piece's type comes from.
+ *
+ * The whole object's type travels with it, because it was generated and exists
+ * in no global list. Its PARTS are authored, so they come from the one table —
+ * which is what keeps an assembly from carrying a copy of a haft around with
+ * every axe in the world.
+ */
+export const typesFor = (item: Item): TypeOf =>
+  (typeId) => (typeId === item.id ? item : partTypeOf(typeId));
+
+export const shapeOfHolding = (h: Holding): Shape => shapeOfInstance(h.instance, typesFor(h.item));
 
 /**
  * Where a thing would go inside a container, or null if it will not.
@@ -584,6 +623,52 @@ function lift(inv: Inventory, id: string): { inventory: Inventory; taken: Holdin
 export type MoveResult = { inventory: Inventory; error: string | null };
 
 /**
+ * Take a piece off a thing you are carrying; the piece becomes yours to hold.
+ *
+ * The interesting half of an assembly. A handle can fail while the blade is
+ * fine, and this is what lets you keep the blade — which is what makes
+ * repairing THE PART THAT FAILED a decision rather than topping up a bar.
+ */
+export function detachPart(inv: Inventory, itemId: string, partId: string): MoveResult {
+  const whole = findHolding(inv, itemId);
+  if (!whole) return { inventory: inv, error: 'you are not carrying that' };
+
+  const taken = detach(whole.instance, partId);
+  if (taken.error || !taken.removed) return { inventory: inv, error: taken.error ?? 'no such part' };
+
+  const type = partTypeOf(taken.removed.typeId);
+  if (!type) return { inventory: inv, error: 'that is not a piece you could keep' };
+
+  return {
+    inventory: {
+      ...replacing(inv, whole.instance.id, (h) => ({ ...h, instance: taken.item })),
+      held: [
+        ...replacing(inv, whole.instance.id, (h) => ({ ...h, instance: taken.item })).held,
+        { instance: taken.removed, item: type },
+      ],
+    },
+    error: null,
+  };
+}
+
+/** Put a loose piece onto something. It stops being a thing you hold. */
+export function attachPart(inv: Inventory, itemId: string, partId: string, at: Cell): MoveResult {
+  const whole = findHolding(inv, itemId);
+  const piece = findHolding(inv, partId);
+  if (!whole || !piece) return { inventory: inv, error: 'you are not carrying that' };
+  if (!partTypeOf(piece.item.id)) return { inventory: inv, error: piece.item.name + ' is not a piece of anything' };
+
+  const built = attach(whole.instance, piece.instance, at);
+  if (built.error) return { inventory: inv, error: built.error };
+
+  const { inventory: without } = lift(inv, piece.instance.id);
+  return {
+    inventory: replacing(without, whole.instance.id, (h) => ({ ...h, instance: built.item })),
+    error: null,
+  };
+}
+
+/**
  * Put something into a container.
  *
  * Refuses three things, each of which would otherwise produce a bag that is
@@ -613,7 +698,7 @@ export function putIn(
   // because "too heavy" is the answer a player can act on without seeing a
   // board.
   if (container.item.capacity !== undefined) {
-    const bulk = weightOfInstance(moving.instance, () => moving.item, weightOf)
+    const bulk = weightOfInstance(moving.instance, typesFor(moving.item), weightOf)
       + (moving.contents ? carriedWeight(moving.contents) : 0);
     if (bulk > spaceIn(container)) {
       return { inventory: inv, error: moving.item.name + ' will not fit in ' + container.item.name };

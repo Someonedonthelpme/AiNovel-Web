@@ -243,6 +243,27 @@ function InventoryTab({ view, act, busy }: { view: GameView; act: Act; busy: boo
             )}
             <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>{item.description}</p>
             {item.board && <Board board={item.board} placed={item.placed} />}
+            {item.parts.length > 0 && (
+              <div className="parts">
+                {item.parts.map((part) => (
+                  <span className="tag" key={part.id} title={part.fused ? 'made as one piece' : undefined}>
+                    {part.name}
+                    {part.condition < 1 && ` ${Math.round(part.condition * 100)}%`}
+                    {/* Fused pieces show, and offer nothing — the boundary is a
+                        fact about the object, not a refusal to discover. */}
+                    {!part.fused && (
+                      <button
+                        className="mini"
+                        disabled={busy}
+                        onClick={() => act({ type: 'strip', item: item.id, part: part.id })}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
             {item.inside && (

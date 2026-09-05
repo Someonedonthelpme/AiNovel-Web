@@ -42,6 +42,7 @@ import { priceOfUse } from '../skills/pools.ts';
 import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
 import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
+import { partTypeOf } from '../items/parts.ts';
 import type { Item } from '../items/types.ts';
 import { boardOf, findHolding, isContainer, placementsIn, spaceIn } from '../items/types.ts';
 import type { Holding, Inventory } from '../items/types.ts';
@@ -168,6 +169,14 @@ export type GameView = {
        */
       board: { w: number; h: number; cells: [number, number][] } | null;
       placed: { id: string; name: string; cells: [number, number][] }[];
+      /**
+       * What it is made of, if it is made of anything.
+       *
+       * A fused piece is shown and cannot be taken off — the boundary is a fact
+       * about the object, and a player should see where it is rather than
+       * discover it by being refused.
+       */
+      parts: { id: string; name: string; condition: number; fused: boolean }[];
       /** Whether it has a history, and whether this character has read it. */
       hasLore: boolean; read: boolean;
     }[];
@@ -614,6 +623,16 @@ function placedView(holding: Holding): GameView['inventory']['stacks'][number]['
   });
 }
 
+/** The pieces of an assembly, each with its own wear. */
+function partsView(holding: Holding): GameView['inventory']['stacks'][number]['parts'] {
+  return (holding.instance.parts ?? []).map((p) => ({
+    id: p.item.id,
+    name: partTypeOf(p.item.typeId)?.name ?? p.item.typeId,
+    condition: p.item.condition / PRISTINE,
+    fused: Boolean(p.item.fused),
+  }));
+}
+
 function inventoryViewOf(state: PlayState): GameView['inventory'] {
   const inv = state.pc.inventory;
   const worn = new Set(Object.values(inv.equipped));
@@ -645,6 +664,7 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
     space: holding && isContainer(item) && item.capacity !== undefined ? spaceIn(holding) : null,
     board: holding ? boardView(item) : null,
     placed: holding ? placedView(holding) : [],
+    parts: holding ? partsView(holding) : [],
     // A history is not advertised until it exists, and once read the button
     // goes rather than sitting there offering nothing.
     hasLore: Boolean(loreFor(item, state.world, state.sheet.language)),

@@ -481,6 +481,17 @@ of one, so wielding the sharp axe instead of the notched one is a thing a player
 can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
 which were tested islands reachable from nothing.
 
+**A thing is made of pieces.** `instance.ts` has known how to walk an assembly,
+weigh it, wear its weakest piece and join its silhouette since the day it was
+written, and nothing ever built one — so every object was a single lump. Weapons
+now come with their pieces on them: the PART TYPES are authored in one small
+table (a haft is a haft in a kingdom and in a wreck, unlike a weapon's name),
+and an archetype's recipe says how they go together. The pieces wear, not the
+frame, so a blade can outlive a grip and repairing the part that failed is a
+decision rather than topping up a bar. A `fused` piece is still a piece — it
+carries weight and wear and cannot come off — which is the boundary that bounds
+recursion without a depth cap.
+
 **A container may have a board, a weight limit, both, or neither — one code
 path.** That is the ruleset principle applied to bags: capacity alone is the
 weight model (Fallout, Cyberpunk), a grid alone is the slot model (PoE, RE,

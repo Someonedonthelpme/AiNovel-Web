@@ -664,3 +664,8 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
 }
 .board .cell.full { background: var(--amber); border-color: var(--amber); }
 .board .cell.gone { border-color: transparent; }
+
+/* What a thing is made of. */
+.parts { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+.parts .tag { display: inline-flex; align-items: center; gap: 0.25rem; }
+.parts .mini { padding: 0 0.25rem; line-height: 1; }

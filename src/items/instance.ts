@@ -1,5 +1,5 @@
 import { shapeOf } from './types.ts';
-import { join, rect } from './shape.ts';
+import { join, normalise, rect } from './shape.ts';
 import type { Ability } from '../combat/types.ts';
 import type { Item } from './types.ts';
 import type { Cell, Shape } from './shape.ts';
@@ -104,12 +104,35 @@ export function findPart(inst: ItemInstance, id: string): ItemInstance | null {
  * which is almost everything.
  */
 export function shapeOfInstance(inst: ItemInstance, typeOf: TypeOf): Shape {
+  const parts = inst.parts ?? [];
   const type = typeOf(inst.typeId);
-  let shape = type ? shapeOf(type) : rect(1, 1);
-  for (const part of inst.parts ?? []) {
-    shape = join(shape, shapeOfInstance(part.item, typeOf), part.at);
+
+  // Nothing to assemble: a thing with no pieces is simply its own shape, which
+  // is almost everything.
+  if (parts.length === 0) return type ? shapeOf(type) : rect(1, 1);
+
+  /*
+   * AN ASSEMBLY IS ITS PIECES, and the frame contributes nothing.
+   *
+   * Starting from the type's own silhouette and adding parts to it looks
+   * right and is not: the archetype shape already describes the FINISHED
+   * object, so a spear's 1×4 covered its haft and its point, and taking the
+   * haft off left it exactly as long. Nothing could ever be seen to come
+   * apart. A design that wants the frame to count lists a frame piece.
+   */
+  /*
+   * The UNION of the pieces, each where it sits. Chaining `join` from the first
+   * piece looked equivalent and was not: it silently dropped that piece's own
+   * offset, so a sword with its blade taken off came out as a guard and a grip
+   * with two empty squares between them.
+   */
+  const cells: Cell[] = [];
+  for (const part of parts) {
+    for (const cell of shapeOfInstance(part.item, typeOf).cells) {
+      cells.push({ x: cell.x + part.at.x, y: cell.y + part.at.y });
+    }
   }
-  return shape;
+  return normalise(cells);
 }
 
 /** Weight is the whole assembly — you carry the parts as well as the frame. */
@@ -130,6 +153,27 @@ export function weightOfInstance(inst: ItemInstance, typeOf: TypeOf, weightOf: (
  */
 export function conditionOfInstance(inst: ItemInstance): number {
   return walk(inst).reduce((worst, p) => Math.min(worst, p.condition), PRISTINE);
+}
+
+/**
+ * What takes the next knock.
+ *
+ * THE PIECES WEAR, NOT THE FRAME. Targeting the worst piece overall picks the
+ * whole assembly while everything is still pristine — `walk` returns the root
+ * first — so a sword would wear as one lump and the blade would never outlive
+ * the handle. Preferring a part is what makes "the handle failed, the blade is
+ * fine" the normal case rather than a curiosity.
+ */
+export function wearsFirst(inst: ItemInstance): ItemInstance {
+  const pieces = walk(inst).filter((p) => p.id !== inst.id);
+  if (pieces.length === 0) return inst;
+
+  // A piece already gone takes no more of it. Without this the first thing to
+  // fail stays the target for ever, and everything else on the assembly would
+  // still be pristine after a hundred fights.
+  const living = pieces.filter((p) => p.condition > 0);
+  const takes = living.length ? living : pieces;
+  return takes.reduce((worst, p) => (p.condition < worst.condition ? p : worst), takes[0]);
 }
 
 /** The piece that is letting the rest down. What a repair should target. */

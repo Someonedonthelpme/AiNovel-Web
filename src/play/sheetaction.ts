@@ -1,5 +1,5 @@
 import { rulesOf } from '../rules/ruleset.ts';
-import { putIn, takeOut } from '../items/types.ts';
+import { attachPart, detachPart, putIn, takeOut } from '../items/types.ts';
 import type { Abilities } from '../combat/types.ts';
 import { loreFor } from './lorebook.ts';
 import { knowsLore, learn } from './lore.ts';
@@ -42,6 +42,9 @@ export type SheetAction =
   /** Stow something in a bag, or take it back out into your hands. */
   | { type: 'stow'; item: string; container: string }
   | { type: 'takeOut'; item: string }
+  /** Take a piece off a thing, or put a loose piece back on one. */
+  | { type: 'strip'; item: string; part: string }
+  | { type: 'fit'; item: string; part: string }
   | { type: 'use'; item: string }
   /** Taken once, at level three. It reshapes the tree by opening an island. */
   | { type: 'chooseSubclass'; id: string }
@@ -132,6 +135,21 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       const out = takeOut(state.pc.inventory, action.item);
       if (out.error) return { state, error: out.error, note: null };
       return settle({ ...state, pc: { ...state.pc, inventory: out.inventory } }, state, 'unpacked');
+    }
+
+    case 'strip': {
+      const off = detachPart(state.pc.inventory, action.item, action.part);
+      if (off.error) return { state, error: off.error, note: null };
+      return settle({ ...state, pc: { ...state.pc, inventory: off.inventory } }, state, 'taken apart');
+    }
+
+    case 'fit': {
+      // Where it goes is the engine's business, not the player's: a piece has
+      // one place on a thing, and asking somebody to pick a square for a
+      // crossguard would be a worse game.
+      const on = attachPart(state.pc.inventory, action.item, action.part, { x: 0, y: 0 });
+      if (on.error) return { state, error: on.error, note: null };
+      return settle({ ...state, pc: { ...state.pc, inventory: on.inventory } }, state, 'fitted');
     }
 
     case 'unequip':

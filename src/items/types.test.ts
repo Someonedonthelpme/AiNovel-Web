@@ -4,6 +4,7 @@ import {
   addItem, countOf, emptyInventory, equip, equippedArmour, equippedAttack,
   equippedGrants, isEquipped, removeItem, unequip, conditionIn, wearEquipped,
   carriedWeight, findHolding, isContainer, putIn, spaceIn, takeOut, boardOf,
+  attachPart, detachPart, shapeOfHolding, weightOf,
 } from './types.ts';
 import type { Inventory, Item } from './types.ts';
 import { rations, weapon, armour, pack, namesTheSameThing, stripMechanics, weaponFromAttack } from './catalogue.ts';
@@ -12,7 +13,9 @@ import { sword } from '../combat/fixtures.ts';
 import { startingInventory } from '../play/state.ts';
 import { sheet } from '../session/fixtures.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import { PRISTINE } from './instance.ts';
+import { PRISTINE, walk } from './instance.ts';
+import type { ItemInstance } from './instance.ts';
+import { area } from './shape.ts';
 
 const ring: Item = {
   id: 'ring_of_note', name: 'a plain ring', description: '',
@@ -431,4 +434,142 @@ test('A GENERATED PACK HAS A BOARD, so the shape module is reached from play', (
   const found = pack(mulberry32(4), 14);
   assert.ok(found.grid, 'a pack has a board');
   assert.ok(boardOf(found)!.cells.length > 0);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Assemblies — a thing is made of pieces                                      */
+/* -------------------------------------------------------------------------- */
+
+const madeOf = (h: { instance: ItemInstance }) =>
+  walk(h.instance).slice(1).map((p) => p.typeId);
+
+test('A GENERATED WEAPON COMES WITH ITS PIECES ON IT', () => {
+  /*
+   * `instance.ts` has known how to walk an assembly, weigh it, wear its weakest
+   * piece and join its silhouette since the day it was written — and nothing
+   * ever built one, so every object in the game was a single lump.
+   */
+  const axe = weapon(mulberry32(3), 6);
+  const inv = addItem(emptyInventory(), axe);
+  assert.ok(madeOf(inv.held[0]).length > 0, axe.name + ' is still one lump');
+});
+
+test('most things are one piece, and that is not a migration', () => {
+  const inv = addItem(emptyInventory(), brick('r', 3));
+  assert.deepEqual(madeOf(inv.held[0]), []);
+});
+
+test('part ids are deterministic, because the fold replays', () => {
+  const axe = weapon(mulberry32(3), 6);
+  const a = addItem(emptyInventory(), axe).held[0].instance;
+  const b = addItem(emptyInventory(), axe).held[0].instance;
+  assert.deepEqual(walk(a).map((p) => p.id), walk(b).map((p) => p.id));
+});
+
+test('the silhouette IS the assembly, so a longer haft is longer in your bag', () => {
+  const spear: Item = {
+    id: 'weapon_spear_d6', name: 'a spear', description: '', kind: 'equipment', slot: 'main',
+    stackable: false, value: 1,
+  };
+  const held = addItem(emptyInventory(), spear).held[0];
+  const whole = area(shapeOfHolding(held));
+
+  const stripped = detachPart(addItem(emptyInventory(), spear), held.instance.id, held.instance.parts![0].item.id);
+  assert.equal(stripped.error, null);
+  assert.ok(area(shapeOfHolding(findHolding(stripped.inventory, held.instance.id)!)) < whole,
+    'taking the haft off makes it smaller');
+});
+
+test('an assembly WEIGHS ITS PIECES', () => {
+  const axe = weapon(mulberry32(3), 6);
+  const built = carriedWeight(addItem(emptyInventory(), axe));
+  assert.ok(built > weightOf(axe), 'the pieces are not free');
+});
+
+test('THE PIECES WEAR, NOT THE FRAME', () => {
+  /*
+   * Targeting the worst piece overall picks the whole assembly while
+   * everything is pristine — `walk` returns the root first — so a sword would
+   * wear as one lump and a blade could never outlive a handle.
+   */
+  const axe = weapon(mulberry32(1), 6);
+  let inv = addItem(emptyInventory(), axe);
+  const id = inv.held[0].instance.id;
+  inv = { ...inv, equipped: { main: id } };
+  inv = wearEquipped(inv, 30);
+
+  const pieces = walk(findHolding(inv, id)!.instance).slice(1);
+  assert.ok(pieces.some((p) => p.condition < PRISTINE), 'something is worn');
+  assert.ok(pieces.some((p) => p.condition === PRISTINE), 'and something is not');
+});
+
+test('a piece already gone takes no more of it', () => {
+  // Without this the first thing to fail stays the target for ever, and
+  // everything else would still be pristine after a hundred fights.
+  const axe = weapon(mulberry32(1), 6);
+  let inv = addItem(emptyInventory(), axe);
+  const id = inv.held[0].instance.id;
+  inv = { ...inv, equipped: { main: id } };
+  for (let n = 0; n < 60; n++) inv = wearEquipped(inv, 5);
+
+  const pieces = walk(findHolding(inv, id)!.instance).slice(1);
+  assert.ok(pieces.every((p) => p.condition < PRISTINE), 'wear moved on rather than sitting on a corpse');
+});
+
+test('a piece comes off and becomes yours to hold', () => {
+  // The interesting half: a handle can fail while the blade is fine, and this
+  // is what lets you keep the blade.
+  const axe = weapon(mulberry32(3), 6);
+  let inv = addItem(emptyInventory(), axe);
+  const whole = inv.held[0];
+  const loose = whole.instance.parts!.find((p) => !p.item.fused)!;
+
+  const off = detachPart(inv, whole.instance.id, loose.item.id);
+  assert.equal(off.error, null);
+  assert.equal(off.inventory.held.length, 2, 'the piece is in your hands now');
+  assert.equal(madeOf(findHolding(off.inventory, whole.instance.id)!).length, madeOf(whole).length - 1);
+});
+
+test('and goes back on again', () => {
+  const axe = weapon(mulberry32(3), 6);
+  const inv = addItem(emptyInventory(), axe);
+  const whole = inv.held[0];
+  const loose = whole.instance.parts!.find((p) => !p.item.fused)!;
+
+  const off = detachPart(inv, whole.instance.id, loose.item.id).inventory;
+  const on = attachPart(off, whole.instance.id, loose.item.id, { x: 0, y: 0 });
+
+  assert.equal(on.error, null);
+  assert.equal(on.inventory.held.length, 1, 'it is part of the thing again');
+});
+
+test('A FUSED PIECE IS STILL A PIECE, and still will not come off', () => {
+  /*
+   * The boundary that bounds recursion without a depth cap. A wound grip is not
+   * swapped for a different grip — you make a new handle — so it carries weight
+   * and wear and simply cannot be removed.
+   */
+  const sword: Item = {
+    id: 'weapon_shortsword_d6', name: 'a sword', description: '', kind: 'equipment', slot: 'main',
+    stackable: false, value: 1,
+  };
+  const inv = addItem(emptyInventory(), sword);
+  const fused = inv.held[0].instance.parts!.find((p) => p.item.fused);
+  assert.ok(fused, 'a sword has a piece made into it');
+
+  const tried = detachPart(inv, inv.held[0].instance.id, fused!.item.id);
+  assert.match(tried.error ?? '', /made as one piece/);
+});
+
+test('a thing cannot be built into itself', () => {
+  const axe = weapon(mulberry32(3), 6);
+  const inv = addItem(emptyInventory(), axe);
+  const id = inv.held[0].instance.id;
+  assert.match(attachPart(inv, id, id, { x: 0, y: 0 }).error ?? '', /cannot contain itself|not a piece/);
+});
+
+test('you cannot bolt a sword onto an axe', () => {
+  let inv = addItem(addItem(emptyInventory(), weapon(mulberry32(3), 6)), brick('r', 1));
+  const [axeId, rockId] = inv.held.map((h) => h.instance.id);
+  assert.match(attachPart(inv, axeId, rockId, { x: 0, y: 0 }).error ?? '', /not a piece of anything/);
 });
