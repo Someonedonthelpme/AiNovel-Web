@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addItem, countOf, emptyInventory, equip, equippedArmour, equippedAttack,
-  equippedGrants, isEquipped, removeItem, unequip,
+  equippedGrants, isEquipped, removeItem, unequip, conditionIn, wearEquipped,
 } from './types.ts';
 import type { Item } from './types.ts';
 import { rations, weapon, armour, namesTheSameThing, stripMechanics, weaponFromAttack } from './catalogue.ts';
@@ -10,6 +10,7 @@ import { sword } from '../combat/fixtures.ts';
 import { startingInventory } from '../play/state.ts';
 import { sheet } from '../session/fixtures.ts';
 import { mulberry32 } from '../engine/roll.ts';
+import { PRISTINE } from './instance.ts';
 
 const ring: Item = {
   id: 'ring_of_note', name: 'a plain ring', description: '',
@@ -24,11 +25,45 @@ test('stackable things collapse into one line', () => {
   assert.equal(countOf(inv, food.item.id), 5);
 });
 
-test('unstackable things take a line each, so provenance survives', () => {
+test('unstackable things become INSTANCES, so provenance survives', () => {
+  // Two swords from different floors are two swords, and now they are two
+  // OBJECTS — which is what lets one of them be notched and the other not.
   const rng = mulberry32(1);
   let inv = addItem(emptyInventory(), weapon(rng, 3));
   inv = addItem(inv, weapon(mulberry32(99), 12));
-  assert.equal(inv.stacks.length, 2, 'two swords from different floors are two swords');
+  assert.equal(inv.held.length, 2);
+  assert.equal(inv.stacks.length, 0, 'and neither of them is a stack');
+});
+
+test('two of the SAME thing are still two objects, with ids of their own', () => {
+  const rng = mulberry32(1);
+  const sword = weapon(rng, 3);
+  const inv = addItem(addItem(emptyInventory(), sword), sword);
+
+  assert.equal(inv.held.length, 2);
+  assert.equal(new Set(inv.held.map((h) => h.instance.id)).size, 2, 'and they are distinguishable');
+});
+
+test('an id is never reused while the thing holding it is still here', () => {
+  // Deterministic, because the fold replays — but the SMALLEST free suffix
+  // rather than a count, or dropping the first of two and picking up another
+  // would mint a second object with the survivor's id.
+  const rng = mulberry32(1);
+  const sword = weapon(rng, 3);
+  let inv = addItem(addItem(emptyInventory(), sword), sword);
+  const second = inv.held[1].instance.id;
+
+  inv = addItem(removeItem(inv, inv.held[0].instance.id), sword);
+  assert.equal(new Set(inv.held.map((h) => h.instance.id)).size, 2, `${second} was minted twice`);
+});
+
+test('equipping wields a SPECIFIC object, not a kind of one', () => {
+  const rng = mulberry32(1);
+  const sword = weapon(rng, 3);
+  const inv = equip(addItem(addItem(emptyInventory(), sword), sword), sword.id).inventory;
+
+  assert.equal(inv.equipped.weapon, inv.held[0].instance.id);
+  assert.equal(isEquipped(inv, sword.id), true, 'and the kind still reads as worn');
 });
 
 test('taking the last of something unequips it', () => {
@@ -136,5 +171,63 @@ test('a character starts with a weapon in hand, not a souvenir', () => {
   const inv = startingInventory(sheet());
   const wielded = equippedAttack(inv);
   assert.ok(wielded, 'something should be equipped');
-  assert.equal(inv.stacks.filter((s) => s.item.slot === 'weapon').length, 1, 'and only one of it');
+  assert.equal(inv.held.filter((h) => h.item.slot === 'weapon').length, 1, 'and only one of it');
+});
+
+/* -------------------------------------------------------------------------- */
+/* Wear — the reason instances exist at all                                    */
+/* -------------------------------------------------------------------------- */
+
+const blade: Item = {
+  id: 'w_blade', name: 'a plain sword', description: '', kind: 'equipment', slot: 'weapon',
+  stackable: false, value: 5,
+  attack: { id: 'atk', name: 'sword', ability: 'str', proficient: true, range: 1,
+            damage: { count: 1, sides: 6, bonusAbility: 'str', type: 'slashing' } },
+};
+
+const mail: Item = {
+  id: 'a_mail', name: 'mail', description: '', kind: 'equipment', slot: 'armour',
+  stackable: false, value: 5, armour: 15,
+};
+
+test('two of the same thing wear SEPARATELY, which stacking could never say', () => {
+  /*
+   * The model change the whole rework turns on. Two axes at different wear are
+   * not one object with a count of two, and no amount of care with a count
+   * could ever make them one.
+   */
+  let inv = addItem(addItem(emptyInventory(), blade), blade);
+  const [first, second] = inv.held.map((h) => h.instance.id);
+
+  inv = equip(inv, first).inventory;
+  inv = wearEquipped(inv, 30);
+
+  assert.ok(conditionIn(inv, first) < 1, 'the one in your hand is worn');
+  assert.equal(conditionIn(inv, second), 1, 'the one in your pack is not');
+});
+
+test('a weapon worn through is no better than an empty hand', () => {
+  // Broken rather than degraded: a blade doing nine tenths of its damage is a
+  // number nobody can feel, and one that has failed is a decision.
+  let inv = equip(addItem(emptyInventory(), blade), blade.id).inventory;
+  assert.ok(equippedAttack(inv), 'it works to begin with');
+
+  inv = wearEquipped(inv, PRISTINE);
+  assert.equal(equippedAttack(inv), null);
+});
+
+test('armour worn through stops being armour', () => {
+  let inv = equip(addItem(emptyInventory(), mail), mail.id).inventory;
+  assert.equal(equippedArmour(inv), 15);
+  assert.equal(equippedArmour(wearEquipped(inv, PRISTINE)), null);
+});
+
+test('nothing in the pack wears — only what you are actually using', () => {
+  const inv = wearEquipped(addItem(emptyInventory(), blade), 50);
+  assert.equal(conditionIn(inv, blade.id), 1);
+});
+
+test('a stack has no condition to speak of, and reads as whole', () => {
+  const inv = addItem(emptyInventory(), { ...blade, id: 'r', stackable: true, kind: 'consumable' }, 3);
+  assert.equal(conditionIn(inv, 'r'), 1);
 });

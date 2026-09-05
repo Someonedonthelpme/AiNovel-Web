@@ -10,7 +10,7 @@ import { flat, instant, self, single } from './effect.ts';
 import type { Effect } from './effect.ts';
 import { priceOfUse } from './pools.ts';
 import { activate, isSkillBook, skillBook } from './book.ts';
-import { addItem } from '../items/types.ts';
+import { addItem, countOf } from '../items/types.ts';
 import { awaitingPlayer, beginEncounter, combatOptions, takeCombatAction } from '../play/combat.ts';
 import { playState } from '../play/fixtures.ts';
 import { takeRest, useItem } from '../play/rest.ts';
@@ -256,7 +256,7 @@ test('a book teaches its skill, once, and is spent doing it', () => {
 
   assert.equal(read.error, null);
   assert.ok(read.state.sheet.learned?.some((s) => s.id === book.teaches.id), 'the skill is kept');
-  assert.equal(read.state.pc.inventory.stacks.some((s) => s.item.id === book.id), false, 'the book is spent');
+  assert.equal(countOf(read.state.pc.inventory, book.id), 0, 'the book is spent');
 });
 
 test('a book too advanced to follow is not wasted', () => {
@@ -268,7 +268,7 @@ test('a book too advanced to follow is not wasted', () => {
   const read = useItem(carrying, deep.id);
 
   assert.match(read.error ?? '', /makes sense/);
-  assert.ok(read.state.pc.inventory.stacks.some((s) => s.item.id === deep.id), 'and it stays in the pack');
+  assert.ok(countOf(read.state.pc.inventory, deep.id) > 0, 'and it stays in the pack');
 });
 
 test('a skill reaches as far as the skill says, not as far as your weapon', () => {

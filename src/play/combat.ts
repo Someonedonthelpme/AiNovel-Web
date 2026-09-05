@@ -16,6 +16,7 @@ import { activeSkills, toCombatant } from '../session/sheet.ts';
 import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
 import { canAfford, priceOfUse, spend } from '../skills/pools.ts';
 import { rulesOf } from '../rules/ruleset.ts';
+import { wearEquipped } from '../items/types.ts';
 import { canAct, castTicks, spendTicks } from '../combat/tempo.ts';
 import { advanceCast, beginCast, finishCast } from '../combat/cast.ts';
 import { activeRegion } from '../world/travel.ts';
@@ -414,7 +415,10 @@ export function concludeCombat(state: PlayState): CombatOutcome {
 
   const floor = activeRegion(state.world)?.floor ?? 0;
   let sheet = { ...state.sheet, counters };
-  let inventory = state.pc.inventory;
+  // Every fight takes something out of what you are wearing. Per fight rather
+  // than per swing: the interesting decision is whether to press on with a
+  // failing blade, and that is measured in encounters, not in blows.
+  let inventory = wearEquipped(state.pc.inventory, rulesOf(state.world).gear.wearPerFight);
   let coin = state.pc.coin;
   let loot: Drop[] = [];
   let xp = 0;

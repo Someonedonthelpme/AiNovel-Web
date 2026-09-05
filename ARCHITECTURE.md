@@ -471,6 +471,16 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 had a job left once pools and the tick budget became the resource economy. The
 sidebar shows what a skill will cost you instead of a permanent `n/n`.
 
+**An inventory holds two different things.** Stacking works exactly as long as
+two of a thing are interchangeable, and stops working the moment anything can
+differ between them — durability broke it first, and refine levels, rarity, a
+component tree and a history each break it the same way. So fungibles stack by
+type and anything that can differ is an INSTANCE, discriminated by `stackable`,
+which already meant that. `equipped` names a specific object rather than a kind
+of one, so wielding the sharp axe instead of the notched one is a thing a player
+can do. This is what finally reaches `items/instance.ts` and `items/shape.ts`,
+which were tested islands reachable from nothing.
+
 **Rumour has two layers, and they meet.** `deed.ts` is the DRAMATIC one —
 people telling each other along the social graph, bounded by degrees of
 separation, where who told whom matters. `ambient.ts` is the cheap one: a PLACE

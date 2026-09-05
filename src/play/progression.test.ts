@@ -2,7 +2,7 @@ import test from 'node:test';
 import { dispositionOf } from '../character/persona.ts';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
-import { addItem, emptyInventory } from '../items/types.ts';
+import { addItem, emptyInventory, countOf } from '../items/types.ts';
 import { rations, draught, weapon } from '../items/catalogue.ts';
 import {
   abilityPointsBetween, depthFactor, grantXp, spendAbilityPoint, xpForFight, xpForNewDepth, xpToNext,
@@ -493,5 +493,5 @@ test('you cannot drink what you do not have, or eat a sword', () => {
 
 test('a character starts with food, or short rests would be unusable', () => {
   const state = playState();
-  assert.ok(state.pc.inventory.stacks.some((s) => s.item.id === rations(1).item.id));
+  assert.ok(countOf(state.pc.inventory, rations(1).item.id) > 0);
 });

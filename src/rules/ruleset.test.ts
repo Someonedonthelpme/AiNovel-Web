@@ -12,7 +12,7 @@ import { abilities, combatant } from '../combat/fixtures.ts';
 import { emptyPersona } from '../character/persona.ts';
 import { defaultVoice, world } from '../world/fixtures.ts';
 import { abilitiesOf, background, sheet } from '../session/fixtures.ts';
-import { addItem, emptyInventory } from '../items/types.ts';
+import { addItem, conditionIn, emptyInventory, equip, wearEquipped } from '../items/types.ts';
 import type { Item } from '../items/types.ts';
 import { takeRest } from '../play/rest.ts';
 import { playState } from '../play/fixtures.ts';
@@ -253,6 +253,20 @@ test('knowledge.ambientFade reaches how long talk stays worth repeating', () => 
   assert.ok(after(tuned({ knowledge: { ambientFade: 0.5 } })) < 1);
 });
 
+test('gear.wearPerFight reaches what a fight takes out of your kit', () => {
+  // Zero is the identity value: gear never degrades and the same code runs
+  // over it. A world with no smiths is a dial, not a missing system.
+  const sword: Item = {
+    id: 'w', name: 'sword', description: '', kind: 'equipment', slot: 'weapon',
+    stackable: false, value: 1,
+  };
+  const kitted = equip(addItem(emptyInventory(), sword), 'w').inventory;
+  const after = (rules: Ruleset) => conditionIn(wearEquipped(kitted, rules.gear.wearPerFight), 'w');
+
+  assert.equal(after(tuned({ gear: { wearPerFight: 0 } })), 1, 'nothing ever wears out');
+  assert.ok(after(tuned({ gear: { wearPerFight: 20 } })) < 1);
+});
+
 test('rest.shortTurns and longTurns reach what resting costs you', () => {
   // Read from the WORLD rather than passed in — `takeRest` already holds the
   // state, so this is real wiring rather than another optional parameter.
@@ -280,6 +294,7 @@ const PROVEN = [
   'combat.soakCeiling', 'combat.soakShare', 'combat.minHit', 'combat.conditionFloor',
   'combat.turnLength', 'combat.minActionTicks',
   'persona.driftThreshold', 'persona.pressureDecay', 'persona.suitSwing',
+  'gear.wearPerFight',
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',

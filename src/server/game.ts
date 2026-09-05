@@ -41,6 +41,8 @@ import type { Effect } from '../skills/effect.ts';
 import { priceOfUse } from '../skills/pools.ts';
 import { rulesOf } from '../rules/ruleset.ts';
 import { trustToward } from '../social/edge.ts';
+import { conditionOfInstance, PRISTINE } from '../items/instance.ts';
+import type { Item } from '../items/types.ts';
 import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
@@ -148,6 +150,8 @@ export type GameView = {
     stacks: {
       id: string; name: string; description: string; kind: string; count: number;
       equipped: boolean; slot: string | null; usable: boolean; wearable: boolean;
+      /** 1 is whole. A specific object can be worn through; a stack cannot. */
+      condition: number;
       /** Whether it has a history, and whether this character has read it. */
       hasLore: boolean; read: boolean;
     }[];
@@ -568,22 +572,36 @@ function inventoryViewOf(state: PlayState): GameView['inventory'] {
   const inv = state.pc.inventory;
   const worn = new Set(Object.values(inv.equipped));
 
+  /*
+   * ONE LIST, of two different things.
+   *
+   * A stack is a kind of thing with a count; a holding is one specific object
+   * and its id is that object's. The panel does not need to care which it is
+   * looking at — it needs an id it can act on, and for a holding that has to be
+   * the INSTANCE id, or equipping "an axe" could never mean the sharp one.
+   */
+  const line = (item: Item, id: string, count: number, condition: number) => ({
+    id,
+    name: item.name,
+    description: item.description,
+    kind: item.kind,
+    count,
+    equipped: worn.has(id),
+    slot: item.slot ?? null,
+    usable: item.kind === 'consumable' && Boolean(item.effect),
+    wearable: item.kind === 'equipment' && Boolean(item.slot),
+    condition,
+    // A history is not advertised until it exists, and once read the button
+    // goes rather than sitting there offering nothing.
+    hasLore: Boolean(loreFor(item, state.world, state.sheet.language)),
+    read: knowsLore(state.sheet, `lore_${item.id}`),
+  });
+
   return {
-    stacks: inv.stacks.map((stack) => ({
-      id: stack.item.id,
-      name: stack.item.name,
-      description: stack.item.description,
-      kind: stack.item.kind,
-      count: stack.count,
-      equipped: worn.has(stack.item.id),
-      slot: stack.item.slot ?? null,
-      usable: stack.item.kind === 'consumable' && Boolean(stack.item.effect),
-      wearable: stack.item.kind === 'equipment' && Boolean(stack.item.slot),
-      // A history is not advertised until it exists, and once read the button
-      // goes rather than sitting there offering nothing.
-      hasLore: Boolean(loreFor(stack.item, state.world, state.sheet.language)),
-      read: knowsLore(state.sheet, `lore_${stack.item.id}`),
-    })),
+    stacks: [
+      ...inv.stacks.map((stack) => line(stack.item, stack.item.id, stack.count, 1)),
+      ...inv.held.map((h) => line(h.item, h.instance.id, 1, conditionOfInstance(h.instance) / PRISTINE)),
+    ],
     equipped: { ...inv.equipped } as Record<string, string>,
   };
 }

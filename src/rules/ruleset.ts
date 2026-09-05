@@ -71,6 +71,16 @@ export type PersonaRules = {
   suitSwing: number;
 };
 
+export type GearRules = {
+  /**
+   * How much condition a fight takes out of everything you are wearing.
+   *
+   * ZERO IS THE IDENTITY VALUE: gear never degrades, and the same code runs
+   * over it. A world with no smiths in it is a dial, not a missing system.
+   */
+  wearPerFight: number;
+};
+
 export type RestRules = {
   shortTurns: number;
   longTurns: number;
@@ -119,6 +129,7 @@ export type Ruleset = {
   combat: CombatRules;
   persona: PersonaRules;
   knowledge: KnowledgeRules;
+  gear: GearRules;
   rest: RestRules;
   world: WorldRules;
 };
@@ -135,6 +146,7 @@ export const STANDARD: Ruleset = {
   combat: { soakCeiling: 2, soakShare: 1 / 3, minHit: 1, conditionFloor: 1, turnLength: 6, minActionTicks: 2 },
   persona: { driftThreshold: 6, pressureDecay: 1, suitSwing: 0.25 },
   knowledge: { spreadDepth: 2, reputationWeight: 1, ambientHops: 1, ambientFade: 0.1 },
+  gear: { wearPerFight: 2 },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
 };
@@ -145,6 +157,7 @@ const copy = (rules: Ruleset): Ruleset => ({
   combat: { ...rules.combat },
   persona: { ...rules.persona },
   knowledge: { ...rules.knowledge },
+  gear: { ...rules.gear },
   rest: { ...rules.rest },
   world: { ...rules.world },
 });
@@ -163,6 +176,7 @@ export const PLAIN: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 0 },
   persona: { ...STANDARD.persona, driftThreshold: Number.POSITIVE_INFINITY, suitSwing: 0 },
   knowledge: { spreadDepth: 0, reputationWeight: 0, ambientHops: 0, ambientFade: 0 },
+  gear: { wearPerFight: 0 },
   world: { ...STANDARD.world, dangerPerFloor: 0 },
 };
 
@@ -173,6 +187,7 @@ export const HARSH: Ruleset = {
   combat: { ...STANDARD.combat, soakCeiling: 1 },
   persona: { ...STANDARD.persona, driftThreshold: 4, suitSwing: 0.4 },
   knowledge: { spreadDepth: 4, reputationWeight: 1.5, ambientHops: 2, ambientFade: 0.05 },
+  gear: { wearPerFight: 5 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
 };

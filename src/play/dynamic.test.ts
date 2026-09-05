@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
-import { addItem } from '../items/types.ts';
+import { addItem, countOf } from '../items/types.ts';
 import { TOWER_DEPTH } from '../items/catalogue.ts';
 import { chainedBook, CHAIN_LENGTH, provableChain, volumeFloor, volumeId } from '../skills/book.ts';
 import { candidateSignetsFor, signetsFor, TOWER_HORIZON } from './signetbook.ts';
@@ -95,7 +95,7 @@ test('reading out of order is refused, and says why', () => {
 
   const early = useItem(carrying, second.id);
   assert.match(early.error ?? '', /follows on from something/);
-  assert.ok(carrying.pc.inventory.stacks.some((s) => s.item.id === second.id), 'and it is not wasted');
+  assert.ok(countOf(carrying.pc.inventory, second.id) > 0, 'and it is not wasted');
 });
 
 test('reading in order shelves both, and the shelf grows both branches', () => {
