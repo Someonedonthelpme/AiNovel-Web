@@ -4,6 +4,7 @@ import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, 
 import { compressRegion } from './lod.ts';
 import { firstFloor, groundFloor, link, place, world } from './fixtures.ts';
 import { isFull } from './types.ts';
+import { STANDARD } from '../rules/ruleset.ts';
 import type { Region, World } from './types.ts';
 
 const atGround = (over: Partial<World> = {}) => world({ currentPlace: 'gate', ...over });
@@ -99,6 +100,12 @@ test('you cannot descend from ground level', () => {
   const r = descend(atGround());
   assert.equal(r.kind, 'error');
   if (r.kind === 'error') assert.match(r.reason, /already at ground level/);
+});
+
+test('a world whose law does not forbid it can be dug below ground', () => {
+  const r = descend(atGround({ rules: { ...STANDARD, laws: [] } }));
+  assert.equal(r.kind, 'needsRegion');
+  if (r.kind === 'needsRegion') assert.equal(r.floor, -1);
 });
 
 test('descending requires standing at the way down', () => {

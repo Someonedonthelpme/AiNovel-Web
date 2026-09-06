@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HARSH, PLAIN, presetNamed, PRESETS, rulesOf, STANDARD, withOverrides } from './ruleset.ts';
-import type { Ruleset } from './ruleset.ts';
+import { CONSTRAINTS, forbids, HARSH, PLAIN, presetNamed, PRESETS, rulesOf, STANDARD, withOverrides } from './ruleset.ts';
+import type { Binding, Ruleset } from './ruleset.ts';
 import { applyDamage, damageReduction, soakOf } from '../combat/resolve.ts';
 import { resistedRounds } from '../combat/conditions.ts';
 import { actionTicks, castTicks, refillTicks } from '../combat/tempo.ts';
@@ -416,13 +416,57 @@ const PROVEN = [
   'world.dangerBase', 'world.dangerPerFloor',
 ];
 
+/* -------------------------------------------------------------------------- */
+/* LAWS                                                                        */
+/* -------------------------------------------------------------------------- */
+
+const underLaw = (binds: Binding) =>
+  world({
+    rules: {
+      ...STANDARD,
+      laws: [{ axis: 'movement' as const, constraint: 'descendBelowGround' as const, binds }],
+    },
+  });
+
+test('a law binds the subjects it names, and the player is never special by default', () => {
+  assert.ok(forbids(underLaw('all'), 'player', 'descendBelowGround'));
+  assert.ok(forbids(underLaw('all'), 'resident', 'descendBelowGround'));
+
+  // the case the hardcoded engine could never express: bound residents, free player
+  assert.equal(forbids(underLaw('residents'), 'player', 'descendBelowGround'), null);
+  assert.ok(forbids(underLaw('residents'), 'resident', 'descendBelowGround'));
+
+  // and its mirror, which is the one that proves nothing assumes the player is exempt
+  assert.ok(forbids(underLaw('player'), 'player', 'descendBelowGround'));
+  assert.equal(forbids(underLaw('player'), 'resident', 'descendBelowGround'), null);
+});
+
+test('each preset gets its own laws array', () => {
+  presetNamed('standard').laws.length = 0;
+  assert.equal(presetNamed('standard').laws.length, 1);
+  assert.equal(STANDARD.laws.length, 1);
+});
+
+/** The same claim for the law vocabulary: a constraint nothing checks is a dead field. */
+const PROVEN_CONSTRAINTS = ['descendBelowGround'];
+
 test('EVERY dial in the ruleset has a proven reader', () => {
+  // `laws` is a list of laws rather than a bag of dials, so it is enumerated by
+  // the constraint guard below instead of this one.
   const actual = (Object.keys(STANDARD) as (keyof Ruleset)[])
+    .filter((group) => group !== 'laws')
     .flatMap((group) => Object.keys(STANDARD[group]).map((field) => `${group}.${field}`));
 
   assert.deepEqual(
     actual.sort(), [...PROVEN].sort(),
     'a rule that changes nothing is the same bug as a field nothing writes — prove it, then list it here',
+  );
+});
+
+test('EVERY constraint a law can name has a proven checker', () => {
+  assert.deepEqual(
+    [...CONSTRAINTS].sort(), [...PROVEN_CONSTRAINTS].sort(),
+    'a constraint nothing checks is a law that changes nothing - prove it, then list it here',
   );
 });
 

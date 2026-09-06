@@ -175,6 +175,40 @@ export type KnowledgeRules = {
   ambientFade: number;
 };
 
+/**
+ * The axes a law can govern. Four, and no more without a design decision.
+ */
+export const RULE_AXES = ['movement', 'knowledge', 'progression', 'economy'] as const;
+export type RuleAxis = (typeof RULE_AXES)[number];
+
+/**
+ * Everything a law can forbid.
+ *
+ * CLOSED, and that is the point: a model that can write "NPCs cannot lie"
+ * produces a rule nothing enforces. The model names and dresses a law; the
+ * engine decides what one can say. Grows only when a constraint gains a
+ * checker — an entry nobody reads is a dead field, which is what §12 of
+ * ARCHITECTURE.md exists to catch.
+ */
+export const CONSTRAINTS = ['descendBelowGround'] as const;
+export type Constraint = (typeof CONSTRAINTS)[number];
+
+/**
+ * Whom a law binds. **Whether the player is bound is part of the law**, so no
+ * check anywhere may assume the player is the exception.
+ */
+export const BINDINGS = ['all', 'residents', 'player'] as const;
+export type Binding = (typeof BINDINGS)[number];
+
+/** Who is asking. Every law check takes one. */
+export type Subject = 'player' | 'resident';
+
+export type Law = {
+  axis: RuleAxis;
+  constraint: Constraint;
+  binds: Binding;
+};
+
 export type Ruleset = {
   body: BodyRules;
   combat: CombatRules;
@@ -183,6 +217,8 @@ export type Ruleset = {
   gear: GearRules;
   rest: RestRules;
   world: WorldRules;
+  /** The laws in force. A world with none forbids nothing. */
+  laws: Law[];
 };
 
 /**
@@ -224,6 +260,10 @@ export const STANDARD: Ruleset = {
   },
   rest: { shortTurns: 1, longTurns: 8 },
   world: { dangerBase: 0, dangerPerFloor: 1 },
+  laws: [
+    // What `descend` used to assert on its own: the ground is the bottom.
+    { axis: 'movement', constraint: 'descendBelowGround', binds: 'all' },
+  ],
 };
 
 /** Deep-copy so a preset can be edited field by field without touching another. */
@@ -235,6 +275,7 @@ const copy = (rules: Ruleset): Ruleset => ({
   gear: { ...rules.gear, slots: rules.gear.slots.map((slot) => ({ ...slot })) },
   rest: { ...rules.rest },
   world: { ...rules.world },
+  laws: rules.laws.map((law) => ({ ...law })),
 });
 
 /**
@@ -299,8 +340,35 @@ type DeepPartial<T> = { [K in keyof T]?: Partial<T[K]> };
  * declared ruleset plays by `STANDARD`, which is what every world did before
  * this existed.
  *
- * `ponytail: no per-subject resolution yet. A rule names who it BINDS and a
- * Signet can exempt one person, so this becomes ruleFor(world, subject, axis)
- * when exemptions land in step 6. Base resolution is all step 1 needs.`
+ * Step 6 answered the question this used to defer. Per-subject resolution went
+ * to `forbids` instead of here: laws are a separate list on the same Ruleset,
+ * and a dial has no subject — carryBase is the same number whoever asks.
+ * Renaming this to `ruleFor(world, subject, axis)` would have touched 27 call
+ * sites and made every tuning read invent a subject, for no change in
+ * behaviour. Revisit only if a Signet has to change a NUMBER rather than a
+ * permission.
  */
 export const rulesOf = (from?: { rules?: Ruleset } | null): Ruleset => from?.rules ?? STANDARD;
+
+const bindsSubject = (binds: Binding, subject: Subject): boolean =>
+  binds === 'all' || (binds === 'player' ? subject === 'player' : subject === 'resident');
+
+/**
+ * The law stopping this subject from doing this, or `null` if nothing does.
+ *
+ * Returns the law rather than a boolean so a caller can say WHICH rule it was
+ * — a refusal nobody can attribute is what makes a world feel arbitrary.
+ *
+ * `ponytail: no exemptions yet. A Signet is meant to exempt one person, but
+ * CharacterSheet.signets has no writer (ARCHITECTURE.md §12), so an exemption
+ * check today would be code nothing can reach. Widen Subject from a kind to a
+ * person id when Signets can actually be held.`
+ */
+export const forbids = (
+  from: { rules?: Ruleset } | null | undefined,
+  subject: Subject,
+  constraint: Constraint,
+): Law | null =>
+  rulesOf(from).laws.find(
+    (law) => law.constraint === constraint && bindsSubject(law.binds, subject),
+  ) ?? null;

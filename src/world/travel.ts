@@ -1,6 +1,7 @@
 import { compressExcept } from './lod.ts';
 import type { Gazetteer, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
+import { forbids } from '../rules/ruleset.ts';
 
 /**
  * Movement within and between regions.
@@ -115,7 +116,12 @@ export function ascend(world: World): TravelResult {
 export function descend(world: World): TravelResult {
   const region = activeRegion(world);
   if (!region) return { kind: 'error', reason: 'the current region is not loaded in full detail' };
-  if (region.floor === 0) return { kind: 'error', reason: 'you are already at ground level' };
+  // The ground being the bottom is this world's LAW, not the engine's assumption:
+  // a world without it can be dug into. The subject is passed because whether the
+  // player is bound is part of the law.
+  if (region.floor === 0 && forbids(world, 'player', 'descendBelowGround')) {
+    return { kind: 'error', reason: 'you are already at ground level' };
+  }
   if (world.currentPlace !== region.entrance) return { kind: 'error', reason: 'you are not at the way down' };
 
   return crossTo(world, region.floor - 1, (r) => r.exit ?? r.entrance);
