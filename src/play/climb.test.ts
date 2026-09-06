@@ -6,6 +6,8 @@ import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
 import { isFull } from '../world/types.ts';
+import { believes } from '../character/belief.ts';
+import { ruleClaim, STANDARD } from '../rules/ruleset.ts';
 
 const floor1 = {
   name: 'The Grey Grove', biome: 'dead forest', culture: 'poachers',
@@ -137,3 +139,37 @@ test('a crossing onto a floor already loaded records no floor, and still replays
   assert.equal(replayed.world.currentRegion, 'floor-0');
   assert.equal(replayed.world.turn, down.state.world.turn);
 });
+
+/* -------------------------------------------------------------------------- */
+/* A LAW IS LEARNED BY HITTING IT                                              */
+/* -------------------------------------------------------------------------- */
+
+test('a refused descent teaches the player the rule', async () => {
+  const r = await godown(provider(), playState());
+
+  assert.match(r.error ?? '', /already at ground level/);
+  assert.ok(
+    believes(r.state.sheet.beliefs ?? [], ruleClaim('descendBelowGround')),
+    'running into a law is how somebody finds out it is there',
+  );
+});
+
+test('the lesson survives a fold, which is why a refusal is logged at all', async () => {
+  const start = playState();
+  const live = await godown(provider(), start);
+
+  assert.ok(live.record, 'a refused attempt must still reach the log or the lesson dies on reload');
+
+  // Exactly what a load with every snapshot deleted would do.
+  const replayed = foldPlay(start, [live.record!]);
+  assert.ok(believes(replayed.sheet.beliefs ?? [], ruleClaim('descendBelowGround')));
+});
+
+test('a world that permits digging teaches nothing about it', async () => {
+  const base = playState();
+  const free = { ...base, world: { ...base.world, rules: { ...STANDARD, laws: [] } } };
+
+  const r = await godown(provider(), free);
+  assert.ok(!believes(r.state.sheet.beliefs ?? [], ruleClaim('descendBelowGround')));
+});
+

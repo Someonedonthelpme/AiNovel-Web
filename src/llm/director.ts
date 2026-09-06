@@ -12,7 +12,8 @@ import { CLASSES } from '../play/state.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { Provider } from './provider.ts';
 import type { WriterBrief } from './redact.ts';
-import { forbids } from '../rules/ruleset.ts';
+import { forbids, ruleClaim, CONSTRAINTS } from '../rules/ruleset.ts';
+import { believes } from '../character/belief.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -278,8 +279,22 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
    * breaking. The people in the room are residents; whether the PLAYER is bound
    * by the same law is a separate question, which the law answers separately.
    */
+  /*
+   * THE LAW, AND WHAT IS KNOWN OF IT — two lines, never one.
+   *
+   * The Director ENFORCES the law, so it has to see the true one. But a
+   * character may only act on what they have found out, and collapsing the two
+   * is how somebody ends up knowing a rule nobody ever told them.
+   */
   const lawsOnThem = present.length && forbids(state.world, 'resident', 'crossFloors')
-    ? 'What the law forbids them: they cannot leave this floor'
+    ? 'The law (you enforce this): they cannot leave this floor'
+    : '';
+
+  const workedOut = CONSTRAINTS
+    .filter((c) => believes(state.sheet.beliefs ?? [], ruleClaim(c)))
+    .map((c) => (c === 'descendBelowGround' ? 'the ground is the bottom' : 'residents cannot leave a floor'));
+  const playerKnows = workedOut.length
+    ? `What the player has worked out about the law: ${workedOut.join('; ')}`
     : '';
 
   return [
@@ -290,6 +305,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',
     bonds.length ? `What they are to each other:\n${bonds.join('\n')}` : '',
     lawsOnThem,
+    playerKnows,
     heard.length ? `What they think you have done (belief, not fact):\n${heard.join('\n')}` : '',
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
     /*

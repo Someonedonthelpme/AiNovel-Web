@@ -1,3 +1,4 @@
+import type { Claim } from '../character/belief.ts';
 /**
  * The ruleset: one game config, and the master dial of the whole engine.
  *
@@ -352,6 +353,12 @@ type DeepPartial<T> = { [K in keyof T]?: Partial<T[K]> };
  * permission.
  */
 export const rulesOf = (from?: { rules?: Ruleset } | null): Ruleset => from?.rules ?? STANDARD;
+
+/**
+ * A belief ABOUT a law. Keyed on the closed vocabulary, so a belief about a rule
+ * the engine does not check cannot be spelled.
+ */
+export const ruleClaim = (constraint: Constraint): Claim => ({ kind: 'rule', rule: constraint });
 
 const bindsSubject = (binds: Binding, subject: Subject): boolean =>
   binds === 'all' || (binds === 'player' ? subject === 'player' : subject === 'resident');

@@ -19,7 +19,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 3 | The component action system | **shipped** | `src/skills/effect.ts`; `ActiveKind` / `usesPerRest` survive only in comments explaining their removal |
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
-| 6 | World rules and strata | **partial** | law vocabulary + `forbids`; `descend` and the Director brief converted (2 constraints); no rule KNOWLEDGE, no strata, no amendment events, no exemptions |
+| 6 | World rules and strata | **partial** | law vocabulary + `forbids`; `descend` and the Director brief converted; a law is learned by hitting it (player only); no NPC discovery or rumour spread, no strata, no amendment events, no exemptions |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module |

@@ -196,6 +196,29 @@ holding a belief — `loreClaim` builds an ordinary `Claim`
 Reading is a turn action and works once ([sheetaction.ts:241](src/play/sheetaction.ts:241)):
 a paragraph cannot be re-read for the same comfort.
 
+### `src/rules/` — the dials, and the law
+`ruleset.ts` holds two different things on one carrier. The **dials** are
+parameters with no subject — `carryBase` is the same number whoever asks — and
+`rulesOf` resolves them. The **laws** are `{ axis, constraint, binds }`, and
+`forbids(from, subject, constraint)` resolves those PER SUBJECT
+([ruleset.ts:377](src/rules/ruleset.ts:377)), because whether the player is
+bound is part of the law rather than an assumption in the engine.
+
+`RULE_AXES` and `CONSTRAINTS` are closed enums: a model can name and dress a
+law but never invent one, for the same reason `WorldDelta` stayed flat — a rule
+nothing checks is a rule that changes nothing. Two constraints exist, and both
+have readers: `descend` refuses below ground, and the Director is told what
+residents may not do.
+
+**A law is learned by hitting it.** `forbids` returns the `Law` rather than a
+boolean, so a refusal can say which rule it was; `descend` carries it back on
+the `TravelResult`, and `applyClimb` writes a firsthand `{ kind: 'rule' }`
+`Claim` onto the sheet ([climb.ts:95](src/play/climb.ts:95)). Knowing a rule is
+an ordinary belief, exactly as knowing a piece of lore is, so `adopt`, `retell`
+and the ambient air carry it with nothing new written. That is also why a
+REFUSED crossing is logged: the lesson lives in the fold, and a lesson outside
+the log does not survive a reload.
+
 ### `src/llm/`
 `provider.ts` (the boundary; implementations never import each other) ·
 `director.ts` · `writer.ts` · `redact.ts` · `register.ts` (**trust IS the
@@ -353,7 +376,7 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:255](src/llm/director.ts:255)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist** | indirectly — only the validated delta and the refusal reasons |
+| **Director** ([director.ts:401](src/llm/director.ts:401)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist** | indirectly — only the validated delta and the refusal reasons |
 | **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:209](src/world/floorgen.ts:209)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture | **yes, in full** — inside `ClimbRecord.built` |

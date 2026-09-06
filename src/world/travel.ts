@@ -2,6 +2,7 @@ import { compressExcept } from './lod.ts';
 import type { Gazetteer, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { forbids } from '../rules/ruleset.ts';
+import type { Law } from '../rules/ruleset.ts';
 
 /**
  * Movement within and between regions.
@@ -19,7 +20,9 @@ import { forbids } from '../rules/ruleset.ts';
 export type TravelResult =
   | { kind: 'moved'; world: World }
   | { kind: 'needsRegion'; floor: number; regionId: RegionId; gazetteer: Gazetteer | null }
-  | { kind: 'error'; reason: string };
+  // `law` is present when it was the WORLD that refused rather than the map.
+  // Carrying it means the caller can say which rule, and somebody can learn it.
+  | { kind: 'error'; reason: string; law?: Law };
 
 export function currentRegion(world: World): Region | Gazetteer | null {
   return world.regions[world.currentRegion] ?? null;
@@ -119,8 +122,11 @@ export function descend(world: World): TravelResult {
   // The ground being the bottom is this world's LAW, not the engine's assumption:
   // a world without it can be dug into. The subject is passed because whether the
   // player is bound is part of the law.
-  if (region.floor === 0 && forbids(world, 'player', 'descendBelowGround')) {
-    return { kind: 'error', reason: 'you are already at ground level' };
+  const groundLaw = region.floor === 0
+    ? forbids(world, 'player', 'descendBelowGround')
+    : null;
+  if (groundLaw) {
+    return { kind: 'error', reason: 'you are already at ground level', law: groundLaw };
   }
   if (world.currentPlace !== region.entrance) return { kind: 'error', reason: 'you are not at the way down' };
 

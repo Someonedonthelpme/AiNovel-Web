@@ -4,6 +4,9 @@ import { generateFloor } from '../world/floorgen.ts';
 import type { FloorResult } from '../world/floorgen.ts';
 import { ascend, descend, installRegion } from '../world/travel.ts';
 import { bumpCounter } from '../character/persona.ts';
+import { adopt, firsthand } from '../character/belief.ts';
+import { ruleClaim } from '../rules/ruleset.ts';
+import type { Law } from '../rules/ruleset.ts';
 import { grantXp, hpAfterGrowth, xpForNewDepth } from './progress.ts';
 import type { LevelUp } from './progress.ts';
 import { COUNTERS } from './traits.ts';
@@ -56,12 +59,35 @@ export type ClimbResult = {
   /** Experience for reaching a depth for the first time. */
   xp: number;
   levelled: LevelUp | null;
-  /** What to append to the log. Null when the climb failed. */
+  /**
+   * What to append to the log.
+   *
+   * Present even when the crossing was REFUSED, because running into a law is
+   * how somebody learns it is there, and a lesson that is not in the log does
+   * not survive a reload.
+   */
   record: ClimbRecord | null;
 };
 
-const failed = (state: PlayState, error: string): ClimbResult =>
-  ({ state, generated: null, error, xp: 0, levelled: null, record: null });
+const failed = (state: PlayState, error: string, record: ClimbRecord | null = null): ClimbResult =>
+  ({ state, generated: null, error, xp: 0, levelled: null, record });
+
+/**
+ * What hitting a law leaves behind.
+ *
+ * Firsthand, because you were there. This runs inside the fold, so the same
+ * refusal replays to the same belief and nothing extra has to be logged.
+ */
+const taught = (state: PlayState, law: Law | undefined): PlayState =>
+  law
+    ? {
+        ...state,
+        sheet: {
+          ...state.sheet,
+          beliefs: adopt(state.sheet.beliefs ?? [], firsthand(ruleClaim(law.constraint))),
+        },
+      }
+    : state;
 
 const moveFor = (direction: 'up' | 'down') => (direction === 'up' ? ascend : descend);
 
@@ -69,14 +95,14 @@ const moveFor = (direction: 'up' | 'down') => (direction === 'up' ? ascend : des
 export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   const attempt = moveFor(record.direction)(state.world);
 
-  if (attempt.kind === 'error') return failed(state, attempt.reason);
+  if (attempt.kind === 'error') return failed(taught(state, attempt.law), attempt.reason, record);
   if (attempt.kind === 'moved') {
     return { ...arrive(state, attempt.world), generated: null, error: null, record };
   }
 
   // Replaying a log whose crossing recorded no floor, onto a world that has
   // none either. Failing loudly beats folding to a state travel already refused.
-  if (!record.built) return failed(state, `floor ${attempt.floor} was never built`);
+  if (!record.built) return failed(state, `floor ${attempt.floor} was never built`, record);
 
   const { region, people, edges } = record.built;
   // MERGED, never replaced: a crossing brings new faces and their first
@@ -96,7 +122,6 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
 
 async function cross(provider: Provider, state: PlayState, direction: 'up' | 'down'): Promise<ClimbResult> {
   const attempt = moveFor(direction)(state.world);
-  if (attempt.kind === 'error') return failed(state, attempt.reason);
 
   // The floor is new, or was compressed on the way past. Build it BEFORE
   // applying anything, so one record drives the live crossing and every replay.

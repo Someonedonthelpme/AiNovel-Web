@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONSTRAINTS, forbids, HARSH, PLAIN, presetNamed, PRESETS, rulesOf, STANDARD, withOverrides } from './ruleset.ts';
+import { CONSTRAINTS, forbids, ruleClaim, HARSH, PLAIN, presetNamed, PRESETS, rulesOf, STANDARD, withOverrides } from './ruleset.ts';
 import type { Binding, Ruleset } from './ruleset.ts';
 import { applyDamage, damageReduction, soakOf } from '../combat/resolve.ts';
 import { resistedRounds } from '../combat/conditions.ts';
@@ -27,7 +27,7 @@ import { nudge } from '../social/edge.ts';
 import type { Edges } from '../social/edge.ts';
 import { spreadOf } from '../social/deed.ts';
 import { carry, seed } from '../social/ambient.ts';
-import { firsthand } from '../character/belief.ts';
+import { adopt, firsthand } from '../character/belief.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { runDirector } from '../llm/director.ts';
 
@@ -457,6 +457,32 @@ test('the Director is told what the law forbids the people present', async () =>
   const p = new FakeProvider({ structured: [] });
   await runDirector(p, bound, 'look around', 'exploration', []).catch(() => {});
   assert.match(p.allSentText(), /cannot leave this floor/);
+});
+
+test('the Director is told the law and what the player has worked out, separately', async () => {
+  // The law is what the Director ENFORCES; the belief is what the player may
+  // act on. Collapsing the two is how a character knows a rule nobody told them.
+  const base = playState();
+  const knowing = {
+    ...base,
+    sheet: {
+      ...base.sheet,
+      beliefs: adopt(base.sheet.beliefs ?? [], firsthand(ruleClaim('descendBelowGround'))),
+    },
+  };
+
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, knowing, 'look around', 'exploration', []).catch(() => {});
+
+  const sent = p.allSentText();
+  assert.match(sent, /The law \(you enforce this\)/);
+  assert.match(sent, /worked out/, "and separately, what the player has found out");
+});
+
+test('a player who has worked nothing out gets no such line', async () => {
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, playState(), 'look around', 'exploration', []).catch(() => {});
+  assert.doesNotMatch(p.allSentText(), /worked out/);
 });
 
 test('a world without that law says nothing about it', async () => {
