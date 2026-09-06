@@ -12,6 +12,7 @@ import { CLASSES } from '../play/state.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { Provider } from './provider.ts';
 import type { WriterBrief } from './redact.ts';
+import { forbids } from '../rules/ruleset.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -270,6 +271,17 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
    */
   const bonds = relationships(state, present.map((p) => p.id));
 
+  /*
+   * WHAT THE LAW FORBIDS THEM.
+   *
+   * A law the Director cannot see is a law it will cheerfully narrate somebody
+   * breaking. The people in the room are residents; whether the PLAYER is bound
+   * by the same law is a separate question, which the law answers separately.
+   */
+  const lawsOnThem = present.length && forbids(state.world, 'resident', 'crossFloors')
+    ? 'What the law forbids them: they cannot leave this floor'
+    : '';
+
   return [
     `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0})`,
     `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
@@ -277,6 +289,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',
     bonds.length ? `What they are to each other:\n${bonds.join('\n')}` : '',
+    lawsOnThem,
     heard.length ? `What they think you have done (belief, not fact):\n${heard.join('\n')}` : '',
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
     /*

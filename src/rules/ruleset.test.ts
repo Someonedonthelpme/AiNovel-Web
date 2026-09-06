@@ -28,6 +28,8 @@ import type { Edges } from '../social/edge.ts';
 import { spreadOf } from '../social/deed.ts';
 import { carry, seed } from '../social/ambient.ts';
 import { firsthand } from '../character/belief.ts';
+import { FakeProvider } from '../llm/provider.ts';
+import { runDirector } from '../llm/director.ts';
 
 const tuned = (over: Parameters<typeof withOverrides>[1]): Ruleset => withOverrides(STANDARD, over);
 
@@ -441,14 +443,42 @@ test('a law binds the subjects it names, and the player is never special by defa
   assert.equal(forbids(underLaw('player'), 'resident', 'descendBelowGround'), null);
 });
 
+test('the Director is told what the law forbids the people present', async () => {
+  // The reader that makes a law more than a record. A rule the Director cannot
+  // see is a rule it will happily narrate somebody breaking.
+  const base = playState();
+  const bound = {
+    ...base,
+    world: { ...base.world, rules: { ...STANDARD, laws: [
+      { axis: 'movement' as const, constraint: 'crossFloors' as const, binds: 'residents' as const },
+    ] } },
+  };
+
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, bound, 'look around', 'exploration', []).catch(() => {});
+  assert.match(p.allSentText(), /cannot leave this floor/);
+});
+
+test('a world without that law says nothing about it', async () => {
+  const base = playState();
+  const free = { ...base, world: { ...base.world, rules: { ...STANDARD, laws: [] } } };
+
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, free, 'look around', 'exploration', []).catch(() => {});
+  assert.doesNotMatch(p.allSentText(), /cannot leave this floor/);
+});
+
 test('each preset gets its own laws array', () => {
+  // The count is not the point; not sharing the array is. Asserting a literal
+  // here broke the moment a second law landed.
+  const before = STANDARD.laws.length;
   presetNamed('standard').laws.length = 0;
-  assert.equal(presetNamed('standard').laws.length, 1);
-  assert.equal(STANDARD.laws.length, 1);
+  assert.equal(presetNamed('standard').laws.length, before);
+  assert.equal(STANDARD.laws.length, before);
 });
 
 /** The same claim for the law vocabulary: a constraint nothing checks is a dead field. */
-const PROVEN_CONSTRAINTS = ['descendBelowGround'];
+const PROVEN_CONSTRAINTS = ['descendBelowGround', 'crossFloors'];
 
 test('EVERY dial in the ruleset has a proven reader', () => {
   // `laws` is a list of laws rather than a bag of dials, so it is enumerated by

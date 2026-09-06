@@ -190,7 +190,7 @@ export type RuleAxis = (typeof RULE_AXES)[number];
  * checker — an entry nobody reads is a dead field, which is what §12 of
  * ARCHITECTURE.md exists to catch.
  */
-export const CONSTRAINTS = ['descendBelowGround'] as const;
+export const CONSTRAINTS = ['descendBelowGround', 'crossFloors'] as const;
 export type Constraint = (typeof CONSTRAINTS)[number];
 
 /**
@@ -263,6 +263,9 @@ export const STANDARD: Ruleset = {
   laws: [
     // What `descend` used to assert on its own: the ground is the bottom.
     { axis: 'movement', constraint: 'descendBelowGround', binds: 'all' },
+    // Nothing moves an NPC between floors today, so this makes an accident of
+    // the engine into a statement of the world.
+    { axis: 'movement', constraint: 'crossFloors', binds: 'residents' },
   ],
 };
 

@@ -105,7 +105,7 @@ config ─┐
   encounter ([combat.ts:6](src/combat/combat.ts:6)).
 - **The world layer refuses to reach upward.** `travel.ts` returns a
   `needsRegion` *request* instead of calling a generator, which keeps it pure
-  and testable offline ([travel.ts:8](src/world/travel.ts:8)).
+  and testable offline ([travel.ts:16](src/world/travel.ts:16)).
   [climb.ts](src/play/climb.ts) is the only place in play that knows floors can
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
@@ -221,11 +221,27 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 
 ### The shapes
 
-**`World`** ([world/types.ts:134](src/world/types.ts:134)) — `seed`, `language`,
+**`World`** ([world/types.ts:141](src/world/types.ts:141)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:148](src/world/types.ts:148)) — one
+`regionIdFor(floor) = 'floor-' + floor` ([:208](src/world/types.ts:208)) — one
 floor is one region is one integer.
+
+Six more are OPTIONAL, and absent means *nobody has done that yet* rather than
+*off*. Each is stored rather than derived for the same reason: a word or a
+relation that came from somewhere other than the seed is lost the next time
+anything derives from the seed alone.
+
+- `subjects` · `roles` — seeded shapes wearing the model’s words
+  ([subjects.ts:111](src/world/subjects.ts:111)).
+- `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. It
+  carries `laws` alongside its dials ([ruleset.ts:221](src/rules/ruleset.ts:221)),
+  which is why a law can change mid-run when a generation-time value could not.
+- `edges` — who feels what about whom, sparsely. On the World because an edge
+  belongs to neither end of it.
+- `reputation` — per region, kept here because a region compresses to a
+  gazetteer and is REBUILT, and standing would not survive that.
+- `ambient` — what is going around per PLACE, not per region.
 
 **`Region`** (full detail) — places, entrance, exit, danger, creatures.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
@@ -318,7 +334,9 @@ same split as `classSpec` on the sheet. **The ids never change**, so anything th
 matched before naming still matches after it.
 
 **Authored** — the pieces that must not vary: `ROLES`, `SHAPES` (the nine
-emergent play-patterns), `PATH_WORDS`, the condition price table.
+emergent play-patterns), `PATH_WORDS`, the condition price table, and the laws
+`STANDARD` declares ([ruleset.ts:265](src/rules/ruleset.ts:265)) — today two:
+the ground is the bottom, and residents do not cross floors.
 
 > **The catalogue-agreement invariant**
 > ([traitbook.ts:158](src/play/traitbook.ts:158)) — the fold, the tree and the
