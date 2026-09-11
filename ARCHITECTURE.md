@@ -153,7 +153,9 @@ its pure resolver.
 
 ### `src/character/` — who someone is
 `persona.ts` (the core shared by player and villager) · `drift.ts` (two clocks,
-with hysteresis) · `roles.ts` (authored mechanical shapes) · `classgen.ts`
+with hysteresis) · `species.ts` (what KIND of thing someone is — a whole-number
+multiplier on how far each need moves, [species.ts:19](src/character/species.ts:19))
+· `roles.ts` (authored mechanical shapes) · `classgen.ts`
 (mechanics from seed) · `classnames.ts` (words from the model) · `classbuild.ts`
 (the seam) · `classes.ts`.
 
@@ -174,7 +176,9 @@ mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts`.
 
 ### `src/world/`
 `types.ts` · `floorgen.ts` (the only world-changing model call) · `travel.ts` ·
-`lod.ts` (**places compress, people do not**) · `validate.ts` · `budget.ts` ·
+`strata.ts` (which structure speaks for a floor, [strata.ts:13](src/world/strata.ts:13)) ·
+`lod.ts` (**places compress, people do not — and a static stratum's places do
+not either**, [lod.ts:72](src/world/lod.ts:72)) · `validate.ts` · `budget.ts` ·
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic map positions).
 
@@ -206,9 +210,47 @@ bound is part of the law rather than an assumption in the engine.
 
 `RULE_AXES` and `CONSTRAINTS` are closed enums: a model can name and dress a
 law but never invent one, for the same reason `WorldDelta` stayed flat — a rule
-nothing checks is a rule that changes nothing. Two constraints exist, and both
-have readers: `descend` refuses below ground, and the Director is told what
-residents may not do.
+nothing checks is a rule that changes nothing. **Five constraints, one or more
+on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
+`ruleset.test.ts` holds a `PROVEN_CONSTRAINTS` list naming the reader of each:
+
+| constraint | axis | checked by |
+|---|---|---|
+| `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
+| `crossFloors` | movement | the Director brief only ([director.ts:343](src/llm/director.ts:343)) — see §12 |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:435](src/play/combat.ts:435)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:443](src/play/combat.ts:443)) |
+| `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
+
+The `gainLevels` guard lives INSIDE `grantXp`
+([progress.ts:94](src/play/progress.ts:94)) because a law some callers check and
+others do not is not a law, and it BANKS the experience rather than burning it,
+so an amended law pays out what was earned under it.
+
+**A Signet is a rule exemption.** The exemption rides on the SUBJECT —
+`Subject` is a bare kind or `{ kind, exempt }`
+([ruleset.ts:250](src/rules/ruleset.ts:250)) — not on a lookup inside
+`forbids`, which keeps `src/rules/` free of the play layer that knows what a
+Signet is. `playerSubject` builds one from the sheet
+([signetbook.ts:200](src/play/signetbook.ts:200)); one Signet per world, the
+first to survive the reachability proof, exempts the first law that binds the
+player ([signetbook.ts:186](src/play/signetbook.ts:186)). `descend` defaults its
+subject to a plain `'player'` ([travel.ts:168](src/world/travel.ts:168)), so a
+caller that forgets to say who is asking gets the strictest reading.
+
+**A law can change mid-run.** `amend` returns a new ruleset with one law
+rebound, imposed or struck out ([ruleset.ts:419](src/rules/ruleset.ts:419)) —
+never editing a preset, which every other run shares — and `AXIS_OF` says which
+axis an imposed law lands on ([ruleset.ts:226](src/rules/ruleset.ts:226)). The
+change travels as `WorldDelta.amendLaw` ([state.ts:120](src/play/state.ts:120)),
+because the delta is what the log stores: a rule changed outside it would replay
+as one that never changed.
+
+**Permission and geography are separate questions.** The ground law says who may
+dig; `world.depthBelowGround` says how far there is to dig
+([ruleset.ts:153](src/rules/ruleset.ts:153), checked at
+[travel.ts:183](src/world/travel.ts:183)). Without it, a world that permits
+digging had no bottom and every floor down was a model call.
 
 **A law is learned by hitting it.** `forbids` returns the `Law` rather than a
 boolean, so a refusal can say which rule it was; `descend` carries it back on
@@ -247,28 +289,56 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 **`World`** ([world/types.ts:226](src/world/types.ts:226)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:308](src/world/types.ts:308)) — one
-floor is one region is one integer.
+`regionIdFor(floor) = 'floor-' + floor` ([:308](src/world/types.ts:308)).
+**"One floor is one region is one integer" was true until step 6, and is now
+only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
+the ground law) and what CONNECTS to what, so a world could only be a stack.
+Depth stays on `floor`; adjacency moved to `Region.exits`
+([:132](src/world/types.ts:132)), and `generateFloor` takes the region id to
+build `into` ([floorgen.ts:310](src/world/floorgen.ts:310)). A region with no
+`exits` derives up and down from depth ([travel.ts:125](src/world/travel.ts:125))
+— every world saved before this.
 
-Six more are OPTIONAL, and absent means *nobody has done that yet* rather than
+Eight more are OPTIONAL, and absent means *nobody has done that yet* rather than
 *off*. Each is stored rather than derived for the same reason: a word or a
 relation that came from somewhere other than the seed is lost the next time
 anything derives from the seed alone.
 
 - `subjects` · `roles` — seeded shapes wearing the model’s words
   ([subjects.ts:111](src/world/subjects.ts:111)).
-- `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. It
-  carries `laws` alongside its dials ([ruleset.ts:273](src/rules/ruleset.ts:273)),
-  which is why a law can change mid-run when a generation-time value could not.
+- `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. Genesis
+  stores the WHOLE preset rather than its name
+  ([genesis.ts:575](src/session/genesis.ts:575)), so retuning a preset cannot
+  reach into a run already under way. It carries `laws` alongside its dials
+  ([ruleset.ts:273](src/rules/ruleset.ts:273)), which is why a law can change
+  mid-run when a generation-time value could not — and `applyDelta` is its only
+  mid-run writer ([delta.ts:231](src/play/delta.ts:231)).
+- `species` — the kinds of thing that live here, dealt from the seed at genesis
+  ([genesis.ts:574](src/session/genesis.ts:574)). Stored for the same reason
+  `subjects` is.
+- `strata` — the structures this world holds ([types.ts:268](src/world/types.ts:268)).
+  Genesis writes one, the tower, covering floor 0 up
+  ([genesis.ts:582](src/session/genesis.ts:582)); a climb that opens a wing adds
+  another ([climb.ts:148](src/play/climb.ts:148)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it.
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
 
-**`Region`** (full detail) — places, entrance, exit, danger, creatures.
+**`Region`** ([types.ts:105](src/world/types.ts:105), full detail) — places,
+entrance, exit, danger, creatures, and optionally `exits: Link[]`. A `Link`
+([:142](src/world/types.ts:142)) carries the far side's DEPTH as well as its id,
+because danger and budgets have to answer before that region exists.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
 known people survive ([lod.ts:38](src/world/lod.ts:38)).
+
+**`Stratum`** ([types.ts:59](src/world/types.ts:59)) — a structure above a
+floor: `kind` `static | dynamic`, an optional `parent`, a floor range, and
+optional `danger`, `theme` and `loot`. Strata NEST, so the plan is a tree and
+the innermost stratum containing a floor speaks for it
+([strata.ts:13](src/world/strata.ts:13)). `static` is authored once and frozen —
+never compressed, so never rebuilt ([lod.ts:72](src/world/lod.ts:72)).
 
 **`Persona`** ([character/persona.ts:295](src/character/persona.ts:295)) — the
 core every villager and the player share:
@@ -278,7 +348,8 @@ core every villager and the player share:
   temperament: Temperament,   // STORED — intuition·feeling·nerve·discipline, −10..+10
   needs: Needs,               // STORED — rest·food·safety·company·purpose, 0..10 = met
   counters: Counters,
-  pressure: Temperament }     // hysteresis accumulator
+  pressure: Temperament,      // hysteresis accumulator
+  species?: string }          // an id into World.species; absent is the ordinary kind
 ```
 
 **`CharacterSheet = Persona & {...}`** ([session/sheet.ts:58](src/session/sheet.ts:58))
@@ -296,7 +367,11 @@ they cannot drift ([sheet.ts:79](src/session/sheet.ts:79)).
 
 **`PlayEvent`** = `{kind:'start'} | TurnRecord | SheetRecord | ClimbRecord`.
 A `TurnRecord` stores the *recorded* roll and the *validated* delta, and a whole
-fight is **one event** carrying only the decisions.
+fight is **one event** carrying only the decisions. A `ClimbRecord` names the
+far side in `to` when the crossing is not a stair
+([climb.ts:55](src/play/climb.ts:55)), and carries any wing the new floor opened
+in `built.stratum` ([climb.ts:73](src/play/climb.ts:73)) — a world's shape
+changing is the last thing a replay should have to guess at.
 
 ---
 
@@ -323,6 +398,9 @@ come from?"
 | `conditionMet` / `progressOf` ([traits.ts:198](src/play/traits.ts:198)) | `TraitContext` | whether a trait condition holds, and its progress bar |
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
+| `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
+| `linksFrom` ([travel.ts:125](src/world/travel.ts:125)) | a region | its ways out: its own `exits`, or up/down derived from depth |
+| `playerSubject` ([signetbook.ts:200](src/play/signetbook.ts:200)) | held Signets + the kept catalogue | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:290](src/server/game.ts:290)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
 ---
@@ -338,6 +416,7 @@ the world seed with its own constant so systems do not correlate:
 paths     seed ^ 0x9a7b5     classes   seed ^ 0xc1a55
 traits    seed ^ 0x7a17      signets   seed ^ 0x51672
 emergent  seed ^ 0x3e3a      tree      seed ^ hash(background) ^ hash(class)
+species   seed ^ 0x59ec
 ```
 
 **Identity-keyed content** — keyed on the *thing's own id* rather than the world
@@ -348,6 +427,12 @@ at level 4 still teaches the same thing at level 12.
 A lorebook keys the same way ([lorebook.ts:74](src/play/lorebook.ts:74)): a sword
 found on floor nine carries the same history on a replay, and none of it travels
 in the save.
+Who is what kind keys the same way, on the world seed and the person's id
+([species.ts:62](src/character/species.ts:62)), weighted 4:1 toward the
+ordinary. And a way out found in play is NAMED from the seed, the region and the
+place it leaves from ([delta.ts:193](src/play/delta.ts:193)) rather than drawn,
+so the live turn and every replay mint the same destination without it being
+logged.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
@@ -357,9 +442,11 @@ same split as `classSpec` on the sheet. **The ids never change**, so anything th
 matched before naming still matches after it.
 
 **Authored** — the pieces that must not vary: `ROLES`, `SHAPES` (the nine
-emergent play-patterns), `PATH_WORDS`, the condition price table, and the laws
-`STANDARD` declares ([ruleset.ts:315](src/rules/ruleset.ts:315)) — today two:
-the ground is the bottom, and residents do not cross floors.
+emergent play-patterns), `PATH_WORDS`, the condition price table, the laws
+`STANDARD` declares ([ruleset.ts:315](src/rules/ruleset.ts:315)) — still two of
+the five constraints the engine checks: the ground is the bottom, and residents
+do not cross floors — and the four non-ordinary species `KINDS`
+([species.ts:35](src/character/species.ts:35)).
 
 > **The catalogue-agreement invariant**
 > ([traitbook.ts:158](src/play/traitbook.ts:158)) — the fold, the tree and the
@@ -376,10 +463,10 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:469](src/llm/director.ts:469)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist** | indirectly — only the validated delta and the refusal reasons |
+| **Director** ([director.ts:469](src/llm/director.ts:469)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:78](src/llm/director.ts:78)) and the PLACE a new way out leaves from (`revealWay`, [:62](src/llm/director.ts:62)) — never where it goes | indirectly — only the validated delta and the refusal reasons |
 | **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
-| **Floor** ([floorgen.ts:335](src/world/floorgen.ts:335)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture | **yes, in full** — inside `ClimbRecord.built` |
+| **Floor** ([floorgen.ts:335](src/world/floorgen.ts:335)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:132](src/world/floorgen.ts:132)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:495](src/world/floorgen.ts:495)) | **yes, in full** — inside `ClimbRecord.built` |
 | **Character** ([genesis.ts:142](src/session/genesis.ts:142)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
 | **Ground floor** ([genesis.ts:297](src/session/genesis.ts:297)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
@@ -408,7 +495,7 @@ app/new/page.tsx
   │     nameClasses(...)              the only model call; words only; may fail
   │     buildClass(...)               shape + naming → CharacterClass
   │
-  └─ POST /api/sessions {language, answers, draft, seed}
+  └─ POST /api/sessions {language, answers, draft, seed, rules, structure}
         draft carries classSpec — the WHOLE class object, because a generated
         class exists in no global list and an id would resolve to nothing
         │
@@ -418,7 +505,9 @@ app/new/page.tsx
             1. generateCharacter  ──► sheet
             2. generateGroundFloor ──► region, people, premise, startPlace
                  (given the sheet, so the town is built around its resident)
-          World assembled IN CODE: floor-0, turn 0, deepestFloor 0
+          World assembled IN CODE: floor-0, turn 0, deepestFloor 0,
+            the chosen preset IN FULL, the kinds from the seed, and one
+            stratum — the tower, fixed or living (genesis.ts:574–582)
           createSession → INSERT sessions + events(seq 0, kind 'start')
           saveSnapshot at seq 0
         │
@@ -452,11 +541,13 @@ rations, because a short rest spends one.
  4  validateDelta ─────────────── the trust boundary
        refuses: a move to an unconnected place · trust for someone who does
        not exist · revealing an exit that is already known · combat where
-       danger is 0 · using what you do not carry · resting when you may not
+       danger is 0 · using what you do not carry · resting when you may not ·
+       a law outside the vocabulary · a way out from a place not here
        (clamps: trust ±3, time 0..3)
  5  applyTurn ───────────────────── the fold
        applyDelta → combat (live or replayed) → drift causes derived FROM
        THE RECORD → traits awarded LAST
+       drift runs by THIS world's rules and each person's kind (delta.ts:567)
  6  toWriterView + assertNoLeak ─── the wall
  7  WRITER ─────────────────────────────────────── model call #2 (+1 retry)
        sees only the redacted view and what already happened
@@ -493,7 +584,11 @@ the whole climb. This is where the difficulty curve lives.
 **Climb** — a crossing is a **logged event**. `ClimbRecord.built` carries the
 generated region and its people, because `foldPlay` is synchronous and holds no
 `Provider`. `applyClimb` is pure and drives **both** the live path and replay,
-so the two cannot drift apart ([climb.ts:40](src/play/climb.ts:40)).
+so the two cannot drift apart ([climb.ts:40](src/play/climb.ts:40)). A crossing
+that is not a stair names its destination and goes through `traverse`
+([travel.ts:136](src/world/travel.ts:136)), which REFUSES a stair
+([:145](src/world/travel.ts:145)) — otherwise a derived down-link would be a way
+around the ground law and the world's bottom, both of which live in `descend`.
 
 **Panel actions** — equipping a helmet is bookkeeping, not a story beat, so
 there is no model call. Every action is a `{kind:'sheet'}` event, and each one
@@ -517,8 +612,10 @@ state instead, it is — which is why a whole fight stores only decisions.
 resolves.
 
 **4. Closed unions, never free text.** `ActiveEffect`, `ItemEffect`,
-`WorldDelta`, `TraitCondition`, `Gate` are all closed. A model names things; it
-never invents a mechanic.
+`WorldDelta`, `TraitCondition`, `Gate`, `CONSTRAINTS` and `BINDINGS` are all
+closed. A model names things; it never invents a mechanic — nor a law, nor
+where a road goes: `revealWay` names the place a way leaves FROM and the engine
+mints the far side ([state.ts:92](src/play/state.ts:92)).
 
 **5. The redaction wall is a type, with a runtime backstop.**
 
@@ -684,6 +781,21 @@ back so a floor that hates you is WRITTEN as one.
 **`NpcVoice.tics`** is *read* ([register.ts:65](src/llm/register.ts:65)) and
 written as `[]` by **every** generator. A reader with no writer.
 
+**`CharacterSheet.species`** (via `Persona.species`) is *read* for the player
+every turn ([delta.ts:570](src/play/delta.ts:570)) and written by nothing —
+genesis and floorgen give every VILLAGER a kind
+([genesis.ts:392](src/session/genesis.ts:392),
+[floorgen.ts:404](src/world/floorgen.ts:404)) and never the climber. The player
+is always the ordinary kind; only a test can make them otherwise.
+
+**`Stratum.danger`** and **`Stratum.loot`** are read — by `dangerAt`
+([strata.ts:51](src/world/strata.ts:51)) and by the fight's loot roll
+([combat.ts:445](src/play/combat.ts:445)) — and written by nothing outside
+tests. Genesis writes the tower with neither
+([genesis.ts:582](src/session/genesis.ts:582)); a wing gets a `theme` and
+nothing else ([floorgen.ts:509](src/world/floorgen.ts:509)). A quiet band or a
+wing known for its loot is expressible and never happens.
+
 ### A knock-on
 
 `CLASSES = []` ([classes.ts:170](src/character/classes.ts:170)) makes
@@ -691,6 +803,20 @@ written as `[]` by **every** generator. A reader with no writer.
 [traitbook.ts:204](src/play/traitbook.ts:204) never leans the trait catalogue
 toward the chosen subclass — even though `subclassOf`, which reads `classSpec`,
 would have worked.
+
+### Enforced by construction
+
+**`crossFloors`** has a reader and no enforcer: the Director is told residents
+may not leave ([director.ts:343](src/llm/director.ts:343)), and nothing else
+checks it — because nothing moves an NPC, so nobody ever tries.
+`Person.homeRegion` is written at generation and never updated. The law is true
+today for want of anyone to break it, and becomes a dead law the day NPCs move
+(DESIGN step 8).
+
+**Per-NPC rule knowledge** has no writer for the same reason. The only
+`ruleClaim` writer is the player's refused crossing
+([climb.ts:110](src/play/climb.ts:110)); the Director is shown the PLAYER's
+beliefs about the law ([director.ts:350](src/llm/director.ts:350)).
 
 ---
 
@@ -709,8 +835,10 @@ changes, every floor is the first, and not one `if` was added.
 
 Converted so far: `body` (carry, speed) · `combat` (soak, condition floor,
 tempo) · `persona` (drift, and the suitability swing) · `rest` · `world` (the
-danger curve, which was hardcoded to `danger === floor`). Everything below not
-marked is still a constant awaiting conversion.
+danger curve, which was hardcoded to `danger === floor`, and how deep the world
+goes below its ground). `persona` and `world` reach play since step 6 — before
+it, `applyTurn`'s drift and `generateFloor`'s danger both used the STANDARD
+default. Everything below not marked is still a constant awaiting conversion.
 
 `ruleset.test.ts` holds a `PROVEN` list and asserts it still covers every field
 on the type, so ADDING a dial without proving a reader fails there rather than
@@ -740,7 +868,12 @@ Every balance number, and where it lives.
 | condition resistance floor | 1 round | [conditions.ts](src/combat/conditions.ts) |
 | default item weight (equipment/consumable/material/armour) | 3 / 1 / 1 / 8 | [items/types.ts](src/items/types.ts) |
 | snapshot cadence | every 20 events | [sessions.ts:23](src/db/sessions.ts:23) |
-| **danger** | `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [budget.ts:32](src/world/budget.ts:32) |
+| **danger** | the stratum's own curve, else its parent's, else `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [strata.ts:51](src/world/strata.ts:51), [budget.ts:32](src/world/budget.ts:32) |
+| depth below ground | 3 | [ruleset.ts:314](src/rules/ruleset.ts:314) |
+| species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:19](src/character/species.ts:19) |
+| kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:48](src/character/species.ts:48), [:70](src/character/species.ts:70) |
+| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:495](src/world/floorgen.ts:495) |
+| loot profile | a multiplier per category on the standing chance; absent is ×1 | [catalogue.ts:254](src/items/catalogue.ts:254) |
 | places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:14](src/world/budget.ts:14) |
 | people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:20](src/world/budget.ts:20) |
 | XP to next level | `100 × level` | [progress.ts:20](src/play/progress.ts:20) |
@@ -763,8 +896,10 @@ build. `skillgen.ts` measures components; the two embedder scripts call
 `rankFacts`, which is what `rankClues` was renamed to when the mystery engine
 became the tower.
 
-**`WorldDelta` is still ten hand-written verbs, and the question is now SETTLED
-rather than deferred.** The design called for it to become a list of `Effect`s
+**`WorldDelta` is still hand-written verbs — ten when this was settled, twelve
+since step 6 added `revealWay` and `amendLaw` ([state.ts:92](src/play/state.ts:92),
+[:120](src/play/state.ts:120)) — and the question is now SETTLED rather than
+deferred.** The design called for it to become a list of `Effect`s
 sharing the skill vocabulary. Having built the second producer — deeds — the
 answer is that it should not, for three reasons that are now evidence rather
 than prediction.
@@ -793,9 +928,29 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened.
 
-Six of the ten verbs (`moveTo`, `revealExit`, `startCombat`, `useItem`,
+Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
-effect-shaped in the first place.
+effect-shaped in the first place. Both new verbs are commands too, which is
+evidence for the settlement rather than against it.
+
+**Step 6 left two things out of the approved plan, on purpose.**
+
+*No `Stratum.topology` knob.* The plan had a stratum declare whether it is a
+stack or a graph. It does not need to: a region's own `exits` already says, and
+a region without them is a stack by derivation
+([travel.ts:125](src/world/travel.ts:125)). A knob would be a second source for
+one fact.
+
+*No `story` stratum kind.* It would behave exactly like `static` until quests
+exist ([types.ts:71](src/world/types.ts:71) has `static | dynamic` only), so it
+would be a word with no reader — the signature bug, introduced on purpose. It
+arrives with quests (DESIGN step 7).
+
+**A world that is not a stack can only GROW sideways — nothing authors one.**
+Genesis still writes `floor-0` and a tower
+([genesis.ts:582](src/session/genesis.ts:582)); the only writer of
+`Region.exits` is a way out found in play ([delta.ts:253](src/play/delta.ts:253)).
+An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
 The seed falls back to `Date.now()` when the client does not supply one; the
@@ -843,7 +998,13 @@ classes now lean on stats and nothing is locked out.
 | **register** | Thai pronoun and particle choice, derived from trust. The signature mechanic: *the trust stat **is** the language*. |
 | **path** | A generated name over a stat pair, with a threshold. Replaced the twelve hardcoded disciplines, which broke in any non-fantasy world. |
 | **graft** | Growing a branch onto the tree. The one mechanism traits, Signets, subclasses and books all share; they differ only in how the branch is *entered*. |
-| **Signet** | A rare, gated reward with a reachability proof. Claimed once its gate is open ([sheetaction.ts:258](src/play/sheetaction.ts:258)), after which it grafts its branch onto the tree. Held, but its `grant` still pays nothing — see the ledger. |
+| **Signet** | A rare, gated reward with a reachability proof. Claimed once its gate is open ([sheetaction.ts:258](src/play/sheetaction.ts:258)), after which it grafts its branch onto the tree. Held, it sets aside one law — one Signet per world is an exemption ([signetbook.ts:186](src/play/signetbook.ts:186)) — but its `grant` still pays nothing; see the ledger. |
+| **law** | A `{ axis, constraint, binds }` in a world's ruleset: what a subject may not do. Closed vocabulary; checked per subject by `forbids`. Distinct from a **dial**, which has no subject. |
+| **exemption** | A law set aside for one holder. What a Signet is. Carried on the `Subject`, not looked up. |
+| **stratum** | A structure above a floor — a tower, a wing inside it. Strata nest; the innermost speaks for a floor. `static` ones are frozen. |
+| **wing** | A stratum a floor opens mid-climb. The model names it; the engine shapes it. |
+| **species** | What kind of thing somebody is: how far each need moves for them. `folk` is ordinary. |
+| **way out** | A `Link` that is not a stair. Found in play, walked with `traverse`. |
 | **declared trait** | A goal, shown with a progress bar. |
 | **emergent trait** | A *recognition* of a play pattern, never foreshadowed — *"declared traits are goals; these are recognitions"* ([emergent.ts:10](src/play/emergent.ts:10)). |
 | **temperament** | Stored wiring: intuition, feeling, nerve, discipline. |
