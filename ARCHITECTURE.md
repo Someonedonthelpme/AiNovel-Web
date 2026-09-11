@@ -69,8 +69,8 @@ The governing rule, repeated in a dozen file headers:
 the model does not have to produce is a field it cannot get wrong*
 ([schema.ts:13](src/session/schema.ts:13),
 [classnames.ts:11](src/character/classnames.ts:11),
-[floorgen.ts:14](src/world/floorgen.ts:14),
-[director.ts:12](src/llm/director.ts:12)).
+[floorgen.ts:57](src/world/floorgen.ts:57),
+[director.ts:31](src/llm/director.ts:31)).
 
 ---
 
@@ -102,7 +102,7 @@ config ─┐
   combat outcome. It narrates a structured round log the engine produced."*
   ([combat/types.ts:5](src/combat/types.ts:5)). Every combat action returns
   `{state, error}` so an illegal proposal is rejected rather than corrupting the
-  encounter ([combat.ts:6](src/combat/combat.ts:6)).
+  encounter ([combat.ts:13](src/combat/combat.ts:13)).
 - **The world layer refuses to reach upward.** `travel.ts` returns a
   `needsRegion` *request* instead of calling a generator, which keeps it pure
   and testable offline ([travel.ts:16](src/world/travel.ts:16)).
@@ -110,18 +110,18 @@ config ─┐
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
   this module decides which are legal and applies only those."*
-  ([delta.ts:20](src/play/delta.ts:20)). Refusing one field never discards the
+  ([delta.ts:30](src/play/delta.ts:30)). Refusing one field never discards the
   rest of the turn.
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
   only a `WriterView`, handing it world state is a **compile error**
-  ([redact.ts:11](src/llm/redact.ts:11)). `assertNoLeak`
-  ([redact.ts:195](src/llm/redact.ts:195)) is the runtime backstop, *"because a
+  ([redact.ts:19](src/llm/redact.ts:19)). `assertNoLeak`
+  ([redact.ts:220](src/llm/redact.ts:220)) is the runtime backstop, *"because a
   type only protects the code paths the compiler can see."*
 - **React never mutates locally.** Every panel action goes to the server as an
-  event ([Panels.tsx:5](app/play/[id]/Panels.tsx:5)); the whole view comes back.
+  event ([Panels.tsx:11](app/play/[id]/Panels.tsx:11)); the whole view comes back.
 - **Routes stay thin** so the web surface and the terminal script cannot drift
-  apart ([game.ts:40](src/server/game.ts:40)).
+  apart ([game.ts:58](src/server/game.ts:58)).
 
 ---
 
@@ -147,7 +147,7 @@ telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 coherence guard that replaced disciplines. A bow that heals *"reads as a bug"*.
 `compose.ts` — prices parts against a budget; the budget **is** the balance.
 `pools.ts` — which pool a skill draws follows its **stat**, not its payload
-(`MENTAL = con,int,wis,cha,luk`, [:34](src/skills/pools.ts:34)).
+(`MENTAL = con,int,wis,cha,luk`, [:37](src/skills/pools.ts:37)).
 `book.ts` — where skills drop from. `active.ts` — the closed-union effect and
 its pure resolver.
 
@@ -201,7 +201,7 @@ a paragraph cannot be re-read for the same comfort.
 parameters with no subject — `carryBase` is the same number whoever asks — and
 `rulesOf` resolves them. The **laws** are `{ axis, constraint, binds }`, and
 `forbids(from, subject, constraint)` resolves those PER SUBJECT
-([ruleset.ts:380](src/rules/ruleset.ts:380)), because whether the player is
+([ruleset.ts:451](src/rules/ruleset.ts:451)), because whether the player is
 bound is part of the law rather than an assumption in the engine.
 
 `RULE_AXES` and `CONSTRAINTS` are closed enums: a model can name and dress a
@@ -213,7 +213,7 @@ residents may not do.
 **A law is learned by hitting it.** `forbids` returns the `Law` rather than a
 boolean, so a refusal can say which rule it was; `descend` carries it back on
 the `TravelResult`, and `applyClimb` writes a firsthand `{ kind: 'rule' }`
-`Claim` onto the sheet ([climb.ts:95](src/play/climb.ts:95)). Knowing a rule is
+`Claim` onto the sheet ([climb.ts:104](src/play/climb.ts:104)). Knowing a rule is
 an ordinary belief, exactly as knowing a piece of lore is, so `adopt`, `retell`
 and the ambient air carry it with nothing new written. That is also why a
 REFUSED crossing is logged: the lesson lives in the fold, and a lesson outside
@@ -244,10 +244,10 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 
 ### The shapes
 
-**`World`** ([world/types.ts:141](src/world/types.ts:141)) — `seed`, `language`,
+**`World`** ([world/types.ts:226](src/world/types.ts:226)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:208](src/world/types.ts:208)) — one
+`regionIdFor(floor) = 'floor-' + floor` ([:308](src/world/types.ts:308)) — one
 floor is one region is one integer.
 
 Six more are OPTIONAL, and absent means *nobody has done that yet* rather than
@@ -258,7 +258,7 @@ anything derives from the seed alone.
 - `subjects` · `roles` — seeded shapes wearing the model’s words
   ([subjects.ts:111](src/world/subjects.ts:111)).
 - `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. It
-  carries `laws` alongside its dials ([ruleset.ts:221](src/rules/ruleset.ts:221)),
+  carries `laws` alongside its dials ([ruleset.ts:273](src/rules/ruleset.ts:273)),
   which is why a law can change mid-run when a generation-time value could not.
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it.
@@ -268,9 +268,9 @@ anything derives from the seed alone.
 
 **`Region`** (full detail) — places, entrance, exit, danger, creatures.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
-known people survive ([lod.ts:37](src/world/lod.ts:37)).
+known people survive ([lod.ts:38](src/world/lod.ts:38)).
 
-**`Persona`** ([character/persona.ts:269](src/character/persona.ts:269)) — the
+**`Persona`** ([character/persona.ts:295](src/character/persona.ts:295)) — the
 core every villager and the player share:
 
 ```ts
@@ -281,14 +281,14 @@ core every villager and the player share:
   pressure: Temperament }     // hysteresis accumulator
 ```
 
-**`CharacterSheet = Persona & {...}`** ([session/sheet.ts:60](src/session/sheet.ts:60))
+**`CharacterSheet = Persona & {...}`** ([session/sheet.ts:58](src/session/sheet.ts:58))
 — name, language, background, `baseAbilities`, `traits` (ids, in earn order),
 level, hitDie, plus optionals: `spentAbilities`, `abilityPoints`, `xp`,
 `allocated`, `skillPoints`, `treeBonuses`†, `traitBonuses`†, `signets`,
 `learned`, `classId`, `classSpec`, `subclassId`, `library`.
 
 † **denormalised caches**, written only alongside the list they summarise so
-they cannot drift ([sheet.ts:83](src/session/sheet.ts:83)).
+they cannot drift ([sheet.ts:79](src/session/sheet.ts:79)).
 
 **`PlayState`** ([play/state.ts:25](src/play/state.ts:25)) — `world`, `sheet`,
 `pc {hp, maxHp, conditions, coin, inventory, stamina, mana}`,
@@ -307,23 +307,23 @@ come from?"
 
 | function | reads | produces |
 |---|---|---|
-| `dispositionOf` ([persona.ts:182](src/character/persona.ts:182)) | temperament + needs | `warmth·candour·nerve·discipline·intuition·feeling` on ±3. Circumstance colours wiring: warmth needs company, nerve is worn by being unsafe, discipline frays unrested |
+| `dispositionOf` ([persona.ts:208](src/character/persona.ts:208)) | temperament + needs | `warmth·candour·nerve·discipline·intuition·feeling` on ±3. Circumstance colours wiring: warmth needs company, nerve is worn by being unsafe, discipline frays unrested |
 | `describeMental` ([persona.ts:260](src/character/persona.ts:260)) | needs | rattled / exhausted / starving / lonely / adrift, and the upside `in good heart` |
-| `registerTrust` ([persona.ts:257](src/character/persona.ts:257)) | trust + persona | the trust value a relationship is actually *read* at |
-| `finalAbilities` ([sheet.ts:224](src/session/sheet.ts:224)) | base + background + spent + tree + traits + equipment | `Abilities`. **Everything that moves a score must land here** or trait gates read a number the player never sees |
-| `maxHpFor` ([sheet.ts:248](src/session/sheet.ts:248)) | VIT, level, tree | `10 + vitMod + (level−1)(6+vitMod)`. **CON and the hit die are deliberately excluded** |
+| `registerTrust` ([persona.ts:283](src/character/persona.ts:283)) | trust + persona | the trust value a relationship is actually *read* at |
+| `finalAbilities` ([sheet.ts:222](src/session/sheet.ts:222)) | base + background + spent + tree + traits + equipment | `Abilities`. **Everything that moves a score must land here** or trait gates read a number the player never sees |
+| `maxHpFor` ([sheet.ts:246](src/session/sheet.ts:246)) | VIT, level, tree | `10 + vitMod + (level−1)(6+vitMod)`. **CON and the hit die are deliberately excluded** |
 | `armourClassFor` | armour, **AGI**, tree | AC is evasion, so it reads AGI. DEX is accuracy and never touches it |
 | `soakOf` ([resolve.ts](src/combat/resolve.ts)) | VIT, the incoming blow | VIT's physical defence. Capped by the stat AND a third of the hit — flat reduction was measured and rejected |
 | `resistedRounds` ([conditions.ts](src/combat/conditions.ts)) | VIT or CON, duration | shortens a condition rather than rolling a save. Never reaches immunity |
 | `speedFor` / `overloadFor` / `carryCapacityFor` | AGI, STR, carried weight | movement, and what hauling a hoard costs |
 | `loreFor` ([lorebook.ts:74](src/play/lorebook.ts:74)) | item id + world seed | the history a thing carries, or nothing — `LORE_CHANCE` 0.35. Depth comes off *floor* depth, so a deep find is worth reading and not merely worth more |
 | `resonanceOf` ([lore.ts:65](src/play/lore.ts:65)) | lore `about` ∩ drive want/fear | `Resonance` — whether it touched them at all, and what it moved |
-| `maxStaminaFor` / `maxManaFor` ([sheet.ts:308](src/session/sheet.ts:308)) | VIT/CON, level, unmet rest/safety, tree | pool ceilings — the body is docked by going unrested, the mind by feeling unsafe |
-| `toCombatant` ([sheet.ts:374](src/session/sheet.ts:374)) | derive + equipped attack | a `Combatant` at full HP and full pools |
+| `maxStaminaFor` / `maxManaFor` ([sheet.ts:323](src/session/sheet.ts:323)) | VIT/CON, level, unmet rest/safety, tree | pool ceilings — the body is docked by going unrested, the mind by feeling unsafe |
+| `toCombatant` ([sheet.ts:444](src/session/sheet.ts:444)) | derive + equipped attack | a `Combatant` at full HP and full pools |
 | `conditionMet` / `progressOf` ([traits.ts:198](src/play/traits.ts:198)) | `TraitContext` | whether a trait condition holds, and its progress bar |
-| `poolFor` / `costOf` ([pools.ts:34](src/skills/pools.ts:34)) | skill stat + effect | which pool, and how much |
+| `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
-| `viewOf` and friends ([game.ts:203](src/server/game.ts:203)) | `PlayState` | the whole `GameView`, rebuilt per request |
+| `viewOf` and friends ([game.ts:290](src/server/game.ts:290)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
 ---
 
@@ -351,14 +351,14 @@ in the save.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
-([types.ts:151](src/world/types.ts:151), [subjects.ts:111](src/world/subjects.ts:111)),
+([types.ts:236](src/world/types.ts:236), [subjects.ts:111](src/world/subjects.ts:111)),
 because a word derived from nothing would be lost on the next derivation. The
 same split as `classSpec` on the sheet. **The ids never change**, so anything that
 matched before naming still matches after it.
 
 **Authored** — the pieces that must not vary: `ROLES`, `SHAPES` (the nine
 emergent play-patterns), `PATH_WORDS`, the condition price table, and the laws
-`STANDARD` declares ([ruleset.ts:265](src/rules/ruleset.ts:265)) — today two:
+`STANDARD` declares ([ruleset.ts:315](src/rules/ruleset.ts:315)) — today two:
 the ground is the bottom, and residents do not cross floors.
 
 > **The catalogue-agreement invariant**
@@ -376,12 +376,12 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:401](src/llm/director.ts:401)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist** | indirectly — only the validated delta and the refusal reasons |
+| **Director** ([director.ts:469](src/llm/director.ts:469)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist** | indirectly — only the validated delta and the refusal reasons |
 | **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
-| **Floor** ([floorgen.ts:209](src/world/floorgen.ts:209)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture | **yes, in full** — inside `ClimbRecord.built` |
-| **Character** ([genesis.ts:93](src/session/genesis.ts:93)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
-| **Ground floor** ([genesis.ts:237](src/session/genesis.ts:237)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
+| **Floor** ([floorgen.ts:335](src/world/floorgen.ts:335)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture | **yes, in full** — inside `ClimbRecord.built` |
+| **Character** ([genesis.ts:142](src/session/genesis.ts:142)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
+| **Ground floor** ([genesis.ts:297](src/session/genesis.ts:297)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
 | **Subject naming** ([subjectnames.ts:50](src/world/subjectnames.ts:50)) | `SUBJECT_NAMING_SCHEMA`, t=0.9 | **words only** — the ids are given to it and it invents none | stored on `World.subjects` |
 
@@ -399,7 +399,7 @@ word.
 
 ```
 app/new/page.tsx
-  seed drawn CLIENT-SIDE at mount (:43) ─── the one point real entropy enters
+  seed drawn CLIENT-SIDE at mount (:50) ─── the one point real entropy enters
   three questions: world · character · drive
   │
   ├─ optional: POST /api/classes {seed, world, language}
@@ -412,7 +412,7 @@ app/new/page.tsx
         draft carries classSpec — the WHOLE class object, because a generated
         class exists in no global list and an id would resolve to nothing
         │
-        newGame  (server/game.ts:352)
+        newGame  (server/game.ts:443)
           startInterview + recordAnswer per stage (blanks get canned defaults)
           runGenesis:
             1. generateCharacter  ──► sheet
@@ -471,7 +471,7 @@ anything.
 
 A fight opens mid-turn and the record is **not written** until it ends. The
 encounter lives in an in-memory `fights` map on `globalThis`
-([game.ts:328](src/server/game.ts:328) — Next gives routes and server components
+([game.ts:413](src/server/game.ts:413) — Next gives routes and server components
 separate module instances, so a plain module-level `Map` would produce two).
 
 Every roll derives from state —
@@ -493,7 +493,7 @@ the whole climb. This is where the difficulty curve lives.
 **Climb** — a crossing is a **logged event**. `ClimbRecord.built` carries the
 generated region and its people, because `foldPlay` is synchronous and holds no
 `Provider`. `applyClimb` is pure and drives **both** the live path and replay,
-so the two cannot drift apart ([climb.ts:21](src/play/climb.ts:21)).
+so the two cannot drift apart ([climb.ts:40](src/play/climb.ts:40)).
 
 **Panel actions** — equipping a helmet is bookkeeping, not a story beat, so
 there is no model call. Every action is a `{kind:'sheet'}` event, and each one
@@ -543,7 +543,7 @@ needs and temperament; **nothing yet proves the reader half.**
 | field | state |
 |---|---|
 | **`pc.stamina` / `pc.mana`** | Stored and topped up by rest, but `playerCombatant` does not carry them **in** and `concludeCombat` does not carry them **out** — so **pools reset to full at the start of every fight.** The scarcity the pool economy exists to create is not happening. |
-| **`Signet.grant`** | Generated everywhere, read nowhere. Its only consumer, `abilityOf` ([signet.ts:279](src/play/signet.ts:279)), has zero callers. |
+| **`Signet.grant`** | Generated everywhere, read nowhere. Its only consumer, `abilityOf` ([signet.ts:289](src/play/signet.ts:289)), has zero callers. |
 | **`Trait.grants.note`** | Set by every authored, generated and emergent trait; read by nothing. A note is the **only** payout an emergent trait has, so every emergent trait grants literally nothing. |
 | **`treeBonuses.attack` / `.damage`** | Accumulated by `applyGrant`, read by no formula. A node granting "+1 to hit" changes nothing. |
 | **`ItemEffect.buff`** | `applyEffect` returns state unchanged and narrates *"…feels sharper"*. Drinking it consumes the potion and does nothing. |
@@ -567,8 +567,8 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:853](src/server/game.ts:853)); and
-[signet.test.ts:238](src/play/signet.test.ts:238) proves a claimed Signet is on
+([game.ts:889](src/server/game.ts:889)); and
+[signet.test.ts:239](src/play/signet.test.ts:239) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
 and still pay out nothing.
@@ -681,12 +681,12 @@ back so a floor that hates you is WRITTEN as one.
 
 ### The mirror image
 
-**`NpcVoice.tics`** is *read* ([register.ts:63](src/llm/register.ts:63)) and
+**`NpcVoice.tics`** is *read* ([register.ts:65](src/llm/register.ts:65)) and
 written as `[]` by **every** generator. A reader with no writer.
 
 ### A knock-on
 
-`CLASSES = []` ([classes.ts:177](src/character/classes.ts:177)) makes
+`CLASSES = []` ([classes.ts:170](src/character/classes.ts:170)) makes
 `subclassById` permanently `undefined`, so
 [traitbook.ts:204](src/play/traitbook.ts:204) never leans the trait catalogue
 toward the chosen subclass — even though `subclassOf`, which reads `classSpec`,
@@ -720,20 +720,20 @@ Every balance number, and where it lives.
 
 | knob | value | file |
 |---|---|---|
-| point buy budget / min / max | 40 / 8 / 15 | [sheet.ts:169](src/session/sheet.ts:169) |
+| point buy budget / min / max | 40 / 8 / 15 | [sheet.ts:167](src/session/sheet.ts:167) |
 | HP at first / per level | 10 / 6 (+VIT mod each) | [sheet.ts:262](src/session/sheet.ts:262) |
-| pool base / per level | 8 / 2 | [sheet.ts:295](src/session/sheet.ts:295) |
-| skill cost floor / ceiling | 1 / 12 | [pools.ts:49](src/skills/pools.ts:49) |
-| turn length in ticks / min action | 6 / 2 | [tempo.ts:20](src/combat/tempo.ts:20) |
-| drift threshold / decay | 6 / 1 | [drift.ts:42](src/character/drift.ts:42) |
+| pool base / per level | 8 / 2 | [sheet.ts:310](src/session/sheet.ts:310) |
+| skill cost floor / ceiling | 1 / 12 | [pools.ts:54](src/skills/pools.ts:54) |
+| turn length in ticks / min action | 6 / 2 | [tempo.ts:25](src/combat/tempo.ts:25) |
+| drift threshold / decay | 6 / 1 | [drift.ts:44](src/character/drift.ts:44) |
 | **suitability swing** | ±25% on cost, magnitude and ticks | [suit.ts](src/skills/suit.ts), [ruleset.ts](src/rules/ruleset.ts) |
 | skill budget per floor | `4 + floor × 0.8` | [book.ts](src/skills/book.ts) |
 | effects drawn per skill | up to 3, until 75% of the budget is spent | [compose.ts](src/skills/compose.ts) |
-| temperament range | −10..+10 | [persona.ts:82](src/character/persona.ts:82) |
-| need range | 0..10 | [persona.ts:123](src/character/persona.ts:123) |
-| trust range / max swing per turn | −3..+4 / ±3 | [types.ts:94](src/world/types.ts:94), [delta.ts](src/play/delta.ts) |
+| temperament range | −10..+10 | [persona.ts:84](src/character/persona.ts:84) |
+| need range | 0..10 | [persona.ts:125](src/character/persona.ts:125) |
+| trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |
-| short / long rest turns | 1 / 8 | [rest.ts:22](src/play/rest.ts:22) |
+| short / long rest turns | 1 / 8 | [rest.ts:25](src/play/rest.ts:25) |
 | base speed / floor | 6 (+AGI mod) / 3 | [sheet.ts](src/session/sheet.ts) |
 | carry base / per STR / overload step | 20 / 2 / 8 | [sheet.ts](src/session/sheet.ts) |
 | damage soak ceiling / share of blow | 2 / one third | [resolve.ts](src/combat/resolve.ts) |
@@ -749,7 +749,7 @@ Every balance number, and where it lives.
 | tree rings | 8 | [skilltree.ts:142](src/play/skilltree.ts:142) |
 | graft size | 2..5 | [graft.ts:44](src/play/graft.ts:44) |
 | emergent branch cap | 3 | [emergent.ts:139](src/play/emergent.ts:139) |
-| tower horizon | 30 | [signetbook.ts:54](src/play/signetbook.ts:54) |
+| tower horizon | 30 | [signetbook.ts:56](src/play/signetbook.ts:56) |
 | embedding dimension | 1024 (bge-m3) | [schema.ts:21](src/db/schema.ts:21) |
 
 ---
@@ -800,7 +800,7 @@ effect-shaped in the first place.
 **Determinism holes** — the *record* is deterministic; its *production* is not.
 The seed falls back to `Date.now()` when the client does not supply one; the
 creation page is the single point where real entropy enters
-([new/page.tsx:43](app/new/page.tsx:43)); fact retrieval depends on a live
+([new/page.tsx:50](app/new/page.tsx:50)); fact retrieval depends on a live
 embedder and silently degrades; an unresolved fight lives only in memory, so a
 restart mid-fight discards the turn (a documented, accepted trade); and
 `combatRng` keys on `log.length`, so an action that logs nothing (a move) leaves
