@@ -6,7 +6,7 @@ import { FOLK } from '../character/species.ts';
 import { activeRegion } from '../world/travel.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState } from './fixtures.ts';
-import { forbids } from '../rules/ruleset.ts';
+import { forbids, STANDARD } from '../rules/ruleset.ts';
 import type { TurnRecord, WorldDelta } from './state.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
@@ -317,4 +317,21 @@ test('a way out the model invents somewhere that does not exist is refused', () 
   const nowhere = validateDelta(s, { revealWay: 'the-moon' });
   assert.equal(nowhere.delta.revealWay, undefined);
   assert.match(nowhere.rejected.join(' '), /the-moon/);
+});
+
+test("a world's own drift dials reach a real turn, not STANDARD's", () => {
+  // Both drift calls in `applyTurn` once fell back to STANDARD, so a world's
+  // `driftThreshold` was proven at `applyDrift` and never reached play.
+  const base = playState();
+  const pressed = { ...base, sheet: { ...base.sheet, pressure: { ...base.sheet.pressure, nerve: 3 } } };
+  const touchy = {
+    ...pressed,
+    world: { ...pressed.world, rules: { ...STANDARD, persona: { ...STANDARD.persona, driftThreshold: 2 } } },
+  };
+
+  const calm = applyTurn(pressed, record({ timeSpent: 1 })).state;
+  assert.equal(calm.sheet.temperament.nerve, pressed.sheet.temperament.nerve, 'STANDARD: 3 is short of 6');
+
+  const shifted = applyTurn(touchy, record({ timeSpent: 1 })).state;
+  assert.equal(shifted.sheet.temperament.nerve, pressed.sheet.temperament.nerve + 1, 'its own dial: 3 crosses 2');
 });
