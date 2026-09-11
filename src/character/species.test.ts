@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { applyDrift } from './drift.ts';
 import { emptyPersona, NEED_MAX } from './persona.ts';
 import { defaultVoice } from '../world/fixtures.ts';
-import { FOLK, speciesFor, speciesIdFor } from './species.ts';
+import { FOLK, speciesFor, speciesIdFor, TYPES } from './species.ts';
+import { ABILITIES } from '../combat/types.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { runDirector } from '../llm/director.ts';
 import { playState } from '../play/fixtures.ts';
@@ -18,6 +19,19 @@ test('every world has the ordinary kind, and the rest are its own', () => {
   assert.equal(kinds[0].id, FOLK.id, 'most people are ordinary, so the ordinary kind is always there');
   assert.deepEqual(speciesFor(11).map((k) => k.id), kinds.map((k) => k.id), 'the same seed, the same world');
   assert.equal(new Set(kinds.map((k) => k.id)).size, kinds.length, 'no kind is dealt twice');
+});
+
+test('no species is simply stronger — every template sums to zero, and they differ', () => {
+  const seen = new Set<string>();
+  for (let seed = 0; seed < 50; seed++) {
+    for (const s of speciesFor(seed)) {
+      assert.ok(TYPES.some((t) => t.id === s.type), `seed ${seed}: ${s.id} has no known type`);
+      const total = ABILITIES.reduce((sum, a) => sum + (s.template[a] ?? 0), 0);
+      assert.equal(total, 0, `seed ${seed}: ${s.id} sums to ${total}`);
+      seen.add(JSON.stringify(s.template));
+    }
+  }
+  assert.ok(seen.size > 8, 'templates must actually differ, not all be zero');
 });
 
 test('a construct does not eat', () => {
