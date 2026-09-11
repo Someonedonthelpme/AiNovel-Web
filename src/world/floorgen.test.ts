@@ -9,7 +9,6 @@ import type { GeneratedFloor } from './floorgen.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, person, world } from './fixtures.ts';
 import { activeRegion } from './travel.ts';
-import { dangerAt } from './strata.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import { validateRegion } from './validate.ts';
 import { isFull } from './types.ts';

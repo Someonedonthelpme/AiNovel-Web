@@ -262,8 +262,7 @@ test('a way out you are not standing at is refused, and one that does not exist 
 test('a stack still derives its ways out from depth, and nothing had to say so', () => {
   // The compatibility claim in one assertion: every world ever saved has no
   // `exits` at all, and its stairs must keep working exactly as before.
-  const w = world({ currentPlace: 'stair', regions: { 'floor-0': groundFloor(), 'floor-1': firstFloor() } });
-  const links = linksFrom(w, groundFloor());
+  const links = linksFrom(groundFloor());
 
   assert.deepEqual(
     links.map((l) => [l.direction, l.to, l.floor]),

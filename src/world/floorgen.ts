@@ -36,7 +36,7 @@ import { clampTemperament, neutralTemperament, metNeeds } from '../character/per
 import { repairRegion, repairVoice } from '../session/repair.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { humanisePlaces, pruneDangling } from './naming.ts';
-import { dangerFor, peopleBudget, placeBudget, settlementBudget } from './budget.ts';
+import { peopleBudget, placeBudget, settlementBudget } from './budget.ts';
 import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, RegionId, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';

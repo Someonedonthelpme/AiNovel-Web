@@ -122,7 +122,7 @@ const downFrom = (region: Region): Link =>
  * listed only once it has been found; the way down is always there to be
  * refused by the law or by the floor of the world.
  */
-export function linksFrom(world: World, region: Region): Link[] {
+export function linksFrom(region: Region): Link[] {
   if (region.exits?.length) return region.exits;
   return [...(region.exit === null ? [] : [upFrom(region)]), downFrom(region)];
 }
@@ -137,7 +137,7 @@ export function traverse(world: World, to: RegionId): TravelResult {
   const region = activeRegion(world);
   if (!region) return { kind: 'error', reason: 'the current region is not loaded in full detail' };
 
-  const link = linksFrom(world, region).find((l) => l.to === to);
+  const link = linksFrom(region).find((l) => l.to === to);
   if (!link) return { kind: 'error', reason: `there is no way from here to "${to}"` };
   // A stair is climbed, not traversed. The ground law and the world's own floor
   // are checked in `descend`, and a general walk that could reach a derived
