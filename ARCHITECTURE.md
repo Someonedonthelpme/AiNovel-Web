@@ -433,7 +433,7 @@ A lorebook keys the same way ([lorebook.ts:74](src/play/lorebook.ts:74)): a swor
 found on floor nine carries the same history on a replay, and none of it travels
 in the save.
 Who is what kind keys the same way, on the world seed and the person's id
-([species.ts:120](src/character/species.ts:120)), weighted 4:1 toward the
+([species.ts:137](src/character/species.ts:137)), weighted 4:1 toward the
 ordinary. And a way out found in play is NAMED from the seed, the region and the
 place it leaves from ([delta.ts:189](src/play/delta.ts:189)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
@@ -455,6 +455,11 @@ do not cross floors — the eight species `TYPES` with their needs and lean
 `KINDS`, each now naming its type ([species.ts:63](src/character/species.ts:63)).
 A species' `template` is **seeded**, not authored: its type's lean plus two single
 points moved between abilities ([species.ts:75](src/character/species.ts:75)).
+Being seeded is what lets a world stored before types read as typed:
+`readSpecies` takes the type from the dealt id and re-derives the template, so
+an old world reads exactly as a new one stores — and an untyped id no world was
+ever dealt throws rather than being guessed
+([species.ts:111](src/character/species.ts:111)). It has no caller until 3c.
 
 > **The catalogue-agreement invariant**
 > ([traitbook.ts:158](src/play/traitbook.ts:158)) — the fold, the tree and the
@@ -812,7 +817,7 @@ written by nothing … the player is always the ordinary kind"* was true until
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:272](src/session/genesis.ts:272),
-[species.ts:138](src/character/species.ts:138)). Skipping the step still leaves
+[species.ts:155](src/character/species.ts:155)). Skipping the step still leaves
 the climber ordinary, which is now a choice rather than a gap.
 
 **Cleared: `Stratum.danger` and `Stratum.loot`.** — *"read … and written by
@@ -899,7 +904,7 @@ Every balance number, and where it lives.
 | depth below ground | 3 | [ruleset.ts:314](src/rules/ruleset.ts:314) |
 | species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:21](src/character/species.ts:21) |
 | species template | type lean ±2 on one pair, then two single points moved; sums to zero, no ability past ±4 | [species.ts:40](src/character/species.ts:40), [:75](src/character/species.ts:75) |
-| kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:106](src/character/species.ts:106), [:128](src/character/species.ts:128) |
+| kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:123](src/character/species.ts:123), [:145](src/character/species.ts:145) |
 | wing length | 1–6 floors, whatever the model asks | [floorgen.ts:504](src/world/floorgen.ts:504) |
 | wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:535](src/world/floorgen.ts:535) |
 | what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:552](src/world/floorgen.ts:552) |
