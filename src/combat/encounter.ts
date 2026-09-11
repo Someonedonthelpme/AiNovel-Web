@@ -4,7 +4,7 @@ import { startCombat } from './combat.ts';
 import { cellKey } from './grid.ts';
 import { makeFoe } from './statblock.ts';
 import type { FoeRole, FoeSpec } from './statblock.ts';
-import type { CombatState, Combatant, Grid, Side, Vec } from './types.ts';
+import type { Abilities, CombatState, Combatant, Grid, Side, Vec } from './types.ts';
 
 /**
  * What you meet on a floor, and how a fight plays out.
@@ -76,6 +76,8 @@ export type EncounterOptions = {
   /** Where the foes gather. */
   origin: Vec;
   taken?: Set<string>;
+  /** A creature's species template, by its name. Absent: role and danger alone. */
+  templateOf?: (name: string) => Partial<Abilities>;
 };
 
 export function buildEncounter(opts: EncounterOptions): Combatant[] {
@@ -84,12 +86,10 @@ export function buildEncounter(opts: EncounterOptions): Combatant[] {
   const taken = opts.taken ?? new Set<string>();
   const cells = freeCellsNear(opts.grid, opts.origin, taken, roles.length);
 
-  const specs: FoeSpec[] = roles.map((role, i) => ({
-    id: `foe${i + 1}`,
-    name: opts.names?.length ? opts.names[i % opts.names.length] : role,
-    role,
-    pos: cells[i] ?? opts.origin,
-  }));
+  const specs: FoeSpec[] = roles.map((role, i) => {
+    const name = opts.names?.length ? opts.names[i % opts.names.length] : role;
+    return { id: `foe${i + 1}`, name, role, pos: cells[i] ?? opts.origin, template: opts.templateOf?.(name) };
+  });
 
   return specs.map((spec) => makeFoe(spec, opts.danger));
 }

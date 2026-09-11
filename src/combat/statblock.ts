@@ -1,4 +1,4 @@
-import type { Abilities, Attack, Combatant, Size, Vec } from './types.ts';
+import type { Abilities, Ability, Attack, Combatant, Size, Vec } from './types.ts';
 import { abilityMod } from './types.ts';
 
 /**
@@ -109,11 +109,16 @@ export type FoeSpec = {
   role: FoeRole;
   size?: Size;
   pos: Vec;
+  /** Its species' ability template, on top of role and danger. Sums to zero. */
+  template?: Partial<Abilities>;
 };
 
 /** Turn a scaled role plus a name into something the combat engine can run. */
 export function makeFoe(spec: FoeSpec, danger: number): Combatant {
-  const stats = scaleFoe(danger, spec.role);
+  const scaled = scaleFoe(danger, spec.role);
+  const abilities = { ...scaled.abilities };
+  for (const [a, by] of Object.entries(spec.template ?? {}) as [Ability, number][]) abilities[a] += by;
+  const stats = { ...scaled, abilities };
   return {
     id: spec.id,
     name: spec.name,

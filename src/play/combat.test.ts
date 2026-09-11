@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { currentActor } from '../combat/combat.ts';
 import {
   ARENA_SIZE, arenaFor, awaitingPlayer, beginEncounter, combatOptions,
-  concludeCombat, notableEvents, takeCombatAction,
+  concludeCombat, foeSpecies, notableEvents, takeCombatAction,
 } from './combat.ts';
+import { scaleFoe } from '../combat/statblock.ts';
+import { ABILITIES } from '../combat/types.ts';
+import { speciesFor } from '../character/species.ts';
 import type { CombatAction } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
 import { xpToNext } from './progress.ts';
@@ -453,4 +456,15 @@ test('a boss is every tenth FLOOR, not every tenth danger level', () => {
 
   assert.ok(!foes(at(5, 10)).includes('boss'), 'danger 10 on floor 5 is no landmark');
   assert.ok(foes(at(10, 1)).includes('boss'), 'floor 10 is, however quiet');
+});
+
+test('a mass foe carries its species\' body on top of its role and danger', () => {
+  const base = onFloorTwo();                                 // danger 8 → one 'elite' หมาป่าเงา
+  const start = { ...base, world: { ...base.world, species: speciesFor(1) } };
+  const kind = foeSpecies(start.world, 'หมาป่าเงา');
+  // Without these, a foeSpecies that returned an empty template passed.
+  assert.ok(start.world.species.some((k) => k.id === kind.id), 'one of the kinds this world holds');
+  assert.ok(Object.values(kind.template).some((v) => v !== 0), 'a template that moves something');
+  const foe = Object.values(beginEncounter(start).combat!.combatants).find((c) => c.side === 'foe')!;
+  for (const a of ABILITIES) assert.equal(foe.abilities[a], scaleFoe(8, 'elite').abilities[a] + (kind.template[a] ?? 0), a);
 });

@@ -23,6 +23,8 @@ import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
+import { FOLK, readSpecies } from '../character/species.ts';
+import type { Grown } from '../character/species.ts';
 
 /**
  * Combat, as it appears inside the play loop.
@@ -92,6 +94,20 @@ export function playerCombatant(state: PlayState): Combatant {
 }
 
 /**
+ * What kind of thing a creature is — one of the kinds this world holds.
+ *
+ * Keyed on the creature's NAME, so a shadow-wolf is the same species every time
+ * it appears in a world, and seeded, so a replay draws the same one. A world
+ * with no species list is all folk, as `speciesIdFor` already treats it.
+ */
+export function foeSpecies(world: PlayState['world'], name: string): Grown {
+  const kinds = world.species?.length ? world.species : [FOLK];
+  let hash = (world.seed ^ 0x3c6e) >>> 0;
+  for (const ch of name) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  return readSpecies(world.seed, kinds[Math.floor(mulberry32(hash)() * kinds.length)]);
+}
+
+/**
  * Start a fight on the current floor.
  *
  * The Director says *that* a fight breaks out; depth decides *what* shows up,
@@ -121,6 +137,7 @@ export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'):
      */
     origin: ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },
     taken: new Set([cellKey(me.pos)]),
+    templateOf: (name) => foeSpecies(state.world, name).template,
   });
 
   const rng = combatRng(state);
