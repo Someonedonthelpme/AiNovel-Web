@@ -511,13 +511,16 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   const causes = causesFor(moved, record);
   const rules = rulesOf(moved.world);
   /*
-   * By THIS world's rules.
+   * WHO is being worn down, and by whose rules.
    *
    * Both drift calls used the STANDARD default, so a world's own
    * `driftThreshold` and `suitSwing` never reached the one place a character
    * actually changes — the same bug `dangerFor(floor)` had in the generator.
    */
-  const player = applyDrift(moved.sheet, causes.pc, rules);
+  const kindOf = (who: { species?: string }) =>
+    moved.world.species?.find((k) => k.id === who.species);
+
+  const player = applyDrift(moved.sheet, causes.pc, rules, kindOf(moved.sheet));
   let world = afterTraffic(
     afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record), rules),
     rules,
@@ -526,7 +529,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
 
   const person = record.addressed ? world.people[record.addressed] : undefined;
   if (person && causes.npc.length) {
-    const drifted = applyDrift(person, causes.npc, rules);
+    const drifted = applyDrift(person, causes.npc, rules, kindOf(person));
     world = { ...world, people: { ...world.people, [person.id]: { ...person, ...drifted.persona } } };
     shifts = drifted.changed;
   }

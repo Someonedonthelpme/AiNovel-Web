@@ -302,6 +302,13 @@ export type Persona = {
   /** What they want and what they are running from. Slow; rarely changes. */
   drive?: Drive;
   /**
+   * What KIND of thing they are, by id, out of the kinds their world holds.
+   *
+   * Absent is the ordinary kind. Stored as an id rather than the profile so a
+   * world can retune what "the made" are without rewriting everyone who is one.
+   */
+  species?: string;
+  /**
    * What this person holds true — histories, rules, deeds, who is whose.
    *
    * Beliefs rather than a list of known ids, because a rumour can be WRONG and

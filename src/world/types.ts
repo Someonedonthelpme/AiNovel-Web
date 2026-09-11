@@ -8,6 +8,7 @@ import type { Edges } from '../social/edge.ts';
 import type { Ambient } from '../social/ambient.ts';
 import type { Role } from '../social/roles.ts';
 import type { LootProfile } from '../items/catalogue.ts';
+import type { Species } from '../character/species.ts';
 /**
  * The world model.
  *
@@ -222,6 +223,14 @@ export type World = {
    * anything resolved at generation time could never do.
    */
   rules?: Ruleset;
+  /**
+   * The kinds of thing that live here.
+   *
+   * Stored for the same reason `subjects` and `roles` are: the shapes come from
+   * the seed, and anything derived from a list that is not kept would differ
+   * the next time it was derived. Absent means everybody is ordinary.
+   */
+  species?: Species[];
   /**
    * The structures this world holds, if it names any.
    *

@@ -1,7 +1,9 @@
 import { axisOf, PLAYER, trustToward } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDelta, foldPlay, validateDelta } from './delta.ts';
+import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
+import { FOLK } from '../character/species.ts';
+import { NEED_MAX } from '../character/persona.ts';
 import { playState } from './fixtures.ts';
 import { forbids } from '../rules/ruleset.ts';
 import type { TurnRecord, WorldDelta } from './state.ts';
@@ -256,4 +258,30 @@ test('a law the engine does not check cannot be legislated by a model', () => {
 
   const wrongBinds = validateDelta(s, { amendLaw: { constraint: 'crossFloors', binds: 'everyone' as never } });
   assert.equal(wrongBinds.delta.amendLaw, undefined);
+});
+
+/* -------------------------------------------------------------------------- */
+/* SPECIES — the kinds a world holds                                           */
+/* -------------------------------------------------------------------------- */
+
+test('a climber of a kind that does not eat crosses a floor without getting hungry', () => {
+  // The wire, not the multiplier: `applyDrift` learned about kinds in
+  // isolation, and this is what proves the fold looks up who the walker
+  // actually IS before wearing them down.
+  const base = playState();
+  const made = { id: 'made', name: 'the made', needs: { food: 0 } };
+  const world = { ...base.world, species: [FOLK, made] };
+
+  const ordinary = applyTurn({ ...base, world }, record({ timeSpent: 3 })).state;
+  assert.ok(ordinary.sheet.needs.food < NEED_MAX, 'an ordinary climber marches on their stomach');
+
+  const construct = {
+    ...base,
+    world,
+    sheet: { ...base.sheet, species: 'made' },
+  };
+  const after = applyTurn(construct, record({ timeSpent: 3 })).state;
+
+  assert.equal(after.sheet.needs.food, NEED_MAX, 'and this one has no stomach to march on');
+  assert.equal(after.sheet.needs.rest, ordinary.sheet.needs.rest, 'while the march tires it the same');
 });

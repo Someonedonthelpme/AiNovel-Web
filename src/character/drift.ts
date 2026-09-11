@@ -4,6 +4,8 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Tone } from '../llm/register.ts';
 import { NEEDS, NEED_MAX, TEMPERAMENT, TEMPER_MAX, TEMPER_MIN } from './persona.ts';
 import type { Needs, Persona, Temperament, TemperamentAxis } from './persona.ts';
+import { needScale } from './species.ts';
+import type { Species } from './species.ts';
 
 /**
  * How people change.
@@ -121,7 +123,17 @@ export type DriftResult = {
  * and never more than one step at a time however bad the day was.
  */
 export function applyDrift(
-  persona: Persona, causes: DriftCause[], rules: Ruleset = STANDARD,
+  persona: Persona,
+  causes: DriftCause[],
+  rules: Ruleset = STANDARD,
+  /**
+   * What KIND this person is, if their world holds more than one.
+   *
+   * Scales how far each need moves for them. Passed in rather than read off the
+   * persona because the kinds themselves live on the World — and this is the
+   * only place a need ever moves, so it is the only place that has to know.
+   */
+  species?: Species,
 ): DriftResult {
   const needs: Needs = { ...persona.needs };
   const pressure: Temperament = { ...persona.pressure };
@@ -131,7 +143,7 @@ export function applyDrift(
 
   for (const cause of causes) {
     const effect = effectOf(cause);
-    for (const need of NEEDS) needs[need] += effect.needs[need] ?? 0;
+    for (const need of NEEDS) needs[need] += (effect.needs[need] ?? 0) * needScale(species, need);
     for (const axis of TEMPERAMENT) {
       const push = effect.pressure[axis] ?? 0;
       if (push === 0) continue;

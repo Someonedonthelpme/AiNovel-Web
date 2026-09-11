@@ -43,6 +43,7 @@ import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
 import { dangerAt, stratumAt } from './strata.ts';
 import type { Stratum } from './types.ts';
+import { speciesIdFor } from '../character/species.ts';
 
 /**
  * Generating a tower floor.
@@ -367,6 +368,9 @@ export async function generateFloor(
       homeRegion: regionId,
       oneLine: p.oneLine,
       tags: p.tags,
+      // The same seeded draw the ground town uses, so who is what does not
+      // depend on which floor somebody happened to be generated on.
+      species: speciesIdFor(world.seed, p.id, world.species ?? []),
       alive: true,
       lastSeenTurn: world.turn,
       status: p.status === 'superior' || p.status === 'inferior' ? p.status : 'peer',

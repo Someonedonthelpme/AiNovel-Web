@@ -16,6 +16,7 @@ import { forbids, ruleClaim, BINDINGS, CONSTRAINTS } from '../rules/ruleset.ts';
 import type { Binding, Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
 import { stratumAt } from '../world/strata.ts';
+import { FOLK } from '../character/species.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -285,7 +286,11 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
 
   const people = present.map((p) => {
     const notes = [...describePersonality(dispositionOf(p)), ...describeMental(p.needs)];
-    return `  - ${p.id} "${p.name}": ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
+    // WHAT they are, but only when it is not the ordinary kind — writing "folk"
+    // beside every villager is a word the model reads past on every turn, while
+    // omitting "the made" is how a construct ends up complaining of hunger.
+    const kind = state.world.species?.find((k) => k.id === p.species && k.id !== FOLK.id);
+    return `  - ${p.id} "${p.name}"${kind ? ` [${kind.name}]` : ''}: ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
   });
 
   /*

@@ -121,6 +121,22 @@ test('a world is born holding one structure, and it can be a frozen one', async 
   assert.equal(frozen.world.strata?.['tower'].kind, 'static');
 });
 
+test('a world holds kinds, and the people in it are one of them', async () => {
+  // `Persona.species` with no writer would be one more field that looks like a
+  // mechanic and does nothing — the bug this codebase keeps having.
+  const r = await runGenesis(wholeGenesis(), completed(), 42);
+
+  assert.ok((r.world.species ?? []).length > 0, 'a world names the kinds that live in it');
+  assert.equal(r.world.species?.[0].id, 'folk');
+
+  const townsfolk = Object.values(r.world.people);
+  assert.ok(townsfolk.length > 0, 'the ground floor has to have people to be a test');
+  for (const person of townsfolk) {
+    assert.ok(person.species, `${person.id} is not any kind of thing`);
+    assert.ok(r.world.species?.some((k) => k.id === person.species), 'and it is a kind this world holds');
+  }
+});
+
 test('Session Zero produces a valid character and a playable ground floor', async () => {
   const result = await runGenesis(wholeGenesis(), completed(), 42);
 

@@ -29,6 +29,7 @@ import { sword } from '../combat/fixtures.ts';
 import { presetNamed } from '../rules/ruleset.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { Stratum } from '../world/types.ts';
+import { speciesFor, speciesIdFor } from '../character/species.ts';
 
 /**
  * Session Zero generation: an interview in, a validated character and ground
@@ -285,8 +286,13 @@ export async function generateGroundFloor(
   interview: Interview,
   sheet: CharacterSheet,
   roles: readonly Role[] = [],
+  seed = 0,
 ): Promise<WorldGenesis> {
   const { language } = interview;
+  // Recomputed from the seed rather than threaded down, the same way traits and
+  // Signets are looked up wherever they are needed: it is a pure function of a
+  // number, so two callers cannot disagree about what this world holds.
+  const kinds = speciesFor(seed);
 
   const generated = await provider.structured<GeneratedGroundFloor>({
     schemaName: 'ground_floor',
@@ -381,6 +387,9 @@ export async function generateGroundFloor(
       homeRegion: 'floor-0',
       oneLine: p.oneLine,
       tags: p.tags,
+      // Seeded from the world and their id, so a replay makes the same person
+      // the same kind of thing without storing anything extra to do it.
+      species: speciesIdFor(seed, p.id, kinds),
       alive: true,
       lastSeenTurn: 0,
       status: p.status === 'superior' || p.status === 'inferior' ? p.status : 'peer',
@@ -545,7 +554,7 @@ export async function runGenesis(
     provider, rolesFor(seed), interview.answers.world ?? '', interview.language,
   );
 
-  const ground = await generateGroundFloor(provider, interview, character.sheet, roles);
+  const ground = await generateGroundFloor(provider, interview, character.sheet, roles, seed);
 
   const world: World = {
     seed,
@@ -561,6 +570,8 @@ export async function runGenesis(
      * into a run already under way — the same reason a climb is a recorded
      * event rather than something recomputed on load.
      */
+    /** The kinds of thing that live here. Pure in the seed; see `species.ts`. */
+    species: speciesFor(seed),
     rules: presetNamed(rules),
     /*
      * A WORLD HOLDS STRUCTURES; a tower is one kind, and this is the one every
