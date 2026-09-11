@@ -443,6 +443,26 @@ test('a law binds the subjects it names, and the player is never special by defa
   assert.equal(forbids(underLaw('player'), 'resident', 'descendBelowGround'), null);
 });
 
+test('a Signet sets aside the law it exempts, and only that law', () => {
+  // THE point of a Signet, per the design: an exemption, held by one person.
+  // The subject carries what it is exempt from, because a law check that has to
+  // look up the holder is a law check that will be called without one.
+  const twoLaws = world({
+    rules: {
+      ...STANDARD,
+      laws: [
+        { axis: 'movement' as const, constraint: 'descendBelowGround' as const, binds: 'all' as const },
+        { axis: 'movement' as const, constraint: 'crossFloors' as const, binds: 'all' as const },
+      ],
+    },
+  });
+  const holder = { kind: 'player' as const, exempt: ['descendBelowGround' as const] };
+
+  assert.equal(forbids(twoLaws, holder, 'descendBelowGround'), null);
+  assert.ok(forbids(twoLaws, holder, 'crossFloors'), 'one exemption is not a licence for everything');
+  assert.ok(forbids(twoLaws, 'player', 'descendBelowGround'), 'and it exempts the holder alone');
+});
+
 test('the Director is told what the law forbids the people present', async () => {
   // The reader that makes a law more than a record. A rule the Director cannot
   // see is a rule it will happily narrate somebody breaking.

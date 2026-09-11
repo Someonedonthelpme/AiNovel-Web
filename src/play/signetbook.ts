@@ -11,6 +11,8 @@ import type { Gate } from './signet.ts';
 import { GATEABLE_FLAGS, generateSignets } from './signetgen.ts';
 import { TRAITS, traitOriginOf, traitsFor } from './traitbook.ts';
 import type { Trait } from './traits.ts';
+import { rulesOf } from '../rules/ruleset.ts';
+import type { Constraint, Subject } from '../rules/ruleset.ts';
 
 /**
  * The Signets a world may contain, and the proof that it can contain them.
@@ -163,9 +165,47 @@ export function signetsFor(state: PlayState): { kept: Signet[]; discarded: { sig
   // walk matters more here than it did when they were authored.
   const checked = admissible(candidateSignetsFor(state.world.seed, traitsFor(state.world.seed, traitOriginOf(state))), world);
   return {
-    kept: checked.kept,
+    kept: withExemption(checked.kept, state),
     discarded: checked.discarded.map((d) => ({ signet: d.signet, why: d.problems.map((p) => p.why) })),
   };
+}
+
+/**
+ * One Signet in each world sets aside one law.
+ *
+ * Marked HERE rather than in the generator because only what survived the
+ * reachability proof can be an exemption — an exemption behind an unopenable
+ * gate exempts nobody, which is precisely the failure this module exists to
+ * prevent. One per world, on the first kept Signet, so it is deterministic from
+ * the seed and a run cannot accidentally hide two.
+ *
+ * The law chosen is the first that binds the player, because the player is the
+ * only person who can hold a Signet today (`Person` has no sheet in play). When
+ * NPCs can hold one, this picks per holder instead.
+ */
+function withExemption(kept: Signet[], state: PlayState): Signet[] {
+  const law = rulesOf(state.world).laws.find((l) => l.binds !== 'residents');
+  if (!law || kept.length === 0) return kept;
+  return kept.map((s, i) => (i === 0 ? { ...s, exempts: law.constraint } : s));
+}
+
+/**
+ * What the laws of this world do NOT stop this player doing.
+ *
+ * The subject a law check takes. Built from the sheet, so no caller has to know
+ * that a Signet is what grants an exemption — and the bare `'player'` fallback
+ * keeps the common path off the generator, which builds and proves a whole
+ * catalogue every time it is asked.
+ */
+export function playerSubject(state: PlayState): Subject {
+  const held = state.sheet.signets ?? [];
+  if (held.length === 0) return 'player';
+
+  const exempt = signetsFor(state).kept
+    .filter((s) => s.exempts && held.includes(s.id))
+    .map((s) => s.exempts as Constraint);
+
+  return exempt.length > 0 ? { kind: 'player', exempt } : 'player';
 }
 
 /* -------------------------------------------------------------------------- */

@@ -263,7 +263,12 @@ export async function generateFloor(
   sheet: CharacterSheet,
   gazetteer: Gazetteer | null = null,
 ): Promise<FloorResult> {
-  if (floor < 1) throw new Error(`floor ${floor} is not inside the tower`);
+  // Floor 0 is AUTHORED at world creation, never generated — this guard exists
+  // to stop a crossing overwriting the town. It used to read `floor < 1`, a
+  // third copy of "the ground is the bottom" hiding in the generator: with the
+  // law lifted, `descend` asks for floor -1 and got a throw instead of a floor.
+  // Whether anyone may go there is the LAW's question, answered in `travel.ts`.
+  if (floor === 0) throw new Error('floor 0 is the authored ground, not generated');
 
   const canon = gazetteer
     ? rehydrationBrief(world, gazetteer)

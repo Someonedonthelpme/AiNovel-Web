@@ -5,7 +5,8 @@ import type { FloorResult } from '../world/floorgen.ts';
 import { ascend, descend, installRegion } from '../world/travel.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { adopt, firsthand } from '../character/belief.ts';
-import { ruleClaim } from '../rules/ruleset.ts';
+import { forbids, ruleClaim } from '../rules/ruleset.ts';
+import { playerSubject } from './signetbook.ts';
 import type { Law } from '../rules/ruleset.ts';
 import { grantXp, hpAfterGrowth, xpForNewDepth } from './progress.ts';
 import type { LevelUp } from './progress.ts';
@@ -89,11 +90,18 @@ const taught = (state: PlayState, law: Law | undefined): PlayState =>
       }
     : state;
 
-const moveFor = (direction: 'up' | 'down') => (direction === 'up' ? ascend : descend);
+/**
+ * The crossing this direction means, asked by somebody in particular.
+ *
+ * `ascend` takes no subject: no law names climbing UP today, and inventing a
+ * parameter for a check nobody makes is the dead field this step is about.
+ */
+const moveFor = (state: PlayState, direction: 'up' | 'down') =>
+  direction === 'up' ? ascend(state.world) : descend(state.world, playerSubject(state));
 
 /** Apply a recorded crossing. The only place a climb changes state. */
 export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
-  const attempt = moveFor(record.direction)(state.world);
+  const attempt = moveFor(state, record.direction);
 
   if (attempt.kind === 'error') return failed(taught(state, attempt.law), attempt.reason, record);
   if (attempt.kind === 'moved') {
@@ -121,7 +129,7 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
 }
 
 async function cross(provider: Provider, state: PlayState, direction: 'up' | 'down'): Promise<ClimbResult> {
-  const attempt = moveFor(direction)(state.world);
+  const attempt = moveFor(state, direction);
 
   // The floor is new, or was compressed on the way past. Build it BEFORE
   // applying anything, so one record drives the live crossing and every replay.
@@ -181,8 +189,15 @@ export const godown = (provider: Provider, state: PlayState): Promise<ClimbResul
 export function exitStatus(state: PlayState): { canClimb: boolean; canDescend: boolean } {
   const record = state.world.regions[state.world.currentRegion];
   if (!record || record.detail !== 'full') return { canClimb: false, canDescend: false };
+  // `record.floor > 0` used to live here — a SECOND copy of "the ground is the
+  // bottom", in the layer that decides what the player is offered. A law the
+  // panel does not consult is a law the panel will contradict: it hid the way
+  // down in a world that permits digging, and from the one person exempt.
+  const stopped = record.floor === 0
+    && forbids(state.world, playerSubject(state), 'descendBelowGround') !== null;
+
   return {
     canClimb: record.exit !== null && state.world.currentPlace === record.exit,
-    canDescend: record.floor > 0 && state.world.currentPlace === record.entrance,
+    canDescend: !stopped && state.world.currentPlace === record.entrance,
   };
 }

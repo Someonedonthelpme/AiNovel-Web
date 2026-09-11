@@ -8,6 +8,7 @@ import { groundFloor, world } from '../world/fixtures.ts';
 import { isFull } from '../world/types.ts';
 import { believes } from '../character/belief.ts';
 import { ruleClaim, STANDARD } from '../rules/ruleset.ts';
+import { signetsFor } from './signetbook.ts';
 
 const floor1 = {
   name: 'The Grey Grove', biome: 'dead forest', culture: 'poachers',
@@ -173,3 +174,37 @@ test('a world that permits digging teaches nothing about it', async () => {
   assert.ok(!believes(r.state.sheet.beliefs ?? [], ruleClaim('descendBelowGround')));
 });
 
+
+test('a Signet is a rule exemption: its holder digs where the law stops everyone else', async () => {
+  // The design's whole claim for Signets, and the first thing `Signet` has ever
+  // done that a stat line could not. Standing at the way down, under a law that
+  // binds everyone: the difference between the two runs is one held Signet.
+  const atTheGate = playState({ currentPlace: 'gate', regions: { 'floor-0': groundFloor() } });
+
+  const exemption = signetsFor(atTheGate).kept.find((s) => s.exempts);
+  assert.ok(exemption, 'a world under a law must hide one Signet that sets it aside');
+  assert.equal(exemption.exempts, 'descendBelowGround');
+
+  const refused = await godown(provider(), atTheGate);
+  assert.match(refused.error ?? '', /already at ground level/);
+
+  const holder = { ...atTheGate, sheet: { ...atTheGate.sheet, signets: [exemption.id] } };
+  const dug = await godown(provider(), holder);
+  assert.equal(dug.error, null, 'the law does not bind the holder of its exemption');
+  assert.equal(dug.state.world.currentRegion, 'floor--1');
+});
+
+test('the exemption belongs to the holder, and the panel agrees', () => {
+  // exitStatus had its own copy of "the ground is the bottom" (`floor > 0`),
+  // which no law could reach — the panel would hide the way down in a world
+  // whose law permits digging, and for the one person exempt from it.
+  const atTheGate = playState({ currentPlace: 'gate', regions: { 'floor-0': groundFloor() } });
+  assert.equal(exitStatus(atTheGate).canDescend, false);
+
+  const exemption = signetsFor(atTheGate).kept.find((s) => s.exempts)!;
+  const holder = { ...atTheGate, sheet: { ...atTheGate.sheet, signets: [exemption.id] } };
+  assert.equal(exitStatus(holder).canDescend, true);
+
+  const lawless = { ...atTheGate, world: { ...atTheGate.world, rules: { ...STANDARD, laws: [] } } };
+  assert.equal(exitStatus(lawless).canDescend, true, 'a world that permits digging shows the way down');
+});

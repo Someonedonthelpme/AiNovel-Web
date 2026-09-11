@@ -201,8 +201,26 @@ export type Constraint = (typeof CONSTRAINTS)[number];
 export const BINDINGS = ['all', 'residents', 'player'] as const;
 export type Binding = (typeof BINDINGS)[number];
 
-/** Who is asking. Every law check takes one. */
-export type Subject = 'player' | 'resident';
+export const SUBJECT_KINDS = ['player', 'resident'] as const;
+export type SubjectKind = (typeof SUBJECT_KINDS)[number];
+
+/**
+ * Who is asking. Every law check takes one.
+ *
+ * A bare kind is somebody ordinary. The object form is somebody carrying
+ * EXEMPTIONS — what a Signet is, per the design. The exemptions travel WITH the
+ * subject rather than being looked up inside `forbids`, for two reasons: the
+ * rules layer stays free of the play layer that knows what a Signet is, and a
+ * check that had to fetch the holder is a check that will one day be called
+ * without one, which is the hardcoded "the player is exempt" this step removed.
+ */
+export type Subject = SubjectKind | { kind: SubjectKind; exempt: readonly Constraint[] };
+
+const kindOf = (subject: Subject): SubjectKind =>
+  typeof subject === 'string' ? subject : subject.kind;
+
+const exemptFrom = (subject: Subject, constraint: Constraint): boolean =>
+  typeof subject !== 'string' && subject.exempt.includes(constraint);
 
 export type Law = {
   axis: RuleAxis;
@@ -361,7 +379,7 @@ export const rulesOf = (from?: { rules?: Ruleset } | null): Ruleset => from?.rul
 export const ruleClaim = (constraint: Constraint): Claim => ({ kind: 'rule', rule: constraint });
 
 const bindsSubject = (binds: Binding, subject: Subject): boolean =>
-  binds === 'all' || (binds === 'player' ? subject === 'player' : subject === 'resident');
+  binds === 'all' || (binds === 'player' ? kindOf(subject) === 'player' : kindOf(subject) === 'resident');
 
 /**
  * The law stopping this subject from doing this, or `null` if nothing does.
@@ -369,16 +387,22 @@ const bindsSubject = (binds: Binding, subject: Subject): boolean =>
  * Returns the law rather than a boolean so a caller can say WHICH rule it was
  * — a refusal nobody can attribute is what makes a world feel arbitrary.
  *
- * `ponytail: no exemptions yet. A Signet is meant to exempt one person, but
- * CharacterSheet.signets has no writer (ARCHITECTURE.md §12), so an exemption
- * check today would be code nothing can reach. Widen Subject from a kind to a
- * person id when Signets can actually be held.`
+ * Exemptions arrive on the SUBJECT (see `Subject`), which is what makes a
+ * Signet a rule exemption rather than a stat line — `playerSubject` in
+ * `play/signetbook.ts` builds one from the sheet.
+ *
+ * `ponytail: a subject is still a KIND plus its exemptions, not a person id.
+ * That is enough while the player is the only one who can hold a Signet
+ * (`Person` has no sheet in play). Widen it when an NPC can hold one — the
+ * exemption itself will not have to change, only who can be handed one.`
  */
 export const forbids = (
   from: { rules?: Ruleset } | null | undefined,
   subject: Subject,
   constraint: Constraint,
 ): Law | null =>
-  rulesOf(from).laws.find(
-    (law) => law.constraint === constraint && bindsSubject(law.binds, subject),
-  ) ?? null;
+  exemptFrom(subject, constraint)
+    ? null
+    : rulesOf(from).laws.find(
+        (law) => law.constraint === constraint && bindsSubject(law.binds, subject),
+      ) ?? null;

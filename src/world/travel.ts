@@ -2,6 +2,7 @@ import { compressExcept } from './lod.ts';
 import type { Gazetteer, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { forbids } from '../rules/ruleset.ts';
+import type { Subject } from '../rules/ruleset.ts';
 import type { Law } from '../rules/ruleset.ts';
 
 /**
@@ -115,15 +116,21 @@ export function ascend(world: World): TravelResult {
   return crossTo(world, region.floor + 1, (r) => r.entrance);
 }
 
-/** Descend to the floor below, arriving at its way up. */
-export function descend(world: World): TravelResult {
+/**
+ * Descend to the floor below, arriving at its way up.
+ *
+ * The subject defaults to a plain `'player'` — bound by every law that names
+ * them — so a caller that forgets to say who is asking gets the STRICTEST
+ * reading rather than a free pass. An exemption has to be handed in on purpose.
+ */
+export function descend(world: World, subject: Subject = 'player'): TravelResult {
   const region = activeRegion(world);
   if (!region) return { kind: 'error', reason: 'the current region is not loaded in full detail' };
   // The ground being the bottom is this world's LAW, not the engine's assumption:
   // a world without it can be dug into. The subject is passed because whether the
-  // player is bound is part of the law.
+  // player is bound is part of the law — and because one of them may be exempt.
   const groundLaw = region.floor === 0
-    ? forbids(world, 'player', 'descendBelowGround')
+    ? forbids(world, subject, 'descendBelowGround')
     : null;
   if (groundLaw) {
     return { kind: 'error', reason: 'you are already at ground level', law: groundLaw };

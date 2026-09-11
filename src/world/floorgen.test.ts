@@ -89,8 +89,14 @@ test('a slash-joined voice form is repaired on generated people too', async () =
   assert.equal(r.people['kell'].voice.particleBands['-3'], 'ครับ');
 });
 
-test('the tower starts at floor 1 — the ground town is not generated this way', async () => {
-  await assert.rejects(() => generateFloor(provider(), world(), 0, pc), /not inside the tower/);
+test('the ground town is authored, never generated — but below it is fair game', async () => {
+  await assert.rejects(() => generateFloor(provider(), world(), 0, pc), /authored ground/);
+
+  // Floors below ground are a LAW question, not a generator one. `descend`
+  // refuses unless the world permits it or the asker is exempt; if it does ask,
+  // the generator must be able to answer.
+  const r = await generateFloor(provider(), world(), -1, pc);
+  assert.equal(r.region.floor, -1);
 });
 
 test('the schema grows with depth', () => {

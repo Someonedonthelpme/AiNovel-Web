@@ -3,6 +3,7 @@ import type { NodeGrant } from './skilltree.ts';
 import type { GraftSpec } from './graft.ts';
 import { conditionMet } from './traits.ts';
 import type { TraitCondition, TraitContext } from './traits.ts';
+import type { Constraint } from '../rules/ruleset.ts';
 
 /**
  * Signets: the third branch, and the one that can go wrong quietly.
@@ -69,6 +70,15 @@ export type Signet = {
   discovery: Discovery;
   /** Where a hint could be dropped, for the hinted ones. */
   hint?: string;
+  /**
+   * The law this Signet sets aside for whoever holds it.
+   *
+   * A SIGNET IS A RULE EXEMPTION — the job it was described as having and had
+   * never been given. Typed to `Constraint`, so a Signet can only exempt its
+   * holder from a law the engine actually checks; an exemption from a rule
+   * nothing enforces is the same dead field in a different coat.
+   */
+  exempts?: Constraint;
   /**
    * A branch this Signet grows when it is claimed.
    *
