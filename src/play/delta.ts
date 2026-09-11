@@ -144,7 +144,10 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     if (!region) rejected.push('startCombat: the current region is not loaded in full detail');
     else if (region.danger <= 0) rejected.push('startCombat: nothing hunts at ground level');
     else if (state.combat && !state.combat.over) rejected.push('startCombat: a fight is already happening');
-    else delta.startCombat = true;
+    else {
+      delta.startCombat = true;
+      if (proposed.startedBy === 'them') delta.startedBy = 'them';
+    }
   }
 
   if (proposed.useItem !== undefined) {
@@ -454,8 +457,8 @@ function deedsIn(state: PlayState, record: TurnRecord): Deed[] {
     out.push({ kind: record.delta.deed.kind, doer: PLAYER, toward: record.delta.deed.toward, at });
   }
 
-  // Drawing on somebody is the plainest deed there is.
-  if (record.delta.startCombat) out.push({ kind: 'drewOn', doer: PLAYER, at });
+  // Drawing on somebody is the plainest deed there is — being jumped is not one.
+  if (record.delta.startCombat && record.delta.startedBy !== 'them') out.push({ kind: 'drewOn', doer: PLAYER, at });
 
   return out;
 }

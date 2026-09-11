@@ -62,6 +62,8 @@ const deltaSchema = obj(
     revealWay: str,
     /** Whether a fight breaks out. What shows up is decided by depth, not here. */
     startCombat: { type: 'boolean' },
+    /** Who attacked first, when a fight starts: the player, or something else. */
+    startedBy: { type: 'string', enum: ['player', 'them'] },
     /** WHICH item is used. What using it does is the item's business. */
     useItem: str,
     equipItem: str,
@@ -80,7 +82,7 @@ const deltaSchema = obj(
   },
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
-    'timeSpent', 'revealExit', 'startCombat', 'useItem', 'equipItem', 'rest',
+    'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
     'amendLaw', 'amendBinds', 'revealWay',
   ],
 );
@@ -129,6 +131,8 @@ export type FlatDelta = {
   /** A place a way LEADS OUT of, when the player finds one that is not the stair. */
   revealWay: string;
   startCombat: boolean;
+  /** 'them' when the player was attacked; 'player' when they struck first. */
+  startedBy: string;
   useItem: string;
   equipItem: string;
   rest: string;
@@ -209,7 +213,10 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
     delta.deed = { kind: flat.deed as DirectorDeed, toward: deedPerson };
   }
   if (typeof flat.timeSpent === 'number') delta.timeSpent = flat.timeSpent;
-  if (flat.startCombat) delta.startCombat = true;
+  if (flat.startCombat) {
+    delta.startCombat = true;
+    if (flat.startedBy === 'them') delta.startedBy = 'them';
+  }
 
   const useItem = meaningful(flat.useItem) ? flat.useItem : null;
   const equipItem = meaningful(flat.equipItem) ? flat.equipItem : null;
@@ -401,6 +408,8 @@ const SYSTEM = [
   '',
   'Set startCombat only when something actually attacks: a fight is a real risk',
   'of death, not a way to add tension. What shows up is decided by the floor.',
+  'Set startedBy to "them" when the player is attacked, "player" when they strike',
+  'first — only striking first counts against them.',
   '',
   'useItem and equipItem take an item id from the pack listed below, and nothing',
   'else. Say only WHICH item is used — never how much it heals or what it does;',

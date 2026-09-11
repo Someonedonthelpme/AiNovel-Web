@@ -335,3 +335,16 @@ test("a world's own drift dials reach a real turn, not STANDARD's", () => {
   const shifted = applyTurn(touchy, record({ timeSpent: 1 })).state;
   assert.equal(shifted.sheet.temperament.nerve, pressed.sheet.temperament.nerve + 1, 'its own dial: 3 crosses 2');
 });
+
+test('an ambush costs no standing; drawing first still does', () => {
+  // `drewOn` was charged to the player on every fight, so being jumped cost you
+  // standing for a fight you did not start.
+  const base = playState();
+  const here = base.world.currentRegion;
+
+  const ambush = applyTurn(base, record({ startCombat: true, startedBy: 'them' })).state;
+  assert.equal(ambush.world.reputation?.[here] ?? 0, 0, 'not your fight, no cost');
+
+  const drawn = applyTurn(base, record({ startCombat: true })).state;
+  assert.ok((drawn.world.reputation?.[here] ?? 0) < 0, 'drawing first still costs');
+});

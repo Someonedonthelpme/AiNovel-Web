@@ -31,7 +31,7 @@ export const emptyDelta = (): FlatDelta => ({
   deedPerson: '',
   timeSpent: 1,
   revealExit: '',
-  startCombat: false, useItem: '', equipItem: '', rest: 'none',
+  startCombat: false, startedBy: 'player', useItem: '', equipItem: '', rest: 'none',
   amendLaw: 'none', amendBinds: 'none', revealWay: '',
 });
 

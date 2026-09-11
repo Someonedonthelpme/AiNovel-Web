@@ -96,6 +96,13 @@ export type WorldDelta = {
    */
   startCombat?: boolean;
   /**
+   * Who started it. Absent means the player — what every fight logged before
+   * this meant — so an old log replays with the same deeds.
+   *
+   * Only the player drawing first is a deed: being jumped costs no standing.
+   */
+  startedBy?: 'player' | 'them';
+  /**
    * Drink it, eat it, apply it.
    *
    * The Director says WHICH item; the item says what it does. A model able to
