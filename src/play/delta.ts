@@ -177,13 +177,6 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
 }
 
 /**
- * Apply an already-validated delta.
- *
- * Turn accounting lives here and nowhere else: `moveWithinRegion` advances the
- * turn itself, so a turn without a move has to advance it explicitly. Every path
- * through this function moves the clock exactly one turn.
- */
-/**
  * Where a newly found road leads.
  *
  * Pure in the world seed, the region and the place it leaves from — a name, not
@@ -196,6 +189,13 @@ function wayIdFor(seed: number, from: RegionId, via: PlaceId): RegionId {
   return `way-${hash.toString(36)}`;
 }
 
+/**
+ * Apply an already-validated delta.
+ *
+ * Turn accounting lives here and nowhere else: `moveWithinRegion` advances the
+ * turn itself, so a turn without a move has to advance it explicitly. Every path
+ * through this function moves the clock exactly one turn.
+ */
 export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   if (state.ended) return state;
 

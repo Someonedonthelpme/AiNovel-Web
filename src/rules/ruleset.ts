@@ -213,10 +213,6 @@ export const CONSTRAINTS = [
 export type Constraint = (typeof CONSTRAINTS)[number];
 
 /**
- * Whom a law binds. **Whether the player is bound is part of the law**, so no
- * check anywhere may assume the player is the exception.
- */
-/**
  * The axis each constraint belongs to.
  *
  * Kept as a map rather than a comment beside the list, because an amendment has
@@ -231,6 +227,10 @@ export const AXIS_OF: Record<Constraint, RuleAxis> = {
   keepMemories: 'knowledge',
 };
 
+/**
+ * Whom a law binds. **Whether the player is bound is part of the law**, so no
+ * check anywhere may assume the player is the exception.
+ */
 export const BINDINGS = ['all', 'residents', 'player'] as const;
 export type Binding = (typeof BINDINGS)[number];
 

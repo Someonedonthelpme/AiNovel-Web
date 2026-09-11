@@ -241,7 +241,7 @@ caller that forgets to say who is asking gets the strictest reading.
 **A law can change mid-run.** `amend` returns a new ruleset with one law
 rebound, imposed or struck out ([ruleset.ts:419](src/rules/ruleset.ts:419)) —
 never editing a preset, which every other run shares — and `AXIS_OF` says which
-axis an imposed law lands on ([ruleset.ts:226](src/rules/ruleset.ts:226)). The
+axis an imposed law lands on ([ruleset.ts:222](src/rules/ruleset.ts:222)). The
 change travels as `WorldDelta.amendLaw` ([state.ts:120](src/play/state.ts:120)),
 because the delta is what the log stores: a rule changed outside it would replay
 as one that never changed.
@@ -430,7 +430,7 @@ in the save.
 Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:62](src/character/species.ts:62)), weighted 4:1 toward the
 ordinary. And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:193](src/play/delta.ts:193)) rather than drawn,
+place it leaves from ([delta.ts:186](src/play/delta.ts:186)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
 

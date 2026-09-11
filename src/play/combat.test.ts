@@ -28,7 +28,6 @@ function onFloorTwo(): PlayState {
   };
 }
 
-/** Fight to a conclusion, always taking the first legal option. */
 /**
  * A fight the party actually wins.
  *
@@ -55,6 +54,7 @@ function winnable(over: Partial<PlayState> = {}): PlayState {
   };
 }
 
+/** Fight to a conclusion, always taking the first legal option. */
 function fightItOut(start: PlayState, cap = 200) {
   let state = start;
   const actions: CombatAction[] = [];
