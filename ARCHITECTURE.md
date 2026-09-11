@@ -295,7 +295,10 @@ only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
 Depth stays on `floor`; adjacency moved to `Region.exits`
 ([:132](src/world/types.ts:132)), and `generateFloor` takes the region id to
-build `into` ([floorgen.ts:310](src/world/floorgen.ts:310)). A region with no
+build `into` ([floorgen.ts:310](src/world/floorgen.ts:310)); its guard against
+overwriting the town keys on that id rather than on depth 0
+([floorgen.ts:322](src/world/floorgen.ts:322)), because an outer world may sit
+at depth 0 perfectly legally. A region with no
 `exits` derives up and down from depth ([travel.ts:125](src/world/travel.ts:125))
 — every world saved before this.
 
