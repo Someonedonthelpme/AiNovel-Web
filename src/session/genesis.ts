@@ -4,7 +4,7 @@ import { subjectsFor } from '../world/subjects.ts';
 import { nameSubjects } from '../world/subjectnames.ts';
 import type { Subject } from '../world/subjects.ts';
 import type { Drive } from '../character/persona.ts';
-import { openingEdges } from '../social/edge.ts';
+import { openingEdges, PLAYER } from '../social/edge.ts';
 import { rolesFor } from '../social/roles.ts';
 import { bondsAmong } from '../world/floorgen.ts';
 import { nameRoles } from '../social/rolenames.ts';
@@ -29,7 +29,8 @@ import { sword } from '../combat/fixtures.ts';
 import { presetNamed } from '../rules/ruleset.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { Stratum } from '../world/types.ts';
-import { speciesFor, speciesIdFor } from '../character/species.ts';
+import { FOLK, speciesFor, speciesIdFor } from '../character/species.ts';
+import type { Species, SpeciesChoice } from '../character/species.ts';
 
 /**
  * Session Zero generation: an interview in, a validated character and ground
@@ -72,6 +73,8 @@ export type CharacterGenesis = {
   sheet: CharacterSheet;
   repairs: string[];
   warnings: string[];
+  /** The kind the model mapped the player's words onto, when asked. Unchecked. */
+  speciesSaid?: string;
 };
 
 /**
@@ -121,6 +124,8 @@ export async function generateCharacter(
   interview: Interview,
   seed = 0,
   named?: readonly Subject[],
+  /** The player's own words for what KIND of being they are, and the kinds to map them onto. */
+  described?: { words: string; kinds: readonly Species[] },
 ): Promise<CharacterGenesis> {
   if (!isComplete(interview)) throw new Error('the interview is not finished');
 
@@ -173,6 +178,14 @@ export async function generateCharacter(
           'The subjects this world turns on. "drive" picks two of these BY NUMBER:',
           ...subjects.map((subject, at) => `  ${at}. ${subject.name} (${subject.kind})`),
           ...(pinned.length ? ['', 'Fixed by the player, do not contradict:', ...pinned] : []),
+          ...(described
+            ? [
+              '',
+              `The player describes what KIND of being they are: "${described.words}".`,
+              'Set "species" to the id of the closest of these kinds, and to nothing else:',
+              ...described.kinds.map((k) => `  ${k.id}: ${k.name}`),
+            ]
+            : []),
         ].join('\n'),
       },
     ],
@@ -241,7 +254,30 @@ export async function generateCharacter(
   const check = validateSheet(sheet);
   if (!check.ok) throw new Error(`generated character is invalid: ${check.errors.join('; ')}`);
 
-  return { sheet, repairs: abilities.repairs, warnings: check.warnings };
+  return {
+    sheet,
+    repairs: abilities.repairs,
+    warnings: check.warnings,
+    ...(described && generated.species ? { speciesSaid: generated.species } : {}),
+  };
+}
+
+/**
+ * The climber's kind, from how the player chose it.
+ *
+ * Never a kind the world lacks: a pick or a mapping that names one falls back to
+ * the ordinary kind, with a warning, rather than inventing a creature the drift
+ * rules have no numbers for.
+ */
+function climberSpecies(
+  choice: SpeciesChoice | undefined, said: string | undefined, seed: number, kinds: readonly Species[], warnings: string[],
+): string | undefined {
+  if (!choice) return undefined;
+  if ('decide' in choice) return speciesIdFor(seed, PLAYER, kinds);
+  const asked = 'pick' in choice ? choice.pick : said;
+  if (kinds.some((k) => k.id === asked)) return asked;
+  warnings.push(`species "${asked ?? ''}" is not a kind this world holds; the climber is ${FOLK.name}`);
+  return FOLK.id;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -531,6 +567,8 @@ export async function runGenesis(
    * also the cheap one — a floor you come back to costs no model call at all.
    */
   structure: Stratum['kind'] = 'dynamic',
+  /** How the climber's kind is chosen. Absent: the ordinary kind. */
+  species?: SpeciesChoice,
 ): Promise<GenesisResult> {
   /*
    * Named FIRST, because the character call lists them and asks which two this
@@ -543,7 +581,14 @@ export async function runGenesis(
     provider, subjectsFor(seed), interview.answers.world ?? '', interview.language,
   );
 
-  const character = await generateCharacter(provider, interview, seed, subjects);
+  const kinds = speciesFor(seed);
+  const character = await generateCharacter(
+    provider, interview, seed, subjects,
+    species && 'describe' in species ? { words: species.describe, kinds } : undefined,
+  );
+  const warnings: string[] = [];
+  const kind = climberSpecies(species, character.speciesSaid, seed, kinds, warnings);
+  const sheet = kind ? { ...character.sheet, species: kind } : character.sheet;
 
   /*
    * And the roles, for the same reason: the ground floor is asked who its
@@ -554,7 +599,7 @@ export async function runGenesis(
     provider, rolesFor(seed), interview.answers.world ?? '', interview.language,
   );
 
-  const ground = await generateGroundFloor(provider, interview, character.sheet, roles, seed);
+  const ground = await generateGroundFloor(provider, interview, sheet, roles, seed);
 
   const world: World = {
     seed,
@@ -571,7 +616,7 @@ export async function runGenesis(
      * event rather than something recomputed on load.
      */
     /** The kinds of thing that live here. Pure in the seed; see `species.ts`. */
-    species: speciesFor(seed),
+    species: kinds,
     rules: presetNamed(rules),
     /*
      * A WORLD HOLDS STRUCTURES; a tower is one kind, and this is the one every
@@ -592,10 +637,10 @@ export async function runGenesis(
   };
 
   return {
-    sheet: character.sheet,
+    sheet,
     world,
     premise: ground.premise,
     repairs: [...character.repairs, ...ground.repairs],
-    warnings: [...character.warnings, ...ground.warnings],
+    warnings: [...character.warnings, ...warnings, ...ground.warnings],
   };
 }

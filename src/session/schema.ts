@@ -91,6 +91,8 @@ export const CHARACTER_SCHEMA = obj(
       ['want', 'fear'],
     ),
     baseAbilities: abilityScores,
+    /** Only when the player described their kind: the id of the closest one listed. */
+    species: str,
     background: obj(
       {
         id: str,
@@ -201,6 +203,8 @@ export type GeneratedCharacter = {
   };
   /** Indices into this world's subjects. Absent is survivable — see `driveFrom`. */
   drive?: { want: number; fear: number };
+  /** An id from the kinds the prompt listed, when the player described one. */
+  species?: string;
   baseAbilities: Record<string, number>;
   background: {
     id: string;

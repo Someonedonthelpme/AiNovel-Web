@@ -70,6 +70,15 @@ export function speciesIdFor(seed: number, personId: string, kinds: readonly Spe
   return rng() < 0.8 ? FOLK.id : others[Math.floor(rng() * others.length)].id;
 }
 
+/**
+ * How the climber's kind is decided at creation.
+ *
+ * Picked by id from the kinds this world holds, described in the player's own
+ * words (the character call maps them onto one of those kinds), or left to the
+ * same seeded draw every villager gets. Absent means the ordinary kind.
+ */
+export type SpeciesChoice = { pick: string } | { describe: string } | { decide: 'world' };
+
 /** How much a need moves for this kind. One when nothing says otherwise. */
 export const needScale = (species: Species | undefined, need: Need): number =>
   species?.needs?.[need] ?? 1;

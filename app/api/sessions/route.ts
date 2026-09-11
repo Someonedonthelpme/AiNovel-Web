@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // the player would be handed a world whose classes are not the ones they
     // were shown.
     const seed = Number.isFinite(Number(body.seed)) ? Number(body.seed) : undefined;
-    return Response.json({ id: await newGame(language, body.answers, body.draft, seed, body.rules, body.structure) });
+    return Response.json({ id: await newGame(language, body.answers, body.draft, seed, body.rules, body.structure, body.species) });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

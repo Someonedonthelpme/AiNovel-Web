@@ -9,6 +9,8 @@ import { validateAbilities, validateSheet } from './sheet.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { HARSH, STANDARD } from '../rules/ruleset.ts';
+import { speciesFor, speciesIdFor } from '../character/species.ts';
+import { PLAYER } from '../social/edge.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
   let iv = startInterview(language);
@@ -328,4 +330,25 @@ test('the model is told the settlement is where play begins', async () => {
   const p = new FakeProvider({ structured: [ground()] });
   await generateGroundFloor(p, completed(), sheet);
   assert.match(p.allSentText(), /player BEGINS there/);
+});
+
+test('the climber chooses their kind: picked, described, or left to the world', async () => {
+  // Every villager got a kind and the climber never did, so `applyDrift` read a
+  // species for the player that nothing had written.
+  const kinds = speciesFor(42);
+  const other = kinds[1];
+
+  const picked = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: other.id });
+  assert.equal(picked.sheet.species, other.id, 'a kind the world holds, chosen by name');
+
+  const drawn = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { decide: 'world' });
+  assert.equal(drawn.sheet.species, speciesIdFor(42, PLAYER, kinds), 'the same seeded draw a villager gets');
+
+  const asked = wholeGenesis(character({ species: other.id }));
+  const described = await runGenesis(asked, completed(), 42, 'standard', 'dynamic', { describe: 'brass, never eats' });
+  assert.equal(described.sheet.species, other.id, 'the character call maps the words onto a kind');
+  assert.match(asked.allSentText(), /brass, never eats/, 'and was shown them');
+
+  const invented = await runGenesis(wholeGenesis(character({ species: 'dragon' })), completed(), 42, 'standard', 'dynamic', { describe: 'x' });
+  assert.ok(kinds.some((k) => k.id === invented.sheet.species), 'never a kind the world lacks');
 });

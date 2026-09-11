@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { climbTarget } from './game.ts';
+import { climbTarget, speciesChoiceOf } from './game.ts';
 
 test('a climb request names a way out, the stair, or is refused', () => {
   // The route used to turn a body it could not parse into `{}`, which climbs
@@ -8,4 +8,13 @@ test('a climb request names a way out, the stair, or is refused', () => {
   assert.deepEqual(climbTarget(''), { to: undefined });
   assert.deepEqual(climbTarget('{"to":"way-abc"}'), { to: 'way-abc' });
   assert.match(climbTarget('{"to":').error ?? '', /malformed/);
+});
+
+test('a species choice from the client is one of three shapes, or refused', () => {
+  assert.equal(speciesChoiceOf(undefined), undefined, 'skipped: the ordinary kind');
+  assert.deepEqual(speciesChoiceOf({ pick: 'made' }), { pick: 'made' });
+  assert.deepEqual(speciesChoiceOf({ describe: '  brass, never eats ' }), { describe: 'brass, never eats' });
+  assert.deepEqual(speciesChoiceOf({ decide: 'world' }), { decide: 'world' });
+  assert.throws(() => speciesChoiceOf({ describe: '' }), /species/);
+  assert.throws(() => speciesChoiceOf({ pick: 7 }), /species/);
 });

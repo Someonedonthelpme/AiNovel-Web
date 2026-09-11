@@ -31,6 +31,7 @@ import type { Mode, PlayState, TurnRecord } from '../play/state.ts';
 import { playTurn, suggestedActions } from '../play/turn.ts';
 import { runGenesis } from '../session/genesis.ts';
 import type { PresetName } from '../rules/ruleset.ts';
+import type { SpeciesChoice } from '../character/species.ts';
 import { recordAnswer, setDraft, startInterview, STAGES } from '../session/interview.ts';
 import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
@@ -449,6 +450,8 @@ export async function newGame(
   rules?: string,
   /** Whether the tower is frozen once authored. Anything else means dynamic. */
   structure?: string,
+  /** How the climber's kind is chosen, as the client sent it. Checked by `speciesChoiceOf`. */
+  species?: unknown,
 ): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
@@ -474,6 +477,7 @@ export async function newGame(
   const genesis = await runGenesis(
     provider(), interview, seed ?? Date.now() % 2147483647, rules as PresetName | undefined ?? 'standard',
     structure === 'static' ? 'static' : 'dynamic',
+    speciesChoiceOf(species),
   );
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);
   await saveSnapshot(id, initialPlayState(genesis.world, genesis.sheet));
@@ -561,6 +565,22 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
 }
 
 export type ClimbOutcomeView = { view: GameView; error: string | null; arrived: string | null };
+
+/**
+ * How the client says the climber's kind is chosen — checked here, at the edge.
+ *
+ * Absent is the ordinary kind. Anything present must be one of the three shapes;
+ * a malformed one is refused rather than quietly becoming "ordinary", which would
+ * hand the player a character they did not ask for.
+ */
+export function speciesChoiceOf(raw: unknown): SpeciesChoice | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const r = raw as { pick?: unknown; describe?: unknown; decide?: unknown };
+  if (typeof r.pick === 'string' && r.pick) return { pick: r.pick };
+  if (typeof r.describe === 'string' && r.describe.trim()) return { describe: r.describe.trim().slice(0, 300) };
+  if (r.decide === 'world') return { decide: 'world' };
+  throw new Error(`species: expected { pick }, { describe } or { decide: 'world' }, got ${JSON.stringify(raw).slice(0, 80)}`);
+}
 
 /**
  * Where a climb request asks to go: a named way out, or the stair when it names none.

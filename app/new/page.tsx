@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ABILITIES } from '../../src/combat/types.ts';
 import type { Abilities } from '../../src/combat/types.ts';
 import {
   defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
 } from '../../src/session/sheet.ts';
 import type { CharacterClass } from '../../src/character/classes.ts';
+import { FOLK, speciesFor } from '../../src/character/species.ts';
+import type { Species } from '../../src/character/species.ts';
 import { questionFor, STAGES } from '../../src/session/interview.ts';
 import type { Language } from '../../src/session/interview.ts';
 
@@ -48,6 +50,20 @@ export default function NewCharacter() {
    * travels with the submission and `runGenesis` uses it verbatim.
    */
   const [seed] = useState(() => Math.floor(Math.random() * 2147483647));
+
+  // What KIND of being the climber is. The kinds come from the same seed, so
+  // the ones offered are exactly the ones the world will hold — and are dealt
+  // after mount, because the server renders with a different random seed and
+  // a list drawn from it would not hydrate.
+  const [kinds, setKinds] = useState<Species[]>([]);
+  useEffect(() => setKinds(speciesFor(seed).filter((k) => k.id !== FOLK.id)), [seed]);
+  const [kindMode, setKindMode] = useState<'ordinary' | 'pick' | 'describe' | 'world'>('ordinary');
+  const [kindPick, setKindPick] = useState('');
+  const [kindWords, setKindWords] = useState('');
+  const species = kindMode === 'pick' && kindPick ? { pick: kindPick }
+    : kindMode === 'describe' && kindWords.trim() ? { describe: kindWords }
+      : kindMode === 'world' ? { decide: 'world' as const }
+        : undefined;
 
   const [roster, setRoster] = useState<CharacterClass[] | null>(null);
   const [rosterFor, setRosterFor] = useState<string | null>(null);
@@ -103,7 +119,7 @@ export default function NewCharacter() {
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, answers, draft, seed, rules, structure }),
+        body: JSON.stringify({ language, answers, draft, seed, rules, structure, species }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'generation failed');
@@ -229,6 +245,44 @@ export default function NewCharacter() {
             : rules === 'harsh'
               ? 'Wounds soak through, gear wears out, people change faster, and depth bites.'
               : 'The tuning everything else was balanced against.'}
+        </p>
+      </section>
+
+      <section className="panel">
+        <p className="label">What you are</p>
+        <div className="chips">
+          <button className={kindMode === 'ordinary' ? 'chip on' : 'chip'} onClick={() => setKindMode('ordinary')}>
+            {FOLK.name}
+          </button>
+          {kinds.map((k) => (
+            <button
+              key={k.id}
+              className={kindMode === 'pick' && kindPick === k.id ? 'chip on' : 'chip'}
+              onClick={() => { setKindMode('pick'); setKindPick(k.id); }}
+            >
+              {k.name}
+            </button>
+          ))}
+          <button className={kindMode === 'describe' ? 'chip on' : 'chip'} onClick={() => setKindMode('describe')}>
+            describe it
+          </button>
+          <button className={kindMode === 'world' ? 'chip on' : 'chip'} onClick={() => setKindMode('world')}>
+            let the world decide
+          </button>
+        </div>
+        {kindMode === 'describe' && (
+          <div className="field" style={{ marginTop: '0.6rem' }}>
+            <input
+              value={kindWords}
+              placeholder="in your own words — it becomes whichever of this world's kinds is closest"
+              onChange={(e) => setKindWords(e.target.value)}
+            />
+          </div>
+        )}
+        <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
+          {kindMode === 'world'
+            ? 'Drawn the way everyone else here was drawn — most people are ordinary.'
+            : 'A kind changes which needs wear on you, and how fast.'}
         </p>
       </section>
 
