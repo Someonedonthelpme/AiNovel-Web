@@ -58,6 +58,23 @@ test('experience carries through several levels at once', () => {
   assert.equal(levelled?.to, 4);
 });
 
+test('a world that forbids levelling banks the experience instead of losing it', () => {
+  // The progression axis: WHO MAY LEVEL is the world's law, not a constant.
+  // Banked rather than burnt, so amending the law later pays out what was
+  // earned under it — a rule that changes has to be able to change back.
+  const base = playState().sheet;
+  const enough = xpToNext(1) + xpToNext(2);
+
+  const held = grantXp(base, enough, false);
+  assert.equal(held.sheet.level, 1, 'the ceiling is the law, not the arithmetic');
+  assert.equal(held.levelled, null);
+  assert.equal(held.sheet.xp, enough, 'and nothing was thrown away');
+
+  // The law lifts: the next grant cashes in everything that was banked.
+  const freed = grantXp(held.sheet, 1);
+  assert.ok(freed.sheet.level > 1, 'what was earned under the law is paid when it lifts');
+});
+
 test('skill points come every level; ability points do not', () => {
   const base = playState().sheet;
   const startingPoints = base.skillPoints ?? 0;

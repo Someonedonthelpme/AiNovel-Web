@@ -160,13 +160,26 @@ function arrive(state: PlayState, world: World): { state: PlayState; xp: number;
   const isNewDepth = deepest > state.world.deepestFloor;
   if (isNewDepth) counters = { ...counters, [COUNTERS.deepestFloor]: deepest };
 
-  let sheet = { ...state.sheet, counters };
+  /*
+   * What crosses with you is the world's law.
+   *
+   * "Memories do not reset" is one of the design's own tower rules, which means
+   * a world can be written where they DO — and this is the seam it happens on,
+   * inside the fold, so a replay forgets in exactly the same places. Everything
+   * the person had worked out goes, not only the rules: a reset that spared
+   * what was convenient would not be a reset.
+   */
+  const forgets = forbids(world, playerSubject(state), 'keepMemories') !== null;
+
+  let sheet = forgets
+    ? { ...state.sheet, counters, beliefs: [] }
+    : { ...state.sheet, counters };
   let xp = 0;
   let levelled: LevelUp | null = null;
 
   if (isNewDepth) {
     xp = xpForNewDepth(deepest);
-    const granted = grantXp(sheet, xp);
+    const granted = grantXp(sheet, xp, forbids(world, playerSubject(state), 'gainLevels') === null);
     sheet = granted.sheet;
     levelled = granted.levelled;
   }

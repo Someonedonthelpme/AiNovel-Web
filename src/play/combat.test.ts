@@ -7,6 +7,8 @@ import {
 } from './combat.ts';
 import type { CombatAction } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
+import { xpToNext } from './progress.ts';
+import { STANDARD } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
 import type { PlayState, TurnRecord } from './state.ts';
@@ -27,6 +29,32 @@ function onFloorTwo(): PlayState {
 }
 
 /** Fight to a conclusion, always taking the first legal option. */
+/**
+ * A fight the party actually wins.
+ *
+ * `onFloorTwo` is a level-one character against a danger-8 floor and LOSES —
+ * which quietly turned every `if (victor === 'party')` guard below into a test
+ * that asserts nothing. Anything about what a win pays has to start here.
+ */
+function winnable(over: Partial<PlayState> = {}): PlayState {
+  const floor: Region = {
+    ...groundFloor(),
+    id: 'floor-2', floor: 2, danger: 1, name: 'The Shallow Steps',
+    creatures: ['หนูยักษ์'],
+  };
+  // Level 2 on floor 2, because `depthFactor` pays almost nothing for a fight
+  // far below your level — a level-8 character on floor 1 wins and earns ZERO,
+  // which would make any test about what a win pays vacuous a second time.
+  const base = playState();
+  return {
+    ...base,
+    world: { ...base.world, currentRegion: 'floor-2', regions: { 'floor-2': floor }, currentPlace: 'town' },
+    sheet: { ...base.sheet, level: 2 },
+    pc: { ...base.pc, hp: 200, maxHp: 200 },
+    ...over,
+  };
+}
+
 function fightItOut(start: PlayState, cap = 200) {
   let state = start;
   const actions: CombatAction[] = [];
@@ -146,6 +174,49 @@ test('wounds persist and kills are counted', () => {
     assert.ok((outcome.state.sheet.counters['kills'] ?? 0) > 0, 'kills feed the tallies traits will read');
     assert.equal(outcome.state.sheet.counters['fights_won'], 1);
   }
+});
+
+test('a world that forbids levelling holds the line at the fight payout too', () => {
+  // The other half of the progression law. A law honoured by the climb and not
+  // by combat would be no law at all — which is why the guard lives inside
+  // `grantXp` and this only proves the fight actually asks.
+  const base = winnable();
+  const brink = { ...base, sheet: { ...base.sheet, xp: xpToNext(base.sheet.level) - 1 } };
+  const capped = {
+    ...brink,
+    world: { ...brink.world, rules: { ...STANDARD, laws: [
+      { axis: 'progression' as const, constraint: 'gainLevels' as const, binds: 'all' as const },
+    ] } },
+  };
+
+  const free = concludeCombat(fightItOut(beginEncounter(brink)).state);
+  const held = concludeCombat(fightItOut(beginEncounter(capped)).state);
+
+  assert.equal(free.victor, 'party', 'the fixture has to WIN or this test asserts nothing');
+  assert.ok(free.state.sheet.level > brink.sheet.level, 'that win is a level in an ordinary world');
+  assert.equal(held.state.sheet.level, brink.sheet.level, 'and none at all under the law');
+  assert.ok((held.state.sheet.xp ?? 0) > (brink.sheet.xp ?? 0), 'the experience is banked, not burnt');
+});
+
+test('a world where the tower keeps its own gives up no loot and no coin', () => {
+  // The economy axis: what may be taken is the world's law. The dead still fall
+  // and the fight still counts — nothing follows you out of the room.
+  const base = winnable();
+  const kept = {
+    ...base,
+    world: { ...base.world, rules: { ...STANDARD, laws: [
+      { axis: 'economy' as const, constraint: 'takeLoot' as const, binds: 'all' as const },
+    ] } },
+  };
+
+  const free = concludeCombat(fightItOut(beginEncounter(base)).state);
+  const barren = concludeCombat(fightItOut(beginEncounter(kept)).state);
+  assert.equal(free.victor, 'party', 'the fixture has to WIN or this test asserts nothing');
+
+  assert.ok(free.loot.length > 0 || free.coin > 0, 'an ordinary win pays something');
+  assert.deepEqual(barren.loot, [], 'nothing drops where the law forbids taking');
+  assert.equal(barren.coin, 0);
+  assert.ok((barren.state.sheet.counters['kills'] ?? 0) > 0, 'the fight still happened');
 });
 
 test('losing ends the run rather than killing you outright', () => {

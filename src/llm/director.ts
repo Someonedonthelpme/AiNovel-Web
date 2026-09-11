@@ -13,6 +13,7 @@ import { activeRegion } from '../world/travel.ts';
 import type { Provider } from './provider.ts';
 import type { WriterBrief } from './redact.ts';
 import { forbids, ruleClaim, CONSTRAINTS } from '../rules/ruleset.ts';
+import type { Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
 
 /**
@@ -130,6 +131,21 @@ export type DirectorOutput = {
   };
   delta: FlatDelta;
   brief: WriterBrief;
+};
+
+/**
+ * Each law in words, one phrase per constraint.
+ *
+ * Exhaustive by type: a new law will not compile without a sentence, which is
+ * the point — this used to be a ternary that described every constraint but one
+ * as "residents cannot leave a floor", and the Director would have believed it.
+ */
+const LAW_IN_WORDS: Record<Constraint, string> = {
+  descendBelowGround: 'the ground is the bottom',
+  crossFloors: 'residents cannot leave a floor',
+  gainLevels: 'nobody here grows stronger by surviving',
+  takeLoot: 'nothing here may be carried away',
+  keepMemories: 'nothing is remembered across a crossing',
 };
 
 /**
@@ -292,7 +308,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
 
   const workedOut = CONSTRAINTS
     .filter((c) => believes(state.sheet.beliefs ?? [], ruleClaim(c)))
-    .map((c) => (c === 'descendBelowGround' ? 'the ground is the bottom' : 'residents cannot leave a floor'));
+    .map((c) => LAW_IN_WORDS[c]);
   const playerKnows = workedOut.length
     ? `What the player has worked out about the law: ${workedOut.join('; ')}`
     : '';

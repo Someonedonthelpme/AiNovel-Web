@@ -191,7 +191,16 @@ export type RuleAxis = (typeof RULE_AXES)[number];
  * checker — an entry nobody reads is a dead field, which is what §12 of
  * ARCHITECTURE.md exists to catch.
  */
-export const CONSTRAINTS = ['descendBelowGround', 'crossFloors'] as const;
+export const CONSTRAINTS = [
+  // movement
+  'descendBelowGround', 'crossFloors',
+  // progression
+  'gainLevels',
+  // economy
+  'takeLoot',
+  // knowledge
+  'keepMemories',
+] as const;
 export type Constraint = (typeof CONSTRAINTS)[number];
 
 /**

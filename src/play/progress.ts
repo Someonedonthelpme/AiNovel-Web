@@ -72,12 +72,26 @@ export type LevelUp = { from: number; to: number; pointsGained: number; skillPoi
  * Returns the new sheet plus what happened, because the UI has to be able to
  * say "you reached level 4" and the Writer has to be able to narrate it.
  */
-export function grantXp(sheet: CharacterSheet, amount: number): { sheet: CharacterSheet; levelled: LevelUp | null } {
+export function grantXp(
+  sheet: CharacterSheet,
+  amount: number,
+  /**
+   * Whether this person's world lets them rise at all.
+   *
+   * The guard lives HERE rather than at the two call sites, because a law
+   * checked by some callers and not others is not a law. Experience is still
+   * BANKED when it is false: the law can be amended, and what was earned under
+   * it is then paid out by the next grant rather than having quietly burnt.
+   */
+  mayLevel = true,
+): { sheet: CharacterSheet; levelled: LevelUp | null } {
   if (amount <= 0) return { sheet, levelled: null };
 
   const from = Math.max(1, sheet.level);
   let level = from;
   let xp = (sheet.xp ?? 0) + amount;
+
+  if (!mayLevel) return { sheet: { ...sheet, xp }, levelled: null };
 
   // Bounded: a single windfall should not be able to spin this forever.
   while (xp >= xpToNext(level) && level - from < 20) {

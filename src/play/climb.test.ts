@@ -6,7 +6,8 @@ import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
 import { isFull } from '../world/types.ts';
-import { believes } from '../character/belief.ts';
+import { adopt, believes, firsthand } from '../character/belief.ts';
+import { xpToNext } from './progress.ts';
 import { ruleClaim, STANDARD } from '../rules/ruleset.ts';
 import { signetsFor } from './signetbook.ts';
 
@@ -207,4 +208,57 @@ test('the exemption belongs to the holder, and the panel agrees', () => {
 
   const lawless = { ...atTheGate, world: { ...atTheGate.world, rules: { ...STANDARD, laws: [] } } };
   assert.equal(exitStatus(lawless).canDescend, true, 'a world that permits digging shows the way down');
+});
+
+test('a world that forbids levelling stops the climb paying out, and banks it', async () => {
+  // The depth reward and the fight reward are the only two ways a level is ever
+  // bought, so the law has to hold at both. This is the one the panel shows.
+  // Poised one point short of level 2, so the crossing decides it either way.
+  const poised = playState({ currentPlace: 'stair', regions: { 'floor-0': groundFloor() } });
+  const brink = { ...poised, sheet: { ...poised.sheet, xp: xpToNext(1) - 1 } };
+
+  const rose = await climb(provider(), brink);
+  assert.equal(rose.state.sheet.level, 2, 'without the law, that crossing is a level');
+
+  const capped = {
+    ...brink,
+    world: { ...brink.world, rules: { ...STANDARD, laws: [
+      { axis: 'progression' as const, constraint: 'gainLevels' as const, binds: 'all' as const },
+    ] } },
+  };
+  const held = await climb(provider(), capped);
+
+  assert.equal(held.error, null);
+  assert.ok(held.xp > 0, 'the depth is still worth something');
+  assert.equal(held.levelled, null, 'but nobody rises in a world whose law forbids it');
+  assert.equal(held.state.sheet.level, 1);
+  assert.equal(held.state.sheet.xp, xpToNext(1) - 1 + held.xp, 'banked, not burnt');
+});
+
+test('a world whose law resets memory keeps nothing across the crossing', async () => {
+  // The knowledge axis, and the design's own example: "memories do not reset"
+  // is a RULE, which means a world can be written where they do. The reset
+  // happens in the fold, on arrival, so a replay forgets in the same places.
+  const base = playState({ currentPlace: 'stair', regions: { 'floor-0': groundFloor() } });
+  const knowing = {
+    ...base,
+    sheet: { ...base.sheet, beliefs: adopt([], firsthand(ruleClaim('descendBelowGround'))) },
+  };
+
+  const ordinary = await climb(provider(), knowing);
+  assert.ok(
+    believes(ordinary.state.sheet.beliefs ?? [], ruleClaim('descendBelowGround')),
+    'an ordinary world carries what you worked out up the stairs with you',
+  );
+
+  const resetting = {
+    ...knowing,
+    world: { ...knowing.world, rules: { ...STANDARD, laws: [
+      { axis: 'knowledge' as const, constraint: 'keepMemories' as const, binds: 'all' as const },
+    ] } },
+  };
+  const forgot = await climb(provider(), resetting);
+
+  assert.equal(forgot.error, null);
+  assert.deepEqual(forgot.state.sheet.beliefs ?? [], [], 'and this one arrives knowing nothing');
 });

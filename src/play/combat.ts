@@ -15,12 +15,13 @@ import type { Rng } from '../engine/roll.ts';
 import { activeSkills, toCombatant } from '../session/sheet.ts';
 import { isCombatUsable, needsTarget, radiusOf, resolveSkill } from '../skills/active.ts';
 import { canAfford, priceOfUse, spend } from '../skills/pools.ts';
-import { rulesOf } from '../rules/ruleset.ts';
+import { forbids, rulesOf } from '../rules/ruleset.ts';
 import { wearEquipped } from '../items/types.ts';
 import { canAct, castTicks, spendTicks } from '../combat/tempo.ts';
 import { advanceCast, beginCast, finishCast } from '../combat/cast.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
+import { playerSubject } from './signetbook.ts';
 
 /**
  * Combat, as it appears inside the play loop.
@@ -430,13 +431,19 @@ export function concludeCombat(state: PlayState): CombatOutcome {
   if (combat.victor === 'party') {
     const rng = combatRng(state);
     xp = xpForFight(floor, sheet.level, killed.length);
-    const granted = grantXp(sheet, xp);
+    const granted = grantXp(sheet, xp, forbids(state.world, playerSubject(state), 'gainLevels') === null);
     sheet = granted.sheet;
     levelled = granted.levelled;
 
-    loot = rollLoot(rng, floor);
-    for (const drop of loot) inventory = addItem(inventory, drop.item, drop.count);
-    coin += rollCoin(rng, floor);
+    // What may be TAKEN is the world's law. Both rolls are skipped together
+    // rather than rolled and discarded: a world under this law never draws
+    // them, so its own replays stay identical to each other, which is all
+    // determinism asks.
+    if (forbids(state.world, playerSubject(state), 'takeLoot') === null) {
+      loot = rollLoot(rng, floor);
+      for (const drop of loot) inventory = addItem(inventory, drop.item, drop.count);
+      coin += rollCoin(rng, floor);
+    }
   }
 
   // A level gained raises the ceiling without healing the wound you took

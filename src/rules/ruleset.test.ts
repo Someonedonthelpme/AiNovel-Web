@@ -479,6 +479,24 @@ test('the Director is told what the law forbids the people present', async () =>
   assert.match(p.allSentText(), /cannot leave this floor/);
 });
 
+test('every law the player has worked out is described as ITSELF', async () => {
+  // Two constraints were spelled out with a ternary — "the ground is the
+  // bottom" or, for everything else, "residents cannot leave a floor". Adding
+  // three more axes turned that fallback into a lie the Director would have
+  // acted on: a player who has worked out that the tower keeps its loot would
+  // have been reported as knowing something about stairs.
+  const base = playState();
+  const knowing = {
+    ...base,
+    sheet: { ...base.sheet, beliefs: adopt(base.sheet.beliefs ?? [], firsthand(ruleClaim('takeLoot'))) },
+  };
+
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, knowing, 'look around', 'exploration', []).catch(() => {});
+  assert.match(p.allSentText(), /nothing here may be carried away/);
+  assert.doesNotMatch(p.allSentText(), /residents cannot leave a floor/);
+});
+
 test('the Director is told the law and what the player has worked out, separately', async () => {
   // The law is what the Director ENFORCES; the belief is what the player may
   // act on. Collapsing the two is how a character knows a rule nobody told them.
@@ -524,7 +542,13 @@ test('each preset gets its own laws array', () => {
 });
 
 /** The same claim for the law vocabulary: a constraint nothing checks is a dead field. */
-const PROVEN_CONSTRAINTS = ['descendBelowGround', 'crossFloors'];
+const PROVEN_CONSTRAINTS = [
+  'descendBelowGround',  // travel.ts, and the panel that offers the way down
+  'crossFloors',         // the Director brief; enforced by construction until anybody can move
+  'gainLevels',          // grantXp, asked by both payouts — the climb and the fight
+  'takeLoot',            // concludeCombat: both rolls skipped together
+  'keepMemories',        // the crossing, in the fold
+];
 
 test('EVERY dial in the ruleset has a proven reader', () => {
   // `laws` is a list of laws rather than a bag of dials, so it is enumerated by
