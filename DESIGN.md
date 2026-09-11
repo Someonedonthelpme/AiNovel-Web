@@ -175,7 +175,7 @@ differ — accept, revisit with real worlds. **Open (measured 2026-09-11, 3c-ii)
 a zero-sum template is not fight-neutral. The humanoid lean `cha +2 / vit −2`
 cost a default climber 1 max HP (11 → 10.2) and 15–19 points of win rate at
 danger 1–4 over 300 seeds; `vit` is the only source of HP, so any lean touching
-it swings a fight hard. Decide how leans pair before 3d multiplies species. Parley is the only stage that puts a
+it swings a fight hard. Decided with the user: leans and shifts trade within a group (body `str dex agi`, mind `con int wis cha luk`) and never touch `vit` — folk went from −15..−19 to −1..−5. Still open: body leans are not even either (`agi −2` costs 5–9 points, `agi +2` gains ~1; `str` gains 3–15), so construct is weaker in a fight. Parley is the only stage that puts a
 model call inside a fight, which is why it is last and the rest stand without it.
 
 ## The persistent world — decided, not built

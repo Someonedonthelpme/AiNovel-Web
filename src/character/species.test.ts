@@ -34,6 +34,28 @@ test('no species is simply stronger — every template sums to zero, and they di
   assert.ok(seen.size > 8, 'templates must actually differ, not all be zero');
 });
 
+test('a lean trades within one group, and no template ever touches vit', () => {
+  // vit is the only source of HP: humanoid's vit −2 cost a default climber
+  // 15–19 points of win rate at danger 1–4.
+  const PHYSICAL = ['str', 'dex', 'agi'];
+  const MENTAL = ['con', 'int', 'wis', 'cha', 'luk'];
+  for (const t of TYPES) {
+    const moved = Object.keys(t.lean);
+    assert.ok(moved.every((a) => PHYSICAL.includes(a)) || moved.every((a) => MENTAL.includes(a)), `${t.id} leans across groups`);
+  }
+  for (let seed = 0; seed < 50; seed++) {
+    for (const s of speciesFor(seed)) {
+      assert.equal(s.template.vit ?? 0, 0, `seed ${seed}: ${s.id} moves vit`);
+      // The seeded shifts too: a point moved from str into cha is the same bad
+      // trade at half the size (measured −7 at danger 4).
+      for (const group of [PHYSICAL, MENTAL]) {
+        const sum = group.reduce((n, a) => n + (s.template[a as keyof typeof s.template] ?? 0), 0);
+        assert.equal(sum, 0, `seed ${seed}: ${s.id} trades across groups`);
+      }
+    }
+  }
+});
+
 test('a world stored before types reads exactly as one dealt today', () => {
   for (let seed = 0; seed < 50; seed++) {
     for (const s of speciesFor(seed)) {

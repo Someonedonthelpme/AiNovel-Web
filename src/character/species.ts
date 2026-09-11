@@ -1,7 +1,6 @@
 import { mulberry32 } from '../engine/roll.ts';
 import type { Need } from './persona.ts';
-import { ABILITIES } from '../combat/types.ts';
-import type { Abilities } from '../combat/types.ts';
+import type { Abilities, Ability } from '../combat/types.ts';
 
 /**
  * What KIND of thing somebody is.
@@ -31,20 +30,33 @@ export type Species = {
 /** A species as a world is dealt it now: always typed, always templated. */
 export type Grown = Species & { type: TypeId; template: Partial<Abilities> };
 
+const BODY: readonly Ability[] = ['str', 'dex', 'agi'];
+const MIND: readonly Ability[] = ['con', 'int', 'wis', 'cha', 'luk'];
+
 /**
  * The TYPES a species belongs to — closed and authored, like every vocabulary
  * the engine resolves. A type is what differs MECHANICALLY: how its needs move,
  * and which way its body leans. The lean sums to zero, so no type is simply
  * stronger than another; it only trades one thing for another.
+ *
+ * A lean trades WITHIN a group — body for body (`str dex agi`), mind for mind
+ * (`con int wis cha luk`) — and never touches `vit`. A zero sum is not a fair
+ * trade across groups: humanoid's first lean, `cha +2 / vit −2`, took a point of
+ * HP off every default climber and 15–19 points of win rate with it.
+ *
+ * No lean buys `str` either: it is both to-hit and damage for a melee climber,
+ * so `str +2` for `dex −2` measured +3 to +15 points of win rate. Body leans
+ * trade `dex` and `agi` — and even that is not even: beast's `agi +2` measured
+ * about level, construct's `agi −2` cost 5–9 points. Open in DESIGN.
  */
 export const TYPES = [
-  { id: 'humanoid', needs: {}, lean: { cha: 2, vit: -2 } },
-  { id: 'beast', needs: { purpose: 0, company: 2 }, lean: { agi: 2, int: -2 } },
-  { id: 'construct', needs: { food: 0 }, lean: { con: 2, agi: -2 } },
+  { id: 'humanoid', needs: {}, lean: { cha: 2, luk: -2 } },
+  { id: 'beast', needs: { purpose: 0, company: 2 }, lean: { agi: 2, dex: -2 } },
+  { id: 'construct', needs: { food: 0 }, lean: { dex: 2, agi: -2 } },
   { id: 'undead', needs: { food: 0, rest: 0, company: 0 }, lean: { con: 2, cha: -2 } },
-  { id: 'fey', needs: { safety: 2, purpose: 2 }, lean: { luk: 2, str: -2 } },
-  { id: 'fiend', needs: { food: 0, company: 0 }, lean: { str: 2, wis: -2 } },
-  { id: 'elemental', needs: { food: 0, rest: 0, company: 0, purpose: 0 }, lean: { vit: 2, int: -2 } },
+  { id: 'fey', needs: { safety: 2, purpose: 2 }, lean: { luk: 2, con: -2 } },
+  { id: 'fiend', needs: { food: 0, company: 0 }, lean: { cha: 2, wis: -2 } },
+  { id: 'elemental', needs: { food: 0, rest: 0, company: 0, purpose: 0 }, lean: { con: 2, int: -2 } },
   { id: 'aberration', needs: { company: 0, safety: 2 }, lean: { int: 2, cha: -2 } },
 ] as const satisfies readonly { id: string; needs: Partial<Record<Need, number>>; lean: Partial<Abilities> }[];
 
@@ -78,9 +90,11 @@ function templateFor(seed: number, id: string, type: TypeId): Partial<Abilities>
   const rng = mulberry32(hash);
 
   const template: Partial<Abilities> = { ...TYPES.find((t) => t.id === type)!.lean };
+  // Never vit, and never across a group — for the reasons the leans obey both.
+  const movable = [...BODY, ...MIND];
   for (let i = 0; i < 2; i++) {
-    const from = ABILITIES[Math.floor(rng() * ABILITIES.length)];
-    const others = ABILITIES.filter((a) => a !== from);
+    const from = movable[Math.floor(rng() * movable.length)];
+    const others = (BODY.includes(from) ? BODY : MIND).filter((a) => a !== from);
     const to = others[Math.floor(rng() * others.length)];
     template[from] = (template[from] ?? 0) - 1;
     template[to] = (template[to] ?? 0) + 1;
