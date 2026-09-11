@@ -14,7 +14,7 @@ import { beliefsAfter, claimOf, witnessDeed } from '../social/deed.ts';
 import { carry, seed } from '../social/ambient.ts';
 import { firsthand } from '../character/belief.ts';
 import type { Deed } from '../social/deed.ts';
-import { rulesOf } from '../rules/ruleset.ts';
+import { amend, BINDINGS, CONSTRAINTS, rulesOf } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
@@ -89,6 +89,20 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
       rejected.push(`deed "${proposed.deed.kind}": ${proposed.deed.toward} is not here`);
     } else {
       delta.deed = proposed.deed;
+    }
+  }
+
+  if (proposed.amendLaw) {
+    // The trust boundary for the one field that can change the rules. A model
+    // that could name its own constraint would be writing laws nothing
+    // enforces — the exact failure the closed vocabulary exists to prevent.
+    const { constraint, binds } = proposed.amendLaw;
+    if (!(CONSTRAINTS as readonly string[]).includes(constraint)) {
+      rejected.push(`amendLaw "${constraint}": no such rule in this engine`);
+    } else if (binds !== null && !(BINDINGS as readonly string[]).includes(binds)) {
+      rejected.push(`amendLaw "${constraint}": "${binds}" binds nobody`);
+    } else {
+      delta.amendLaw = { constraint, binds };
     }
   }
 
@@ -187,6 +201,12 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
       people[id] = { ...person, lastSeenTurn: world.turn };
     }
     world = { ...world, people, edges };
+  }
+
+  if (delta.amendLaw) {
+    // The world's law, changed by something that happened in it. Stored on the
+    // world rather than applied to the preset, which every other run shares.
+    world = { ...world, rules: amend(rulesOf(world), delta.amendLaw.constraint, delta.amendLaw.binds) };
   }
 
   if (delta.revealExit) {

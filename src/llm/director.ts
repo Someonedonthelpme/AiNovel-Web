@@ -12,8 +12,8 @@ import { CLASSES } from '../play/state.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { Provider } from './provider.ts';
 import type { WriterBrief } from './redact.ts';
-import { forbids, ruleClaim, CONSTRAINTS } from '../rules/ruleset.ts';
-import type { Constraint } from '../rules/ruleset.ts';
+import { forbids, ruleClaim, BINDINGS, CONSTRAINTS } from '../rules/ruleset.ts';
+import type { Binding, Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
 
 /**
@@ -62,10 +62,22 @@ const deltaSchema = obj(
     useItem: str,
     equipItem: str,
     rest: { type: 'string', enum: ['none', 'short', 'long'] },
+    /*
+     * The world's LAW changing, and the only field here that rewrites a rule
+     * rather than a fact. Almost always 'none': a law changes when the fiction
+     * itself changes it — a gate is sealed, a decree is read out, the tower
+     * shifts — never as a way of describing what already is.
+     *
+     * Closed like `deed`: name a law the engine already keeps, and say whom it
+     * now binds. 'none' in `amendBinds` LIFTS it.
+     */
+    amendLaw: { type: 'string', enum: ['none', ...CONSTRAINTS] },
+    amendBinds: { type: 'string', enum: ['none', ...BINDINGS] },
   },
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'useItem', 'equipItem', 'rest',
+    'amendLaw', 'amendBinds',
   ],
 );
 
@@ -114,6 +126,10 @@ export type FlatDelta = {
   useItem: string;
   equipItem: string;
   rest: string;
+  /** A law this turn changed, from the closed vocabulary. 'none' for the usual turn. */
+  amendLaw: string;
+  /** Whom it now binds — or 'none' to lift it entirely. */
+  amendBinds: string;
 };
 
 export type Outcome = { narrate: string; delta: FlatDelta };
@@ -192,6 +208,16 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   if (useItem) delta.useItem = useItem;
   if (equipItem) delta.equipItem = equipItem;
   if (flat.rest === 'short' || flat.rest === 'long') delta.rest = flat.rest;
+
+  // Shaped here, CHECKED in `validateDelta` like everything else: this is the
+  // conversion, not the trust boundary.
+  const amendLaw = meaningful(flat.amendLaw) ? flat.amendLaw : null;
+  if (amendLaw) {
+    delta.amendLaw = {
+      constraint: amendLaw as Constraint,
+      binds: meaningful(flat.amendBinds) ? (flat.amendBinds as Binding) : null,
+    };
+  }
 
   return delta;
 }
@@ -364,6 +390,11 @@ const SYSTEM = [
   'else. Say only WHICH item is used — never how much it heals or what it does;',
   'the item decides that. Set rest to "short" when the player makes camp or',
   'catches their breath, and "long" only when they sleep the night through.',
+  '',
+  'amendLaw is "none" on almost every turn. Use it only when the fiction itself',
+  'CHANGES the law of this world: a gate sealed for good, a decree read out,',
+  'the tower shifting — never to describe a rule that already holds.',
+  'Name a law from the list and say whom it now binds; "none" lifts it.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson must be an id from the',

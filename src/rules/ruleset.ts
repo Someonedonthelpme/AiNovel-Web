@@ -207,6 +207,21 @@ export type Constraint = (typeof CONSTRAINTS)[number];
  * Whom a law binds. **Whether the player is bound is part of the law**, so no
  * check anywhere may assume the player is the exception.
  */
+/**
+ * The axis each constraint belongs to.
+ *
+ * Kept as a map rather than a comment beside the list, because an amendment has
+ * to BUILD a law at runtime and something has to know which axis it lands on.
+ * Exhaustive by type: a new constraint will not compile without one.
+ */
+export const AXIS_OF: Record<Constraint, RuleAxis> = {
+  descendBelowGround: 'movement',
+  crossFloors: 'movement',
+  gainLevels: 'progression',
+  takeLoot: 'economy',
+  keepMemories: 'knowledge',
+};
+
 export const BINDINGS = ['all', 'residents', 'player'] as const;
 export type Binding = (typeof BINDINGS)[number];
 
@@ -380,6 +395,25 @@ type DeepPartial<T> = { [K in keyof T]?: Partial<T[K]> };
  * permission.
  */
 export const rulesOf = (from?: { rules?: Ruleset } | null): Ruleset => from?.rules ?? STANDARD;
+
+/**
+ * The same ruleset with one law rebound, imposed, or struck out.
+ *
+ * `binds: null` lifts the law entirely. Anything else replaces the existing law
+ * on that constraint rather than adding a second one — two laws about the same
+ * thing is a contradiction the engine would resolve by list order, which is no
+ * answer at all.
+ *
+ * Returns a NEW ruleset: presets are shared objects, and a world that edited
+ * one in place would retune every other run in the process.
+ */
+export const amend = (rules: Ruleset, constraint: Constraint, binds: Binding | null): Ruleset => ({
+  ...rules,
+  laws: [
+    ...rules.laws.filter((law) => law.constraint !== constraint),
+    ...(binds ? [{ axis: AXIS_OF[constraint], constraint, binds }] : []),
+  ],
+});
 
 /**
  * A belief ABOUT a law. Keyed on the closed vocabulary, so a belief about a rule

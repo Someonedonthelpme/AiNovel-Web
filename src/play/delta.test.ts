@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, foldPlay, validateDelta } from './delta.ts';
 import { playState } from './fixtures.ts';
+import { forbids } from '../rules/ruleset.ts';
 import type { TurnRecord, WorldDelta } from './state.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
@@ -220,4 +221,39 @@ test('nobody drifts once the session has ended', () => {
   const ended = { ...playState(), ended: { reason: 'died' } };
   const after = foldPlay(ended, [spokenTo('smith', 'กูไม่เชื่อมึง')]);
   assert.deepEqual(after.world.people['smith'].needs, playState().world.people['smith'].needs);
+});
+
+/* -------------------------------------------------------------------------- */
+/* AMENDMENTS — a law changing is an event, or replay diverges                  */
+/* -------------------------------------------------------------------------- */
+
+test('a law amended during a turn binds afterwards, and the fold reaches the same law', () => {
+  // Step 6's requirement: rule changes must be LOGGED events. The delta is what
+  // the log stores, so an amendment carried there replays for free — the same
+  // reasoning that made a climb an event rather than something recomputed.
+  const base = playState();
+  assert.equal(forbids(base.world, 'player', 'crossFloors'), null, 'nothing binds the player at the start');
+
+  const sealing = record({ amendLaw: { constraint: 'crossFloors', binds: 'all' } });
+  const after = applyDelta(base, sealing.delta);
+  assert.ok(forbids(after.world, 'player', 'crossFloors'), 'the tower closed the stairs to everyone');
+
+  const replayed = foldPlay(base, [sealing]);
+  assert.ok(forbids(replayed.world, 'player', 'crossFloors'), 'and a reload finds the same world');
+
+  const opening = record({ amendLaw: { constraint: 'crossFloors', binds: null } });
+  assert.equal(forbids(foldPlay(base, [sealing, opening]).world, 'player', 'crossFloors'), null);
+});
+
+test('a law the engine does not check cannot be legislated by a model', () => {
+  // The same boundary as `deed` and `useItem`: the model NAMES from a closed
+  // list and the engine decides what it means. A constraint outside the
+  // vocabulary is a rule nothing enforces, so it never reaches the world.
+  const s = playState();
+  const junk = validateDelta(s, { amendLaw: { constraint: 'npcsCannotLie' as never, binds: 'all' } });
+  assert.equal(junk.delta.amendLaw, undefined);
+  assert.match(junk.rejected.join(' '), /npcsCannotLie/);
+
+  const wrongBinds = validateDelta(s, { amendLaw: { constraint: 'crossFloors', binds: 'everyone' as never } });
+  assert.equal(wrongBinds.delta.amendLaw, undefined);
 });

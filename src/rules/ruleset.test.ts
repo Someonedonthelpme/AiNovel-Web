@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONSTRAINTS, forbids, ruleClaim, HARSH, PLAIN, presetNamed, PRESETS, rulesOf, STANDARD, withOverrides } from './ruleset.ts';
+import { amend, CONSTRAINTS, forbids, ruleClaim, HARSH, PLAIN, presetNamed, PRESETS, rulesOf, STANDARD, withOverrides } from './ruleset.ts';
 import type { Binding, Ruleset } from './ruleset.ts';
 import { applyDamage, damageReduction, soakOf } from '../combat/resolve.ts';
 import { resistedRounds } from '../combat/conditions.ts';
@@ -461,6 +461,26 @@ test('a Signet sets aside the law it exempts, and only that law', () => {
   assert.equal(forbids(twoLaws, holder, 'descendBelowGround'), null);
   assert.ok(forbids(twoLaws, holder, 'crossFloors'), 'one exemption is not a licence for everything');
   assert.ok(forbids(twoLaws, 'player', 'descendBelowGround'), 'and it exempts the holder alone');
+});
+
+test('a law can be amended, lifted and re-imposed, and the ruleset it came from is untouched', () => {
+  // Step 6 asks for amendments as EVENTS. This is the pure half: what an
+  // amendment does to a ruleset. Immutable, because the presets are shared
+  // objects and a world editing one in place would retune every other run.
+  const before = { ...STANDARD, laws: [...STANDARD.laws] };
+
+  const sealed = amend(STANDARD, 'crossFloors', 'all');
+  assert.ok(forbids({ rules: sealed }, 'player', 'crossFloors'), 'it now binds everyone');
+  assert.equal(sealed.laws.filter((l) => l.constraint === 'crossFloors').length, 1, 'rebound, not duplicated');
+  assert.equal(sealed.laws.find((l) => l.constraint === 'crossFloors')?.axis, 'movement', 'the axis comes with the constraint');
+
+  const lifted = amend(sealed, 'crossFloors', null);
+  assert.equal(forbids({ rules: lifted }, 'resident', 'crossFloors'), null, 'and a law can be struck out entirely');
+
+  const imposed = amend(lifted, 'takeLoot', 'all');
+  assert.equal(imposed.laws.find((l) => l.constraint === 'takeLoot')?.axis, 'economy');
+
+  assert.deepEqual(STANDARD.laws, before.laws, 'the preset everyone shares is never edited in place');
 });
 
 test('the Director is told what the law forbids the people present', async () => {

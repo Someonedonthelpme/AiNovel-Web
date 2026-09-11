@@ -1,6 +1,6 @@
 import type { DirectorDeed } from '../social/deed.ts';
 import { rulesOf, STANDARD } from '../rules/ruleset.ts';
-import type { Ruleset } from '../rules/ruleset.ts';
+import type { Binding, Constraint, Ruleset } from '../rules/ruleset.ts';
 import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
 import type { SheetRecord } from './sheetaction.ts';
@@ -95,6 +95,20 @@ export type WorldDelta = {
   useItem?: string;
   /** Put something on. Must be equipment the player is carrying. */
   equipItem?: string;
+  /**
+   * The world's LAW changing, mid-run.
+   *
+   * `binds: null` lifts it. This is the one thing here that alters the rules
+   * rather than the state, so it is deliberately the narrowest field in the
+   * vocabulary: a constraint the engine already checks, a binding from the
+   * closed list, one law at a time. The model may say the tower sealed itself;
+   * it may not invent what sealing means.
+   *
+   * An amendment MUST travel in the delta, because the delta is what the log
+   * stores — a rule that changed outside the log would replay as a rule that
+   * never changed.
+   */
+  amendLaw?: { constraint: Constraint; binds: Binding | null };
   /**
    * Catch your breath, or sleep properly.
    *
