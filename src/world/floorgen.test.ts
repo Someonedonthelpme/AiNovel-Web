@@ -219,3 +219,12 @@ test('a stratum tells the model what it is building inside', async () => {
   assert.match(p.allSentText(), /flooded stone/);
   assert.match(p.allSentText(), /salvagers/);
 });
+
+test('a region can be built somewhere that is not a floor number', async () => {
+  // `regionIdFor(floor)` was the only source of a region id, which quietly made
+  // every world a stack: two places at the same depth could not both exist.
+  const r = await generateFloor(provider(), world(), 0, pc, null, 'outer-market');
+  assert.equal(r.region.id, 'outer-market');
+  assert.equal(r.region.floor, 0, 'depth is still depth');
+  assert.deepEqual(validateRegion(r.region, r.people).errors, []);
+});

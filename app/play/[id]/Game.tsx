@@ -253,12 +253,17 @@ export default function Game({ initial }: { initial: GameView }) {
     }
   }
 
-  async function ascend() {
+  async function ascend(to?: string) {
     if (busy) return;
     setBusy(true);
     setNotice(null);
     try {
-      const response = await fetch(`/api/sessions/${view.id}/climb`, { method: 'POST' });
+      const response = await fetch(`/api/sessions/${view.id}/climb`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // A way out that is not the stair, when one was clicked.
+        body: JSON.stringify(to ? { to } : {}),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'the climb failed');
       if (data.error) setNotice(data.error);
@@ -449,10 +454,22 @@ export default function Game({ initial }: { initial: GameView }) {
                 <button className="chip" key={s} onClick={() => send(s)} disabled={busy}>{s}</button>
               ))}
               {view.canClimb && !view.combat && !view.ended && (
-                <button className="chip" onClick={ascend} disabled={busy} style={{ borderColor: 'var(--amber-dim)' }}>
+                <button className="chip" onClick={() => ascend()} disabled={busy} style={{ borderColor: 'var(--amber-dim)' }}>
                   ↑ Climb to floor {view.region.floor + 1}
                 </button>
               )}
+              {/* Ways out that are not stairs: a road, a breach, a gate. */}
+              {!view.combat && !view.ended && view.ways.filter((w) => w.here).map((w) => (
+                <button
+                  key={w.to}
+                  className="chip"
+                  onClick={() => ascend(w.to)}
+                  disabled={busy}
+                  style={{ borderColor: 'var(--amber-dim)' }}
+                >
+                  → Take the way out
+                </button>
+              ))}
             </div>
           </section>
         </div>

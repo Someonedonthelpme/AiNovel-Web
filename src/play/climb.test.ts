@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
-import { climb, exitStatus, godown } from './climb.ts';
+import { applyClimb, climb, exitStatus, godown } from './climb.ts';
 import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
@@ -261,4 +261,33 @@ test('a world whose law resets memory keeps nothing across the crossing', async 
 
   assert.equal(forgot.error, null);
   assert.deepEqual(forgot.state.sheet.beliefs ?? [], [], 'and this one arrives knowing nothing');
+});
+
+/* -------------------------------------------------------------------------- */
+/* CROSSINGS THAT ARE NEITHER UP NOR DOWN                                      */
+/* -------------------------------------------------------------------------- */
+
+test('a world that is not a stack is walked sideways, and the log replays it', () => {
+  // A crossing was always "up" or "down", which is only true of a tower. An
+  // outer world is a structure with its own connections, and the record has to
+  // be able to say WHERE rather than which direction.
+  const hub = { ...groundFloor(), id: 'outer-hub', floor: 0,
+    exits: [{ to: 'outer-market', via: 'gate', floor: 0 }] };
+  const market = { ...groundFloor(), id: 'outer-market', floor: 0, name: 'The Salt Market',
+    exits: [{ to: 'outer-hub', via: 'gate', floor: 0 }] };
+
+  const outer = playState({
+    currentRegion: 'outer-hub',
+    currentPlace: 'gate',
+    regions: { 'outer-hub': hub, 'outer-market': market },
+  });
+
+  const record = { kind: 'climb' as const, direction: 'up' as const, to: 'outer-market', built: null };
+  const moved = applyClimb(outer, record);
+
+  assert.equal(moved.error, null);
+  assert.equal(moved.state.world.currentRegion, 'outer-market');
+
+  const replayed = foldPlay(outer, [record]);
+  assert.equal(replayed.world.currentRegion, 'outer-market', 'and a reload walks the same way');
 });

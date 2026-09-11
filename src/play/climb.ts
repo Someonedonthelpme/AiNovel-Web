@@ -2,7 +2,7 @@ import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import type { FloorResult } from '../world/floorgen.ts';
-import { ascend, descend, installRegion } from '../world/travel.ts';
+import { ascend, descend, installRegion, traverse } from '../world/travel.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { adopt, firsthand } from '../character/belief.ts';
 import { forbids, ruleClaim } from '../rules/ruleset.ts';
@@ -12,7 +12,7 @@ import { grantXp, hpAfterGrowth, xpForNewDepth } from './progress.ts';
 import type { LevelUp } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import type { PlayState } from './state.ts';
-import type { Person, PersonId, Region, World } from '../world/types.ts';
+import type { Person, PersonId, Region, RegionId, World } from '../world/types.ts';
 
 /**
  * Moving between floors, generating what does not exist yet.
@@ -45,6 +45,14 @@ import type { Person, PersonId, Region, World } from '../world/types.ts';
 export type ClimbRecord = {
   kind: 'climb';
   direction: 'up' | 'down';
+  /**
+   * WHERE, when the structure is not a stack.
+   *
+   * A crossing was always up or down, which is only true of a tower. An outer
+   * world has ways out that are neither, so the record names the far side and
+   * `direction` is left as the stack's shorthand for it.
+   */
+  to?: RegionId;
   /**
    * The generated floor. Null when the region already existed in full detail,
    * because travel is pure in that case and replays from the world alone.
@@ -96,12 +104,14 @@ const taught = (state: PlayState, law: Law | undefined): PlayState =>
  * `ascend` takes no subject: no law names climbing UP today, and inventing a
  * parameter for a check nobody makes is the dead field this step is about.
  */
-const moveFor = (state: PlayState, direction: 'up' | 'down') =>
-  direction === 'up' ? ascend(state.world) : descend(state.world, playerSubject(state));
+const moveFor = (state: PlayState, record: { direction: 'up' | 'down'; to?: RegionId }) => {
+  if (record.to) return traverse(state.world, record.to);
+  return record.direction === 'up' ? ascend(state.world) : descend(state.world, playerSubject(state));
+};
 
 /** Apply a recorded crossing. The only place a climb changes state. */
 export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
-  const attempt = moveFor(state, record.direction);
+  const attempt = moveFor(state, record);
 
   if (attempt.kind === 'error') return failed(taught(state, attempt.law), attempt.reason, record);
   if (attempt.kind === 'moved') {
@@ -128,18 +138,21 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   };
 }
 
-async function cross(provider: Provider, state: PlayState, direction: 'up' | 'down'): Promise<ClimbResult> {
-  const attempt = moveFor(state, direction);
+async function cross(
+  provider: Provider, state: PlayState, direction: 'up' | 'down', to?: RegionId,
+): Promise<ClimbResult> {
+  const attempt = moveFor(state, { direction, to });
 
   // The floor is new, or was compressed on the way past. Build it BEFORE
   // applying anything, so one record drives the live crossing and every replay.
   const generated = attempt.kind === 'needsRegion'
-    ? await generateFloor(provider, state.world, attempt.floor, state.sheet, attempt.gazetteer)
+    ? await generateFloor(provider, state.world, attempt.floor, state.sheet, attempt.gazetteer, attempt.regionId)
     : null;
 
   const record: ClimbRecord = {
     kind: 'climb',
     direction,
+    ...(to ? { to } : {}),
     built: generated ? { region: generated.region, people: generated.people, edges: generated.edges } : null,
   };
 
@@ -197,6 +210,15 @@ export const climb = (provider: Provider, state: PlayState): Promise<ClimbResult
 
 export const godown = (provider: Provider, state: PlayState): Promise<ClimbResult> =>
   cross(provider, state, 'down');
+
+/**
+ * Take a named way out, in a world whose regions are not a stack.
+ *
+ * `direction` is still recorded because the depth curves read it for what a
+ * crossing is worth; where you actually went is `to`.
+ */
+export const travelTo = (provider: Provider, state: PlayState, to: RegionId): Promise<ClimbResult> =>
+  cross(provider, state, 'up', to);
 
 /** Whether the player is standing somewhere they could leave the floor from. */
 export function exitStatus(state: PlayState): { canClimb: boolean; canDescend: boolean } {

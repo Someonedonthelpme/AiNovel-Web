@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
 import { FOLK } from '../character/species.ts';
+import { activeRegion } from '../world/travel.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState } from './fixtures.ts';
 import { forbids } from '../rules/ruleset.ts';
@@ -284,4 +285,36 @@ test('a climber of a kind that does not eat crosses a floor without getting hung
 
   assert.equal(after.sheet.needs.food, NEED_MAX, 'and this one has no stomach to march on');
   assert.equal(after.sheet.needs.rest, ordinary.sheet.needs.rest, 'while the march tires it the same');
+});
+
+/* -------------------------------------------------------------------------- */
+/* A WORLD CAN GROW SIDEWAYS                                                   */
+/* -------------------------------------------------------------------------- */
+
+test('a way out found in play becomes a way out, and the fold finds the same one', () => {
+  // How a world that is not a stack ever comes to exist. The Director says a
+  // road leads out of the market; the ENGINE decides where that is — a model
+  // that could mint region ids would be authoring the map's shape, which is
+  // the line this codebase does not cross.
+  const base = playState();
+  assert.deepEqual(activeRegion(base.world)?.exits ?? [], [], 'the town starts as a plain stack');
+
+  const found = record({ revealWay: 'market' });
+  const after = applyDelta(base, found.delta);
+  const exits = activeRegion(after.world)?.exits ?? [];
+
+  assert.equal(exits.length, 1);
+  assert.equal(exits[0].via, 'market');
+  assert.equal(exits[0].floor, 0, 'a road out of town leads somewhere at the same depth');
+  assert.ok(exits[0].to.length > 0, 'and the engine named where');
+
+  const replayed = foldPlay(base, [found]);
+  assert.deepEqual(activeRegion(replayed.world)?.exits, exits, 'minted from state, so a reload agrees');
+});
+
+test('a way out the model invents somewhere that does not exist is refused', () => {
+  const s = playState();
+  const nowhere = validateDelta(s, { revealWay: 'the-moon' });
+  assert.equal(nowhere.delta.revealWay, undefined);
+  assert.match(nowhere.rejected.join(' '), /the-moon/);
 });

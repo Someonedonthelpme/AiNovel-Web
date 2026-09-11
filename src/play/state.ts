@@ -82,6 +82,15 @@ export type WorldDelta = {
   /** Finding the way up. */
   revealExit?: string;
   /**
+   * Finding a way OUT that is not the stair — a road, a breach, a gate.
+   *
+   * The model names the PLACE it leads from; the engine mints where it goes.
+   * A model able to name the far side would be authoring the shape of the map,
+   * which is the same line `useItem` and `deed` draw: name the thing, never
+   * decide what it does.
+   */
+  revealWay?: string;
+  /**
    * A fight breaks out. The Director says only THAT one starts; depth decides
    * what shows up, because the difficulty curve is the whole progression.
    */

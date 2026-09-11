@@ -58,6 +58,8 @@ const deltaSchema = obj(
     deedPerson: str,
     timeSpent: { type: 'integer', minimum: 0, maximum: 3 },
     revealExit: str,
+    /** A way OUT that is not the stair. Name the PLACE it leaves from; where it goes is not yours to say. */
+    revealWay: str,
     /** Whether a fight breaks out. What shows up is decided by depth, not here. */
     startCombat: { type: 'boolean' },
     /** WHICH item is used. What using it does is the item's business. */
@@ -79,7 +81,7 @@ const deltaSchema = obj(
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'useItem', 'equipItem', 'rest',
-    'amendLaw', 'amendBinds',
+    'amendLaw', 'amendBinds', 'revealWay',
   ],
 );
 
@@ -124,6 +126,8 @@ export type FlatDelta = {
   deedPerson: string;
   timeSpent: number;
   revealExit: string;
+  /** A place a way LEADS OUT of, when the player finds one that is not the stair. */
+  revealWay: string;
   startCombat: boolean;
   useItem: string;
   equipItem: string;
@@ -189,6 +193,8 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
 
   if (moveTo) delta.moveTo = moveTo;
   if (revealExit) delta.revealExit = revealExit;
+  const revealWay = meaningful(flat.revealWay);
+  if (revealWay) delta.revealWay = revealWay;
   if (flat.learnFacts?.length) {
     const facts = flat.learnFacts.filter((f) => meaningful(f));
     if (facts.length) delta.learnFacts = facts;
@@ -406,6 +412,10 @@ const SYSTEM = [
   'CHANGES the law of this world: a gate sealed for good, a decree read out,',
   'the tower shifting — never to describe a rule that already holds.',
   'Name a law from the list and say whom it now binds; "none" lifts it.',
+  '',
+  'revealWay is for a way OUT of this region that is not the stair — a road, a',
+  'breach, a gate somebody opens. Name the place it leaves FROM and nothing else;',
+  'where it goes is decided outside you.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson must be an id from the',

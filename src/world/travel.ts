@@ -1,5 +1,5 @@
 import { compressExcept } from './lod.ts';
-import type { Gazetteer, PlaceId, Region, RegionId, World } from './types.ts';
+import type { Gazetteer, Link, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { forbids, rulesOf } from '../rules/ruleset.ts';
 import type { Subject } from '../rules/ruleset.ts';
@@ -74,8 +74,8 @@ export function moveWithinRegion(world: World, to: PlaceId): TravelResult {
   };
 }
 
-function crossTo(world: World, floor: number, arriveAt: (r: Region) => PlaceId | null): TravelResult {
-  const regionId = regionIdFor(floor);
+function crossTo(world: World, link: Link, arriveAt: (r: Region) => PlaceId | null): TravelResult {
+  const { to: regionId, floor } = link;
   const record = world.regions[regionId];
 
   if (!record) return { kind: 'needsRegion', floor, regionId, gazetteer: null };
@@ -106,6 +106,48 @@ function crossTo(world: World, floor: number, arriveAt: (r: Region) => PlaceId |
   };
 }
 
+/** The stair up, as a link. Present whether or not the way up has been found. */
+const upFrom = (region: Region): Link =>
+  ({ to: regionIdFor(region.floor + 1), via: region.exit ?? region.entrance, floor: region.floor + 1, direction: 'up' });
+
+const downFrom = (region: Region): Link =>
+  ({ to: regionIdFor(region.floor - 1), via: region.entrance, floor: region.floor - 1, direction: 'down' });
+
+/**
+ * Every way out of a region.
+ *
+ * A region that names its own `exits` has exactly those. One that does not is a
+ * STACK, and its adjacency is derived from depth — which is what every world
+ * saved before regions could name their ways out relies on. The way up is
+ * listed only once it has been found; the way down is always there to be
+ * refused by the law or by the floor of the world.
+ */
+export function linksFrom(world: World, region: Region): Link[] {
+  if (region.exits?.length) return region.exits;
+  return [...(region.exit === null ? [] : [upFrom(region)]), downFrom(region)];
+}
+
+/**
+ * Take a named way out of this region.
+ *
+ * The general form of `ascend` and `descend`: a structure that is not a stack
+ * has ways out that are neither up nor down, and this is how they are walked.
+ */
+export function traverse(world: World, to: RegionId): TravelResult {
+  const region = activeRegion(world);
+  if (!region) return { kind: 'error', reason: 'the current region is not loaded in full detail' };
+
+  const link = linksFrom(world, region).find((l) => l.to === to);
+  if (!link) return { kind: 'error', reason: `there is no way from here to "${to}"` };
+  // A stair is climbed, not traversed. The ground law and the world's own floor
+  // are checked in `descend`, and a general walk that could reach a derived
+  // up/down link would be a way around both.
+  if (link.direction) return { kind: 'error', reason: 'that is a stair — climb it' };
+  if (world.currentPlace !== link.via) return { kind: 'error', reason: 'you are not at that way out' };
+
+  return crossTo(world, link, (r) => r.entrance);
+}
+
 /** Climb to the next floor. Only possible from a discovered way up. */
 export function ascend(world: World): TravelResult {
   const region = activeRegion(world);
@@ -113,7 +155,7 @@ export function ascend(world: World): TravelResult {
   if (region.exit === null) return { kind: 'error', reason: 'the way up has not been found yet' };
   if (world.currentPlace !== region.exit) return { kind: 'error', reason: 'you are not at the way up' };
 
-  return crossTo(world, region.floor + 1, (r) => r.entrance);
+  return crossTo(world, upFrom(region), (r) => r.entrance);
 }
 
 /**
@@ -143,13 +185,13 @@ export function descend(world: World, subject: Subject = 'player'): TravelResult
   }
   if (world.currentPlace !== region.entrance) return { kind: 'error', reason: 'you are not at the way down' };
 
-  return crossTo(world, region.floor - 1, (r) => r.exit ?? r.entrance);
+  return crossTo(world, downFrom(region), (r) => r.exit ?? r.entrance);
 }
 
 /** Record a newly generated or rehydrated region and step into it. */
 export function installRegion(world: World, region: Region, arriveAt: PlaceId): World {
   const withRegion: World = { ...world, regions: { ...world.regions, [region.id]: region } };
-  const result = crossTo(withRegion, region.floor, (r) =>
+  const result = crossTo(withRegion, { to: region.id, via: arriveAt, floor: region.floor }, (r) =>
     r.places.some((p) => p.id === arriveAt) ? arriveAt : r.entrance,
   );
   return result.kind === 'moved' ? result.world : withRegion;

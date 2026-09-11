@@ -22,7 +22,7 @@ import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
-import type { Fact, World } from '../world/types.ts';
+import type { Fact, Link, PlaceId, RegionId, World } from '../world/types.ts';
 
 /**
  * The trust boundary between the model and the world.
@@ -106,6 +106,18 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     }
   }
 
+  if (proposed.revealWay !== undefined) {
+    const region = activeRegion(state.world);
+    const place = region?.places.find((p) => p.id === proposed.revealWay);
+    if (!place) {
+      rejected.push(`revealWay "${proposed.revealWay}": no such place here`);
+    } else if ((region?.exits ?? []).some((l) => l.via === place.id)) {
+      rejected.push(`revealWay "${proposed.revealWay}": that way is already known`);
+    } else {
+      delta.revealWay = place.id;
+    }
+  }
+
   if (proposed.revealExit !== undefined) {
     if (!region) {
       rejected.push('revealExit: the current region is not loaded in full detail');
@@ -171,6 +183,19 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
  * turn itself, so a turn without a move has to advance it explicitly. Every path
  * through this function moves the clock exactly one turn.
  */
+/**
+ * Where a newly found road leads.
+ *
+ * Pure in the world seed, the region and the place it leaves from — a name, not
+ * a draw, so the live turn and every replay of it agree without the destination
+ * having to be written into the log.
+ */
+function wayIdFor(seed: number, from: RegionId, via: PlaceId): RegionId {
+  let hash = (seed ^ 0x7a11) >>> 0;
+  for (const ch of `${from}/${via}`) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  return `way-${hash.toString(36)}`;
+}
+
 export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   if (state.ended) return state;
 
@@ -207,6 +232,28 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
     // The world's law, changed by something that happened in it. Stored on the
     // world rather than applied to the preset, which every other run shares.
     world = { ...world, rules: amend(rulesOf(world), delta.amendLaw.constraint, delta.amendLaw.binds) };
+  }
+
+  if (delta.revealWay) {
+    const region = activeRegion(world);
+    if (region) {
+      /*
+       * Where the road goes is decided HERE, from state alone.
+       *
+       * No rng draw: the id is a function of the world's seed, the region and
+       * the place it leaves from, so the fold mints the same destination on
+       * every replay without anything extra being logged.
+       */
+      const to = wayIdFor(world.seed, region.id, delta.revealWay);
+      const link: Link = { to, via: delta.revealWay, floor: region.floor };
+      world = {
+        ...world,
+        regions: {
+          ...world.regions,
+          [region.id]: { ...region, exits: [...(region.exits ?? []), link] },
+        },
+      };
+    }
   }
 
   if (delta.revealExit) {

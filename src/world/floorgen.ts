@@ -38,7 +38,7 @@ import type { CharacterSheet } from '../session/sheet.ts';
 import { humanisePlaces, pruneDangling } from './naming.ts';
 import { dangerFor, peopleBudget, placeBudget, settlementBudget } from './budget.ts';
 import { rehydrationBrief } from './lod.ts';
-import type { Gazetteer, Person, Place, PlaceKind, Region, World } from './types.ts';
+import type { Gazetteer, Person, Place, PlaceKind, Region, RegionId, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
 import { dangerAt, stratumAt } from './strata.ts';
@@ -280,6 +280,15 @@ export async function generateFloor(
   floor: number,
   sheet: CharacterSheet,
   gazetteer: Gazetteer | null = null,
+  /**
+   * WHERE this is being built, when it is not simply a floor.
+   *
+   * `regionIdFor(floor)` was the only source of a region id, which made every
+   * world a stack by construction: two places at one depth could not both
+   * exist. Depth still decides how dangerous and how large; the id decides
+   * where it hangs in the world.
+   */
+  into: RegionId = regionIdFor(floor),
 ): Promise<FloorResult> {
   // Floor 0 is AUTHORED at world creation, never generated — this guard exists
   // to stop a crossing overwriting the town. It used to read `floor < 1`, a
@@ -288,7 +297,10 @@ export async function generateFloor(
   // Whether anyone may go there is the LAW's question, answered in `travel.ts`.
   // How far down there is to go is `world.depthBelowGround`, checked by
   // `descend` before anything is ever asked of a generator.
-  if (floor === 0) throw new Error('floor 0 is the authored ground, not generated');
+  // The invariant is the authored GROUND, which is a region id — not depth 0.
+  // Keyed on the id because an outer world sits at depth 0 perfectly legally,
+  // and a region there is only forbidden when it would overwrite the town.
+  if (into === regionIdFor(0)) throw new Error('floor 0 is the authored ground, not generated');
 
   // The stratum first, then this world's dials. `dangerFor(floor)` was called
   // bare here, so neither ever reached a generated floor.
@@ -317,7 +329,7 @@ export async function generateFloor(
     ],
   });
 
-  const regionId = regionIdFor(floor);
+  const regionId = into;
   const rawPlaces: Place[] = generated.places.map((p) => ({
     id: p.id,
     name: p.name,

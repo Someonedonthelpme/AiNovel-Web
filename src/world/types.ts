@@ -118,6 +118,34 @@ export type Region = {
   exit: PlaceId | null;
   /** What lives and hunts here. Names only; encounters take numbers from depth. */
   creatures: string[];
+  /**
+   * The ways out of this region, when they are not a stair.
+   *
+   * `floor` meant two things at once — how DEEP (danger, budgets, depth
+   * experience, the ground law) and what CONNECTS to what (`crossTo(floor ± 1)`)
+   * — and a structure that is not a stack is impossible while they are the same
+   * number. Depth stays on `floor`; adjacency is this.
+   *
+   * Absent means the stack: up from `exit`, down from `entrance`, derived in
+   * `linksFrom`. That is every world saved before this existed.
+   */
+  exits?: Link[];
+};
+
+/**
+ * One way out of a region.
+ *
+ * Carries the far side's DEPTH as well as its id, because the curves that
+ * decide what is generated there — danger, budgets, what a fight is worth —
+ * have to answer before the region on the other side exists.
+ */
+export type Link = {
+  to: RegionId;
+  /** The place you must be standing at to take it. */
+  via: PlaceId;
+  floor: number;
+  /** Which way it goes, for a structure where that means anything. */
+  direction?: 'up' | 'down';
 };
 
 /**

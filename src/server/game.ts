@@ -21,7 +21,7 @@ import { traitOriginOf, traitsFor } from '../play/traitbook.ts';
 import { isEmergent } from '../play/emergent.ts';
 import { visibleSignets } from '../play/signet.ts';
 import { signetsFor } from '../play/signetbook.ts';
-import { climb, exitStatus } from '../play/climb.ts';
+import { climb, exitStatus, travelTo } from '../play/climb.ts';
 import {
   awaitingPlayer, combatOptions, concludeCombat, notableEvents, takeCombatAction,
 } from '../play/combat.ts';
@@ -245,6 +245,13 @@ export type GameView = {
   suggestions: string[];
   canClimb: boolean;
   canDescend: boolean;
+  /**
+   * The ways out that are not stairs, for a world that is not a stack.
+   *
+   * `here` is whether the player is standing at the one place it can be taken
+   * from — the same rule the stair has, said for a road.
+   */
+  ways: { to: string; via: string; here: boolean }[];
   deepestFloor: number;
   factCount: number;
   transcript: TranscriptEntry[];
@@ -379,6 +386,11 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
     suggestions: suggestedActions(state),
     canClimb: exits.canClimb,
     canDescend: exits.canDescend,
+    ways: (activeRegion(state.world)?.exits ?? []).map((l) => ({
+      to: l.to,
+      via: l.via,
+      here: state.world.currentPlace === l.via,
+    })),
     deepestFloor: state.world.deepestFloor,
     factCount: state.world.facts.length,
     transcript,
@@ -550,12 +562,18 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
 
 export type ClimbOutcomeView = { view: GameView; error: string | null; arrived: string | null };
 
-export async function climbFloor(id: string): Promise<ClimbOutcomeView | null> {
+/**
+ * Cross out of this region.
+ *
+ * `to` names a way out that is not a stair; without it this is the stair up,
+ * which is what every world had before regions could be anything but a stack.
+ */
+export async function climbFloor(id: string, to?: string): Promise<ClimbOutcomeView | null> {
   await bootstrap();
   const loaded = await loadSession(id);
   if (!loaded) return null;
 
-  const result = await climb(provider(), loaded.state);
+  const result = to ? await travelTo(provider(), loaded.state, to) : await climb(provider(), loaded.state);
   if (result.error || !result.record) {
     return { view: viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, arrived: null };
   }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, moveWithinRegion } from './travel.ts';
+import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, linksFrom, moveWithinRegion, traverse } from './travel.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, groundFloor, link, place, world } from './fixtures.ts';
 import { isFull, regionIdFor } from './types.ts';
@@ -208,4 +208,77 @@ test('nothing can be done while the current region is only a gazetteer', () => {
   assert.equal(activeRegion(w), null);
   assert.equal(moveWithinRegion(w, 'town').kind, 'error');
   assert.equal(ascend(w).kind, 'error');
+});
+
+/* -------------------------------------------------------------------------- */
+/* ADJACENCY IS NOT DEPTH                                                      */
+/* -------------------------------------------------------------------------- */
+
+test('a region can name its own ways out, and they are walked like any stair', () => {
+  // `floor` meant two things at once: how deep (danger, budgets, depth xp, the
+  // ground law) and what connects to what (`crossTo(floor ± 1)`). A structure
+  // that is not a stack is impossible while those are the same number, so
+  // adjacency becomes something a region can state.
+  const hub: Region = {
+    ...groundFloor(), id: 'outer-hub', floor: 0,
+    exits: [{ to: 'outer-market', via: 'gate', floor: 0 }],
+  };
+  const market: Region = {
+    ...groundFloor(), id: 'outer-market', floor: 0, name: 'The Salt Market',
+    exits: [{ to: 'outer-hub', via: 'gate', floor: 0 }],
+  };
+  const outer = world({
+    currentRegion: 'outer-hub',
+    currentPlace: 'gate',
+    regions: { 'outer-hub': hub, 'outer-market': market },
+  });
+
+  const there = traverse(outer, 'outer-market');
+  assert.equal(there.kind, 'moved');
+  if (there.kind !== 'moved') return;
+  assert.equal(there.world.currentRegion, 'outer-market');
+  assert.equal(there.world.currentPlace, 'gate', 'you arrive at the region entrance');
+
+  // And back the way you came — neither of these is up or down.
+  const back = traverse({ ...there.world, currentPlace: 'gate' }, 'outer-hub');
+  assert.equal(back.kind, 'moved');
+  if (back.kind === 'moved') assert.equal(back.world.currentRegion, 'outer-hub');
+});
+
+test('a way out you are not standing at is refused, and one that does not exist too', () => {
+  const hub: Region = {
+    ...groundFloor(), id: 'outer-hub', floor: 0,
+    exits: [{ to: 'outer-market', via: 'gate', floor: 0 }],
+  };
+  const outer = world({ currentRegion: 'outer-hub', currentPlace: 'town', regions: { 'outer-hub': hub } });
+
+  const wrongPlace = traverse(outer, 'outer-market');
+  assert.equal(wrongPlace.kind, 'error');
+
+  const nowhere = traverse({ ...outer, currentPlace: 'gate' }, 'the-moon');
+  assert.equal(nowhere.kind, 'error');
+});
+
+test('a stack still derives its ways out from depth, and nothing had to say so', () => {
+  // The compatibility claim in one assertion: every world ever saved has no
+  // `exits` at all, and its stairs must keep working exactly as before.
+  const w = world({ currentPlace: 'stair', regions: { 'floor-0': groundFloor(), 'floor-1': firstFloor() } });
+  const links = linksFrom(w, groundFloor());
+
+  assert.deepEqual(
+    links.map((l) => [l.direction, l.to, l.floor]),
+    [['up', 'floor-1', 1], ['down', 'floor--1', -1]],
+  );
+});
+
+test('traverse is not a way around the law that guards the stairs', () => {
+  // `linksFrom` derives an up and a down for a stack, and `traverse` walking
+  // one of those would step past the ground law and the world's floor — both
+  // of which live in `descend`. A stair is taken by climbing it.
+  const w = world({ currentPlace: 'gate', regions: { 'floor-0': groundFloor() } });
+  const sneak = traverse(w, 'floor--1');
+
+  assert.equal(sneak.kind, 'error');
+  if (sneak.kind === 'error') assert.match(sneak.reason, /stair/);
+  assert.equal(descend(w).kind, 'error', 'and the honest way down is still refused by the law');
 });
