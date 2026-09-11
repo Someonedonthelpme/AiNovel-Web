@@ -22,6 +22,7 @@ import { advanceCast, beginCast, finishCast } from '../combat/cast.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
+import { stratumAt } from '../world/strata.ts';
 
 /**
  * Combat, as it appears inside the play loop.
@@ -440,7 +441,8 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     // them, so its own replays stay identical to each other, which is all
     // determinism asks.
     if (forbids(state.world, playerSubject(state), 'takeLoot') === null) {
-      loot = rollLoot(rng, floor);
+      // The structure decides what is worth finding here, not the depth alone.
+      loot = rollLoot(rng, floor, stratumAt(state.world, floor)?.loot);
       for (const drop of loot) inventory = addItem(inventory, drop.item, drop.count);
       coin += rollCoin(rng, floor);
     }

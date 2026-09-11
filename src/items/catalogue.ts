@@ -220,28 +220,59 @@ export type Drop = { item: Item; count: number };
  * Deterministic from the rng the fight already threads, so a replayed log
  * produces the same pack rather than a differently lucky one.
  */
-export function rollLoot(rng: Rng, floor: number): Drop[] {
+/**
+ * What a place is known for.
+ *
+ * A multiplier per category, applied to the standing chance: `0` silences one
+ * entirely, `3` makes it the thing this wing is famous for. Absent categories
+ * are unchanged, and an absent profile is the table every floor used before
+ * strata could own anything.
+ */
+export type LootProfile = {
+  weights?: Partial<Record<LootCategory, number>>;
+};
+
+export const LOOT_CATEGORIES = [
+  'rations', 'draught', 'weapon', 'armour', 'pack', 'part', 'material', 'book',
+] as const;
+export type LootCategory = (typeof LOOT_CATEGORIES)[number];
+
+export function rollLoot(rng: Rng, floor: number, loot?: LootProfile): Drop[] {
   const drops: Drop[] = [];
+
+  /*
+   * Weights move the threshold, and a silenced category costs its builder's
+   * draws as well as its own — `weapon` and `armour` each pull from the same
+   * stream to decide WHICH one, so two profiles do not produce comparable
+   * sequences and the coin rolled afterwards will differ between them.
+   *
+   * That is fine, and worth stating so nobody "fixes" it: a world's profile is
+   * authored once and never changes underneath a run, so every replay of a
+   * recorded fight draws exactly what the live one did. Comparability between
+   * two different worlds was never something replay needed.
+   */
+  const odds = (category: LootCategory, base: number): number =>
+    base * (loot?.weights?.[category] ?? 1);
 
   // Something to eat is the common case: rest is a supply economy, and a tower
   // that never yields rations forces a walk home every other fight.
-  if (rng() < 0.55) drops.push(rations(1 + Math.floor(rng() * 2)));
-  if (rng() < 0.3) drops.push({ item: draught(floor), count: 1 });
-  if (rng() < 0.16) drops.push({ item: weapon(rng, floor), count: 1 });
-  if (rng() < 0.12) drops.push({ item: armour(rng, floor), count: 1 });
+  if (rng() < odds('rations', 0.55)) drops.push(rations(1 + Math.floor(rng() * 2)));
+  if (rng() < odds('draught', 0.3)) drops.push({ item: draught(floor), count: 1 });
+  if (rng() < odds('weapon', 0.16)) drops.push({ item: weapon(rng, floor), count: 1 });
+  if (rng() < odds('armour', 0.12)) drops.push({ item: armour(rng, floor), count: 1 });
   // Rare, because a pack is a lasting upgrade rather than a consumable — and
   // finding the first one should be a moment rather than a Tuesday.
-  if (rng() < 0.07) drops.push({ item: pack(rng, floor), count: 1 });
+  if (rng() < odds('pack', 0.07)) drops.push({ item: pack(rng, floor), count: 1 });
   /*
    * A loose piece, so a failed handle can be REPLACED rather than only mended.
    * Without these, `attachPart` is reachable only by taking something off and
    * putting the same thing back on, which is no decision at all.
    */
-  if (rng() < 0.14) {
+  if (rng() < odds('part', 0.14)) {
     const names = Object.keys(PART_TYPES);
     drops.push({ item: PART_TYPES[names[Math.floor(rng() * names.length)]], count: 1 });
   }
-  if (rng() < 0.18) drops.push({ item: material(rng, floor), count: 1 });
+  if (rng() < odds('material', 0.18)) drops.push({ item: material(rng, floor), count: 1 });
   /*
    * Uncommon on purpose: a book is a permanent new verb, not a consumable.
    *
@@ -249,7 +280,7 @@ export function rollLoot(rng: Rng, floor: number): Drop[] {
    * the whole of it is reachable in this tower — an unreadable volume three is
    * a dead end the player can never diagnose.
    */
-  if (rng() < 0.09) {
+  if (rng() < odds('book', 0.09)) {
     const series = Math.floor(rng() * 6);
     const volume = Math.floor(rng() * CHAIN_LENGTH);
     const chained = rng() < 0.45 && provableChain(series, TOWER_DEPTH) && volumeFloor(series, volume) <= floor;

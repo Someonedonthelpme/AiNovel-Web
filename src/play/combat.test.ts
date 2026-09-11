@@ -219,6 +219,32 @@ test('a world where the tower keeps its own gives up no loot and no coin', () =>
   assert.ok((barren.state.sheet.counters['kills'] ?? 0) > 0, 'the fight still happened');
 });
 
+test('a fight pays from the stratum it happens in', () => {
+  // The wire, not the roll: `rollLoot` learned about profiles in isolation, and
+  // this is what proves the fight actually asks the structure it is standing in.
+  const base = winnable();
+  const ordinary = concludeCombat(fightItOut(beginEncounter(base)).state);
+  assert.equal(ordinary.victor, 'party', 'the fixture has to WIN or this test asserts nothing');
+  assert.ok(ordinary.loot.length > 0, 'an ordinary wing pays something');
+
+  const hoarding = {
+    ...base,
+    world: {
+      ...base.world,
+      strata: { vault: {
+        id: 'vault', name: 'The Locked Vault', kind: 'dynamic' as const, from: 0,
+        loot: { weights: {
+          rations: 0, draught: 0, weapon: 0, armour: 0, pack: 0, part: 0, material: 0, book: 0,
+        } },
+      } },
+    },
+  };
+  const kept = concludeCombat(fightItOut(beginEncounter(hoarding)).state);
+
+  assert.deepEqual(kept.loot, [], 'a wing that gives up nothing gives up nothing');
+  assert.ok(kept.coin > 0, 'coin is not part of the profile — the body is still worth robbing');
+});
+
 test('losing ends the run rather than killing you outright', () => {
   const doomed = { ...onFloorTwo(), pc: { ...onFloorTwo().pc, hp: 1 } };
   const { state } = fightItOut(beginEncounter(doomed));

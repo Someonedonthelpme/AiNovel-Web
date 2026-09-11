@@ -7,6 +7,7 @@ import type { Subject } from './subjects.ts';
 import type { Edges } from '../social/edge.ts';
 import type { Ambient } from '../social/ambient.ts';
 import type { Role } from '../social/roles.ts';
+import type { LootProfile } from '../items/catalogue.ts';
 /**
  * The world model.
  *
@@ -89,6 +90,14 @@ export type Stratum = {
     /** Who is found here — a phrase, not a roster. Fed to the people the floor generates. */
     people: string;
   };
+  /**
+   * What this place is known for dropping.
+   *
+   * A world's economy is REGIONAL: loot keyed on depth alone meant every floor
+   * of every structure paid from one table, so no wing could be worth going to
+   * for anything in particular. See `LootProfile`.
+   */
+  loot?: LootProfile;
 };
 
 /** A region held in full detail — the one you are standing in. */

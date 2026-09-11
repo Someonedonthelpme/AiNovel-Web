@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dangerAt, stratumAt } from './strata.ts';
 import { world } from './fixtures.ts';
+import { rollCoin, rollLoot } from '../items/catalogue.ts';
+import { mulberry32 } from '../engine/roll.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { runDirector } from '../llm/director.ts';
 import { playState } from '../play/fixtures.ts';
@@ -58,4 +60,47 @@ test('the Director is told which structure the player is standing in', async () 
   const p = new FakeProvider({ structured: [] });
   await runDirector(p, inside, 'look around', 'exploration', []).catch(() => {});
   assert.match(p.allSentText(), /Sunken Wing/);
+});
+
+/* -------------------------------------------------------------------------- */
+/* STRATA OWN LOOT                                                             */
+/* -------------------------------------------------------------------------- */
+
+test('a stratum owns its loot: one depth pays differently in two wings', () => {
+  // "A world's economy is regional and a gear set lives somewhere specific."
+  // `rollLoot` keyed on depth alone, so every floor of every structure paid
+  // from one table and no wing could be known for anything.
+  // Seed 13 at depth 5 drops a shortsword and a padded coat, so silencing the
+  // categories is observable rather than vacuously true.
+  const at = (loot?: Parameters<typeof rollLoot>[2]) => rollLoot(mulberry32(13), 5, loot);
+
+  const ordinary = at();
+  assert.ok(ordinary.some((d) => d.item.slot), 'this seed arms you in an ordinary wing');
+
+  const barren = at({ weights: { weapon: 0, armour: 0, pack: 0 } });
+  assert.ok(
+    !barren.some((d) => d.item.slot),
+    'and a wing that arms nobody drops nothing you can wear or swing',
+  );
+  assert.ok(barren.length < ordinary.length, 'the rest of the table is untouched');
+});
+
+test('one profile, one stream: a wing pays the same on every replay', () => {
+  // The invariant replay actually needs. A profile is authored with the world
+  // and never changes under a run, so the same fight rolls the same pack every
+  // time it is folded. (Two DIFFERENT profiles do not produce comparable
+  // streams — a silenced category skips its builder's draws too — which is why
+  // this is stated as replay rather than as comparability.)
+  const wing = { weights: { weapon: 0, armour: 0, book: 4 } };
+
+  const first = mulberry32(13);
+  const lootA = rollLoot(first, 5, wing);
+  const coinA = rollCoin(first, 5);
+
+  const second = mulberry32(13);
+  const lootB = rollLoot(second, 5, wing);
+  const coinB = rollCoin(second, 5);
+
+  assert.deepEqual(lootB.map((d) => d.item.id), lootA.map((d) => d.item.id));
+  assert.equal(coinB, coinA);
 });
