@@ -313,17 +313,17 @@ anything derives from the seed alone.
   ([subjects.ts:111](src/world/subjects.ts:111)).
 - `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. Genesis
   stores the WHOLE preset rather than its name
-  ([genesis.ts:620](src/session/genesis.ts:620)), so retuning a preset cannot
+  ([genesis.ts:623](src/session/genesis.ts:623)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
   ([ruleset.ts:273](src/rules/ruleset.ts:273)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:234](src/play/delta.ts:234)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
-  ([genesis.ts:619](src/session/genesis.ts:619)). Stored for the same reason
+  ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
   `subjects` is.
 - `strata` — the structures this world holds ([types.ts:268](src/world/types.ts:268)).
   Genesis writes one, the tower, covering floor 0 up
-  ([genesis.ts:627](src/session/genesis.ts:627)); a climb that opens a wing adds
+  ([genesis.ts:630](src/session/genesis.ts:630)); a climb that opens a wing adds
   another ([climb.ts:148](src/play/climb.ts:148)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it.
@@ -390,16 +390,16 @@ come from?"
 | `dispositionOf` ([persona.ts:208](src/character/persona.ts:208)) | temperament + needs | `warmth·candour·nerve·discipline·intuition·feeling` on ±3. Circumstance colours wiring: warmth needs company, nerve is worn by being unsafe, discipline frays unrested |
 | `describeMental` ([persona.ts:260](src/character/persona.ts:260)) | needs | rattled / exhausted / starving / lonely / adrift, and the upside `in good heart` |
 | `registerTrust` ([persona.ts:283](src/character/persona.ts:283)) | trust + persona | the trust value a relationship is actually *read* at |
-| `finalAbilities` ([sheet.ts:222](src/session/sheet.ts:222)) | base + background + spent + tree + traits + equipment | `Abilities`. **Everything that moves a score must land here** or trait gates read a number the player never sees |
-| `maxHpFor` ([sheet.ts:246](src/session/sheet.ts:246)) | VIT, level, tree | `10 + vitMod + (level−1)(6+vitMod)`. **CON and the hit die are deliberately excluded** |
+| `finalAbilities` ([sheet.ts:230](src/session/sheet.ts:230)) | base + background + species template + spent + tree + traits + equipment | `Abilities`. **Everything that moves a score must land here** or trait gates read a number the player never sees |
+| `maxHpFor` ([sheet.ts:255](src/session/sheet.ts:255)) | VIT, level, tree | `10 + vitMod + (level−1)(6+vitMod)`. **CON and the hit die are deliberately excluded** |
 | `armourClassFor` | armour, **AGI**, tree | AC is evasion, so it reads AGI. DEX is accuracy and never touches it |
 | `soakOf` ([resolve.ts](src/combat/resolve.ts)) | VIT, the incoming blow | VIT's physical defence. Capped by the stat AND a third of the hit — flat reduction was measured and rejected |
 | `resistedRounds` ([conditions.ts](src/combat/conditions.ts)) | VIT or CON, duration | shortens a condition rather than rolling a save. Never reaches immunity |
 | `speedFor` / `overloadFor` / `carryCapacityFor` | AGI, STR, carried weight | movement, and what hauling a hoard costs |
 | `loreFor` ([lorebook.ts:74](src/play/lorebook.ts:74)) | item id + world seed | the history a thing carries, or nothing — `LORE_CHANCE` 0.35. Depth comes off *floor* depth, so a deep find is worth reading and not merely worth more |
 | `resonanceOf` ([lore.ts:65](src/play/lore.ts:65)) | lore `about` ∩ drive want/fear | `Resonance` — whether it touched them at all, and what it moved |
-| `maxStaminaFor` / `maxManaFor` ([sheet.ts:323](src/session/sheet.ts:323)) | VIT/CON, level, unmet rest/safety, tree | pool ceilings — the body is docked by going unrested, the mind by feeling unsafe |
-| `toCombatant` ([sheet.ts:444](src/session/sheet.ts:444)) | derive + equipped attack | a `Combatant` at full HP and full pools |
+| `maxStaminaFor` / `maxManaFor` ([sheet.ts:332](src/session/sheet.ts:332)) | VIT/CON, level, unmet rest/safety, tree | pool ceilings — the body is docked by going unrested, the mind by feeling unsafe |
+| `toCombatant` ([sheet.ts:453](src/session/sheet.ts:453)) | derive + equipped attack | a `Combatant` at full HP and full pools |
 | `conditionMet` / `progressOf` ([traits.ts:198](src/play/traits.ts:198)) | `TraitContext` | whether a trait condition holds, and its progress bar |
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
@@ -684,8 +684,9 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
 `CharacterSheet.hitDie` (read by no formula since HP moved to VIT) ·
-`Species.template` (written at genesis, read by nothing until 6b stage 3c puts it
-on the player and on mass foes).
+`Species.template` for everyone but the player (the climber's copy,
+`speciesTemplate`, is a `finalAbilities` layer; villagers and foes read nothing
+until 6b stage 3c-ii).
 
 **Cleared by the claim path.** — *"`CharacterSheet.signets`: never written by
 any code path … the whole branch is inert in play"* was **reversed on
@@ -825,7 +826,7 @@ nothing outside tests"* was true until `3506255`. A wing's danger is
 seeded ([floorgen.ts:535](src/world/floorgen.ts:535)) and its loot comes from
 what the model named out of `LOOT_CATEGORIES`
 ([floorgen.ts:552](src/world/floorgen.ts:552)). The genesis tower still has
-neither ([genesis.ts:627](src/session/genesis.ts:627)), which means the
+neither ([genesis.ts:630](src/session/genesis.ts:630)), which means the
 ruleset's curve and the ordinary table — identity, not a gap.
 
 ### A knock-on
@@ -880,9 +881,9 @@ Every balance number, and where it lives.
 
 | knob | value | file |
 |---|---|---|
-| point buy budget / min / max | 40 / 8 / 15 | [sheet.ts:167](src/session/sheet.ts:167) |
-| HP at first / per level | 10 / 6 (+VIT mod each) | [sheet.ts:262](src/session/sheet.ts:262) |
-| pool base / per level | 8 / 2 | [sheet.ts:310](src/session/sheet.ts:310) |
+| point buy budget / min / max | 40 / 8 / 15 | [sheet.ts:175](src/session/sheet.ts:175) |
+| HP at first / per level | 10 / 6 (+VIT mod each) | [sheet.ts:271](src/session/sheet.ts:271) |
+| pool base / per level | 8 / 2 | [sheet.ts:319](src/session/sheet.ts:319) |
 | skill cost floor / ceiling | 1 / 12 | [pools.ts:54](src/skills/pools.ts:54) |
 | turn length in ticks / min action | 6 / 2 | [tempo.ts:25](src/combat/tempo.ts:25) |
 | drift threshold / decay | 6 / 1 | [drift.ts:44](src/character/drift.ts:44) |
@@ -987,7 +988,7 @@ arrives with quests (DESIGN step 7).
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
-([genesis.ts:627](src/session/genesis.ts:627)); the only writer of
+([genesis.ts:630](src/session/genesis.ts:630)); the only writer of
 `Region.exits` is a way out found in play ([delta.ts:256](src/play/delta.ts:256)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
