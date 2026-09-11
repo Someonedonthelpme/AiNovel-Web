@@ -107,7 +107,9 @@ export function beginEncounter(state: PlayState): PlayState {
 
   const foes = buildEncounter({
     danger,
-    kind: kindForFloor(danger),
+    // A landmark is a DEPTH, not a danger level: the two part ways in any world
+    // whose curve is not the identity, and a stratum can set its own.
+    kind: kindForFloor(region?.floor ?? 0),
     names: region?.creatures,
     grid,
     origin: { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },

@@ -392,3 +392,19 @@ test('a pool never comes back above its ceiling by fighting', () => {
   assert.ok(done.state.pc.stamina <= start.pc.stamina, 'a fight cannot refill you');
   assert.ok(done.state.pc.mana <= start.pc.mana);
 });
+
+test('a boss is every tenth FLOOR, not every tenth danger level', () => {
+  // Step 6 decoupled danger from depth, and `kindForFloor` kept being handed
+  // danger — so a steep world met bosses early and a quiet one never did.
+  const at = (floor: number, danger: number): PlayState => {
+    const base = playState();
+    const region: Region = { ...groundFloor(), id: `floor-${floor}`, floor, danger, creatures: [] };
+    return { ...base, world: { ...base.world, currentRegion: region.id, regions: { [region.id]: region }, currentPlace: 'town' } };
+  };
+  // With no creature names, a foe is called by its role.
+  const foes = (s: PlayState) =>
+    Object.values(beginEncounter(s).combat?.combatants ?? {}).filter((c) => c.side !== 'party').map((c) => c.name);
+
+  assert.ok(!foes(at(5, 10)).includes('boss'), 'danger 10 on floor 5 is no landmark');
+  assert.ok(foes(at(10, 1)).includes('boss'), 'floor 10 is, however quiet');
+});
