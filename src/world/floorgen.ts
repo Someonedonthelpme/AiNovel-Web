@@ -41,6 +41,7 @@ import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
+import { rulesOf } from '../rules/ruleset.ts';
 
 /**
  * Generating a tower floor.
@@ -179,11 +180,11 @@ function styleRule(language: 'th' | 'en'): string {
   ].join(' ');
 }
 
-function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: number; max: number }): string {
+function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: number; max: number }, danger: number): string {
   return [
     `You are building floor ${floor} of an endless tower, in ${LANGUAGE_NAME[language]}.`,
     styleRule(language),
-    `This floor is a REGION with its own biome and character. Danger level ${dangerFor(floor)}.`,
+    `This floor is a REGION with its own biome and character. Danger level ${danger}.`,
     'Deeper floors are stranger and more hostile than shallow ones.',
     'One place is the arrival point from the floor below, and one is the way up;',
     'both have kind "gate", and they must be different places.',
@@ -272,6 +273,10 @@ export async function generateFloor(
   // `descend` before anything is ever asked of a generator.
   if (floor === 0) throw new Error('floor 0 is the authored ground, not generated');
 
+  // This world's dials. `dangerFor(floor)` was called bare here, so they never
+  // reached a generated floor.
+  const danger = dangerFor(floor, rulesOf(world));
+
   const canon = gazetteer
     ? rehydrationBrief(world, gazetteer)
     : { people: [], facts: [] as string[] };
@@ -281,7 +286,7 @@ export async function generateFloor(
     schema: floorSchema(floor),
     temperature: 0.9,
     messages: [
-      { role: 'system', content: systemPrompt(floor, world.language, settlementBudget(floor)) },
+      { role: 'system', content: systemPrompt(floor, world.language, settlementBudget(floor), danger) },
       {
         role: 'user',
         content: userPrompt(floor, world, sheet, gazetteer, {
@@ -313,7 +318,7 @@ export async function generateFloor(
     name: gazetteer?.name ?? generated.name,
     biome: gazetteer?.biome ?? generated.biome,
     culture: generated.culture,
-    danger: dangerFor(floor),
+    danger,
     places,
     entrance: generated.entrance,
     exit: generated.exit,

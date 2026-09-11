@@ -9,6 +9,7 @@ import type { GeneratedFloor } from './floorgen.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, person, world } from './fixtures.ts';
 import { activeRegion } from './travel.ts';
+import { STANDARD } from '../rules/ruleset.ts';
 import { validateRegion } from './validate.ts';
 import { isFull } from './types.ts';
 
@@ -159,4 +160,13 @@ test('the rehydration brief puts the established canon in front of the model', a
   assert.match(sent, /same place/);
   assert.match(sent, /the snare you never checked/);
   assert.match(sent, /The Grey Grove/);
+});
+
+test('a generated floor takes its danger from the world, not from the default dial', async () => {
+  // `dangerFor(floor)` was called here with NO ruleset, so a world's own danger
+  // curve never reached the floors it was meant to shape — HARSH generated
+  // exactly the same floor as PLAIN.
+  const steep = world({ rules: { ...STANDARD, world: { ...STANDARD.world, dangerPerFloor: 3 } } });
+  const sharp = await generateFloor(provider(), steep, 4, pc);
+  assert.equal(sharp.region.danger, 12, "the world's own curve, not the default one");
 });
