@@ -11,6 +11,7 @@ import { firstFloor, person, world } from './fixtures.ts';
 import { activeRegion } from './travel.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import { validateRegion } from './validate.ts';
+import { dangerAt } from './strata.ts';
 import { isFull } from './types.ts';
 
 const pc = sheet();
@@ -249,4 +250,28 @@ test('a floor may begin a wing, and the engine decides its shape', async () => {
 
   const quiet = await generateFloor(provider(generated()), inTower, 4, pc);
   assert.equal(quiet.stratum, undefined, 'and most floors begin nothing at all');
+});
+
+test('a wing gets a seeded danger curve, and a loot profile from the closed list', async () => {
+  // Stratum.danger and Stratum.loot had readers and no writer outside tests.
+  // Danger is a number, so the seed decides it; what a wing is known for is a
+  // word, so the model names it from LOOT_CATEGORIES and the engine weighs it.
+  const opening = generated({ wingName: 'The Sunken Wing', wingFloors: 3, wingKnownFor: ['weapon', 'sword-of-doom'] });
+  const inTower = world({ strata: { tower: { id: 'tower', name: 'the tower', kind: 'dynamic', from: 0 } } });
+
+  const wing = (await generateFloor(provider(opening), inTower, 4, pc)).stratum!;
+  const withWing = { ...inTower, strata: { ...inTower.strata, [wing.id]: wing } };
+  const swing = dangerAt(withWing, 4) - dangerAt(inTower, 4);
+  assert.ok(wing.danger, 'a wing has its own curve');
+  assert.ok(swing >= -2 && swing <= 3, `a seeded swing on the danger where it opens, got ${swing}`);
+
+  const again = (await generateFloor(provider(opening), inTower, 4, pc)).stratum!;
+  assert.deepEqual(again.danger, wing.danger, 'same seed, same wing, same curve');
+
+  assert.equal(wing.loot?.weights?.weapon, 3, 'known for what it named');
+  assert.equal(wing.loot?.weights?.book, 0.5, 'and thinner in the rest');
+  assert.ok(!('sword-of-doom' in (wing.loot?.weights ?? {})), 'a word outside the list is ignored');
+
+  const plain = (await generateFloor(provider(generated({ wingName: 'The Cellar', wingFloors: 2 })), inTower, 4, pc)).stratum!;
+  assert.equal(plain.loot, undefined, 'a wing known for nothing pays from the ordinary table');
 });

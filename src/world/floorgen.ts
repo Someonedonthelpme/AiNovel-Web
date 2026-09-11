@@ -44,6 +44,10 @@ import { validateRegion } from './validate.ts';
 import { dangerAt, stratumAt } from './strata.ts';
 import type { Stratum } from './types.ts';
 import { speciesIdFor } from '../character/species.ts';
+import { mulberry32 } from '../engine/roll.ts';
+import { LOOT_CATEGORIES } from '../items/catalogue.ts';
+import type { LootCategory, LootProfile } from '../items/catalogue.ts';
+import { rulesOf } from '../rules/ruleset.ts';
 
 /**
  * Generating a tower floor.
@@ -131,6 +135,8 @@ export function floorSchema(floor: number) {
        */
       wingName: str,
       wingFloors: { type: 'integer', minimum: 1, maximum: 6 },
+      /** What the wing is KNOWN for finding, from a closed list. Empty for most. */
+      wingKnownFor: { type: 'array', items: { type: 'string', enum: [...LOOT_CATEGORIES] }, maxItems: 2 },
       /** Who these people already are to each other. The template decides what that COSTS. */
       bonds: {
         type: 'array',
@@ -138,7 +144,7 @@ export function floorSchema(floor: number) {
         items: obj({ a: str, b: str, role: str }, ['a', 'b', 'role']),
       },
     },
-    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds', 'wingName', 'wingFloors'],
+    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds', 'wingName', 'wingFloors', 'wingKnownFor'],
   );
 }
 
@@ -146,6 +152,7 @@ export type GeneratedFloor = {
   /** A wing this floor opens. Empty when it opens none, which is most floors. */
   wingName?: string;
   wingFloors?: number;
+  wingKnownFor?: string[];
   name: string;
   biome: string;
   culture: string;
@@ -206,7 +213,8 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
     'wingName is EMPTY on almost every floor. Name one only when this floor is',
     'plainly the mouth of somewhere else — a dungeon, a sunken quarter, a sealed',
     'ward — and say in wingFloors roughly how far it runs. Where it sits and how',
-    'far it really runs are decided outside you.',
+    'far it really runs are decided outside you. If it is known for finding',
+    'something, name at most two kinds in wingKnownFor; otherwise leave it empty.',
     'One place is the arrival point from the floor below, and one is the way up;',
     'both have kind "gate", and they must be different places.',
     'Every connection must be listed on BOTH places it joins.',
@@ -471,12 +479,13 @@ export async function generateFloor(
     throw new Error(`generated floor ${floor} is unplayable: ${check.errors.map((e) => e.message).join('; ')}`);
   }
 
+  const wing = wingOf(generated, floor, region, stratum, world);
   return {
     region,
     people,
     edges: bondsAmong(openingEdges({}, arrivals), rolesOf(world), people, generated.bonds ?? [], repairs),
     creatures: generated.creatures,
-    ...(wingOf(generated, floor, region, stratum) ? { stratum: wingOf(generated, floor, region, stratum) } : {}),
+    ...(wing ? { stratum: wing } : {}),
     repairs,
     warnings: check.warnings.map((w) => w.message),
   };
@@ -493,21 +502,57 @@ export async function generateFloor(
  * indistinguishable from ordinary floors.
  */
 function wingOf(
-  generated: GeneratedFloor, floor: number, region: Region, parent: Stratum | null,
+  generated: GeneratedFloor, floor: number, region: Region, parent: Stratum | null, world: World,
 ): Stratum | undefined {
   const name = (generated.wingName ?? '').trim();
   if (!name || EMPTY_WING.has(name.toLowerCase())) return undefined;
 
   const floors = Math.max(1, Math.min(6, Math.round(generated.wingFloors ?? 1)));
+  const id = `wing-${floor}`;
+  const loot = lootKnownFor(generated.wingKnownFor ?? []);
   return {
-    id: `wing-${floor}`,
+    id,
     name,
     kind: 'static',
     ...(parent ? { parent: parent.id } : {}),
     from: floor,
     to: floor + floors - 1,
+    danger: wingDanger(world, floor, parent, id),
     theme: { biome: region.biome, culture: region.culture, people: region.culture },
+    ...(loot ? { loot } : {}),
   };
+}
+
+/**
+ * A wing's danger curve: where it opens, nudged by the seed.
+ *
+ * A number, so the SEED decides it and never the model. The swing (−2..+3) is
+ * keyed on the world and the wing's id, so a replay draws the same curve, and it
+ * lands on the danger at the floor the wing opens — a wing is a harder or a
+ * quieter pocket of where you already are, not a jump to somewhere else. The
+ * slope is whatever the floor already climbs at.
+ */
+function wingDanger(world: World, floor: number, parent: Stratum | null, id: string): { base: number; perFloor: number } {
+  let hash = (world.seed ^ 0x3a9e) >>> 0;
+  for (const ch of id) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  const swing = Math.floor(mulberry32(hash)() * 6) - 2;
+
+  const perFloor = parent?.danger?.perFloor ?? rulesOf(world).world.dangerPerFloor;
+  return { base: dangerAt(world, floor) + swing - floor * perFloor, perFloor };
+}
+
+/**
+ * What a wing is known for, as weights on the ordinary table.
+ *
+ * The model NAMES categories from `LOOT_CATEGORIES`; anything else is dropped,
+ * and naming nothing leaves the ordinary table untouched. What it named is three
+ * times as likely, everything else half as likely — so a wing known for blades
+ * is somewhere you go FOR blades, and pays thinner in the rest.
+ */
+function lootKnownFor(named: readonly string[]): LootProfile | undefined {
+  const known = [...new Set(named)].filter((c): c is LootCategory => (LOOT_CATEGORIES as readonly string[]).includes(c)).slice(0, 2);
+  if (known.length === 0) return undefined;
+  return { weights: Object.fromEntries(LOOT_CATEGORIES.map((c) => [c, known.includes(c) ? 3 : 0.5])) };
 }
 
 /** What a model writes when it means "this floor opens nothing". */
