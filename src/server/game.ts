@@ -563,6 +563,24 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
 export type ClimbOutcomeView = { view: GameView; error: string | null; arrived: string | null };
 
 /**
+ * Where a climb request asks to go: a named way out, or the stair when it names none.
+ *
+ * An empty body is the stair — that is what a request without one has always
+ * meant. A body that does not parse is REFUSED: turning it into `{}` climbed the
+ * stair, so a broken request moved the player instead of failing.
+ */
+export function climbTarget(text: string): { to?: string; error?: string } {
+  let body: unknown = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    return { error: `malformed climb request: ${text.slice(0, 80)}` };
+  }
+  const to = (body as { to?: unknown } | null)?.to;
+  return { to: typeof to === 'string' ? to : undefined };
+}
+
+/**
  * Cross out of this region.
  *
  * `to` names a way out that is not a stair; without it this is the stair up,
