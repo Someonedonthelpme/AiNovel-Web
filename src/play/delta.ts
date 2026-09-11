@@ -19,6 +19,7 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
 import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
+import type { CombatAction } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
@@ -428,7 +429,7 @@ function edgesAfter(state: PlayState, record: TurnRecord): Edges | undefined {
  * things it already resolves. A deed inferred from prose would be a model
  * deciding a consequence, which is the one thing this codebase does not allow.
  */
-function deedsIn(state: PlayState, record: TurnRecord): Deed[] {
+function deedsIn(state: PlayState, record: TurnRecord, killed: number): Deed[] {
   const at = state.world.currentPlace;
   const out: Deed[] = [];
 
@@ -459,6 +460,10 @@ function deedsIn(state: PlayState, record: TurnRecord): Deed[] {
 
   // Drawing on somebody is the plainest deed there is — being jumped is not one.
   if (record.delta.startCombat && record.delta.startedBy !== 'them') out.push({ kind: 'drewOn', doer: PLAYER, at });
+
+  // A kill is seen whoever started it. One deed per fight, not per body: a mass
+  // foe is nobody in particular, and three rats are not three times the notoriety.
+  if (killed > 0) out.push({ kind: 'killed', doer: PLAYER, at });
 
   return out;
 }
@@ -538,6 +543,7 @@ export type TurnOutcome = {
 
 export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   let moved = applyDelta(state, record.delta);
+  let killed = 0;
 
   if (record.delta.startCombat) {
     const fight = beginEncounter(moved);
@@ -548,7 +554,9 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
       for (const action of record.combatActions) {
         fighting = takeCombatAction(fighting, action).state;
       }
-      moved = concludeCombat(fighting).state;
+      const outcome = concludeCombat(fighting);
+      moved = outcome.state;
+      killed = outcome.killed.length;
     } else {
       // LIVE. The fight is opened and left running; the caller drives it, and
       // records the decisions onto this turn when it ends.
@@ -572,7 +580,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
 
   const player = applyDrift(moved.sheet, causes.pc, rules, kindOf(moved.sheet));
   let world = afterTraffic(
-    afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record), rules),
+    afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record, killed), rules),
     rules,
   );
   let shifts: AxisChange[] = [];
@@ -594,6 +602,20 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   const awarded = awardTraits(traitsFor(drifted.world.seed, traitOriginOf(drifted)), drifted.sheet, drifted.pc.inventory);
 
   return { state: { ...drifted, sheet: awarded.sheet }, shifts, earned: awarded.earned };
+}
+
+/**
+ * A live fight's end: what the server writes, and the state it saves.
+ *
+ * Re-folded from the state BEFORE the turn rather than concluded from the fight
+ * as it stands. The live turn ran drift, deeds and traits when the fight OPENED,
+ * replay runs them after it ends — and a kill is a deed, so the two orders no
+ * longer agree. Folding the finished record is what replay does, so the saved
+ * state and the log cannot disagree.
+ */
+export function settleFight(fight: { pre: PlayState; draft: TurnRecord; actions: readonly CombatAction[] }) {
+  const record: TurnRecord = { ...fight.draft, combatActions: [...fight.actions] };
+  return { record, state: applyTurn(fight.pre, record).state };
 }
 
 export function foldPlay(initial: PlayState, events: readonly { kind: string }[]): PlayState {

@@ -6,8 +6,12 @@ import {
   concludeCombat, notableEvents, takeCombatAction,
 } from './combat.ts';
 import type { CombatAction } from './combat.ts';
-import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
+import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
 import { xpToNext } from './progress.ts';
+import { COUNTERS } from './traits.ts';
+import { counterOf } from '../character/persona.ts';
+import { believes } from '../character/belief.ts';
+import { PLAYER } from '../social/edge.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
@@ -295,6 +299,22 @@ test('replaying a fight from the log reaches the same place as playing it', () =
   assert.equal(replayed.pc.hp, played.state.pc.hp, 'the log must reproduce the fight that was fought');
   assert.deepEqual(replayed.sheet.counters, played.state.sheet.counters);
   assert.deepEqual(replayed.ended, played.state.ended);
+});
+
+test('a kill is a deed the people standing there saw', () => {
+  const start = winnable();
+  const { actions } = fightItOut(openFight(start));
+  const after = applyTurn(start, combatTurn(actions)).state;
+  assert.ok(counterOf(after.sheet.counters, COUNTERS.kills) > 0, 'something has to have died');
+  assert.ok(believes(after.world.people['smith'].beliefs ?? [], { kind: 'deed', who: PLAYER, what: 'killed' }));
+});
+
+test('a fight played live ends exactly where its replay does', () => {
+  const start = winnable();
+  const draft: TurnRecord = { ...combatTurn([]), combatActions: undefined };
+  const { actions } = fightItOut(applyTurn(start, draft).state);   // driven as the server drives it
+  const live = settleFight({ pre: start, draft, actions });
+  assert.deepEqual(live.state, foldPlay(start, [live.record]));
 });
 
 test('a fight leaves nothing half-finished behind it', () => {

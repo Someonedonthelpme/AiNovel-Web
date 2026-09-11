@@ -23,8 +23,9 @@ import { visibleSignets } from '../play/signet.ts';
 import { signetsFor } from '../play/signetbook.ts';
 import { climb, exitStatus, travelTo } from '../play/climb.ts';
 import {
-  awaitingPlayer, combatOptions, concludeCombat, notableEvents, takeCombatAction,
+  awaitingPlayer, combatOptions, notableEvents, takeCombatAction,
 } from '../play/combat.ts';
+import { settleFight } from '../play/delta.ts';
 import type { CombatAction } from '../play/combat.ts';
 import { initialPlayState } from '../play/state.ts';
 import type { Mode, PlayState, TurnRecord } from '../play/state.ts';
@@ -408,7 +409,14 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
  * restart mid-fight loses that turn, which for a local single-player game is a
  * fair trade against writing a half-finished fight into the history.
  */
-type ActiveFight = { state: PlayState; draft: TurnRecord; actions: CombatAction[]; log: string[] };
+type ActiveFight = {
+  /** Before the turn that opened the fight — its end is re-folded from here (`settleFight`). */
+  pre: PlayState;
+  state: PlayState;
+  draft: TurnRecord;
+  actions: CombatAction[];
+  log: string[];
+};
 
 /**
  * Held on `globalThis` rather than in a module variable.
@@ -540,7 +548,7 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
   // A fight is one event, and its record cannot be written until the decisions
   // are known. Hold it open and let the caller drive it.
   if (result.state.combat && !result.state.combat.over) {
-    fights.set(id, { state: result.state, draft: result.record, actions: [], log: [] });
+    fights.set(id, { pre: state, state: result.state, draft: result.record, actions: [], log: [] });
     return {
       view: viewOf(id, result.state, await transcriptOf(id), []),
       prose: result.record.prose,
@@ -666,21 +674,22 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   }
 
   // Over. Fold the consequences out, write the turn, and forget the encounter.
-  const outcome = concludeCombat(fight.state);
-  const record: TurnRecord = { ...fight.draft, combatActions: fight.actions };
-  const seq = await appendTurn(id, record);
-  await saveSnapshot(id, outcome.state);
+  const settled = settleFight(fight);
+  const seq = await appendTurn(id, settled.record);
+  await saveSnapshot(id, settled.state);
   fights.delete(id);
 
+  const combat = fight.state.combat;
+  const down = Object.values(combat?.combatants ?? {}).filter((c) => c.side === 'foe' && c.dead).length;
   const tail = [
     ...fight.log,
-    outcome.victor === 'party'
-      ? `You are still standing. ${outcome.killed.length} down.`
+    combat?.victor === 'party'
+      ? `You are still standing. ${down} down.`
       : 'You do not get back up.',
   ];
   void seq;
 
-  return { view: viewOf(id, outcome.state, await transcriptOf(id), tail), error: null, finished: true };
+  return { view: viewOf(id, settled.state, await transcriptOf(id), tail), error: null, finished: true };
 }
 
 /** Whether a fight is waiting on the player, e.g. after a page reload. */
