@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3c-i shipped (`settleFight`, `killed` deed, ambush, species templates, their reader, the climber's and mass foes' templates); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3c shipped; stage 3 re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -135,6 +135,50 @@ Decided with the user:
   reward is* — `resist` and `discount` are not built yet, so templates start as
   ability shifts).
 
+**Decided with the user, 2026-09-12** (supersedes *Species are a three-level
+hierarchy* above, its scale line, and stage 9; spikes in the session that
+decided it):
+
+- **Four levels, every living thing at the leaf** — like *Homo sapiens
+  sapiens*: **type → group → species → subspecies**. Types stay the eight closed,
+  authored `TYPES`; the seed picks 3–5, then 2–4 groups per type, 1–3 species per
+  group, 1–3 subspecies per species (spike: median 87 entries, 47 subspecies). The
+  climber and every person carry a SUBSPECIES id; the levels above are derived.
+- **No ~60 cap.** Nothing reads the whole list (the Director sees one person's
+  kind, drift one kind, floorgen one id) and storage is a few KB. The real costs
+  are the naming call and the picker; if naming is slow, name per type.
+- **Leans are dynamic and pass down.** Type, species and subspecies each add a
+  seeded delta on 2–4 stats summing to zero; a subspecies' template is the sum
+  down its path. Nothing is fixed per type. **A group adds no delta** — its
+  purpose is to categorise, not to be a step of evolution.
+- **Disadvantage is allowed.** Fairness does not make a single-player game fun;
+  a subspecies may be weaker. The one rule kept: the picker SHOWS each
+  subspecies' template, so a disadvantage is chosen, never handed out silently
+  (folk's −15 points was a trap because nobody chose it).
+- **A group has five mechanics**, none of them stat math:
+  1. **Body plan** — the slots a body has (hands, hooves, wings), overriding the
+     ruleset's one body per world (`items/types.ts:30`): what it can wear and wield.
+  2. **Habitat** — home biomes or strata; floorgen draws a floor's creatures from
+     the groups that live there, and a pack is one group.
+  3. **Kinship** — same-group people start with more familiarity and trust and
+     pass news faster between them; other groups start cooler.
+  4. **Law** — a group can be a law's subject (`forbids`), joining 6c's
+     `territory` axis ("the hollow may not hold land").
+  5. **Predator and prey** — an attack edge against a prey group.
+- **Species have their own skill.** Type = the GRAMMAR (what kind of skill it
+  may be — undead drain and frighten, a construct never heals); species = one
+  signature skill from `composeSkill` (`skills/compose.ts:432`), keyed to the
+  stat its template raises most; subspecies = a variant of it (budget or stat).
+  **The AI does not use skills** (`combat/ai.ts` has none), so foes carry theirs
+  unused until step 9 rebuilds the AI with companions — listed in the dead-field
+  ledger until then.
+- **The matchup chart** is subspecies against subspecies, a REPORT (`npm run
+  chart`), not a pass/fail test — there is no fairness for a test to fail on,
+  and cycles are not required. Fighters are built from SHEETS (`toCombatant` +
+  template), because a foe's HP comes from danger and its `vit` would count for
+  nothing. It runs on a build matrix (str melee, dex ranged, caster, tank) with
+  the engine's own AI, not one fixed build taking its first option.
+
 **Stages** (each starts with one failing test the user approves; `npm run fight`
 after any that touches a fight):
 
@@ -151,11 +195,20 @@ after any that touches a fight):
    to zero INCLUDING the lean; today's ids kept) · **3b shipped** (`readSpecies`: a tolerant reader for
    stored worlds; an unknown untyped id throws) · **3c-i shipped** (the climber carries `speciesTemplate`, a `finalAbilities` layer; no choice means folk's) · **3c-ii shipped** (mass foes carry the template of a species picked from their name, `foeSpecies`) — its simulation found the humanoid lean costs every default climber 15–19 points of win rate; see the open question below · 3c-ii originally: templates reach mass foes, with a fight
    simulation (a zero sum can still be stronger in a fight: `str` outweighs
-   `cha`) · 3d the seed picks 3–5 types and 2–4 species each, model-named ·
-   3e dominant species replaces folk, grouped picker · then the signature skill.
-   Originally: genesis naming; the player's template;
-   mass foes use template × role × danger; the grouped picker; a tolerant reader
-   for today's four kinds.
+   `cha`) · the lean fix shipped (`27da4db`). **Re-planned 2026-09-12** after
+   the four-level decision above; each is test-first:
+   - **3d** the build-matrix harness and `npm run chart` — first, so every later
+     step is measured by a player with more than one build.
+   - **3e** the tree: type → group → species → subspecies, dynamic leans passed
+     down, every person and the climber at a subspecies, `readSpecies` mapping
+     today's five ids onto it.
+   - **3f** model naming at genesis, words only.
+   - **3g** a dominant subspecies replaces folk; the grouped picker shows each
+     template.
+   - **3h** species skills: type grammar, species skill, subspecies variant —
+     the player's only, until step 9.
+   - **3i–3m** the group mechanics, one each: body plan, habitat, kinship, law
+     (may wait for 6c's `territory` axis), predator and prey.
 4. **Epic foes** — species + one mutation, on landmark floors.
 5. **Notable foes are existing people** — `Person.sheet` gets its first writer.
 6. **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
@@ -165,7 +218,8 @@ after any that touches a fight):
    their account; a returning survivor covers "mass escalates to notable".
 8. **Parley** — a Director turn inside a fight, its verdict recorded in the
    action so the fight stays one replayable event.
-9. **Subspecies** — deferred until a world needs them, if stage 3 runs long.
+9. ~~**Subspecies** — deferred until a world needs them.~~ Folded into stage 3
+   (2026-09-12): every living thing is at a subspecies.
 
 **Out of scope here:** recruiting stops at a `stance` of *willing to join*;
 joining the party is step 9 (companions).
@@ -175,7 +229,11 @@ differ — accept, revisit with real worlds. **Open (measured 2026-09-11, 3c-ii)
 a zero-sum template is not fight-neutral. The humanoid lean `cha +2 / vit −2`
 cost a default climber 1 max HP (11 → 10.2) and 15–19 points of win rate at
 danger 1–4 over 300 seeds; `vit` is the only source of HP, so any lean touching
-it swings a fight hard. Decided with the user: leans and shifts trade within a group (body `str dex agi`, mind `con int wis cha luk`) and never touch `vit` — folk went from −15..−19 to −1..−5. Still open: body leans are not even either (`agi −2` costs 5–9 points, `agi +2` gains ~1; `str` gains 3–15), so construct is weaker in a fight. Parley is the only stage that puts a
+it swings a fight hard. Decided with the user: leans and shifts trade within a group (body `str dex agi`, mind `con int wis cha luk`) and never touch `vit` — folk went from −15..−19 to −1..−5. Body leans were still uneven (`agi −2` costs 5–9 points, `agi +2` gains ~1; `str` gains 3–15).
+**Open after 2026-09-12:** whether that body/mind/no-`vit` rule survives
+dynamic leans now that disadvantage is allowed (the spikes let a lean touch any
+stat, and reached ±6 on one ability of a subspecies); and whether a subspecies
+gets a per-ability cap. Parley is the only stage that puts a
 model call inside a fight, which is why it is last and the rest stand without it.
 
 ## The persistent world — decided, not built
