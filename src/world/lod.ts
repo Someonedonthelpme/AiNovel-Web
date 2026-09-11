@@ -1,6 +1,7 @@
 import { trustToward } from '../social/edge.ts';
 import type { Gazetteer, PersonId, Region, RegionId, World } from './types.ts';
 import { isFull } from './types.ts';
+import { isStatic } from './strata.ts';
 
 /**
  * Tiered persistence — how "every floor is a persistent region" stays
@@ -60,6 +61,15 @@ export function compressExcept(world: World, keep: RegionId[], turn: number): Wo
   const regions = { ...world.regions };
   for (const [id, record] of Object.entries(world.regions)) {
     if (kept.has(id) || !isFull(record)) continue;
+    // A STATIC stratum is authored once and frozen. Compression is the only
+    // thing that throws detail away, so not compressing IS the freeze: the
+    // floor is still there, exactly as written, and never needs rebuilding.
+    //
+    // ponytail: a frozen world therefore holds every floor it has ever shown
+    // you, in full, in one jsonb blob. Fine for a twenty-floor tower, which is
+    // the case this exists for. Page them out of the snapshot and rebuild from
+    // the generation events in the log if a static world ever runs long.
+    if (isStatic(world, record.floor)) continue;
     // The standing you earned here travels with the summary. It lives on the
     // World so it survives rehydration too; this copy is what the returning
     // brief reads, and it is `Gazetteer.reputation`'s first writer ever.

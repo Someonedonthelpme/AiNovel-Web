@@ -34,6 +34,9 @@ export default function NewCharacter() {
   // presets, so the dials a world is born under are a choice rather than a
   // constant nobody could reach.
   const [rules, setRules] = useState<'standard' | 'plain' | 'harsh'>('standard');
+  // Whether the tower is authored once and frozen, or rebuilt as you return to
+  // it. A frozen world never spends a model call on a floor twice.
+  const [structure, setStructure] = useState<'dynamic' | 'static'>('dynamic');
   const [answers, setAnswers] = useState<Answers>({});
   const [step, setStep] = useState(0);
 
@@ -100,7 +103,7 @@ export default function NewCharacter() {
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, answers, draft, seed, rules }),
+        body: JSON.stringify({ language, answers, draft, seed, rules, structure }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'generation failed');
@@ -201,6 +204,25 @@ export default function NewCharacter() {
             </button>
           ))}
         </div>
+        <div className="chips" style={{ marginTop: '0.6rem' }}>
+          {([
+            ['dynamic', 'a living tower'],
+            ['static', 'a fixed tower'],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              className={structure === id ? 'chip on' : 'chip'}
+              onClick={() => setStructure(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
+          {structure === 'static'
+            ? 'A fixed tower is written once. Come back to a floor and it is the same floor, down to the doorways.'
+            : 'A living tower is rewritten from what it was when you return to it.'}
+        </p>
         <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
           {rules === 'plain'
             ? 'Nothing presses on you: no soak, no drift, no carry limit, every floor as dangerous as the first.'

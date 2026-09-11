@@ -107,6 +107,20 @@ test('a world is born under a named ruleset, and records the one it got', async 
   assert.equal(junk.world.rules?.world.dangerPerFloor, STANDARD.world.dangerPerFloor);
 });
 
+test('a world is born holding one structure, and it can be a frozen one', async () => {
+  // `World.strata` needs a writer or it is one more field that looks like a
+  // mechanic and does nothing. Every world gets its tower; whether that tower
+  // is FROZEN — authored once, never rebuilt behind you — is a creation choice.
+  const ordinary = await runGenesis(wholeGenesis(), completed(), 42);
+  const tower = ordinary.world.strata?.['tower'];
+  assert.ok(tower, 'every world holds at least the structure it is climbing');
+  assert.equal(tower.kind, 'dynamic');
+  assert.equal(tower.from, 0, 'the ground is part of the tower, not a separate hub');
+
+  const frozen = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'static');
+  assert.equal(frozen.world.strata?.['tower'].kind, 'static');
+});
+
 test('Session Zero produces a valid character and a playable ground floor', async () => {
   const result = await runGenesis(wholeGenesis(), completed(), 42);
 

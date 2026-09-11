@@ -92,3 +92,27 @@ test('a hundred floors compress to a bounded number of full regions', () => {
   assert.equal(f.full, 2, 'only the current floor and the one below stay in full detail');
   assert.equal(f.gazetteer, 98);
 });
+
+test('a static stratum is never compressed, which is what frozen means', () => {
+  // "Static floor = authored once by the model, then FROZEN. Never rehydrated."
+  // Compression is the only thing that throws detail away, so declining to
+  // compress IS the freeze — the floor stays exactly as it was authored and no
+  // second generation event is ever needed.
+  const frozen = world({
+    strata: { vault: { id: 'vault', name: 'The Vault', kind: 'static', from: 0, to: 5 } },
+    regions: { 'floor-0': groundFloor(), 'floor-1': { ...groundFloor(), id: 'floor-1', floor: 1 } },
+    currentRegion: 'floor-0',
+  });
+
+  const after = compressExcept(frozen, ['floor-0'], 9);
+  assert.equal(after.regions['floor-1'].detail, 'full', 'a frozen floor keeps its geometry');
+
+  const ordinary = world({
+    regions: { 'floor-0': groundFloor(), 'floor-1': { ...groundFloor(), id: 'floor-1', floor: 1 } },
+    currentRegion: 'floor-0',
+  });
+  assert.equal(
+    compressExcept(ordinary, ['floor-0'], 9).regions['floor-1'].detail, 'gazetteer',
+    'while an ordinary floor still compresses behind you',
+  );
+});

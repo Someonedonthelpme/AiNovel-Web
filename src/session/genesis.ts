@@ -28,6 +28,7 @@ import { POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, validateSheet } from '.
 import { sword } from '../combat/fixtures.ts';
 import { presetNamed } from '../rules/ruleset.ts';
 import type { PresetName } from '../rules/ruleset.ts';
+import type { Stratum } from '../world/types.ts';
 
 /**
  * Session Zero generation: an interview in, a validated character and ground
@@ -505,11 +506,22 @@ export type GenesisResult = {
   warnings: string[];
 };
 
+/** What the structure every world starts with is called, before anyone renames it. */
+const TOWER_NAME = { en: 'the tower', th: 'หอคอย' } as const;
+
 export async function runGenesis(
   provider: Provider,
   interview: Interview,
   seed = Date.now(),
   rules: PresetName = 'standard',
+  /**
+   * Whether the tower is authored once and frozen, or rebuilt as you return.
+   *
+   * A creation choice rather than a constant: "a twenty-floor static tower" is
+   * one of the worlds the design asks to be reachable, and a frozen world is
+   * also the cheap one — a floor you come back to costs no model call at all.
+   */
+  structure: Stratum['kind'] = 'dynamic',
 ): Promise<GenesisResult> {
   /*
    * Named FIRST, because the character call lists them and asks which two this
@@ -550,6 +562,13 @@ export async function runGenesis(
      * event rather than something recomputed on load.
      */
     rules: presetNamed(rules),
+    /*
+     * A WORLD HOLDS STRUCTURES; a tower is one kind, and this is the one every
+     * world starts with. It covers floor 0 because the ground town is part of
+     * the tower rather than a hub beside it — the same claim `regionIdFor(0)`
+     * has always made. Sub-strata (a dungeon inside it) nest under this id.
+     */
+    strata: { tower: { id: 'tower', name: TOWER_NAME[interview.language], kind: structure, from: 0 } },
     regions: { 'floor-0': ground.region },
     people: ground.people,
     edges: ground.edges,

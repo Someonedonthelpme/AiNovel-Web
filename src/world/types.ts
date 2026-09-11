@@ -44,6 +44,53 @@ export type Place = {
   discovered: boolean;
 };
 
+export type StratumId = string;
+
+/**
+ * A level above a floor: a tower, a dungeon inside it, an outer world.
+ *
+ * STRATA NEST — "four dungeons inside a twenty-floor tower" makes a dungeon a
+ * sub-stratum, so the plan is a TREE and the innermost stratum containing a
+ * floor is the one that speaks for it. A world need not declare any; the
+ * ruleset dials answer for a world that does not.
+ */
+export type Stratum = {
+  id: StratumId;
+  name: string;
+  /**
+   * Whether this stratum may be generated twice.
+   *
+   * `static` is authored once by the model and then FROZEN — its floors are
+   * never compressed and so never rehydrated, which is what makes coming back
+   * the same place rather than a consistent retelling of it. `dynamic` is
+   * today's behaviour: compressed when you leave, rebuilt from the gazetteer
+   * when you return.
+   */
+  kind: 'static' | 'dynamic';
+  /** The stratum this one sits inside. Absent for a root. */
+  parent?: StratumId;
+  /** The floors it covers, inclusive. `to` absent runs to the top. */
+  from: number;
+  to?: number;
+  /** Its own danger curve. Absent inherits the parent's, then the ruleset's. */
+  danger?: { base: number; perFloor: number };
+  /**
+   * What this stratum IS, in this world's own words.
+   *
+   * Authored once for the whole structure rather than per floor. Without it a
+   * declared stratum is only a range: every floor invented its own biome and
+   * culture, so four floors of one wing read as four unrelated places. The
+   * model is told these and builds inside them; the floor stores them rather
+   * than whatever it proposed instead.
+   */
+  theme?: {
+    biome: string;
+    culture: string;
+    /** Who is found here — a phrase, not a roster. Fed to the people the floor generates. */
+    people: string;
+  };
+};
+
 /** A region held in full detail — the one you are standing in. */
 export type Region = {
   detail: 'full';
@@ -166,6 +213,13 @@ export type World = {
    * anything resolved at generation time could never do.
    */
   rules?: Ruleset;
+  /**
+   * The structures this world holds, if it names any.
+   *
+   * A World HOLDS STRUCTURES; a tower is one kind. Absent means the whole world
+   * is one unnamed stack, which is every world made before this existed.
+   */
+  strata?: Record<StratumId, Stratum>;
   regions: Record<RegionId, RegionRecord>;
   people: Record<PersonId, Person>;
   /**

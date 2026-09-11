@@ -9,6 +9,7 @@ import type { GeneratedFloor } from './floorgen.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, person, world } from './fixtures.ts';
 import { activeRegion } from './travel.ts';
+import { dangerAt } from './strata.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import { validateRegion } from './validate.ts';
 import { isFull } from './types.ts';
@@ -165,8 +166,56 @@ test('the rehydration brief puts the established canon in front of the model', a
 test('a generated floor takes its danger from the world, not from the default dial', async () => {
   // `dangerFor(floor)` was called here with NO ruleset, so a world's own danger
   // curve never reached the floors it was meant to shape — HARSH generated
-  // exactly the same floor as PLAIN.
+  // exactly the same floor as PLAIN. The stratum has the first word, the
+  // world's dials the second.
   const steep = world({ rules: { ...STANDARD, world: { ...STANDARD.world, dangerPerFloor: 3 } } });
   const sharp = await generateFloor(provider(), steep, 4, pc);
   assert.equal(sharp.region.danger, 12, "the world's own curve, not the default one");
+
+  const wing = world({
+    ...steep,
+    strata: { quiet: { id: 'quiet', name: 'The Quiet Band', kind: 'dynamic', from: 3, to: 6, danger: { base: 1, perFloor: 0 } } },
+  });
+  const calm = await generateFloor(provider(), wing, 4, pc);
+  assert.equal(calm.region.danger, 1, 'a quiet band deep in a tower is the whole point of the curve');
+});
+
+test('floors of one stratum are one place, not four unrelated ones', async () => {
+  // A stratum could be DECLARED before this and its floors would still each
+  // invent their own biome and culture, so a Sunken Wing spanning four floors
+  // read as four unconnected places. The stratum's character is authored once
+  // and every floor inside it inherits.
+  const wing = {
+    id: 'wing', name: 'The Sunken Wing', kind: 'static' as const, from: 3, to: 6,
+    theme: { biome: 'flooded stone', culture: 'divers who do not speak', people: 'salvagers' },
+  };
+  const themed = world({ strata: { wing } });
+
+  const lower = await generateFloor(provider(), themed, 4, pc);
+  const upper = await generateFloor(provider(), themed, 5, pc);
+
+  assert.equal(lower.region.biome, 'flooded stone');
+  assert.equal(lower.region.culture, 'divers who do not speak');
+  assert.equal(upper.region.biome, lower.region.biome, 'two floors of one wing are one place');
+
+  // And a floor belonging to no stratum is exactly as it was: the model's own.
+  const loose = await generateFloor(provider(), world(), 4, pc);
+  assert.equal(loose.region.biome, 'dead forest');
+  assert.equal(loose.region.culture, 'poachers and worse');
+});
+
+test('a stratum tells the model what it is building inside', async () => {
+  // Inheriting the words is not enough on its own: a floor whose PROSE was
+  // written for a dead forest and whose biome then says "flooded stone" is
+  // worse than one that simply disagreed.
+  const themed = world({ strata: { wing: {
+    id: 'wing', name: 'The Sunken Wing', kind: 'static' as const, from: 3, to: 6,
+    theme: { biome: 'flooded stone', culture: 'divers who do not speak', people: 'salvagers' },
+  } } });
+
+  const p = provider();
+  await generateFloor(p, themed, 4, pc);
+  assert.match(p.allSentText(), /Sunken Wing/);
+  assert.match(p.allSentText(), /flooded stone/);
+  assert.match(p.allSentText(), /salvagers/);
 });

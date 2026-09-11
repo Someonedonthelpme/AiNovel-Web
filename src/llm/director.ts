@@ -15,6 +15,7 @@ import type { WriterBrief } from './redact.ts';
 import { forbids, ruleClaim, BINDINGS, CONSTRAINTS } from '../rules/ruleset.ts';
 import type { Binding, Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
+import { stratumAt } from '../world/strata.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -332,6 +333,8 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     ? 'The law (you enforce this): they cannot leave this floor'
     : '';
 
+  const here = region ? stratumAt(state.world, region.floor) : null;
+
   const workedOut = CONSTRAINTS
     .filter((c) => believes(state.sheet.beliefs ?? [], ruleClaim(c)))
     .map((c) => LAW_IN_WORDS[c]);
@@ -340,7 +343,10 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     : '';
 
   return [
-    `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0})`,
+    // The STRUCTURE this floor belongs to, when the world names one: a dungeon
+    // inside a tower should read as the dungeon, not as "floor 9".
+    `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0}`
+      + `${here ? `, in ${here.name}` : ''})`,
     `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,

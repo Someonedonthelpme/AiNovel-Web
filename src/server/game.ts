@@ -435,6 +435,8 @@ export async function newGame(
   seed?: number,
   /** Which ruleset this world plays by. Anything unknown falls back to STANDARD. */
   rules?: string,
+  /** Whether the tower is frozen once authored. Anything else means dynamic. */
+  structure?: string,
 ): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
@@ -459,6 +461,7 @@ export async function newGame(
   // answers STANDARD for anything a client makes up.
   const genesis = await runGenesis(
     provider(), interview, seed ?? Date.now() % 2147483647, rules as PresetName | undefined ?? 'standard',
+    structure === 'static' ? 'static' : 'dynamic',
   );
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);
   await saveSnapshot(id, initialPlayState(genesis.world, genesis.sheet));

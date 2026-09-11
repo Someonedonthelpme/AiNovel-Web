@@ -41,7 +41,8 @@ import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
-import { rulesOf } from '../rules/ruleset.ts';
+import { dangerAt, stratumAt } from './strata.ts';
+import type { Stratum } from './types.ts';
 
 /**
  * Generating a tower floor.
@@ -224,6 +225,7 @@ function userPrompt(
   world: World,
   sheet: CharacterSheet,
   gazetteer: Gazetteer | null,
+  stratum: Stratum | null,
   canon: { people: string[]; facts: string[] },
 ): string {
   if (gazetteer) {
@@ -253,7 +255,21 @@ function userPrompt(
     belowName ? `The floor below was "${belowName}".` : '',
     `The world: ${world.regions[regionIdFor(0)]?.name ?? ''}.`,
     `The climber is ${sheet.name}, ${sheet.background.name}.`,
-    'Make this floor feel unlike the one below it.',
+    /*
+     * A floor inside a structure belongs to it.
+     *
+     * "Make this floor feel unlike the one below it" is the right instruction
+     * for an open climb and exactly the wrong one inside a wing meant to read
+     * as one place — so the two are alternatives, never both.
+     */
+    stratum?.theme
+      ? [
+        `This floor is part of ${stratum.name}, and must feel of a piece with the rest of it.`,
+        `Its biome is "${stratum.theme.biome}" and its people are ${stratum.theme.culture}.`,
+        `Who is found here: ${stratum.theme.people}.`,
+        'Vary what is IN it — the rooms, the trouble, who is standing where — never what it is.',
+      ].join('\n')
+      : 'Make this floor feel unlike the one below it.',
   ].filter(Boolean).join('\n');
 }
 
@@ -273,9 +289,12 @@ export async function generateFloor(
   // `descend` before anything is ever asked of a generator.
   if (floor === 0) throw new Error('floor 0 is the authored ground, not generated');
 
-  // This world's dials. `dangerFor(floor)` was called bare here, so they never
-  // reached a generated floor.
-  const danger = dangerFor(floor, rulesOf(world));
+  // The stratum first, then this world's dials. `dangerFor(floor)` was called
+  // bare here, so neither ever reached a generated floor.
+  const danger = dangerAt(world, floor);
+  // The structure this floor belongs to, if any. Its character is authored once
+  // for the whole wing rather than reinvented per floor.
+  const stratum = stratumAt(world, floor);
 
   const canon = gazetteer
     ? rehydrationBrief(world, gazetteer)
@@ -289,7 +308,7 @@ export async function generateFloor(
       { role: 'system', content: systemPrompt(floor, world.language, settlementBudget(floor), danger) },
       {
         role: 'user',
-        content: userPrompt(floor, world, sheet, gazetteer, {
+        content: userPrompt(floor, world, sheet, gazetteer, stratum, {
           people: 'people' in canon ? canon.people.map((p) => `${p.id} "${p.name}": ${p.oneLine}`) : [],
           facts: canon.facts,
         }),
@@ -316,8 +335,11 @@ export async function generateFloor(
     id: regionId,
     floor,
     name: gazetteer?.name ?? generated.name,
-    biome: gazetteer?.biome ?? generated.biome,
-    culture: generated.culture,
+    // Established canon first, then the structure's own character, then what
+    // the model proposed — a returning floor keeps what it was, and a floor in
+    // a wing is the wing's.
+    biome: gazetteer?.biome ?? stratum?.theme?.biome ?? generated.biome,
+    culture: stratum?.theme?.culture ?? generated.culture,
     danger,
     places,
     entrance: generated.entrance,
