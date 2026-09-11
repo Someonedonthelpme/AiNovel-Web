@@ -20,6 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
+| 6b | Enemies after victory | **next** (user's call, 2026-09-11) | nothing built; design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module |
@@ -60,6 +61,37 @@ undocumented when the concepts are covered under other names; a `grep ActiveKind
 implied a deletion had not happened when every hit was a comment describing it;
 and a citation script reported blank lines as end-of-file. Verify the checker
 before trusting what it reports.
+
+## Enemies after victory — decided, not built
+
+Moved here from `~/.claude/plans/so-what-happen-to-delegated-peach.md`, where it
+was paused. Today `concludeCombat` discards the encounter: loot comes off the
+FLOOR's table rather than the body, `region.creatures` is never depleted, and
+`Person.alive` has no `false` writer.
+
+Decided with the user:
+- Encounter kinds `mass | notable | epic`; mass can escalate to notable mid-session.
+- The model names a race; the engine keeps a closed nature. **One taxonomy**: a
+  foe's nature IS its species (`character/species.ts`) — no second vocabulary.
+- Notable and epic foes carry sheets.
+- Parley is a full Director turn whose verdict is RECORDED into the action, so a
+  fight stays one replayable event.
+- Defeat is not death: `killed | yielded | fled | captured`.
+- The ambusher gets the initiative edge.
+- Survivors remember you, tell people, come back, and can be captured or recruited.
+
+**Stage 0 — the ground it stands on** (verified 2026-09-11):
+1. **Live.** `drewOn` is charged to the player on every `startCombat`
+   (`play/delta.ts:458`), so an ambush costs standing for a fight you did not start.
+2. **Live.** `kindForFloor(danger)` (`play/combat.ts:110`, and the fallback at
+   `combat/encounter.ts:82`) feeds DANGER to a parameter meaning depth, so since
+   step 6 "every tenth floor is a boss" means every tenth danger level.
+3. **Latent, not live.** Live combat runs the turn pipeline (drift, deeds,
+   traits) when the fight OPENS (`applyTurn`) and concludes outside it
+   (`server/game.ts:649`); replay runs it after the fight ends. A spike found no
+   divergence today, even with a trait on a kill threshold, because every
+   consequence commutes. It stops commuting the moment a kill carries a
+   consequence — so it is fixed first, before anything attaches to one.
 
 ---
 
