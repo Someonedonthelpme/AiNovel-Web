@@ -140,7 +140,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:114](src/play/combat.ts:114)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:130](src/play/combat.ts:130)); a mass foe is role × danger × its species' template, the species picked by `foeSpecies` from the creature's name ([play/combat.ts:103](src/play/combat.ts:103)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -220,8 +220,8 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:446](src/play/combat.ts:446)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:454](src/play/combat.ts:454)) |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:463](src/play/combat.ts:463)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:471](src/play/combat.ts:471)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -597,7 +597,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:135](src/combat/combat.ts:135)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:122](src/play/combat.ts:122)): acting first from 9 squares away
+([play/combat.ts:138](src/play/combat.ts:138)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -683,10 +683,7 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `Person.tags` / `homeRegion` · `Fact.people` (no column — dropped on write) ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
-`CharacterSheet.hitDie` (read by no formula since HP moved to VIT) ·
-`Species.template` for everyone but the player (the climber's copy,
-`speciesTemplate`, is a `finalAbilities` layer; villagers and foes read nothing
-until 6b stage 3c-ii).
+`CharacterSheet.hitDie` (read by no formula since HP moved to VIT).
 
 **Cleared by the claim path.** — *"`CharacterSheet.signets`: never written by
 any code path … the whole branch is inert in play"* was **reversed on
