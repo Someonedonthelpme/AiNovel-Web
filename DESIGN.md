@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a shipped (`settleFight`, `killed` deed, ambush, species templates); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3b shipped (`settleFight`, `killed` deed, ambush, species templates and their reader); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -148,8 +148,8 @@ after any that touches a fight):
    player advantage. Striking first gives the player no edge (not decided).
 3. **Types and species templates** — split with the user, 2026-09-11:
    **3a shipped** (eight closed `TYPES`, a seeded template per species summing
-   to zero INCLUDING the lean; today's ids kept) · 3b a tolerant reader for
-   stored worlds · 3c templates reach the player and mass foes, with a fight
+   to zero INCLUDING the lean; today's ids kept) · **3b shipped** (`readSpecies`: a tolerant reader for
+   stored worlds; an unknown untyped id throws) · 3c templates reach the player and mass foes, with a fight
    simulation (a zero sum can still be stronger in a fight: `str` outweighs
    `cha`) · 3d the seed picks 3–5 types and 2–4 species each, model-named ·
    3e dominant species replaces folk, grouped picker · then the signature skill.

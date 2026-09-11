@@ -97,6 +97,23 @@ const grow = (seed: number, kind: { id: string; name: string; type: TypeId }): G
   };
 };
 
+const FOLK_KIND = { id: FOLK.id, name: FOLK.name, type: 'humanoid' as const };
+
+/**
+ * A species as a stored world holds it, typed and templated.
+ *
+ * A world saved before types existed has neither. Its ids are the ones a world
+ * was dealt, so the type comes from them and the template is re-derived from the
+ * same seed — an old world reads exactly as a new one stores, with no migration.
+ * An untyped id outside that list was never written by this code: refused, since
+ * guessing a type would quietly give somebody the wrong body.
+ */
+export function readSpecies(seed: number, stored: Species): Grown {
+  const type = stored.type ?? [FOLK_KIND, ...KINDS].find((k) => k.id === stored.id)?.type;
+  if (!type) throw new Error(`species "${stored.id}" has no type and is not a kind any world was dealt`);
+  return { ...stored, type, template: stored.template ?? templateFor(seed, stored.id, type) };
+}
+
 /**
  * The kinds THIS world holds.
  *
@@ -107,7 +124,7 @@ export function speciesFor(seed: number): Grown[] {
   const rng = mulberry32((seed ^ 0x59ec) >>> 0);
   const deck = [...KINDS].sort(() => rng() - 0.5);
   const want = 1 + Math.floor(rng() * 3);
-  return [{ id: FOLK.id, name: FOLK.name, type: 'humanoid' as const }, ...deck.slice(0, want)].map((k) => grow(seed, k));
+  return [FOLK_KIND, ...deck.slice(0, want)].map((k) => grow(seed, k));
 }
 
 /**

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { applyDrift } from './drift.ts';
 import { emptyPersona, NEED_MAX } from './persona.ts';
 import { defaultVoice } from '../world/fixtures.ts';
-import { FOLK, speciesFor, speciesIdFor, TYPES } from './species.ts';
+import { FOLK, readSpecies, speciesFor, speciesIdFor, TYPES } from './species.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { runDirector } from '../llm/director.ts';
@@ -32,6 +32,19 @@ test('no species is simply stronger — every template sums to zero, and they di
     }
   }
   assert.ok(seen.size > 8, 'templates must actually differ, not all be zero');
+});
+
+test('a world stored before types reads exactly as one dealt today', () => {
+  for (let seed = 0; seed < 50; seed++) {
+    for (const s of speciesFor(seed)) {
+      const { type, template, ...stored } = s;   // what an older world saved
+      assert.deepEqual(readSpecies(seed, stored), s, `seed ${seed}: ${s.id}`);
+    }
+  }
+});
+
+test('an untyped species nobody ever stored is refused, not guessed', () => {
+  assert.throws(() => readSpecies(1, { id: 'gnoll', name: 'gnolls' }), /gnoll/);
 });
 
 test('a construct does not eat', () => {
