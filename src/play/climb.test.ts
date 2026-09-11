@@ -6,6 +6,7 @@ import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
 import { isFull } from '../world/types.ts';
+import type { PlaceKind, Region } from '../world/types.ts';
 import { adopt, believes, firsthand } from '../character/belief.ts';
 import { xpToNext } from './progress.ts';
 import { ruleClaim, STANDARD } from '../rules/ruleset.ts';
@@ -22,6 +23,15 @@ const floor1 = {
 };
 
 const provider = () => new FakeProvider({ structured: [floor1] });
+
+/** The floor `floor1` describes, as a region a record can carry. */
+const builtFloor = (): Region => ({
+  detail: 'full',
+  id: 'floor-1', floor: 1, name: floor1.name, biome: floor1.biome, culture: floor1.culture,
+  danger: 1,
+  places: floor1.places.map((p) => ({ ...p, kind: p.kind as PlaceKind, discovered: false })),
+  entrance: floor1.entrance, exit: floor1.exit, creatures: floor1.creatures,
+});
 
 /** Standing on the ground-floor stair, with the way up already found. */
 const atTheStair = () => playState({ currentPlace: 'stair', regions: { 'floor-0': groundFloor() } });
@@ -290,4 +300,28 @@ test('a world that is not a stack is walked sideways, and the log replays it', (
 
   const replayed = foldPlay(outer, [record]);
   assert.equal(replayed.world.currentRegion, 'outer-market', 'and a reload walks the same way');
+});
+
+test('a floor can begin a new wing, and the wing survives a fold', () => {
+  // "Four dungeons inside a twenty-floor tower" needs somebody to say where a
+  // dungeon starts. Nothing could: genesis wrote the root tower and nothing
+  // ever added another, so nesting had a reader and no writer.
+  const base = playState({ currentPlace: 'stair', regions: { 'floor-0': groundFloor() } });
+  const wing = {
+    id: 'wing-1', name: 'The Sunken Wing', kind: 'static' as const, parent: 'tower',
+    from: 1, to: 3, theme: { biome: 'flooded stone', culture: 'divers', people: 'salvagers' },
+  };
+
+  const record = {
+    kind: 'climb' as const,
+    direction: 'up' as const,
+    built: { region: builtFloor(), people: {}, stratum: wing },
+  };
+
+  const climbed = applyClimb(base, record);
+  assert.equal(climbed.error, null);
+  assert.deepEqual(climbed.state.world.strata?.['wing-1'], wing, 'the wing is part of the world now');
+
+  const replayed = foldPlay(base, [record]);
+  assert.deepEqual(replayed.world.strata?.['wing-1'], wing, 'and a reload still knows about it');
 });

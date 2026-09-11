@@ -121,6 +121,16 @@ export function floorSchema(floor: number) {
       people: { type: 'array', items: personSchema, minItems: 0, maxItems: people.max },
       /** Local ecology — names only; the numbers come from `statblock.ts`. */
       creatures: { type: 'array', items: str, minItems: 1, maxItems: 4 },
+      /**
+       * A WING this floor begins, if it begins one — a dungeon inside the
+       * tower, a sunken quarter, a sealed ward. Empty name for the usual floor.
+       *
+       * Flat like the rest of this schema: the model names it and says roughly
+       * how far it runs, and the engine decides where it hangs, how far it
+       * really runs, and what it is called by.
+       */
+      wingName: str,
+      wingFloors: { type: 'integer', minimum: 1, maximum: 6 },
       /** Who these people already are to each other. The template decides what that COSTS. */
       bonds: {
         type: 'array',
@@ -128,11 +138,14 @@ export function floorSchema(floor: number) {
         items: obj({ a: str, b: str, role: str }, ['a', 'b', 'role']),
       },
     },
-    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds'],
+    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds', 'wingName', 'wingFloors'],
   );
 }
 
 export type GeneratedFloor = {
+  /** A wing this floor opens. Empty when it opens none, which is most floors. */
+  wingName?: string;
+  wingFloors?: number;
   name: string;
   biome: string;
   culture: string;
@@ -164,6 +177,8 @@ export type FloorResult = {
   edges: Edges;
   /** Names for whatever lives here; encounters take their numbers from depth. */
   creatures: string[];
+  /** A structure this floor begins, for the crossing to record and install. */
+  stratum?: Stratum;
   repairs: string[];
   warnings: string[];
 };
@@ -188,6 +203,10 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
     styleRule(language),
     `This floor is a REGION with its own biome and character. Danger level ${danger}.`,
     'Deeper floors are stranger and more hostile than shallow ones.',
+    'wingName is EMPTY on almost every floor. Name one only when this floor is',
+    'plainly the mouth of somewhere else — a dungeon, a sunken quarter, a sealed',
+    'ward — and say in wingFloors roughly how far it runs. Where it sits and how',
+    'far it really runs are decided outside you.',
     'One place is the arrival point from the floor below, and one is the way up;',
     'both have kind "gate", and they must be different places.',
     'Every connection must be listed on BOTH places it joins.',
@@ -457,7 +476,39 @@ export async function generateFloor(
     people,
     edges: bondsAmong(openingEdges({}, arrivals), rolesOf(world), people, generated.bonds ?? [], repairs),
     creatures: generated.creatures,
+    ...(wingOf(generated, floor, region, stratum) ? { stratum: wingOf(generated, floor, region, stratum) } : {}),
     repairs,
     warnings: check.warnings.map((w) => w.message),
   };
 }
+
+/**
+ * The wing this floor opens, if the model said it opens one.
+ *
+ * The engine decides everything that could break the tree: it hangs inside
+ * whatever this floor was already in, starts HERE, runs a bounded number of
+ * floors, and takes its character from the floor that opened it — so a wing can
+ * never be authored somewhere the player is not, or run to the top of the
+ * world. Frozen, because a named wing that rewrites itself behind you is
+ * indistinguishable from ordinary floors.
+ */
+function wingOf(
+  generated: GeneratedFloor, floor: number, region: Region, parent: Stratum | null,
+): Stratum | undefined {
+  const name = (generated.wingName ?? '').trim();
+  if (!name || EMPTY_WING.has(name.toLowerCase())) return undefined;
+
+  const floors = Math.max(1, Math.min(6, Math.round(generated.wingFloors ?? 1)));
+  return {
+    id: `wing-${floor}`,
+    name,
+    kind: 'static',
+    ...(parent ? { parent: parent.id } : {}),
+    from: floor,
+    to: floor + floors - 1,
+    theme: { biome: region.biome, culture: region.culture, people: region.culture },
+  };
+}
+
+/** What a model writes when it means "this floor opens nothing". */
+const EMPTY_WING = new Set(['', 'none', 'null', 'n/a', '-', 'ไม่มี']);

@@ -12,7 +12,7 @@ import { grantXp, hpAfterGrowth, xpForNewDepth } from './progress.ts';
 import type { LevelUp } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import type { PlayState } from './state.ts';
-import type { Person, PersonId, Region, RegionId, World } from '../world/types.ts';
+import type { Person, PersonId, Region, RegionId, Stratum, World } from '../world/types.ts';
 
 /**
  * Moving between floors, generating what does not exist yet.
@@ -57,7 +57,21 @@ export type ClimbRecord = {
    * The generated floor. Null when the region already existed in full detail,
    * because travel is pure in that case and replays from the world alone.
    */
-  built: { region: Region; people: Record<PersonId, Person>; edges?: Edges } | null;
+  built: {
+    region: Region;
+    people: Record<PersonId, Person>;
+    edges?: Edges;
+    /**
+     * A structure this floor BEGINS, if it begins one.
+     *
+     * "Four dungeons inside a twenty-floor tower" needs somebody to say where a
+     * dungeon starts, and nothing could: the root tower was written at genesis
+     * and no second stratum was ever added. It travels in the record because a
+     * world's shape changing is exactly the kind of thing a replay must not
+     * have to guess at.
+     */
+    stratum?: Stratum;
+  } | null;
 };
 
 export type ClimbResult = {
@@ -122,13 +136,16 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   // none either. Failing loudly beats folding to a state travel already refused.
   if (!record.built) return failed(state, `floor ${attempt.floor} was never built`, record);
 
-  const { region, people, edges } = record.built;
+  const { region, people, edges, stratum } = record.built;
   // MERGED, never replaced: a crossing brings new faces and their first
   // impressions, and must not touch what the floors below already earned.
   const withPeople: World = {
     ...state.world,
     people: { ...state.world.people, ...people },
     edges: { ...state.world.edges, ...edges },
+    // A floor that begins a wing adds it to what the world holds. Merged, never
+    // replaced: the tower this hangs inside is already in there.
+    ...(stratum ? { strata: { ...state.world.strata, [stratum.id]: stratum } } : {}),
   };
   return {
     ...arrive(state, installRegion(withPeople, region, region.entrance)),
@@ -153,7 +170,16 @@ async function cross(
     kind: 'climb',
     direction,
     ...(to ? { to } : {}),
-    built: generated ? { region: generated.region, people: generated.people, edges: generated.edges } : null,
+    built: generated
+      ? {
+        region: generated.region,
+        people: generated.people,
+        edges: generated.edges,
+        // A wing the floor opened travels with it: the world's SHAPE changing
+        // is the last thing a replay should have to guess at.
+        ...(generated.stratum ? { stratum: generated.stratum } : {}),
+      }
+      : null,
   };
 
   return { ...applyClimb(state, record), generated };

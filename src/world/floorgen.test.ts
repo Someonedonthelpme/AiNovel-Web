@@ -228,3 +228,26 @@ test('a region can be built somewhere that is not a floor number', async () => {
   assert.equal(r.region.floor, 0, 'depth is still depth');
   assert.deepEqual(validateRegion(r.region, r.people).errors, []);
 });
+
+test('a floor may begin a wing, and the engine decides its shape', async () => {
+  // The model NAMES a wing and says roughly how far it runs; where it hangs in
+  // the tree, how far it actually runs, and what it is called by are the
+  // engine's — the same division as `deed` and `amendLaw`.
+  const opening = generated({ wingName: 'The Sunken Wing', wingFloors: 40 });
+  const inTower = world({
+    strata: { tower: { id: 'tower', name: 'the tower', kind: 'dynamic', from: 0 } },
+  });
+
+  const r = await generateFloor(provider(opening), inTower, 4, pc);
+  const wing = r.stratum;
+
+  assert.ok(wing, 'the floor said it begins one');
+  assert.equal(wing.name, 'The Sunken Wing');
+  assert.equal(wing.parent, 'tower', 'it hangs inside whatever it was found in');
+  assert.equal(wing.from, 4, 'and it starts here');
+  assert.ok(wing.to !== undefined && wing.to - wing.from < 8, 'however many floors the model asked for');
+  assert.equal(wing.theme?.biome, r.region.biome, 'a wing takes the character of the floor that opens it');
+
+  const quiet = await generateFloor(provider(generated()), inTower, 4, pc);
+  assert.equal(quiet.stratum, undefined, 'and most floors begin nothing at all');
+});
