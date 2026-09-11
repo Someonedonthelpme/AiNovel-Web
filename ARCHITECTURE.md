@@ -121,7 +121,7 @@ config ─┐
 - **React never mutates locally.** Every panel action goes to the server as an
   event ([Panels.tsx:11](app/play/[id]/Panels.tsx:11)); the whole view comes back.
 - **Routes stay thin** so the web surface and the terminal script cannot drift
-  apart ([game.ts:59](src/server/game.ts:59)).
+  apart ([game.ts:60](src/server/game.ts:60)).
 
 ---
 
@@ -404,7 +404,7 @@ come from?"
 | `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
 | `linksFrom` ([travel.ts:125](src/world/travel.ts:125)) | a region | its ways out: its own `exits`, or up/down derived from depth |
 | `playerSubject` ([signetbook.ts:200](src/play/signetbook.ts:200)) | held Signets + the kept catalogue | the `Subject` every law check on the player takes |
-| `viewOf` and friends ([game.ts:291](src/server/game.ts:291)) | `PlayState` | the whole `GameView`, rebuilt per request |
+| `viewOf` and friends ([game.ts:292](src/server/game.ts:292)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
 ---
 
@@ -502,7 +502,7 @@ app/new/page.tsx
         draft carries classSpec — the WHOLE class object, because a generated
         class exists in no global list and an id would resolve to nothing
         │
-        newGame  (server/game.ts:443)
+        newGame  (server/game.ts:451)
           startInterview + recordAnswer per stage (blanks get canned defaults)
           runGenesis:
             1. generateCharacter  ──► sheet
@@ -549,9 +549,10 @@ rations, because a short rest spends one.
        a law outside the vocabulary · a way out from a place not here
        (clamps: trust ±3, time 0..3)
  5  applyTurn ───────────────────── the fold
-       applyDelta → combat (live or replayed) → drift causes derived FROM
+       applyDelta → combat (live or replayed; a finished live fight is
+       re-folded by settleFight) → drift causes derived FROM
        THE RECORD → traits awarded LAST
-       drift runs by THIS world's rules and each person's kind (delta.ts:570)
+       drift runs by THIS world's rules and each person's kind (delta.ts:578)
  6  toWriterView + assertNoLeak ─── the wall
  7  WRITER ─────────────────────────────────────── model call #2 (+1 retry)
        sees only the redacted view and what already happened
@@ -566,7 +567,7 @@ anything.
 
 A fight opens mid-turn and the record is **not written** until it ends. The
 encounter lives in an in-memory `fights` map on `globalThis`
-([game.ts:414](src/server/game.ts:414) — Next gives routes and server components
+([game.ts:422](src/server/game.ts:422) — Next gives routes and server components
 separate module instances, so a plain module-level `Map` would produce two).
 
 Every roll derives from state —
@@ -575,6 +576,12 @@ Every roll derives from state —
 unaffordable skill is *not offered* rather than offered and refused. When it
 concludes, the original turn's draft record plus `combatActions` is appended as
 **one event**, and a snapshot is taken unconditionally.
+
+The state saved is not the fight as it stands: `settleFight` re-folds the
+finished record from the state before the turn
+([delta.ts:616](src/play/delta.ts:616)), because the live turn ran drift, deeds
+and traits when the fight OPENED and replay runs them after it ends. Live and
+replay agree by construction.
 
 ---
 
@@ -643,7 +650,6 @@ needs and temperament; **nothing yet proves the reader half.**
 
 | field | state |
 |---|---|
-| **`pc.stamina` / `pc.mana`** | Stored and topped up by rest, but `playerCombatant` does not carry them **in** and `concludeCombat` does not carry them **out** — so **pools reset to full at the start of every fight.** The scarcity the pool economy exists to create is not happening. |
 | **`Signet.grant`** | Generated everywhere, read nowhere. Its only consumer, `abilityOf` ([signet.ts:289](src/play/signet.ts:289)), has zero callers. |
 | **`Trait.grants.note`** | Set by every authored, generated and emergent trait; read by nothing. A note is the **only** payout an emergent trait has, so every emergent trait grants literally nothing. |
 | **`treeBonuses.attack` / `.damage`** | Accumulated by `applyGrant`, read by no formula. A node granting "+1 to hit" changes nothing. |
@@ -668,7 +674,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:927](src/server/game.ts:927)); and
+([game.ts:936](src/server/game.ts:936)); and
 [signet.test.ts:239](src/play/signet.test.ts:239) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
@@ -787,7 +793,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:573](src/play/delta.ts:573)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:581](src/play/delta.ts:581)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:272](src/session/genesis.ts:272),
@@ -936,7 +942,9 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:104](src/play/state.ts:104)),
-and being jumped is no deed ([delta.ts:461](src/play/delta.ts:461)).
+and being jumped is no deed ([delta.ts:462](src/play/delta.ts:462)). A fight
+with any kill is one `killed` deed, charged even in an ambush
+([delta.ts:466](src/play/delta.ts:466)); `spared` has no writer until 6b stage 6.
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
