@@ -546,7 +546,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   let killed = 0;
 
   if (record.delta.startCombat) {
-    const fight = beginEncounter(moved);
+    const fight = beginEncounter(moved, record.delta.startedBy);
     if (record.combatActions) {
       // REPLAY. The decisions are known, and every roll comes from state, so
       // this reproduces the original encounter exactly.

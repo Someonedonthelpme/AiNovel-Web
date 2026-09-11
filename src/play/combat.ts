@@ -98,12 +98,14 @@ export function playerCombatant(state: PlayState): Combatant {
  * because the difficulty curve is the whole progression and cannot be
  * re-invented per encounter by a model.
  */
-export function beginEncounter(state: PlayState): PlayState {
+export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'): PlayState {
   if (state.combat && !state.combat.over) return state;
 
   const region = activeRegion(state.world);
   const danger = region?.danger ?? 0;
   const grid = arenaFor(state.world.seed + state.world.turn, danger);
+  const me = playerCombatant(state);
+  const ambushed = startedBy === 'them';
 
   const foes = buildEncounter({
     danger,
@@ -112,11 +114,18 @@ export function beginEncounter(state: PlayState): PlayState {
     kind: kindForFloor(region?.floor ?? 0),
     names: region?.creatures,
     grid,
-    origin: { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },
+    /*
+     * Being jumped means they are already on you. Going first across the open
+     * arena only spent the turn closing the gap, which handed the PLAYER the
+     * first swing — an ambush measured as raising your odds.
+     */
+    origin: ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },
+    taken: new Set([cellKey(me.pos)]),
   });
 
   const rng = combatRng(state);
-  let combat = startCombat(rng, [playerCombatant(state), ...foes], grid);
+  // Striking first earns nothing extra yet — only being jumped moves the order.
+  let combat = startCombat(rng, [me, ...foes], grid, ambushed ? 'foe' : undefined);
 
   // If something faster went first, let it act. Otherwise the fight opens with
   // nobody able to move and the player waiting on a turn that is not theirs.

@@ -317,6 +317,32 @@ test('a fight played live ends exactly where its replay does', () => {
   assert.deepEqual(live.state, foldPlay(start, [live.record]));
 });
 
+const ambush: TurnRecord = { ...combatTurn([]), combatActions: undefined, delta: { startCombat: true, startedBy: 'them' } };
+
+test('whoever struck first acts first', () => {
+  let playerWouldLead = false;
+  for (let seed = 0; seed < 12; seed++) {
+    const base = onFloorTwo();
+    const start = { ...base, world: { ...base.world, seed, turn: seed } };
+    playerWouldLead ||= beginEncounter(applyDelta(start, { startCombat: true })).combat!.order[0] === 'pc';
+    const { order, combatants } = applyTurn(start, ambush).state.combat!;
+    const firstParty = order.findIndex((id) => combatants[id].side === 'party');
+    assert.ok(order.slice(firstParty).every((id) => combatants[id].side === 'party'), `seed ${seed}: a foe acted after you`);
+  }
+  assert.ok(playerWouldLead, 'no seed where the player would have gone first — the test proves nothing');
+});
+
+test('being jumped means being struck before you can move', () => {
+  // Acting first across an open arena only spends the turn closing the gap —
+  // which measured as an ambush RAISING the player's win rate.
+  for (let seed = 0; seed < 12; seed++) {
+    const base = onFloorTwo();
+    const start = { ...base, world: { ...base.world, seed, turn: seed } };
+    const { log, combatants } = applyTurn(start, ambush).state.combat!;
+    assert.ok(log.some((e) => e.kind === 'attack' && combatants[e.attacker]?.side === 'foe'), `seed ${seed}: nobody struck`);
+  }
+});
+
 test('a fight leaves nothing half-finished behind it', () => {
   const start = onFloorTwo();
   const { actions } = fightItOut(openFight(start));

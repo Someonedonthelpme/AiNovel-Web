@@ -112,7 +112,13 @@ function advanceToNextActor(rng: Rng, state: CombatState): CombatState {
   return settleIfOver(next);
 }
 
-export function startCombat(rng: Rng, roster: Combatant[], grid: Grid): CombatState {
+export function startCombat(
+  rng: Rng,
+  roster: Combatant[],
+  grid: Grid,
+  /** The side that struck first, which acts before the other whatever it rolled. */
+  ambusher?: Side,
+): CombatState {
   /*
    * AGILITY rolls initiative, not dexterity.
    *
@@ -125,8 +131,11 @@ export function startCombat(rng: Rng, roster: Combatant[], grid: Grid): CombatSt
   const rolled = roster.map((c) => ({ c, init: d20(rng, abilityMod(c.abilities.agi)).total }));
 
   // Ties break on agility then id, so initiative order is fully deterministic.
+  // Everybody still rolls in an ambush, so the dice after it fall the same.
+  const edge = (c: Combatant) => (c.side === ambusher ? 1 : 0);
   rolled.sort(
     (a, b) =>
+      edge(b.c) - edge(a.c) ||
       b.init - a.init ||
       abilityMod(b.c.abilities.agi) - abilityMod(a.c.abilities.agi) ||
       a.c.id.localeCompare(b.c.id),
