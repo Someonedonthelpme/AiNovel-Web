@@ -154,7 +154,9 @@ its pure resolver.
 ### `src/character/` — who someone is
 `persona.ts` (the core shared by player and villager) · `drift.ts` (two clocks,
 with hysteresis) · `species.ts` (what KIND of thing someone is — a whole-number
-multiplier on how far each need moves, [species.ts:19](src/character/species.ts:19))
+multiplier on how far each need moves, [species.ts:21](src/character/species.ts:21);
+each belongs to one of eight closed `TYPES` and carries an ability `template`
+summing to zero, [species.ts:40](src/character/species.ts:40))
 · `roles.ts` (authored mechanical shapes) · `classgen.ts`
 (mechanics from seed) · `classnames.ts` (words from the model) · `classbuild.ts`
 (the seam) · `classes.ts`.
@@ -431,7 +433,7 @@ A lorebook keys the same way ([lorebook.ts:74](src/play/lorebook.ts:74)): a swor
 found on floor nine carries the same history on a replay, and none of it travels
 in the save.
 Who is what kind keys the same way, on the world seed and the person's id
-([species.ts:62](src/character/species.ts:62)), weighted 4:1 toward the
+([species.ts:120](src/character/species.ts:120)), weighted 4:1 toward the
 ordinary. And a way out found in play is NAMED from the seed, the region and the
 place it leaves from ([delta.ts:189](src/play/delta.ts:189)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
@@ -448,8 +450,11 @@ matched before naming still matches after it.
 emergent play-patterns), `PATH_WORDS`, the condition price table, the laws
 `STANDARD` declares ([ruleset.ts:315](src/rules/ruleset.ts:315)) — still two of
 the five constraints the engine checks: the ground is the bottom, and residents
-do not cross floors — and the four non-ordinary species `KINDS`
-([species.ts:35](src/character/species.ts:35)).
+do not cross floors — the eight species `TYPES` with their needs and lean
+([species.ts:40](src/character/species.ts:40)), and the four non-ordinary species
+`KINDS`, each now naming its type ([species.ts:63](src/character/species.ts:63)).
+A species' `template` is **seeded**, not authored: its type's lean plus two single
+points moved between abilities ([species.ts:75](src/character/species.ts:75)).
 
 > **The catalogue-agreement invariant**
 > ([traitbook.ts:158](src/play/traitbook.ts:158)) — the fold, the tree and the
@@ -673,7 +678,9 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `Person.tags` / `homeRegion` · `Fact.people` (no column — dropped on write) ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
-`CharacterSheet.hitDie` (read by no formula since HP moved to VIT).
+`CharacterSheet.hitDie` (read by no formula since HP moved to VIT) ·
+`Species.template` (written at genesis, read by nothing until 6b stage 3c puts it
+on the player and on mass foes).
 
 **Cleared by the claim path.** — *"`CharacterSheet.signets`: never written by
 any code path … the whole branch is inert in play"* was **reversed on
@@ -805,7 +812,7 @@ written by nothing … the player is always the ordinary kind"* was true until
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:272](src/session/genesis.ts:272),
-[species.ts:80](src/character/species.ts:80)). Skipping the step still leaves
+[species.ts:138](src/character/species.ts:138)). Skipping the step still leaves
 the climber ordinary, which is now a choice rather than a gap.
 
 **Cleared: `Stratum.danger` and `Stratum.loot`.** — *"read … and written by
@@ -890,8 +897,9 @@ Every balance number, and where it lives.
 | snapshot cadence | every 20 events | [sessions.ts:23](src/db/sessions.ts:23) |
 | **danger** | the stratum's own curve, else its parent's, else `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [strata.ts:51](src/world/strata.ts:51), [budget.ts:32](src/world/budget.ts:32) |
 | depth below ground | 3 | [ruleset.ts:314](src/rules/ruleset.ts:314) |
-| species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:19](src/character/species.ts:19) |
-| kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:48](src/character/species.ts:48), [:70](src/character/species.ts:70) |
+| species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:21](src/character/species.ts:21) |
+| species template | type lean ±2 on one pair, then two single points moved; sums to zero, no ability past ±4 | [species.ts:40](src/character/species.ts:40), [:75](src/character/species.ts:75) |
+| kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:106](src/character/species.ts:106), [:128](src/character/species.ts:128) |
 | wing length | 1–6 floors, whatever the model asks | [floorgen.ts:504](src/world/floorgen.ts:504) |
 | wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:535](src/world/floorgen.ts:535) |
 | what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:552](src/world/floorgen.ts:552) |
@@ -1029,7 +1037,8 @@ classes now lean on stats and nothing is locked out.
 | **exemption** | A law set aside for one holder. What a Signet is. Carried on the `Subject`, not looked up. |
 | **stratum** | A structure above a floor — a tower, a wing inside it. Strata nest; the innermost speaks for a floor. `static` ones are frozen. |
 | **wing** | A stratum a floor opens mid-climb. The model names it; the engine shapes it. |
-| **species** | What kind of thing somebody is: how far each need moves for them. `folk` is ordinary. |
+| **species** | What kind of thing somebody is: how far each need moves for them, and an ability template. `folk` is ordinary. |
+| **type** | The closed class a species belongs to (humanoid, beast, construct, undead, fey, fiend, elemental, aberration). Sets its needs and its lean. |
 | **way out** | A `Link` that is not a stair. Found in play, walked with `traverse`. |
 | **declared trait** | A goal, shown with a progress bar. |
 | **emergent trait** | A *recognition* of a play pattern, never foreshadowed — *"declared traits are goals; these are recognitions"* ([emergent.ts:10](src/play/emergent.ts:10)). |
