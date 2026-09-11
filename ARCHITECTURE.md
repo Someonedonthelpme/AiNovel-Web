@@ -201,7 +201,7 @@ a paragraph cannot be re-read for the same comfort.
 parameters with no subject — `carryBase` is the same number whoever asks — and
 `rulesOf` resolves them. The **laws** are `{ axis, constraint, binds }`, and
 `forbids(from, subject, constraint)` resolves those PER SUBJECT
-([ruleset.ts:377](src/rules/ruleset.ts:377)), because whether the player is
+([ruleset.ts:380](src/rules/ruleset.ts:380)), because whether the player is
 bound is part of the law rather than an assumption in the engine.
 
 `RULE_AXES` and `CONSTRAINTS` are closed enums: a model can name and dress a
@@ -542,7 +542,6 @@ needs and temperament; **nothing yet proves the reader half.**
 
 | field | state |
 |---|---|
-| **`CharacterSheet.signets`** | **Never written by any code path.** No `SheetAction` claims one. Signets are generated, proved reachable, and filtered for visibility — and **can never be acquired.** The whole branch is inert in play. |
 | **`pc.stamina` / `pc.mana`** | Stored and topped up by rest, but `playerCombatant` does not carry them **in** and `concludeCombat` does not carry them **out** — so **pools reset to full at the start of every fight.** The scarcity the pool economy exists to create is not happening. |
 | **`Signet.grant`** | Generated everywhere, read nowhere. Its only consumer, `abilityOf` ([signet.ts:279](src/play/signet.ts:279)), has zero callers. |
 | **`Trait.grants.note`** | Set by every authored, generated and emergent trait; read by nothing. A note is the **only** payout an emergent trait has, so every emergent trait grants literally nothing. |
@@ -560,6 +559,19 @@ which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
 `CharacterSheet.hitDie` (read by no formula since HP moved to VIT).
+
+**Cleared by the claim path.** — *"`CharacterSheet.signets`: never written by
+any code path … the whole branch is inert in play"* was **reversed on
+2026-09-05** by `f8bcf9f`, and this document went on asserting it for a day.
+`claimSignet` re-checks the gate at the boundary and appends the id
+([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
+branch for every held Signet that `opens` one
+([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
+([game.ts:853](src/server/game.ts:853)); and
+[signet.test.ts:238](src/play/signet.test.ts:238) proves a claimed Signet is on
+the sheet and survives replay. Writer and readers both exist. `Signet.grant`
+and `Signet.augments` above are NOT cleared by this — a Signet can be held now
+and still pay out nothing.
 
 **Cleared by the component conversion** — `usesPerRest`, `skillUses`,
 `usesLeft`, `spendUse`, `refreshUses`, `SkillUses`, `ActiveKind` and
@@ -831,7 +843,7 @@ classes now lean on stats and nothing is locked out.
 | **register** | Thai pronoun and particle choice, derived from trust. The signature mechanic: *the trust stat **is** the language*. |
 | **path** | A generated name over a stat pair, with a threshold. Replaced the twelve hardcoded disciplines, which broke in any non-fantasy world. |
 | **graft** | Growing a branch onto the tree. The one mechanism traits, Signets, subclasses and books all share; they differ only in how the branch is *entered*. |
-| **Signet** | A rare, gated reward with a reachability proof. Currently unacquirable — see the ledger. |
+| **Signet** | A rare, gated reward with a reachability proof. Claimed once its gate is open ([sheetaction.ts:258](src/play/sheetaction.ts:258)), after which it grafts its branch onto the tree. Held, but its `grant` still pays nothing — see the ledger. |
 | **declared trait** | A goal, shown with a progress bar. |
 | **emergent trait** | A *recognition* of a play pattern, never foreshadowed — *"declared traits are goals; these are recognitions"* ([emergent.ts:10](src/play/emergent.ts:10)). |
 | **temperament** | Stored wiring: intuition, feeling, nerve, discipline. |
