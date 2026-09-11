@@ -69,7 +69,7 @@ The governing rule, repeated in a dozen file headers:
 the model does not have to produce is a field it cannot get wrong*
 ([schema.ts:13](src/session/schema.ts:13),
 [classnames.ts:11](src/character/classnames.ts:11),
-[floorgen.ts:57](src/world/floorgen.ts:57),
+[floorgen.ts:61](src/world/floorgen.ts:61),
 [director.ts:31](src/llm/director.ts:31)).
 
 ---
@@ -121,7 +121,7 @@ config ─┐
 - **React never mutates locally.** Every panel action goes to the server as an
   event ([Panels.tsx:11](app/play/[id]/Panels.tsx:11)); the whole view comes back.
 - **Routes stay thin** so the web surface and the terminal script cannot drift
-  apart ([game.ts:58](src/server/game.ts:58)).
+  apart ([game.ts:59](src/server/game.ts:59)).
 
 ---
 
@@ -140,7 +140,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:112](src/play/combat.ts:112)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -217,9 +217,9 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
-| `crossFloors` | movement | the Director brief only ([director.ts:343](src/llm/director.ts:343)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:435](src/play/combat.ts:435)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:443](src/play/combat.ts:443)) |
+| `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:437](src/play/combat.ts:437)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:445](src/play/combat.ts:445)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -242,7 +242,7 @@ caller that forgets to say who is asking gets the strictest reading.
 rebound, imposed or struck out ([ruleset.ts:419](src/rules/ruleset.ts:419)) —
 never editing a preset, which every other run shares — and `AXIS_OF` says which
 axis an imposed law lands on ([ruleset.ts:222](src/rules/ruleset.ts:222)). The
-change travels as `WorldDelta.amendLaw` ([state.ts:120](src/play/state.ts:120)),
+change travels as `WorldDelta.amendLaw` ([state.ts:127](src/play/state.ts:127)),
 because the delta is what the log stores: a rule changed outside it would replay
 as one that never changed.
 
@@ -295,9 +295,9 @@ only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
 Depth stays on `floor`; adjacency moved to `Region.exits`
 ([:132](src/world/types.ts:132)), and `generateFloor` takes the region id to
-build `into` ([floorgen.ts:310](src/world/floorgen.ts:310)); its guard against
+build `into` ([floorgen.ts:318](src/world/floorgen.ts:318)); its guard against
 overwriting the town keys on that id rather than on depth 0
-([floorgen.ts:322](src/world/floorgen.ts:322)), because an outer world may sit
+([floorgen.ts:330](src/world/floorgen.ts:330)), because an outer world may sit
 at depth 0 perfectly legally. A region with no
 `exits` derives up and down from depth ([travel.ts:125](src/world/travel.ts:125))
 — every world saved before this.
@@ -311,17 +311,17 @@ anything derives from the seed alone.
   ([subjects.ts:111](src/world/subjects.ts:111)).
 - `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. Genesis
   stores the WHOLE preset rather than its name
-  ([genesis.ts:575](src/session/genesis.ts:575)), so retuning a preset cannot
+  ([genesis.ts:620](src/session/genesis.ts:620)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
   ([ruleset.ts:273](src/rules/ruleset.ts:273)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:231](src/play/delta.ts:231)).
+  mid-run writer ([delta.ts:234](src/play/delta.ts:234)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
-  ([genesis.ts:574](src/session/genesis.ts:574)). Stored for the same reason
+  ([genesis.ts:619](src/session/genesis.ts:619)). Stored for the same reason
   `subjects` is.
 - `strata` — the structures this world holds ([types.ts:268](src/world/types.ts:268)).
   Genesis writes one, the tower, covering floor 0 up
-  ([genesis.ts:582](src/session/genesis.ts:582)); a climb that opens a wing adds
+  ([genesis.ts:627](src/session/genesis.ts:627)); a climb that opens a wing adds
   another ([climb.ts:148](src/play/climb.ts:148)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it.
@@ -404,7 +404,7 @@ come from?"
 | `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
 | `linksFrom` ([travel.ts:125](src/world/travel.ts:125)) | a region | its ways out: its own `exits`, or up/down derived from depth |
 | `playerSubject` ([signetbook.ts:200](src/play/signetbook.ts:200)) | held Signets + the kept catalogue | the `Subject` every law check on the player takes |
-| `viewOf` and friends ([game.ts:290](src/server/game.ts:290)) | `PlayState` | the whole `GameView`, rebuilt per request |
+| `viewOf` and friends ([game.ts:291](src/server/game.ts:291)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
 ---
 
@@ -433,7 +433,7 @@ in the save.
 Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:62](src/character/species.ts:62)), weighted 4:1 toward the
 ordinary. And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:186](src/play/delta.ts:186)) rather than drawn,
+place it leaves from ([delta.ts:189](src/play/delta.ts:189)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
 
@@ -466,12 +466,12 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:469](src/llm/director.ts:469)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:78](src/llm/director.ts:78)) and the PLACE a new way out leaves from (`revealWay`, [:62](src/llm/director.ts:62)) — never where it goes | indirectly — only the validated delta and the refusal reasons |
+| **Director** ([director.ts:477](src/llm/director.ts:477)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:80](src/llm/director.ts:80)) and the PLACE a new way out leaves from (`revealWay`, [:62](src/llm/director.ts:62)) — never where it goes | indirectly — only the validated delta and the refusal reasons |
 | **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
-| **Floor** ([floorgen.ts:335](src/world/floorgen.ts:335)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:132](src/world/floorgen.ts:132)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:495](src/world/floorgen.ts:495)) | **yes, in full** — inside `ClimbRecord.built` |
-| **Character** ([genesis.ts:142](src/session/genesis.ts:142)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
-| **Ground floor** ([genesis.ts:297](src/session/genesis.ts:297)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
+| **Floor** ([floorgen.ts:343](src/world/floorgen.ts:343)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:136](src/world/floorgen.ts:136)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:504](src/world/floorgen.ts:504)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:139](src/world/floorgen.ts:139)) | **yes, in full** — inside `ClimbRecord.built` |
+| **Character** ([genesis.ts:147](src/session/genesis.ts:147)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
+| **Ground floor** ([genesis.ts:333](src/session/genesis.ts:333)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
 | **Subject naming** ([subjectnames.ts:50](src/world/subjectnames.ts:50)) | `SUBJECT_NAMING_SCHEMA`, t=0.9 | **words only** — the ids are given to it and it invents none | stored on `World.subjects` |
 
@@ -498,7 +498,7 @@ app/new/page.tsx
   │     nameClasses(...)              the only model call; words only; may fail
   │     buildClass(...)               shape + naming → CharacterClass
   │
-  └─ POST /api/sessions {language, answers, draft, seed, rules, structure}
+  └─ POST /api/sessions {language, answers, draft, seed, rules, structure, species}
         draft carries classSpec — the WHOLE class object, because a generated
         class exists in no global list and an id would resolve to nothing
         │
@@ -510,7 +510,7 @@ app/new/page.tsx
                  (given the sheet, so the town is built around its resident)
           World assembled IN CODE: floor-0, turn 0, deepestFloor 0,
             the chosen preset IN FULL, the kinds from the seed, and one
-            stratum — the tower, fixed or living (genesis.ts:574–582)
+            stratum — the tower, fixed or living (genesis.ts:619–627)
           createSession → INSERT sessions + events(seq 0, kind 'start')
           saveSnapshot at seq 0
         │
@@ -540,7 +540,8 @@ rations, because a short rest spends one.
  3  if check.required:
        modifier = abilityMod(finalAbilities[ability]) + edgeFor(skills)
        ENGINE rolls 2d6           ≤6 miss · 7–9 partial · ≥10 hit
-       the pre-committed branch is selected and merged
+       the pre-committed branch is selected and merged — both halves
+       spread, so no verb can be dropped (director.ts:250)
  4  validateDelta ─────────────── the trust boundary
        refuses: a move to an unconnected place · trust for someone who does
        not exist · revealing an exit that is already known · combat where
@@ -550,7 +551,7 @@ rations, because a short rest spends one.
  5  applyTurn ───────────────────── the fold
        applyDelta → combat (live or replayed) → drift causes derived FROM
        THE RECORD → traits awarded LAST
-       drift runs by THIS world's rules and each person's kind (delta.ts:567)
+       drift runs by THIS world's rules and each person's kind (delta.ts:570)
  6  toWriterView + assertNoLeak ─── the wall
  7  WRITER ─────────────────────────────────────── model call #2 (+1 retry)
        sees only the redacted view and what already happened
@@ -565,7 +566,7 @@ anything.
 
 A fight opens mid-turn and the record is **not written** until it ends. The
 encounter lives in an in-memory `fights` map on `globalThis`
-([game.ts:413](src/server/game.ts:413) — Next gives routes and server components
+([game.ts:414](src/server/game.ts:414) — Next gives routes and server components
 separate module instances, so a plain module-level `Map` would produce two).
 
 Every roll derives from state —
@@ -667,7 +668,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:889](src/server/game.ts:889)); and
+([game.ts:927](src/server/game.ts:927)); and
 [signet.test.ts:239](src/play/signet.test.ts:239) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
@@ -784,20 +785,22 @@ back so a floor that hates you is WRITTEN as one.
 **`NpcVoice.tics`** is *read* ([register.ts:65](src/llm/register.ts:65)) and
 written as `[]` by **every** generator. A reader with no writer.
 
-**`CharacterSheet.species`** (via `Persona.species`) is *read* for the player
-every turn ([delta.ts:570](src/play/delta.ts:570)) and written by nothing —
-genesis and floorgen give every VILLAGER a kind
-([genesis.ts:392](src/session/genesis.ts:392),
-[floorgen.ts:404](src/world/floorgen.ts:404)) and never the climber. The player
-is always the ordinary kind; only a test can make them otherwise.
+**Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
+written by nothing … the player is always the ordinary kind"* was true until
+`50ef7c7`. Drift still reads it ([delta.ts:573](src/play/delta.ts:573)); genesis
+now writes it from the player's choice — a kind picked, a kind described and
+mapped by the character call, or the seeded draw villagers get
+([genesis.ts:272](src/session/genesis.ts:272),
+[species.ts:80](src/character/species.ts:80)). Skipping the step still leaves
+the climber ordinary, which is now a choice rather than a gap.
 
-**`Stratum.danger`** and **`Stratum.loot`** are read — by `dangerAt`
-([strata.ts:51](src/world/strata.ts:51)) and by the fight's loot roll
-([combat.ts:445](src/play/combat.ts:445)) — and written by nothing outside
-tests. Genesis writes the tower with neither
-([genesis.ts:582](src/session/genesis.ts:582)); a wing gets a `theme` and
-nothing else ([floorgen.ts:509](src/world/floorgen.ts:509)). A quiet band or a
-wing known for its loot is expressible and never happens.
+**Cleared: `Stratum.danger` and `Stratum.loot`.** — *"read … and written by
+nothing outside tests"* was true until `3506255`. A wing's danger is
+seeded ([floorgen.ts:535](src/world/floorgen.ts:535)) and its loot comes from
+what the model named out of `LOOT_CATEGORIES`
+([floorgen.ts:552](src/world/floorgen.ts:552)). The genesis tower still has
+neither ([genesis.ts:627](src/session/genesis.ts:627)), which means the
+ruleset's curve and the ordinary table — identity, not a gap.
 
 ### A knock-on
 
@@ -810,7 +813,7 @@ would have worked.
 ### Enforced by construction
 
 **`crossFloors`** has a reader and no enforcer: the Director is told residents
-may not leave ([director.ts:343](src/llm/director.ts:343)), and nothing else
+may not leave ([director.ts:349](src/llm/director.ts:349)), and nothing else
 checks it — because nothing moves an NPC, so nobody ever tries.
 `Person.homeRegion` is written at generation and never updated. The law is true
 today for want of anyone to break it, and becomes a dead law the day NPCs move
@@ -819,7 +822,7 @@ today for want of anyone to break it, and becomes a dead law the day NPCs move
 **Per-NPC rule knowledge** has no writer for the same reason. The only
 `ruleClaim` writer is the player's refused crossing
 ([climb.ts:110](src/play/climb.ts:110)); the Director is shown the PLAYER's
-beliefs about the law ([director.ts:350](src/llm/director.ts:350)).
+beliefs about the law ([director.ts:356](src/llm/director.ts:356)).
 
 ---
 
@@ -875,7 +878,9 @@ Every balance number, and where it lives.
 | depth below ground | 3 | [ruleset.ts:314](src/rules/ruleset.ts:314) |
 | species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:19](src/character/species.ts:19) |
 | kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:48](src/character/species.ts:48), [:70](src/character/species.ts:70) |
-| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:495](src/world/floorgen.ts:495) |
+| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:504](src/world/floorgen.ts:504) |
+| wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:535](src/world/floorgen.ts:535) |
+| what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:552](src/world/floorgen.ts:552) |
 | loot profile | a multiplier per category on the standing chance; absent is ×1 | [catalogue.ts:254](src/items/catalogue.ts:254) |
 | places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:14](src/world/budget.ts:14) |
 | people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:20](src/world/budget.ts:20) |
@@ -901,7 +906,7 @@ became the tower.
 
 **`WorldDelta` is still hand-written verbs — ten when this was settled, twelve
 since step 6 added `revealWay` and `amendLaw` ([state.ts:92](src/play/state.ts:92),
-[:120](src/play/state.ts:120)) — and the question is now SETTLED rather than
+[:127](src/play/state.ts:127)) — and the question is now SETTLED rather than
 deferred.** The design called for it to become a list of `Effect`s
 sharing the skill vocabulary. Having built the second producer — deeds — the
 answer is that it should not, for three reasons that are now evidence rather
@@ -929,7 +934,9 @@ Director name one of `helped · insulted · humiliated · threatened` and the
 deed's own mark decides what it costs, who felt it and how far it went — the
 `useItem` division exactly. `drewOn`, `killed` and `spared` are NOT claimable:
 they are outcomes the engine resolves, and a model able to name one could report
-a killing that never happened.
+a killing that never happened. `drewOn` is charged only when the player struck
+first: the Director says who did (`startedBy`, [state.ts:104](src/play/state.ts:104)),
+and being jumped is no deed ([delta.ts:461](src/play/delta.ts:461)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -951,14 +958,14 @@ arrives with quests (DESIGN step 7).
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
-([genesis.ts:582](src/session/genesis.ts:582)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:253](src/play/delta.ts:253)).
+([genesis.ts:627](src/session/genesis.ts:627)); the only writer of
+`Region.exits` is a way out found in play ([delta.ts:256](src/play/delta.ts:256)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
 The seed falls back to `Date.now()` when the client does not supply one; the
 creation page is the single point where real entropy enters
-([new/page.tsx:50](app/new/page.tsx:50)); fact retrieval depends on a live
+([new/page.tsx:52](app/new/page.tsx:52)); fact retrieval depends on a live
 embedder and silently degrades; an unresolved fight lives only in memory, so a
 restart mid-fight discards the turn (a documented, accepted trade); and
 `combatRng` keys on `log.length`, so an action that logs nothing (a move) leaves
