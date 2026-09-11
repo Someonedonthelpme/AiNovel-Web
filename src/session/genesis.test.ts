@@ -8,6 +8,7 @@ import type { Interview } from './interview.ts';
 import { validateAbilities, validateSheet } from './sheet.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
+import { HARSH, STANDARD } from '../rules/ruleset.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
   let iv = startInterview(language);
@@ -86,6 +87,25 @@ const provider = (c = character(), g = ground()) => new FakeProvider({ structure
  */
 const wholeGenesis = (c = character(), g = ground()) =>
   new FakeProvider({ structured: [noNames, c, noRoleNames, g] });
+
+test('a world is born under a named ruleset, and records the one it got', async () => {
+  // `World.rules` had no writer at all: every world ever created played by
+  // STANDARD, and PLAIN and HARSH existed only in tests. The world stores the
+  // whole ruleset rather than the name so that retuning a preset later cannot
+  // silently re-tune a run already in progress — the same reason a climb is
+  // recorded rather than recomputed.
+  const harsh = await runGenesis(wholeGenesis(), completed(), 42, 'harsh');
+  assert.equal(harsh.world.rules?.world.dangerPerFloor, HARSH.world.dangerPerFloor);
+  assert.equal(harsh.world.rules?.gear.wearPerFight, HARSH.gear.wearPerFight);
+
+  const named = await runGenesis(wholeGenesis(), completed(), 42);
+  assert.equal(named.world.rules?.world.dangerPerFloor, STANDARD.world.dangerPerFloor);
+  assert.deepEqual(named.world.rules?.laws, STANDARD.laws, 'a world carries its laws, not a pointer to them');
+
+  // Anything a client can post. The fallback is STANDARD, never a throw.
+  const junk = await runGenesis(wholeGenesis(), completed(), 42, 'no-such-preset' as never);
+  assert.equal(junk.world.rules?.world.dangerPerFloor, STANDARD.world.dangerPerFloor);
+});
 
 test('Session Zero produces a valid character and a playable ground floor', async () => {
   const result = await runGenesis(wholeGenesis(), completed(), 42);

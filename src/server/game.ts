@@ -30,6 +30,7 @@ import { initialPlayState } from '../play/state.ts';
 import type { Mode, PlayState, TurnRecord } from '../play/state.ts';
 import { playTurn, suggestedActions } from '../play/turn.ts';
 import { runGenesis } from '../session/genesis.ts';
+import type { PresetName } from '../rules/ruleset.ts';
 import { recordAnswer, setDraft, startInterview, STAGES } from '../session/interview.ts';
 import type { CharacterDraft } from '../session/interview.ts';
 import type { Language } from '../session/interview.ts';
@@ -432,6 +433,8 @@ export async function newGame(
   answers?: Partial<Record<string, string>>,
   draft?: CharacterDraft,
   seed?: number,
+  /** Which ruleset this world plays by. Anything unknown falls back to STANDARD. */
+  rules?: string,
 ): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
@@ -452,7 +455,11 @@ export async function newGame(
    * classes are not the ones they were shown. The seed IS the world, and
    * deciding it at the last moment was always arbitrary.
    */
-  const genesis = await runGenesis(provider(), interview, seed ?? Date.now() % 2147483647);
+  // Cast at the boundary, not inside: `presetNamed` is the validator, and it
+  // answers STANDARD for anything a client makes up.
+  const genesis = await runGenesis(
+    provider(), interview, seed ?? Date.now() % 2147483647, rules as PresetName | undefined ?? 'standard',
+  );
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);
   await saveSnapshot(id, initialPlayState(genesis.world, genesis.sheet));
   return id;

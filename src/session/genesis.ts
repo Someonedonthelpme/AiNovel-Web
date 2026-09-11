@@ -26,6 +26,8 @@ import { CHARACTER_SCHEMA, GROUND_FLOOR_SCHEMA } from './schema.ts';
 import type { Background, CharacterSheet, Skill } from './sheet.ts';
 import { POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, validateSheet } from './sheet.ts';
 import { sword } from '../combat/fixtures.ts';
+import { presetNamed } from '../rules/ruleset.ts';
+import type { PresetName } from '../rules/ruleset.ts';
 
 /**
  * Session Zero generation: an interview in, a validated character and ground
@@ -507,6 +509,7 @@ export async function runGenesis(
   provider: Provider,
   interview: Interview,
   seed = Date.now(),
+  rules: PresetName = 'standard',
 ): Promise<GenesisResult> {
   /*
    * Named FIRST, because the character call lists them and asks which two this
@@ -537,6 +540,16 @@ export async function runGenesis(
     language: interview.language,
     subjects,
     roles,
+    /*
+     * The world keeps the ruleset it was BORN under, in full.
+     *
+     * `World.rules` had no writer until here, so every world ever created
+     * played by STANDARD and the presets were reachable only from tests. Stored
+     * whole rather than by name because retuning a preset must not reach back
+     * into a run already under way — the same reason a climb is a recorded
+     * event rather than something recomputed on load.
+     */
+    rules: presetNamed(rules),
     regions: { 'floor-0': ground.region },
     people: ground.people,
     edges: ground.edges,

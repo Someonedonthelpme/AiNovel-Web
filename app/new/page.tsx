@@ -30,6 +30,10 @@ type Answers = Partial<Record<string, string>>;
 
 export default function NewCharacter() {
   const [language, setLanguage] = useState<Language>('en');
+  // The world's ruleset. Not the two-phase rules view step 10 wants — three
+  // presets, so the dials a world is born under are a choice rather than a
+  // constant nobody could reach.
+  const [rules, setRules] = useState<'standard' | 'plain' | 'harsh'>('standard');
   const [answers, setAnswers] = useState<Answers>({});
   const [step, setStep] = useState(0);
 
@@ -96,7 +100,7 @@ export default function NewCharacter() {
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, answers, draft, seed }),
+        body: JSON.stringify({ language, answers, draft, seed, rules }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'generation failed');
@@ -177,6 +181,33 @@ export default function NewCharacter() {
             ไทย
           </button>
         </div>
+      </section>
+
+      <section className="panel">
+        <p className="label">Rules</p>
+        <div className="chips">
+          {([
+            ['standard', 'standard', 'the tuning everything was balanced against'],
+            ['plain', 'plain', 'nothing presses: no soak, no drift, no load, one danger'],
+            ['harsh', 'harsh', 'things hurt more, gear wears, the climb bites'],
+          ] as const).map(([id, label, why]) => (
+            <button
+              key={id}
+              className={rules === id ? 'chip on' : 'chip'}
+              onClick={() => setRules(id)}
+              title={why}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
+          {rules === 'plain'
+            ? 'Nothing presses on you: no soak, no drift, no carry limit, every floor as dangerous as the first.'
+            : rules === 'harsh'
+              ? 'Wounds soak through, gear wears out, people change faster, and depth bites.'
+              : 'The tuning everything else was balanced against.'}
+        </p>
       </section>
 
       {/* --------------------------------------------------- the interview */}
