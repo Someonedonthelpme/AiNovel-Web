@@ -5,7 +5,8 @@ import { validateRegion } from '../world/validate.ts';
 import { generateCharacter, generateGroundFloor, runGenesis } from './genesis.ts';
 import { recordAnswer, setDraft, startInterview, STAGES } from './interview.ts';
 import type { Interview } from './interview.ts';
-import { validateAbilities, validateSheet } from './sheet.ts';
+import { finalAbilities, validateAbilities, validateSheet } from './sheet.ts';
+import { ABILITIES } from '../combat/types.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { HARSH, STANDARD } from '../rules/ruleset.ts';
@@ -351,4 +352,17 @@ test('the climber chooses their kind: picked, described, or left to the world', 
 
   const invented = await runGenesis(wholeGenesis(character({ species: 'dragon' })), completed(), 42, 'standard', 'dynamic', { describe: 'x' });
   assert.ok(kinds.some((k) => k.id === invented.sheet.species), 'never a kind the world lacks');
+});
+
+test('the climber is born with their kind\'s template, on top of point buy', async () => {
+  const other = speciesFor(42)[1];
+  const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: other.id });
+  const without = finalAbilities({ ...sheet, speciesTemplate: undefined });
+  for (const a of ABILITIES) assert.equal(finalAbilities(sheet)[a], without[a] + (other.template[a] ?? 0), a);
+});
+
+test('a climber who never chose a kind is ordinary, with the ordinary template', async () => {
+  const folk = speciesFor(42)[0];
+  const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic');
+  assert.deepEqual(sheet.speciesTemplate, folk.template);
 });

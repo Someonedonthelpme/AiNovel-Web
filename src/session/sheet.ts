@@ -97,6 +97,14 @@ export type CharacterSheet = Persona & {
    * here would be a cycle.
    */
   traitBonuses?: Partial<Abilities>;
+  /**
+   * The body their kind gave them, copied from the world's species at creation.
+   *
+   * A layer rather than folded into `baseAbilities`, which point buy bounds to
+   * 8–15. Copied because `finalAbilities` never sees the world — the same reason
+   * `background.grantsStats` lives here. Absent on a climber made before types.
+   */
+  speciesTemplate?: Partial<Abilities>;
   /** Signets claimed. Discovery is the hard part; holding one is just a list. */
   signets?: string[];
   /**
@@ -226,6 +234,7 @@ export function finalAbilities(sheet: CharacterSheet, inventory?: Inventory): Ab
     out[ability] =
       out[ability]
       + (sheet.background.grantsStats[ability] ?? 0)
+      + (sheet.speciesTemplate?.[ability] ?? 0)
       + (sheet.spentAbilities?.[ability] ?? 0)
       + (sheet.treeBonuses?.ability[ability] ?? 0)
       + (sheet.traitBonuses?.[ability] ?? 0)

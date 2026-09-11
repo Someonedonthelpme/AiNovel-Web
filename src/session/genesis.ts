@@ -588,7 +588,10 @@ export async function runGenesis(
   );
   const warnings: string[] = [];
   const kind = climberSpecies(species, character.speciesSaid, seed, kinds, warnings);
-  const sheet = kind ? { ...character.sheet, species: kind } : character.sheet;
+  // No choice is the ordinary kind — which has a body too, or two ordinary
+  // climbers would differ by whether anyone asked.
+  const speciesTemplate = kinds.find((k) => k.id === (kind ?? FOLK.id))?.template;
+  const sheet = { ...character.sheet, ...(kind ? { species: kind } : {}), speciesTemplate };
 
   /*
    * And the roles, for the same reason: the ground floor is asked who its
