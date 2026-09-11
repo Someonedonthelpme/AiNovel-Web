@@ -237,18 +237,17 @@ export function mergeDeltas(base: WorldDelta, outcome: WorldDelta): WorldDelta {
     trust[id] = (trust[id] ?? 0) + change;
   }
   return {
-    moveTo: outcome.moveTo ?? base.moveTo,
-    revealExit: outcome.revealExit ?? base.revealExit,
+    // The branch the dice picked wins: what happened is one thing, not both.
+    // Spread rather than listed, so a verb added to `WorldDelta` cannot be
+    // dropped here — `amendLaw` and `revealWay` were, on every checked turn.
+    ...base,
+    ...outcome,
+    // Except where both halves genuinely add up.
     learnFacts: [...(base.learnFacts ?? []), ...(outcome.learnFacts ?? [])],
     trust: Object.keys(trust).length ? trust : undefined,
     flags: { ...(base.flags ?? {}), ...(outcome.flags ?? {}) },
     timeSpent: Math.max(base.timeSpent ?? 0, outcome.timeSpent ?? 0),
     startCombat: base.startCombat || outcome.startCombat,
-    // The branch the dice picked wins: what happened is one thing, not both.
-    deed: outcome.deed ?? base.deed,
-    useItem: outcome.useItem ?? base.useItem,
-    equipItem: outcome.equipItem ?? base.equipItem,
-    rest: outcome.rest ?? base.rest,
   };
 }
 

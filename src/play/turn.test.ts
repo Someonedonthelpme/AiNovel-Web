@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
 import { hasDialogue } from '../llm/writer.ts';
+import { mergeDeltas } from '../llm/director.ts';
 import { WriterLeakError, assertNoLeak, hiddenStrings, toWriterView } from '../llm/redact.ts';
 import { checkedOutput, directorOutput, emptyDelta, outcome, playState } from './fixtures.ts';
 import { outcomeFor, playTurn, suggestedActions } from './turn.ts';
@@ -363,4 +364,15 @@ test('the writer is told who it is writing, not just their name', async () => {
   const sent = (d.writer as FakeProvider).allSentText();
   assert.match(sent, /cold/);
   assert.match(sent, /badly rattled/);
+});
+
+test('a dice check never drops what either side of the delta named', () => {
+  // `mergeDeltas` rebuilt the delta from a hand-kept field list, and step 6's
+  // `amendLaw` and `revealWay` were not on it: any turn with a check lost them.
+  const merged = mergeDeltas(
+    { amendLaw: { constraint: 'crossFloors', binds: 'all' }, revealWay: 'market' },
+    { timeSpent: 1 },
+  );
+  assert.deepEqual(merged.amendLaw, { constraint: 'crossFloors', binds: 'all' });
+  assert.equal(merged.revealWay, 'market');
 });
