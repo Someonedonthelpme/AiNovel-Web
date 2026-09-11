@@ -21,6 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0: two of three bugs fixed; design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module |
@@ -92,6 +93,172 @@ Decided with the user:
    divergence today, even with a trait on a kill threshold, because every
    consequence commutes. It stops commuting the moment a kill carries a
    consequence — so it is fixed first, before anything attaches to one.
+
+**Decided with the user, 2026-09-11** (supersedes the stage list in the old plan file):
+
+- **Only foes with a future persist.** A foe that fled, yielded or was captured,
+  or that is notable or epic, becomes a `Person`. A dead mass foe becomes a tally
+  and a fact, never a person — `world.people` is never compressed, so persisting
+  every minion would grow the snapshot, the fold and the Director's context
+  without bound.
+- **Mass** foes are template × role × danger (today they are role × danger,
+  `combat/statblock.ts:54`). **Epic** foes are a species plus one MUTATION — a
+  boss or sub-boss, still an NPC foe. **Notable** foes are named people who
+  existed BEFORE the fight: a person on the floor whose relationship with you has
+  gone bad enough becomes the foe, and gets a sheet from their species template
+  the first time they fight.
+- **Species are a three-level hierarchy**, D&D-shaped:
+  - **Type** — closed and authored: humanoid, beast, construct, undead, fey,
+    fiend, elemental, aberration. Each differs mechanically through systems that
+    already exist: need multipliers (a type with no safety need never yields or
+    flees; with no company need it cannot be parleyed), an ability lean, how it
+    behaves when losing. Today's four kinds map onto the first five, so their ids
+    stay readable.
+  - **Species** — 2–4 per type the world holds (the seed picks 3–5 types). A stat
+    template = the type's lean + a seeded shift, SUMMING TO ZERO so no species is
+    simply stronger, plus one signature skill composed by the skill composer from
+    that lean. The model NAMES them (words only, one call at genesis, like subject
+    naming): a high-fantasy world will say elf and dwarf; another world says its
+    own words for the same shapes.
+  - **Subspecies** — 1–3 per species, a small template delta (high-human,
+    dark-elf, ancient-dwarf), also model-named.
+  - **"Folk" goes away**: the seed picks a DOMINANT species for the town. The
+    player's picker groups type → species → subspecies; "describe it" maps onto a
+    subspecies. The player's species applies the same template.
+  - Scale: at most ~60 entries per world, stored on the World.
+- **Mutations are a `Variant`, not a trait**: `{ id, name, grant: NodeGrant }`
+  from a closed authored list (grown, twisted, hungering, ancient, …). A
+  subspecies and a mutation are the same shape — a delta on a template — for a
+  population and for one individual. Traits stay what they are, EARNED by play
+  from a per-player catalogue the fold must agree on; a born-with mutation would
+  break both. Only the grant shape is shared (see *Traits and Signets: what a
+  reward is* — `resist` and `discount` are not built yet, so templates start as
+  ability shifts).
+
+**Stages** (each starts with one failing test the user approves; `npm run fight`
+after any that touches a fight):
+
+1. **A kill is a deed** — `killed` is recorded for witnesses; the live path
+   re-folds from the pre-turn state so live and replay agree by construction
+   (stage 0.3).
+2. **Whoever struck first acts first** — `startedBy: 'them'` gives foes the
+   first action.
+3. **Types and species templates** — genesis naming; the player's template;
+   mass foes use template × role × danger; the grouped picker; a tolerant reader
+   for today's four kinds.
+4. **Epic foes** — species + one mutation, on landmark floors.
+5. **Notable foes are existing people** — `Person.sheet` gets its first writer.
+6. **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
+   the engine from HP, nerve and nature; `alive: false` and `spared` get writers.
+7. **Survivors with a future** — become people (model-named, recorded in the
+   turn), keep a firsthand belief and a grudge, and the rumour system carries
+   their account; a returning survivor covers "mass escalates to notable".
+8. **Parley** — a Director turn inside a fight, its verdict recorded in the
+   action so the fight stays one replayable event.
+9. **Subspecies** — deferred until a world needs them, if stage 3 runs long.
+
+**Out of scope here:** recruiting stops at a `stance` of *willing to join*;
+joining the party is step 9 (companions).
+
+**Objections recorded:** 60 templates can read alike even when their numbers
+differ — accept, revisit with real worlds. Parley is the only stage that puts a
+model call inside a fight, which is why it is last and the rest stand without it.
+
+## The persistent world — decided, not built
+
+The user's inspiration: manhwa towers that are a PERSISTENT world, where places
+can be owned and negotiated for; Ragnarok Online's map screens; D&D battle maps;
+Paradox's recursive provinces. Decided with the user, 2026-09-11. Ordered after
+6b, before quests.
+
+**The player is a climber who can come to own places** — not a trader, not a
+ruler of nations.
+
+### 1. Ownership
+- A holder (a person, or the player) on a **province, a floor or a stratum**.
+  Which levels can be owned at all is the world's LAW, in a closed vocabulary on
+  a new `territory` axis (who may hold land, who may build).
+- Acquired by **negotiation** (the Director proposes; the engine checks trust,
+  standing and a coin price), **conquest** (6b's defeat outcomes against the
+  holder), or **reward** (quests, step 7).
+- Every settlement has an NPC holder from the start, so negotiating is dealing
+  with a real person with trust, grudges and beliefs.
+- **First reader, on day one:** a long rest requires a settlement on floor 0
+  (ARCHITECTURE §10). A settlement you hold is a place you can long-rest — a base
+  halfway up the tower.
+
+### 2. Maps — the Ragnarok model
+- **Every province is one grid map**, joined to its neighbours at PORTALS. The
+  existing place graph IS the portal list, so the Director still picks from
+  connected places and the engine pathfinds the tiles.
+- **Bigger levels are coarser grids**: a floor is a grid whose cells are
+  provinces. One grid type at every scale; an interior is a finer grid.
+- **Maps are drawn by the engine from the seed and the place's id, never
+  stored.** Only changes are stored (what was built, what fell, who died where).
+  The model names and themes zones and never draws tiles — it counts and keeps
+  adjacency unreliably, the same reason it never sets a stat.
+- **Distance is travel time**, so crossing a big forest costs turns and needs.
+- **Combat happens on the local map** (decided), in a window around the player.
+  **Objection:** balance was measured on fixed open arenas; the window needs a
+  size clamp and `npm run fight` re-measured.
+- **Objection: text-first becomes map-first.** The grid sits UNDER the graph, so
+  nothing in the Director or validation changes — but pacing and UI do.
+
+### 3. The administrative hierarchy — the Paradox model
+
+| level | spatial | administrative |
+|---|---|---|
+| tile | a cell on a province's grid | — |
+| province | one place, one map | holder, crowd, buildings: the atomic unit |
+| floor | a coarse grid of provinces | a group of provinces |
+| state | — | a stratum |
+| region | — | a parent stratum (strata already nest) |
+| world | the whole graph of maps | the root |
+
+- Floors are never MERGED into one region: a region keeps one depth, because
+  danger, budgets and depth XP key on it. Combining floors means combining
+  AUTHORITY — travel, market, government — at the stratum level.
+- Laws, markets and holders resolve **innermost-wins, else inherit up** — the
+  rule `stratumAt` and `dangerAt` already implement (`world/strata.ts:13`, `:51`).
+  Laws gain a scope; today they are world-level only.
+- **Stratum membership becomes "these regions"**, with a floor range kept as the
+  stack shorthand — a floor range cannot group the outer world's sideways
+  regions, which share a depth. The same split adjacency already went through.
+- **Objection: the two trees must never disagree.** A province belongs to exactly
+  one floor, a floor to exactly one innermost stratum, checked at generation the
+  way `validateRegion` checks a map.
+
+### 4. Building
+- A closed, law-gated verb: build a settlement on free cells in territory you
+  hold, for coin and materials.
+- **Objection, and it decides the design:** a compressed floor is REBUILT by the
+  model from its gazetteer, which would erase what the player built. Built
+  things are stored as diffs on the seeded map and handed to any rebuild as
+  fixed canon.
+
+### 5. Crowds, markets and government — the Victoria model
+- **The crowd is the compressed form of people** — a population group (species,
+  profession, size, pooled needs) per province. A named person is drawn out of a
+  group when they start to matter and returns to it when they stop; a dead mass
+  foe shrinks one, a survivor with a future is drawn from one.
+- **Markets** for a few goods per province, priced by what groups produce versus
+  need. Readers: coin (earned everywhere, spent almost nowhere), `Item.value`
+  (dead, "there are no shops"), and the price of rations — the difficulty curve.
+- **Government**: interest groups by profession; whichever holds a place's power
+  gives `amendLaw` its CAUSE.
+- **Off-screen ticking waits for step 8's scheduler.** Until then a place moves
+  only while you are in it and catches up in one closed-form step on return, as
+  compressed floors already do.
+- **Objection recorded:** a simulation with nothing the player does to it is the
+  dead-field bug at system scale. Every stage here names its reader first.
+
+### 6. The outer world
+A graph-topology structure, not `floor-0` — already decided in *Tower decisions
+(2026-09-04)*. Needs stratum membership by region (§3).
+
+### 7. The 3D map
+A view. The engine only knows the graph and the grids; 3D is a height map of
+tiles with floors stacked. Last.
 
 ---
 
