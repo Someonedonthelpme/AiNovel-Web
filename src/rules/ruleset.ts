@@ -142,6 +142,15 @@ export type WorldRules = {
   /** Danger is `dangerBase + floor × dangerPerFloor` — no longer just the floor. */
   dangerBase: number;
   dangerPerFloor: number;
+  /**
+   * How many floors this world has BELOW the ground, if anyone may go there.
+   *
+   * Geography, not permission: `descendBelowGround` says who may dig, this says
+   * how far there is to dig. Nothing bounded it before, and every new floor is
+   * a model call — an exempt digger could walk down for ever. Zero is a world
+   * whose ground is solid, and the law then never even gets asked.
+   */
+  depthBelowGround: number;
 };
 
 export type KnowledgeRules = {
@@ -302,7 +311,7 @@ export const STANDARD: Ruleset = {
     maxRefine: 10, refineRisk: 0.25, refineLoss: 1, repairLoss: 8,
   },
   rest: { shortTurns: 1, longTurns: 8 },
-  world: { dangerBase: 0, dangerPerFloor: 1 },
+  world: { dangerBase: 0, dangerPerFloor: 1, depthBelowGround: 3 },
   laws: [
     // What `descend` used to assert on its own: the ground is the bottom.
     { axis: 'movement', constraint: 'descendBelowGround', binds: 'all' },

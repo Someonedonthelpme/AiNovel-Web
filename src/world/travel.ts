@@ -1,7 +1,7 @@
 import { compressExcept } from './lod.ts';
 import type { Gazetteer, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
-import { forbids } from '../rules/ruleset.ts';
+import { forbids, rulesOf } from '../rules/ruleset.ts';
 import type { Subject } from '../rules/ruleset.ts';
 import type { Law } from '../rules/ruleset.ts';
 
@@ -134,6 +134,12 @@ export function descend(world: World, subject: Subject = 'player'): TravelResult
     : null;
   if (groundLaw) {
     return { kind: 'error', reason: 'you are already at ground level', law: groundLaw };
+  }
+  // Permission and geography are different questions, and the law only answers
+  // the first. Without this a world that permits digging has no bottom at all,
+  // and every floor down is a generation call.
+  if (region.floor - 1 < -rulesOf(world).world.depthBelowGround) {
+    return { kind: 'error', reason: 'there is nothing below this but solid ground' };
   }
   if (world.currentPlace !== region.entrance) return { kind: 'error', reason: 'you are not at the way down' };
 

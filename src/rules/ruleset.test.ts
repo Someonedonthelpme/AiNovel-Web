@@ -415,7 +415,7 @@ const PROVEN = [
   'knowledge.spreadDepth', 'knowledge.reputationWeight',
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',
-  'world.dangerBase', 'world.dangerPerFloor',
+  'world.dangerBase', 'world.dangerPerFloor', 'world.depthBelowGround',
 ];
 
 /* -------------------------------------------------------------------------- */

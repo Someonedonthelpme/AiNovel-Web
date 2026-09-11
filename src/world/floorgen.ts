@@ -268,6 +268,8 @@ export async function generateFloor(
   // third copy of "the ground is the bottom" hiding in the generator: with the
   // law lifted, `descend` asks for floor -1 and got a throw instead of a floor.
   // Whether anyone may go there is the LAW's question, answered in `travel.ts`.
+  // How far down there is to go is `world.depthBelowGround`, checked by
+  // `descend` before anything is ever asked of a generator.
   if (floor === 0) throw new Error('floor 0 is the authored ground, not generated');
 
   const canon = gazetteer

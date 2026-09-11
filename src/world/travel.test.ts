@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, moveWithinRegion } from './travel.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, groundFloor, link, place, world } from './fixtures.ts';
-import { isFull } from './types.ts';
+import { isFull, regionIdFor } from './types.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import type { Region, World } from './types.ts';
 
@@ -106,6 +106,34 @@ test('a world whose law does not forbid it can be dug below ground', () => {
   const r = descend(atGround({ rules: { ...STANDARD, laws: [] } }));
   assert.equal(r.kind, 'needsRegion');
   if (r.kind === 'needsRegion') assert.equal(r.floor, -1);
+});
+
+test('a world has a bottom, and it is geography rather than permission', () => {
+  // The ponytail note left on `generateFloor`: with the law lifted, nothing at
+  // all bounded how far down a run could dig, and every floor is a model call.
+  // A DIAL rather than a law, because "how deep does this world go" is not a
+  // question about who is asking — the exempt hit the bottom too.
+  const undercroft = (floor: number): Region => ({ ...groundFloor(), id: regionIdFor(floor), floor });
+  const dug = (floor: number) => world({
+    currentPlace: 'gate',
+    currentRegion: regionIdFor(floor),
+    regions: { [regionIdFor(floor)]: undercroft(floor) },
+    rules: { ...STANDARD, laws: [] },
+  });
+
+  const deeper = descend(dug(-2));
+  assert.equal(deeper.kind, 'needsRegion', 'the world goes three below the ground by default');
+
+  const bottom = descend(dug(-3));
+  assert.equal(bottom.kind, 'error');
+  if (bottom.kind === 'error') assert.match(bottom.reason, /nothing below/);
+
+  // And the bottom is a dial: a world can be written with no undercroft at all.
+  const solid = world({
+    currentPlace: 'gate',
+    rules: { ...STANDARD, laws: [], world: { ...STANDARD.world, depthBelowGround: 0 } },
+  });
+  assert.equal(descend(solid).kind, 'error');
 });
 
 test('descending requires standing at the way down', () => {
