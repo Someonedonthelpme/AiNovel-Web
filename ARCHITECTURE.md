@@ -110,7 +110,7 @@ config ─┐
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
   this module decides which are legal and applies only those."*
-  ([delta.ts:30](src/play/delta.ts:30)). Refusing one field never discards the
+  ([delta.ts:34](src/play/delta.ts:34)). Refusing one field never discards the
   rest of the turn.
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
@@ -234,9 +234,9 @@ so an amended law pays out what was earned under it.
 ([ruleset.ts:250](src/rules/ruleset.ts:250)) — not on a lookup inside
 `forbids`, which keeps `src/rules/` free of the play layer that knows what a
 Signet is. `playerSubject` builds one from the sheet
-([signetbook.ts:200](src/play/signetbook.ts:200)); one Signet per world, the
+([signetbook.ts:201](src/play/signetbook.ts:201)); one Signet per world, the
 first to survive the reachability proof, exempts the first law that binds the
-player ([signetbook.ts:186](src/play/signetbook.ts:186)). `descend` defaults its
+player ([signetbook.ts:190](src/play/signetbook.ts:190)). `descend` defaults its
 subject to a plain `'player'` ([travel.ts:168](src/world/travel.ts:168)), so a
 caller that forgets to say who is asking gets the strictest reading.
 
@@ -317,7 +317,7 @@ anything derives from the seed alone.
   reach into a run already under way. It carries `laws` alongside its dials
   ([ruleset.ts:273](src/rules/ruleset.ts:273)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:234](src/play/delta.ts:234)).
+  mid-run writer ([delta.ts:235](src/play/delta.ts:235)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
   `subjects` is.
@@ -405,7 +405,7 @@ come from?"
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
 | `linksFrom` ([travel.ts:125](src/world/travel.ts:125)) | a region | its ways out: its own `exits`, or up/down derived from depth |
-| `playerSubject` ([signetbook.ts:200](src/play/signetbook.ts:200)) | held Signets + the kept catalogue | the `Subject` every law check on the player takes |
+| `playerSubject` ([signetbook.ts:201](src/play/signetbook.ts:201)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:292](src/server/game.ts:292)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
 ---
@@ -435,7 +435,7 @@ in the save.
 Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:137](src/character/species.ts:137)), weighted 4:1 toward the
 ordinary. And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:189](src/play/delta.ts:189)) rather than drawn,
+place it leaves from ([delta.ts:190](src/play/delta.ts:190)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
 
@@ -459,7 +459,7 @@ Being seeded is what lets a world stored before types read as typed:
 `readSpecies` takes the type from the dealt id and re-derives the template, so
 an old world reads exactly as a new one stores — and an untyped id no world was
 ever dealt throws rather than being guessed
-([species.ts:111](src/character/species.ts:111)). It has no caller until 3c.
+([species.ts:125](src/character/species.ts:125)). `foeSpecies` is its caller.
 
 > **The catalogue-agreement invariant**
 > ([traitbook.ts:158](src/play/traitbook.ts:158)) — the fold, the tree and the
@@ -736,6 +736,19 @@ a slip and RO's destruction are one code path with no switch on a rule. It also
 gives COIN its first spender: it had been earned from every fight and spent on
 nothing at all.
 
+**What enhancing grants, as of `e9735c2`.** Rarity `fine` sets one LAW aside
+while the thing is worn — the Signet mechanic, on gear. `exemptOf`
+([refine.ts:286](src/items/refine.ts:286)) draws it from the laws IN FORCE, since
+an exemption from a law no world declares would be a word on a sheet, and seeds
+WHICH law from the object, so it is a fixed property of that thing. It survives
+later rebirths: the reset takes what was invested, never what the rarity earned.
+`playerSubject` reads worn gear beside signets
+([signetbook.ts:201](src/play/signetbook.ts:201)), so every `forbids` check
+honours it at once — and only while it is worn. DESIGN asks for two more payouts
+that are NOT built: a skill (nothing lets an item grant one; `activeSkills` never
+sees the inventory) and the full `NodeGrant` shape (`attack` and `damage` are
+dead until `resolve.ts` reads them).
+
 **A thing is made of pieces.** `instance.ts` has known how to walk an assembly,
 weigh it, wear its weakest piece and join its silhouette since the day it was
 written, and nothing ever built one — so every object was a single lump. Weapons
@@ -843,6 +856,16 @@ checks it — because nothing moves an NPC, so nobody ever tries.
 today for want of anyone to break it, and becomes a dead law the day NPCs move
 (DESIGN step 8).
 
+**An object's identity is unique only within one bag.** `nextInstanceId` returns
+`typeId#n` against that inventory's contents
+([types.ts:242](src/items/types.ts:242)) and `addItem` assembles a NEW id
+([types.ts:280](src/items/types.ts:280)). Since refine, rarity and the law
+exemption are all keyed on the id, moving an object between owners would rename
+it and silently re-roll what it is worth. True today only because NOTHING
+transfers an object: no shop, no corpse, no companion has an inventory. It
+becomes a live bug the day foes carry gear (DESIGN 6b 3n records it as a
+prerequisite).
+
 **Per-NPC rule knowledge** has no writer for the same reason. The only
 `ruleClaim` writer is the player's refused crossing
 ([climb.ts:110](src/play/climb.ts:110)); the Director is shown the PLAYER's
@@ -915,7 +938,7 @@ Every balance number, and where it lives.
 | tree rings | 8 | [skilltree.ts:142](src/play/skilltree.ts:142) |
 | graft size | 2..5 | [graft.ts:44](src/play/graft.ts:44) |
 | emergent branch cap | 3 | [emergent.ts:139](src/play/emergent.ts:139) |
-| tower horizon | 30 | [signetbook.ts:56](src/play/signetbook.ts:56) |
+| tower horizon | 30 | [signetbook.ts:57](src/play/signetbook.ts:57) |
 | embedding dimension | 1024 (bge-m3) | [schema.ts:21](src/db/schema.ts:21) |
 
 ---
@@ -1035,9 +1058,9 @@ classes now lean on stats and nothing is locked out.
 | **register** | Thai pronoun and particle choice, derived from trust. The signature mechanic: *the trust stat **is** the language*. |
 | **path** | A generated name over a stat pair, with a threshold. Replaced the twelve hardcoded disciplines, which broke in any non-fantasy world. |
 | **graft** | Growing a branch onto the tree. The one mechanism traits, Signets, subclasses and books all share; they differ only in how the branch is *entered*. |
-| **Signet** | A rare, gated reward with a reachability proof. Claimed once its gate is open ([sheetaction.ts:258](src/play/sheetaction.ts:258)), after which it grafts its branch onto the tree. Held, it sets aside one law — one Signet per world is an exemption ([signetbook.ts:186](src/play/signetbook.ts:186)) — but its `grant` still pays nothing; see the ledger. |
+| **Signet** | A rare, gated reward with a reachability proof. Claimed once its gate is open ([sheetaction.ts:258](src/play/sheetaction.ts:258)), after which it grafts its branch onto the tree. Held, it sets aside one law — one Signet per world is an exemption ([signetbook.ts:190](src/play/signetbook.ts:190)) — but its `grant` still pays nothing; see the ledger. |
 | **law** | A `{ axis, constraint, binds }` in a world's ruleset: what a subject may not do. Closed vocabulary; checked per subject by `forbids`. Distinct from a **dial**, which has no subject. |
-| **exemption** | A law set aside for one holder. What a Signet is. Carried on the `Subject`, not looked up. |
+| **exemption** | A law set aside for one holder. What a Signet is, and what a `fine` object is while worn. Carried on the `Subject`, not looked up. |
 | **stratum** | A structure above a floor — a tower, a wing inside it. Strata nest; the innermost speaks for a floor. `static` ones are frozen. |
 | **wing** | A stratum a floor opens mid-climb. The model names it; the engine shapes it. |
 | **species** | What kind of thing somebody is: how far each need moves for them, and an ability template. `folk` is ordinary. |
