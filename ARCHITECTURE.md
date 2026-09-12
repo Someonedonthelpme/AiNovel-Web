@@ -12,6 +12,15 @@ Postgres/pgvector · LM Studio as the model provider.
 Every claim carries a `file:line`. A claim you cannot cite does not belong here
 yet — it belongs in `HANDOFF.md` until it settles.
 
+**`scripts/check-citations.ts` does NOT tell you a citation is right.** It
+catches a line number landing on `*/`, on a blank line or past the end of a
+file, and nothing else — a citation that points at plausible but unrelated code
+passes silently. 3n-ii moved lines in eight files and left five citations wrong
+that the checker was happy with: `regionIdFor` pointed at `facts: Fact[]`,
+`gainLevels` at `settleCast`, the static-stratum freeze at a local variable. So
+after any edit that inserts or removes lines, grep this file for each touched
+path and read every hit BY HAND. It also cannot see a claim nobody wrote.
+
 **§4, §11, §12 and §13 are four views of the same facts** — what is stored, what
 must hold, what nothing reads, what can be dialled. A change to one is not done
 until it has been checked against the other three. Grep this file for the field,
