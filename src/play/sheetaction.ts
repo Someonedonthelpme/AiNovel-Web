@@ -214,7 +214,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
       return improve(state, action.item, (inst) => enchant(inst, action.working), (inst) => enchantCost(inst.enchants?.length ?? 0));
 
     case 'enhance':
-      return improve(state, action.item, (inst) => enhance(inst), (inst) => enhanceCost(inst.rarity));
+      return improve(state, action.item, (inst, rules) => enhance(inst, rules.laws), (inst) => enhanceCost(inst.rarity));
 
     case 'repair':
       return improve(

@@ -3,6 +3,7 @@ import { join, normalise, rect } from './shape.ts';
 import type { Ability } from '../combat/types.ts';
 import type { Item } from './types.ts';
 import type { Cell, Shape } from './shape.ts';
+import type { Constraint } from '../rules/ruleset.ts';
 
 /**
  * A specific thing, as opposed to a kind of thing.
@@ -64,6 +65,12 @@ export type ItemInstance = {
   /** Bought at refine milestones. */
   enchants?: string[];
   rarity?: Rarity;
+  /**
+   * One law this object sets aside for whoever WEARS it — the Signet mechanic,
+   * on gear. Granted by `enhance` at `fine`, and kept through later rebirths:
+   * the reset is what was invested, never what the rarity earned.
+   */
+  exempts?: Constraint;
   /**
    * This object's own history — who carried it, what it was made for.
    *

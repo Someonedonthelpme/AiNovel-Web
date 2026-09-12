@@ -341,3 +341,21 @@ test('mending is FOLDED, and costs coin like everything else at a smith', () => 
   assert.ok(done.state.pc.coin < 500, 'a smith is not free');
   assert.deepEqual(done.state, applySheetAction(battered, { type: 'repair', item: id }).state);
 });
+
+test('a fine thing is made against one of the laws in force', () => {
+  const law = { axis: 'economy' as const, constraint: 'takeLoot' as const, binds: 'player' as const };
+  let inst = instanceOf('axe#0', 'weapon_axe_d8');
+  const steps: (string | undefined)[] = [];
+  for (let i = 0; i < 4; i++) {
+    inst = enhance(inst, [law]).item!;
+    steps.push(inst.exempts);
+  }
+  assert.deepEqual(steps, [undefined, undefined, 'takeLoot', 'takeLoot'], 'nothing below fine sets a law aside');
+  assert.equal(inst.rarity, 'storied', 'and the power it earned survives the next rebirth');
+});
+
+test('a world with no laws has nothing to be made against', () => {
+  let inst = instanceOf('axe#0', 'weapon_axe_d8');
+  for (let i = 0; i < 4; i++) inst = enhance(inst, []).item!;
+  assert.equal(inst.exempts, undefined);
+});

@@ -6,7 +6,10 @@ import type { Gate, Reachable, Signet } from './signet.ts';
 import { CANDIDATE_SIGNETS, DROPPABLE_FAMILIES, reachableIn, signetsFor, TOWER_HORIZON } from './signetbook.ts';
 import { COUNTERS } from './traits.ts';
 import type { TraitContext } from './traits.ts';
-import { addItem } from '../items/types.ts';
+import { addItem, emptyInventory, equip, withInstance } from '../items/types.ts';
+import type { Item } from '../items/types.ts';
+import { forbids, STANDARD } from '../rules/ruleset.ts';
+import { playerSubject } from './signetbook.ts';
 import { material } from '../items/catalogue.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import { playState } from './fixtures.ts';
@@ -268,4 +271,23 @@ test('a claimed signet survives a reload, because claiming is an event', () => {
 
   const replayed = foldPlay(state, [sheetRecord({ type: 'claimSignet', id: target.id })]);
   assert.ok((replayed.sheet.signets ?? []).includes(target.id));
+});
+
+test('a law set aside by what you carry is set aside only while you carry it', () => {
+  const law = { axis: 'economy' as const, constraint: 'takeLoot' as const, binds: 'player' as const };
+  const axe: Item = {
+    id: 'axe', name: 'an axe', description: 'plain', kind: 'equipment',
+    slot: 'main', stackable: false, value: 10,
+  };
+  const bag = addItem(emptyInventory(), axe);
+  const held = bag.held[0].instance;
+  const storied = withInstance(bag, held.id, { ...held, rarity: 'storied', exempts: 'takeLoot' });
+
+  const base = playState();
+  const world = { ...base.world, rules: { ...STANDARD, laws: [law] } };
+  const carrying = { ...base, world, pc: { ...base.pc, inventory: equip(storied, held.id).inventory } };
+  const stowed = { ...base, world, pc: { ...base.pc, inventory: storied } };
+
+  assert.equal(forbids(world, playerSubject(carrying), 'takeLoot'), null, 'worn, it sets the law aside');
+  assert.ok(forbids(world, playerSubject(stowed), 'takeLoot'), 'in the bag, it does nothing');
 });

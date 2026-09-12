@@ -2,6 +2,7 @@ import { mulberry32 } from '../engine/roll.ts';
 import type { Ability } from '../combat/types.ts';
 import { ceilingOf, instanceOf, PRISTINE, RARITIES, weakestPart } from './instance.ts';
 import type { ItemInstance, Rarity } from './instance.ts';
+import type { Constraint, Law } from '../rules/ruleset.ts';
 
 /**
  * Making a thing better, three ways, and the trade between them.
@@ -258,15 +259,33 @@ export function enchant(inst: ItemInstance, name: string): Attempt {
  *
  * Wear is kept. Rebirth is not repair.
  */
-export function enhance(inst: ItemInstance): Attempt {
+export function enhance(inst: ItemInstance, laws: readonly Law[] = []): Attempt {
   const next = nextRarity(inst.rarity);
   if (!next) return { item: inst, attempted: false, note: 'nothing is finer than this' };
 
+  const exempts = inst.exempts ?? exemptOf(inst.id, next, laws);
   return {
-    item: { ...inst, rarity: next, refine: 0, enchants: [] },
+    item: { ...inst, rarity: next, refine: 0, enchants: [], ...(exempts ? { exempts } : {}) },
     attempted: true,
-    note: `${next} now — and everything it carried is gone`,
+    note: exempts && !inst.exempts
+      ? `${next} now — made against the law on ${exempts}, and everything it carried is gone`
+      : `${next} now — and everything it carried is gone`,
   };
+}
+
+/** The rarity at which a thing starts setting a law aside. */
+export const EXEMPT_FROM: Rarity = 'fine';
+
+/**
+ * The law this object was made against, or nothing.
+ *
+ * Drawn from the laws IN FORCE rather than the whole vocabulary, because an
+ * exemption from a law no world declares is a word on a sheet. Seeded from the
+ * object, so which law it answers is a fixed property of the thing.
+ */
+export function exemptOf(instanceId: string, rarity: Rarity, laws: readonly Law[]): Constraint | undefined {
+  if (RARITIES.indexOf(rarity) < RARITIES.indexOf(EXEMPT_FROM) || laws.length === 0) return undefined;
+  return laws[hash(`${instanceId}|exempt`) % laws.length].constraint;
 }
 
 /* -------------------------------------------------------------------------- */

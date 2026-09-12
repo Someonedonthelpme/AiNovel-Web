@@ -1,5 +1,6 @@
 import { ABILITIES } from '../combat/types.ts';
 import { RATION_ID } from '../items/catalogue.ts';
+import { equippedHoldings } from '../items/types.ts';
 import type { PlayState } from './state.ts';
 import type { Reachable, Signet } from './signet.ts';
 import { admissible } from './signet.ts';
@@ -199,12 +200,21 @@ function withExemption(kept: Signet[], state: PlayState): Signet[] {
  */
 export function playerSubject(state: PlayState): Subject {
   const held = state.sheet.signets ?? [];
-  if (held.length === 0) return 'player';
 
-  const exempt = signetsFor(state).kept
+  const fromSignets = held.length === 0 ? [] : signetsFor(state).kept
     .filter((s) => s.exempts && held.includes(s.id))
     .map((s) => s.exempts as Constraint);
 
+  /*
+   * And what they are WEARING. A rarity earned on gear sets a law aside the same
+   * way a Signet does — while it is worn, never while it is in the bag, which is
+   * what makes taking it off a decision.
+   */
+  const fromGear = equippedHoldings(state.pc.inventory)
+    .map((h) => h.instance.exempts)
+    .filter((c): c is Constraint => Boolean(c));
+
+  const exempt = [...fromSignets, ...fromGear];
   return exempt.length > 0 ? { kind: 'player', exempt } : 'player';
 }
 
