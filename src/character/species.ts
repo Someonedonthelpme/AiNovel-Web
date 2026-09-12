@@ -200,6 +200,17 @@ export function speciesFor(seed: number): Grown[] {
   return nodes;
 }
 
+/** Whichever GROUP this node sits under — what its body plan and habitat are. */
+export function groupOf(nodes: readonly Species[], id: string): string | undefined {
+  let at = nodes.find((n) => n.id === id);
+  while (at && at.level !== 'group') at = nodes.find((n) => n.id === at!.parent);
+  return at?.id;
+}
+
+/** Every subspecies below a node, by walking ids: a tree id carries its path. */
+export const leavesUnder = (nodes: readonly Species[], id: string): Species[] =>
+  leavesOf(nodes).filter((leaf) => leaf.id === id || leaf.id.startsWith(`${id}.`));
+
 /** The leaves — the subspecies, which is what a living thing actually is. */
 export const leavesOf = (nodes: readonly Species[]): Species[] =>
   nodes.filter((n) => n.level === 'subspecies');

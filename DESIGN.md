@@ -296,8 +296,17 @@ after any that touches a fight):
      behaviour. Readers on day one: `body.ts` narrows the ruleset at both equip
      paths and at CREATION, so a handless climber carries its weapon instead of
      wielding it. A world stored before bodies keeps the world's body.
-   - **3j–3m** the rest of the group mechanics, one each: habitat, kinship, law
-     (may wait for 6c's `territory` axis), predator and prey.
+   - **3j SHIPPED** habitat (`character/habitat.ts`): a group lives in a DEPTH
+     band, not a biome — `Region.biome` is a word the model invented for that floor,
+     so a habitat keyed on it would be matching prose. Bands are SPREAD across the
+     tower (each group centred on its share, jittered, then widened to cover that
+     share) so every floor has something that really lives there: drawing freely
+     left floor 1 and floors 25–30 empty and only a fallback hid it. Reader:
+     `foeSpecies` picks the encounter's group from the ones living at that depth,
+     and **a pack is one group** — every creature in a fight comes from one
+     population, its lineage still keyed on the model's name for it.
+   - **3k–3m** the rest of the group mechanics, one each: kinship, law (may wait
+     for 6c's `territory` axis), predator and prey.
 3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
    individuation into a sheet, profession and rank, derived gear, the instance-id
    fix, used looted gear; `scripts/balance.ts` holds the curve.

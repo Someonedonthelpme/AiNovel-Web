@@ -8,6 +8,8 @@ import {
 import { scaleFoe } from '../combat/statblock.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { speciesFor } from '../character/species.ts';
+import { livesAt } from '../character/habitat.ts';
+import { groupOf } from '../character/species.ts';
 import type { CombatAction } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
 import { xpToNext } from './progress.ts';
@@ -467,4 +469,20 @@ test('a mass foe carries its species\' body on top of its role and danger', () =
   assert.ok(Object.values(kind.template).some((v) => v !== 0), 'a template that moves something');
   const foe = Object.values(beginEncounter(start).combat!.combatants).find((c) => c.side === 'foe')!;
   for (const a of ABILITIES) assert.equal(foe.abilities[a], scaleFoe(8, 'elite').abilities[a] + (kind.template[a] ?? 0), a);
+});
+
+test('what you meet on a floor lives there, and a pack is one group', () => {
+  const kinds = speciesFor(11);
+  for (const floor of [2, 7, 14, 22]) {
+    const base = onFloorTwo();
+    const region = { ...base.world.regions['floor-2'], floor, danger: Math.max(1, floor), creatures: ['a', 'b', 'c'] };
+    const start = { ...base, world: { ...base.world, seed: 11, species: kinds, regions: { 'floor-2': region } } };
+
+    const foes = Object.values(beginEncounter(start).combat!.combatants).filter((c) => c.side === 'foe');
+    const groups = new Set(foes.map((f) => groupOf(kinds, foeSpecies(start.world, f.name, floor).id)));
+    assert.equal(groups.size, 1, `floor ${floor}: a pack from ${groups.size} different groups`);
+
+    const [group] = [...groups];
+    assert.ok(livesAt(11, kinds, group!, floor), `floor ${floor}: ${group} does not live there`);
+  }
 });

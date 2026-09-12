@@ -23,7 +23,8 @@ import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
-import { FOLK, readSpecies } from '../character/species.ts';
+import { FOLK, leavesUnder, readSpecies } from '../character/species.ts';
+import { groupsAt } from '../character/habitat.ts';
 import type { Grown } from '../character/species.ts';
 
 /**
@@ -96,15 +97,33 @@ export function playerCombatant(state: PlayState): Combatant {
 /**
  * What kind of thing a creature is — one of the kinds this world holds.
  *
- * Keyed on the creature's NAME, so a shadow-wolf is the same species every time
- * it appears in a world, and seeded, so a replay draws the same one. A world
- * with no species list is all folk, as `speciesIdFor` already treats it.
+ * A floor's foes come from a group that LIVES at that depth (`habitat.ts`), and
+ * all of them from the same one — a pack is one population, not an assortment.
+ * Which lineage of it a given creature is stays keyed on the NAME, so a
+ * shadow-wolf is the same lineage every time the model says it, and everything is
+ * seeded, so a replay draws exactly the same creatures.
+ *
+ * A world with no species list at all is folk, as `speciesIdFor` already treats it.
  */
-export function foeSpecies(world: PlayState['world'], name: string): Grown {
-  const kinds = world.species?.length ? world.species : [FOLK];
+export function foeSpecies(world: PlayState['world'], name: string, floor = 0): Grown {
+  const kinds = world.species ?? [];
+  if (kinds.length === 0) return readSpecies(world.seed, FOLK);
+
+  /*
+   * A PACK IS ONE GROUP. The group is chosen from the ones that live at this
+   * depth and from the floor alone, so every creature in the encounter — and
+   * every encounter on that floor — comes from the same population. Which of its
+   * lineages a given creature is stays keyed on the NAME, so a shadow-wolf is the
+   * same lineage each time the model says it.
+   */
+  const groups = groupsAt(world.seed, kinds, floor);
+  const pack = groups[Math.floor(mulberry32((world.seed ^ 0xf100 ^ (floor * 31)) >>> 0)() * groups.length)];
+  const leaves = leavesUnder(kinds, pack?.id ?? '');
+  const from = leaves.length > 0 ? leaves : kinds;
+
   let hash = (world.seed ^ 0x3c6e) >>> 0;
   for (const ch of name) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
-  return readSpecies(world.seed, kinds[Math.floor(mulberry32(hash)() * kinds.length)]);
+  return readSpecies(world.seed, from[Math.floor(mulberry32(hash)() * from.length)]);
 }
 
 /**
@@ -137,7 +156,7 @@ export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'):
      */
     origin: ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },
     taken: new Set([cellKey(me.pos)]),
-    templateOf: (name) => foeSpecies(state.world, name).template,
+    templateOf: (name) => foeSpecies(state.world, name, region?.floor ?? 0).template,
   });
 
   const rng = combatRng(state);
