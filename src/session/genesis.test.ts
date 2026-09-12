@@ -5,7 +5,8 @@ import { validateRegion } from '../world/validate.ts';
 import { generateCharacter, generateGroundFloor, runGenesis } from './genesis.ts';
 import { recordAnswer, setDraft, startInterview, STAGES } from './interview.ts';
 import type { Interview } from './interview.ts';
-import { finalAbilities, validateAbilities, validateSheet } from './sheet.ts';
+import { activeSkills, finalAbilities, validateAbilities, validateSheet } from './sheet.ts';
+import { signatureSkill } from '../character/speciesskill.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
@@ -392,4 +393,14 @@ test('a climber who chose nothing IS the dominant kind, not a kind of nobody', a
   const { sheet } = await runGenesis(wholeGenesis(), completed(), 42);
   assert.equal(sheet.species, dominant, 'everybody alive is some particular kind');
   assert.deepEqual(sheet.speciesTemplate, kinds.find((k) => k.id === dominant)?.template);
+});
+
+test('the climber sets out knowing what their kind can do', async () => {
+  const kinds = speciesFor(42);
+  const mine = leavesOf(kinds)[2];
+  const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: mine.id });
+
+  const theirs = signatureSkill(42, kinds.find((k) => k.id === mine.id)!);
+  assert.ok((sheet.learned ?? []).some((s) => s.id === theirs.id), `no sign of ${theirs.name}`);
+  assert.ok(activeSkills(sheet).some((s) => s.id === theirs.id), 'and it is usable, not just stored');
 });

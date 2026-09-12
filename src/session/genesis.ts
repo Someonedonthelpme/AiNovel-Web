@@ -31,6 +31,7 @@ import type { PresetName } from '../rules/ruleset.ts';
 import type { Stratum } from '../world/types.ts';
 import { dominantOf, FOLK, leavesOf, speciesFor, speciesIdFor } from '../character/species.ts';
 import { nameSpecies } from '../character/speciesnames.ts';
+import { signatureSkill } from '../character/speciesskill.ts';
 import type { Species, SpeciesChoice } from '../character/species.ts';
 
 /**
@@ -610,7 +611,21 @@ export async function runGenesis(
   // No choice is the ordinary kind — which has a body too, or two ordinary
   // climbers would differ by whether anyone asked.
   const born = kind ?? ordinaryOf(seed, kinds);
-  const sheet = { ...character.sheet, species: born, speciesTemplate: kinds.find((k) => k.id === born)?.template };
+  const mine = kinds.find((k) => k.id === born);
+  /*
+   * And what their kind can DO, on the sheet beside what a book would teach.
+   *
+   * `learned` rather than a new field: a species skill is used exactly like any
+   * other active, and `activeSkills` already reads that list — a second list
+   * would mean every reader asking twice.
+   */
+  const signature = mine ? signatureSkill(seed, mine) : null;
+  const sheet = {
+    ...character.sheet,
+    species: born,
+    speciesTemplate: mine?.template,
+    ...(signature ? { learned: [...(character.sheet.learned ?? []), signature] } : {}),
+  };
 
   /*
    * And the roles, for the same reason: the ground floor is asked who its

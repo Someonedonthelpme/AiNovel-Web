@@ -276,8 +276,17 @@ after any that touches a fight):
      browser. **Known gap:** the picker runs BEFORE genesis, so a lineage shows
      its id and its body but not its name; naming it earlier needs the world
      description, which the same page asks for later.
-   - **3h** species skills: type grammar, species skill, subspecies variant —
-     the player's only, until step 9.
+   - **3h SHIPPED** `character/speciesskill.ts`: a type is a FILTER over the stat
+     grammar (a beast never bursts, the dead never mend), a species gets one
+     signature skill from `composeSkill` at budget 10, a subspecies the same knack
+     at 8 — the same idea bent, not a new one. The narrowing is absolute: where a
+     stat and a type share no payload the answer is an empty grammar, and the
+     KNACK narrows instead (the best stat its kind can actually use), so no
+     creature is ever asked to compose from nothing. The climber sets out with
+     theirs in `learned`, so `activeSkills` needs no new reader. Measured at +3/0/−1
+     points of win rate at danger 2/3/4 — near free, partly because the harness
+     policy prefers a skill over a swing unconditionally, which is its own
+     weakness to fix. Foes carry none: `combat/ai.ts` cannot cast until step 9.
    - **3i–3m** the group mechanics, one each: body plan, habitat, kinship, law
      (may wait for 6c's `territory` axis), predator and prey.
 3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
