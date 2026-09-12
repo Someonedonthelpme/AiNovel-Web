@@ -260,7 +260,12 @@ after any that touches a fight):
      RESPECIFIED (folk is no longer "the ordinary kind") and the harness curve
      re-anchored, because a world with no species list now gives its foes an
      empty body instead of folk's invented template.
-   - **3f** model naming at genesis, words only.
+   - **3f SHIPPED** `nameSpecies` (`character/speciesnames.ts`): ONE call for the
+     whole tree, before the character call so the player's own description maps
+     onto named kinds. Words only — the schema carries id and name and nothing
+     else. A word for a node that does not exist is ignored, a repeated word is
+     refused however it is cased, a skipped node keeps its placeholder, and a
+     model that is down leaves a playable world with duller words. Ids never move.
    - **3g** a dominant subspecies replaces folk; the grouped picker shows each
      template.
    - **3h** species skills: type grammar, species skill, subspecies variant —

@@ -88,8 +88,10 @@ const provider = (c = character(), g = ground()) => new FakeProvider({ structure
  * subjects before the character, and the roles before the ground floor, which
  * has to be told what a bond can be before it can propose one.
  */
+const noSpeciesNames = { kinds: [] as { id: string; name: string }[] };
+
 const wholeGenesis = (c = character(), g = ground()) =>
-  new FakeProvider({ structured: [noNames, c, noRoleNames, g] });
+  new FakeProvider({ structured: [noNames, noSpeciesNames, c, noRoleNames, g] });
 
 test('a world is born under a named ruleset, and records the one it got', async () => {
   // `World.rules` had no writer at all: every world ever created played by
@@ -372,4 +374,21 @@ test('a climber who never chose a kind is ordinary, with the ordinary template',
   const folk = leavesOf(speciesFor(42))[0];
   const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic');
   assert.deepEqual(sheet.speciesTemplate, folk.template);
+});
+
+test('a world stores the words its model gave its kinds, and none of the ids move', async () => {
+  const tree = speciesFor(42);
+  const provider = new FakeProvider({
+    structured: [
+      { subjects: [] },
+      { kinds: tree.map((n, i) => ({ id: n.id, name: `kind ${i}` })) },
+      character(),
+      { roles: [] },
+      ground(),
+    ],
+  });
+
+  const r = await runGenesis(provider, completed(), 42);
+  assert.deepEqual(r.world.species?.map((k) => k.id), tree.map((n) => n.id), 'ids are untouched');
+  assert.deepEqual(r.world.species?.map((k) => k.name), tree.map((_, i) => `kind ${i}`), 'and the words are the world\'s own');
 });

@@ -30,6 +30,7 @@ import { presetNamed } from '../rules/ruleset.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { Stratum } from '../world/types.ts';
 import { FOLK, leavesOf, speciesFor, speciesIdFor } from '../character/species.ts';
+import { nameSpecies } from '../character/speciesnames.ts';
 import type { Species, SpeciesChoice } from '../character/species.ts';
 
 /**
@@ -594,7 +595,12 @@ export async function runGenesis(
     provider, subjectsFor(seed), interview.answers.world ?? '', interview.language,
   );
 
-  const kinds = speciesFor(seed);
+  /*
+   * The kinds get their words BEFORE the character call, because that call maps
+   * the player's own description of what they are onto one of them — and it can
+   * only do that well if they are called something.
+   */
+  const kinds = await nameSpecies(provider, speciesFor(seed), interview.answers.world ?? '', interview.language);
   const character = await generateCharacter(
     provider, interview, seed, subjects,
     species && 'describe' in species ? { words: species.describe, kinds } : undefined,
