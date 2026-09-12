@@ -2,6 +2,7 @@ import { trustToward } from '../social/edge.ts';
 import type { Gazetteer, PersonId, Region, RegionId, World } from './types.ts';
 import { isFull } from './types.ts';
 import { isStatic } from './strata.ts';
+import { aggregate } from '../character/population.ts';
 
 /**
  * Tiered persistence — how "every floor is a persistent region" stays
@@ -59,6 +60,16 @@ export function compressRegion(region: Region, turn: number, opts: CompressOptio
 export function compressExcept(world: World, keep: RegionId[], turn: number): World {
   const kept = new Set(keep);
   const regions = { ...world.regions };
+  /*
+   * Who lives there goes the way the geometry does, but not all the way.
+   *
+   * A population is keyed by PLACE, and place ids are the model's own words, so
+   * the floor that comes back has different ones and a place-keyed thinning
+   * would be silently thrown away every time you left. The floor's places are
+   * folded into ONE total instead — a thinned floor rather than a thinned gate.
+   * Lossy by decision; 6c removes compression and this with it.
+   */
+  let populations = world.populations;
   for (const [id, record] of Object.entries(world.regions)) {
     if (kept.has(id) || !isFull(record)) continue;
     // A STATIC stratum is authored once and frozen. Compression is the only
@@ -74,8 +85,9 @@ export function compressExcept(world: World, keep: RegionId[], turn: number): Wo
     // World so it survives rehydration too; this copy is what the returning
     // brief reads, and it is `Gazetteer.reputation`'s first writer ever.
     regions[id] = compressRegion(record, turn, { reputation: world.reputation?.[id] ?? 0 });
+    populations = aggregate(populations, id, record.places.map((p) => p.id));
   }
-  return { ...world, regions };
+  return { ...world, regions, ...(populations ? { populations } : {}) };
 }
 
 /** People named by a region, so they can be checked against the registry. */

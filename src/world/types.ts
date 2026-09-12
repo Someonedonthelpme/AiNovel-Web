@@ -6,6 +6,7 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Subject } from './subjects.ts';
 import type { Edges } from '../social/edge.ts';
 import type { Ambient } from '../social/ambient.ts';
+import type { Populations } from '../character/population.ts';
 import type { Role } from '../social/roles.ts';
 import type { LootProfile } from '../items/catalogue.ts';
 import type { Species } from '../character/species.ts';
@@ -296,6 +297,14 @@ export type World = {
    * something and the gate not yet is the whole point — see `ambient.ts`.
    */
   ambient?: Ambient;
+  /**
+   * Who lives where, per place.
+   *
+   * Keyed by place for the reason `ambient` is, and ABSENT until something has
+   * been killed: a population answers from the seed until then, so this holds
+   * only the thinning. See `character/population.ts`.
+   */
+  populations?: Populations;
   facts: Fact[];
   currentRegion: RegionId;
   currentPlace: PlaceId;

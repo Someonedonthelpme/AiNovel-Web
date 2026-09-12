@@ -29,7 +29,8 @@ import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
 import { FOLK, groupOf, leavesUnder, readSpecies } from '../character/species.ts';
 import { preyOf } from '../character/prey.ts';
-import { groupsAt } from '../character/habitat.ts';
+import { groupsAt, packAt } from '../character/habitat.ts';
+import { populationAt, sizeIn, thinPopulation } from '../character/population.ts';
 import type { Grown } from '../character/species.ts';
 
 /**
@@ -137,14 +138,6 @@ export function foeSpecies(world: PlayState['world'], name: string, floor = 0): 
   return readSpecies(world.seed, from[Math.floor(mulberry32(hash)() * from.length)]);
 }
 
-/** Which group's population this floor's foes come out of. */
-export function packAt(world: PlayState['world'], floor: number): string | undefined {
-  const kinds = world.species ?? [];
-  if (kinds.length === 0) return undefined;
-  const groups = groupsAt(world.seed, kinds, floor);
-  return groups[Math.floor(mulberry32((world.seed ^ 0xf100 ^ (floor * 31)) >>> 0)() * groups.length)]?.id;
-}
-
 /**
  * The foes, as CHARACTERS out of the floor's population.
  *
@@ -165,19 +158,30 @@ function crowdFoes(
   grid: Grid,
   origin: Vec,
   taken: Set<string>,
-): Combatant[] {
+): Combatant[] | null {
   const kinds = state.world.species ?? [];
-  const pack = packAt(state.world, floor);
-  if (!pack) return [];
+  const region = activeRegion(state.world);
+  const cohorts = populationAt(state.world, state.world.currentRegion, state.world.currentPlace, floor);
+  // `null` is a world that holds no kinds, and falls back to statblocks. An
+  // EMPTY population is a different answer — this place has been cleared out —
+  // and the two must not collapse, or thinning a place to nothing would quietly
+  // summon back the statblock foes the population replaced.
+  if (!cohorts) return null;
 
-  const roles = composition(danger, kindForFloor(floor));
+  /*
+   * NO MORE BODIES THAN LIVE HERE. This is the cap that makes the population
+   * bite: the composition says what the depth is worth, and the crowd says how
+   * much of it is actually available. A cleared place fields nobody at all.
+   */
+  const roles = composition(danger, kindForFloor(floor)).slice(0, sizeIn(cohorts));
   const cells = freeCellsNear(grid, origin, taken, roles.length);
-  const names = activeRegion(state.world)?.creatures ?? [];
+  const names = region?.creatures ?? [];
 
   return roles.map((role, i) => {
     const rank = RANK_OF[role];
-    const who = { ...crowdMember(state.world.seed, kinds, pack, floor, i), rank };
-    const { sheet, inventory } = crowdFighter(state.world.seed, kinds, who, danger);
+    const drawn = crowdMember(state.world.seed, cohorts, floor, i)!;
+    const who = { ...drawn, rank };
+    const { sheet, inventory } = crowdFighter(state.world.seed, kinds, who, danger, `${state.world.currentPlace}:${i}`);
     const group = groupOf(kinds, who.subspecies);
     const hunts = group ? preyOf(state.world.seed, kinds, group) : undefined;
 
@@ -211,13 +215,33 @@ function crowdFoes(
       abilities: stats.abilities,
       attacks: [stats.attack],
       speed: stats.speed,
-      // The model's word for what lives here; the engine decided everything else.
-      name: names.length ? names[i % names.length] : who.profession,
+      /*
+       * THE WORD AND THE BODY AGREE. `Region.creatures` are words the model
+       * invented, and naming a foe `names[i % names.length]` meant a floor of
+       * undead could be handed a wolf's name — the word said one thing and the
+       * sheet another. So the name follows the body: whichever creature word
+       * maps to THIS lineage (`foeSpecies` keys a lineage on the name) is what
+       * it is called, and a lineage no word covers wears its own, since the
+       * engine invents no words.
+       */
+      name: nameFor(state.world, names, who.subspecies, floor) ?? `${who.rank} ${who.subspecies}`,
       pos: cells[i] ?? origin,
+      kind: who.subspecies,
+      trade: who.profession,
       ...(group ? { group } : {}),
       ...(hunts ? { hunts } : {}),
     };
   });
+}
+
+/** The floor's own word for this lineage, if it has one. */
+function nameFor(
+  world: PlayState['world'],
+  names: readonly string[],
+  subspecies: string,
+  floor: number,
+): string | undefined {
+  return names.find((name) => foeSpecies(world, name, floor).id === subspecies);
 }
 
 /** A statblock role, as a standing in a crowd. */
@@ -247,8 +271,11 @@ export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'):
   const origin = ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) };
   const taken = new Set([cellKey(me.pos)]);
   const asCharacters = crowdFoes(state, danger, region?.floor ?? 0, grid, origin, taken);
+  // Nobody lives here any more, so nobody attacks: the one visible end of
+  // thinning a place, and deterministic in stored state, so a replay agrees.
+  if (asCharacters && asCharacters.length === 0) return state;
 
-  const foes = asCharacters.length > 0 ? asCharacters : buildEncounter({
+  const foes = asCharacters ?? buildEncounter({
     danger,
     // A landmark is a DEPTH, not a danger level: the two part ways in any world
     // whose curve is not the identity, and a stratum can set its own.
@@ -560,9 +587,25 @@ export function concludeCombat(state: PlayState): CombatOutcome {
   if (!combat) return { state, victor: null, killed: [], loot: [], coin: 0, xp: 0, levelled: null };
 
   const pc = combat.combatants['pc'];
-  const killed = Object.values(combat.combatants)
-    .filter((c) => c.side === 'foe' && c.dead)
-    .map((c) => c.name);
+  const fallen = Object.values(combat.combatants).filter((c) => c.side === 'foe' && c.dead);
+  const killed = fallen.map((c) => c.name);
+
+  /*
+   * THE PLACE IS THINNER FOR IT.
+   *
+   * The reader that stops a crowd being a simulation nothing touches: what you
+   * kill is gone from the population it came out of, so clearing the wolves off
+   * a place means meeting fewer of them there and eventually none. Matched on
+   * the cohort each body carries (`kind`, `trade`) rather than re-derived, and
+   * counted whoever won — a foe that died died even if you lost.
+   */
+  const populations = thinPopulation(
+    state.world,
+    state.world.currentRegion,
+    state.world.currentPlace,
+    activeRegion(state.world)?.floor ?? 0,
+    fallen.flatMap((c) => (c.kind && c.trade ? [{ subspecies: c.kind, profession: c.trade as never }] : [])),
+  );
 
   let counters = state.sheet.counters;
   for (const _ of killed) counters = bumpCounter(counters, COUNTERS.kills);
@@ -611,6 +654,7 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     state: {
       ...state,
       combat: null,
+      world: { ...state.world, ...(populations ? { populations } : {}) },
       sheet,
       pc: {
         ...state.pc,

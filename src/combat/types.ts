@@ -152,6 +152,21 @@ export type Combatant = {
   group?: string;
   hunts?: string;
   /**
+   * WHICH lineage, and at what trade — the cohort it came out of.
+   *
+   * Every living thing is at a subspecies, and a fighter is no exception: this
+   * is that leaf. Carried rather than re-derived because the population it was
+   * drawn from is what killing THINS (`character/population.ts`), and finding
+   * the right cohort afterwards by re-drawing whichever indices died would go
+   * silently wrong the day foe ids stop being `foe1`, `foe2`.
+   *
+   * Also what makes the word and the body agree: a foe named for one of the
+   * floor's creatures is the lineage that name maps to, not whichever one the
+   * draw happened to land on.
+   */
+  kind?: string;
+  trade?: string;
+  /**
    * Party members drop to dying at 0 HP and roll death saves; foes just die.
    * `dead` is terminal in both cases.
    */

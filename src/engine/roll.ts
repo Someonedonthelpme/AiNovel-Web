@@ -72,3 +72,16 @@ export function roll(
     tier: tierFor(total),
   };
 }
+
+/**
+ * A seed out of words.
+ *
+ * Seven files grew their own private copy of this before it was worth
+ * exporting; the new ones use this. Same FNV-shaped mix they all used, so a
+ * caller that switches over keeps the numbers it had.
+ */
+export function hashText(text: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(h ^ text.charCodeAt(i), 16777619) >>> 0);
+  return h >>> 0;
+}

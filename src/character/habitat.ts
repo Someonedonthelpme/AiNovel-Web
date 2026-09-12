@@ -81,3 +81,19 @@ export function groupsAt(seed: number, nodes: readonly Species[], floor: number)
   const nearest = groups.slice().sort((a, b) => distance(a) - distance(b) || a.id.localeCompare(b.id));
   return nearest.slice(0, 1);
 }
+
+/**
+ * WHICH group's population this floor draws on — a pack is one group.
+ *
+ * Keyed on the floor alone, so every encounter on a floor and every creature in
+ * one comes out of the same population. Undefined for a world that holds no
+ * kinds, which is every world stored before the tree existed.
+ *
+ * Lives here rather than with the fight because the population needs the same
+ * answer: who lives at a place is who lives on that floor.
+ */
+export function packAt(seed: number, nodes: readonly Species[], floor: number): string | undefined {
+  if (nodes.length === 0) return undefined;
+  const groups = groupsAt(seed, nodes, floor);
+  return groups[Math.floor(mulberry32((seed ^ 0xf100 ^ (floor * 31)) >>> 0)() * groups.length)]?.id;
+}

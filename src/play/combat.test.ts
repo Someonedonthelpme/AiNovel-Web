@@ -8,7 +8,8 @@ import {
 import { scaleFoe } from '../combat/statblock.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { speciesFor } from '../character/species.ts';
-import { bandOf, livesAt } from '../character/habitat.ts';
+import { bandOf, livesAt, packAt } from '../character/habitat.ts';
+import { populationAt, sizeIn } from '../character/population.ts';
 import { groupOf, leavesUnder } from '../character/species.ts';
 import { preyOf } from '../character/prey.ts';
 import type { CombatAction } from './combat.ts';
@@ -526,4 +527,86 @@ test('what hunts you has the edge in a real fight, both ways round', () => {
   const foe = Object.values(combat.combatants).find((c) => c.side === 'foe')!;
   assert.ok(foe.group, 'and so is what it meets');
   if (foe.group === hunter.id) assert.equal(foe.hunts, quarry, 'a hunter brings its appetite into the fight');
+});
+
+/*
+ * 6b stage 3n-ii. A crowd is a population that KILLING THINS, so what a place
+ * fields is what still lives there — and what a foe carries comes off the body
+ * as the object it was, worn by the thing that carried it.
+ */
+
+/** A world with kinds, on a floor worth fighting on. */
+function populated(over: Partial<PlayState['world']> = {}): PlayState {
+  const base = onFloorTwo();
+  return { ...base, world: { ...base.world, seed: 11, species: speciesFor(11), ...over } };
+}
+
+const foesOf = (state: PlayState) =>
+  Object.values(state.combat?.combatants ?? {}).filter((c) => c.side === 'foe');
+
+test('a place fields no more bodies than live there', () => {
+  const start = populated();
+  const floor = start.world.regions['floor-2'].floor;
+  const full = foesOf(beginEncounter(start));
+  assert.ok(full.length > 0, 'a populated place fields somebody');
+
+  // Down to one living creature, whatever the depth thinks the fight is worth.
+  const cohorts = populationAt(start.world, 'floor-2', 'town', floor)!;
+  const one = [{ ...cohorts[0], size: 1 }];
+  const thin = populated({ populations: { town: one } });
+
+  const foes = foesOf(beginEncounter(thin));
+  assert.equal(foes.length, 1, `one left alive fielded ${foes.length}`);
+  assert.equal(foes[0].kind, one[0].subspecies, 'and it is the one that is left');
+});
+
+test('a place cleared out attacks nobody at all', () => {
+  const emptied = populated({ populations: { town: [] } });
+  assert.equal(beginEncounter(emptied).combat, null, 'something came out of an empty place');
+
+  // And this is NOT the same as a world that holds no kinds, which still meets
+  // the statblock foes it always did.
+  assert.ok(beginEncounter(onFloorTwo()).combat, 'an old world lost its fights');
+});
+
+test('KILLING a floor thins it: what dies is gone from the population', () => {
+  // A fight the party actually WINS, or nothing dies and this asserts nothing.
+  const won = winnable();
+  const start = { ...won, world: { ...won.world, seed: 11, species: speciesFor(11) } };
+  const floor = start.world.regions['floor-2'].floor;
+  const before = populationAt(start.world, 'floor-2', 'town', floor)!;
+
+  const { state: fighting } = fightItOut(beginEncounter(start));
+  const dead = foesOf(fighting).filter((c) => c.dead);
+  assert.ok(dead.length > 0, 'nothing died, so this asserts nothing');
+
+  const after = populationAt(concludeCombat(fighting).state.world, 'floor-2', 'town', floor)!;
+  assert.equal(sizeIn(after), sizeIn(before) - dead.length, 'the dead are still in the crowd');
+  for (const body of dead) {
+    assert.ok(body.kind && body.trade, 'a body with no cohort cannot be taken out of one');
+  }
+});
+
+test('the word and the body agree: a foe is what it is called', () => {
+  const kinds = speciesFor(11);
+  const floor = 4;
+  // Every word the model could say for this floor, so there is one per lineage.
+  const creatures = leavesUnder(kinds, packAt(11, kinds, floor)!).map((k) => `word-${k.id}`);
+  const base = onFloorTwo();
+  const region = { ...base.world.regions['floor-2'], floor, danger: 6, creatures };
+  const start = {
+    ...base,
+    world: { ...base.world, seed: 11, species: kinds, regions: { 'floor-2': region } },
+  };
+
+  const foes = foesOf(beginEncounter(start));
+  assert.ok(foes.length > 0);
+  for (const foe of foes) {
+    if (creatures.includes(foe.name)) {
+      assert.equal(foe.kind, foeSpecies(start.world, foe.name, floor).id, `a ${foe.name} is not a ${foe.kind}`);
+    } else {
+      // A lineage no word covers wears its own name; the engine invents none.
+      assert.ok(foe.name.includes(foe.kind!), `${foe.name} names neither a creature nor its own kind`);
+    }
+  }
 });

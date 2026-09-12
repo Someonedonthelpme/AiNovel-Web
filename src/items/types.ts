@@ -239,10 +239,14 @@ export function assemble(id: string, item: Item): ItemInstance {
   };
 }
 
-export function nextInstanceId(inv: Inventory, typeId: string): string {
+export function nextInstanceId(inv: Inventory, typeId: string, ns?: string): string {
   const taken = new Set(inv.held.map((h) => h.instance.id));
+  // A NAMESPACE makes the id unique across bags, not just within this one —
+  // which is what `give` needs, since the id is the key a thing's bonuses are
+  // hashed from and renaming one on transfer re-rolls them.
+  const stem = ns ? `${typeId}@${ns}` : typeId;
   for (let n = 0; ; n++) {
-    const id = typeId + '#' + n;
+    const id = stem + '#' + n;
     if (!taken.has(id)) return id;
   }
 }
@@ -270,14 +274,14 @@ export const isEquipped = (inv: Inventory, id: string): boolean =>
  * Stackable things collapse into one line; everything else takes its own, so
  * two swords with different provenance stay two swords.
  */
-export function addItem(inv: Inventory, item: Item, count = 1): Inventory {
+export function addItem(inv: Inventory, item: Item, count = 1, ns?: string): Inventory {
   if (count <= 0) return inv;
 
   if (!item.stackable) {
     // Each one is its own object, because each one can go on to differ.
     let next = inv;
     for (let n = 0; n < count; n++) {
-      const id = nextInstanceId(next, item.id);
+      const id = nextInstanceId(next, item.id, ns);
       next = { ...next, held: [...next.held, { instance: assemble(id, item), item }] };
     }
     return next;
@@ -290,6 +294,25 @@ export function addItem(inv: Inventory, item: Item, count = 1): Inventory {
     return { ...inv, stacks };
   }
   return { ...inv, stacks: [...inv.stacks, { item, count }] };
+}
+
+/**
+ * Hand an EXISTING object over, keeping the object.
+ *
+ * `addItem` MINTS a new instance; this moves one that already exists, and the
+ * difference matters because `ItemInstance.id` is what an object's refine and
+ * rarity bonuses are hashed from (`refine.ts:71,138`). Renaming a rare +4 on
+ * the way into a pack re-rolls them silently into other stats, so a transfer
+ * PRESERVES the id — and a collision is a real bug rather than something to
+ * paper over, since the only way to survive one is to change what the object is
+ * worth. Minters namespace their ids (`nextInstanceId`'s `ns`) so it cannot
+ * arise; this throws if one ever does.
+ */
+export function give(inv: Inventory, holding: Holding): Inventory {
+  if (inv.held.some((h) => h.instance.id === holding.instance.id)) {
+    throw new Error(`already holding an object called ${holding.instance.id}`);
+  }
+  return { ...inv, held: [...inv.held, holding] };
 }
 
 /**
