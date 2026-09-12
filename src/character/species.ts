@@ -236,6 +236,23 @@ const LEGACY: Record<string, TypeId> = {
 };
 
 /**
+ * The kind most of this world's towns are — what `folk` used to mean.
+ *
+ * A world's own people rather than a global default, which is the point: one
+ * world's ordinary is elves and another's is something with no name for hunger.
+ * PEOPLE where there are any — a town of beasts is a bestiary, not a town — and
+ * seeded, so a replay and the creation page agree without it being stored.
+ */
+export function dominantOf(seed: number, kinds: readonly Species[]): string {
+  const leaves = leavesOf(kinds);
+  if (leaves.length === 0) return FOLK.id;
+
+  const people = leaves.filter((leaf) => leaf.type === 'humanoid');
+  const from = people.length > 0 ? people : leaves;
+  return from[Math.floor(mulberry32((seed ^ 0x10ad) >>> 0)() * from.length)].id;
+}
+
+/**
  * Which kind a particular person is — a SUBSPECIES, like every living thing.
  *
  * Seeded from the world and their id, so it is the same on every replay and
@@ -251,7 +268,7 @@ export function speciesIdFor(seed: number, personId: string, kinds: readonly Spe
   for (const ch of personId) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
   const rng = mulberry32(hash);
 
-  return rng() < 0.8 ? leaves[0].id : leaves[Math.floor(rng() * leaves.length)].id;
+  return rng() < 0.8 ? dominantOf(seed, kinds) : leaves[Math.floor(rng() * leaves.length)].id;
 }
 
 /**

@@ -10,7 +10,7 @@ import { ABILITIES } from '../combat/types.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { HARSH, STANDARD } from '../rules/ruleset.ts';
-import { leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
+import { dominantOf, leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
 import { PLAYER } from '../social/edge.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
@@ -368,13 +368,6 @@ test('the climber is born with their kind\'s template, on top of point buy', asy
   for (const a of ABILITIES) assert.equal(finalAbilities(sheet)[a], without[a] + (other.template?.[a] ?? 0), a);
 });
 
-test('a climber who never chose a kind is ordinary, with the ordinary template', async () => {
-  // RESPECIFIED 2026-09-12 (3e): "ordinary" was folk; it is now the kind most of
-  // the town is, which is this world's first subspecies until 3g declares one.
-  const folk = leavesOf(speciesFor(42))[0];
-  const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic');
-  assert.deepEqual(sheet.speciesTemplate, folk.template);
-});
 
 test('a world stores the words its model gave its kinds, and none of the ids move', async () => {
   const tree = speciesFor(42);
@@ -391,4 +384,12 @@ test('a world stores the words its model gave its kinds, and none of the ids mov
   const r = await runGenesis(provider, completed(), 42);
   assert.deepEqual(r.world.species?.map((k) => k.id), tree.map((n) => n.id), 'ids are untouched');
   assert.deepEqual(r.world.species?.map((k) => k.name), tree.map((_, i) => `kind ${i}`), 'and the words are the world\'s own');
+});
+
+test('a climber who chose nothing IS the dominant kind, not a kind of nobody', async () => {
+  const kinds = speciesFor(42);
+  const dominant = dominantOf(42, kinds);
+  const { sheet } = await runGenesis(wholeGenesis(), completed(), 42);
+  assert.equal(sheet.species, dominant, 'everybody alive is some particular kind');
+  assert.deepEqual(sheet.speciesTemplate, kinds.find((k) => k.id === dominant)?.template);
 });

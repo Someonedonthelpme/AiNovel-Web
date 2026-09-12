@@ -266,8 +266,16 @@ after any that touches a fight):
      else. A word for a node that does not exist is ignored, a repeated word is
      refused however it is cased, a skipped node keeps its placeholder, and a
      model that is down leaves a playable world with duller words. Ids never move.
-   - **3g** a dominant subspecies replaces folk; the grouped picker shows each
-     template.
+   - **3g SHIPPED** `dominantOf` — a world's own ordinary kind, PEOPLE where a
+     world has any (a town of beasts is a bestiary), seeded so the creation page
+     and a replay agree without it being stored. It is what `speciesIdFor` weights
+     80% toward and what a climber who chose nothing IS: nobody is left without a
+     kind. The picker groups type → subspecies in collapsible sections and shows
+     every body as words ("con −2 · str +2 · dex +1 · wis −1"), which is the rule
+     that keeps a disadvantage chosen rather than handed out — verified in the
+     browser. **Known gap:** the picker runs BEFORE genesis, so a lineage shows
+     its id and its body but not its name; naming it earlier needs the world
+     description, which the same page asks for later.
    - **3h** species skills: type grammar, species skill, subspecies variant —
      the player's only, until step 9.
    - **3i–3m** the group mechanics, one each: body plan, habitat, kinship, law

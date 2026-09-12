@@ -7,7 +7,7 @@ import {
   defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
 } from '../../src/session/sheet.ts';
 import type { CharacterClass } from '../../src/character/classes.ts';
-import { FOLK, speciesFor } from '../../src/character/species.ts';
+import { dominantOf, leavesOf, speciesFor, TYPES } from '../../src/character/species.ts';
 import type { Species } from '../../src/character/species.ts';
 import { questionFor, STAGES } from '../../src/session/interview.ts';
 import type { Language } from '../../src/session/interview.ts';
@@ -29,6 +29,21 @@ import type { Language } from '../../src/session/interview.ts';
 const ASKED = STAGES.filter((s) => s !== 'review');
 
 type Answers = Partial<Record<string, string>>;
+
+/**
+ * What a body is worth, in words — "str +2 · vit −1".
+ *
+ * The whole reason the picker exists: a template is a TRADE, and a player choosing
+ * a kind has to be able to see which way it trades before they live with it.
+ */
+function bodyOf(kind: Species | undefined): string {
+  const template = kind?.template ?? {};
+  return Object.entries(template)
+    .filter(([, by]) => by)
+    .sort((a, b) => Math.abs(b[1] ?? 0) - Math.abs(a[1] ?? 0))
+    .map(([ability, by]) => `${ability} ${(by ?? 0) > 0 ? '+' : '−'}${Math.abs(by ?? 0)}`)
+    .join(' · ');
+}
 
 export default function NewCharacter() {
   const [language, setLanguage] = useState<Language>('en');
@@ -56,7 +71,14 @@ export default function NewCharacter() {
   // after mount, because the server renders with a different random seed and
   // a list drawn from it would not hydrate.
   const [kinds, setKinds] = useState<Species[]>([]);
-  useEffect(() => setKinds(speciesFor(seed).filter((k) => k.id !== FOLK.id)), [seed]);
+  useEffect(() => setKinds(speciesFor(seed)), [seed]);
+  // Everybody alive is a SUBSPECIES; a type and a group are categories to choose
+  // WITHIN, not bodies. The ordinary chip is this world's own dominant kind.
+  const leaves = leavesOf(kinds);
+  const dominant = kinds.length ? dominantOf(seed, kinds) : '';
+  const byType = TYPES
+    .map((t) => ({ type: t.id, leaves: leaves.filter((k) => k.type === t.id) }))
+    .filter((g) => g.leaves.length > 0);
   const [kindMode, setKindMode] = useState<'ordinary' | 'pick' | 'describe' | 'world'>('ordinary');
   const [kindPick, setKindPick] = useState('');
   const [kindWords, setKindWords] = useState('');
@@ -252,17 +274,8 @@ export default function NewCharacter() {
         <p className="label">What you are</p>
         <div className="chips">
           <button className={kindMode === 'ordinary' ? 'chip on' : 'chip'} onClick={() => setKindMode('ordinary')}>
-            {FOLK.name}
+            ordinary here{bodyOf(kinds.find((k) => k.id === dominant)) ? ` · ${bodyOf(kinds.find((k) => k.id === dominant))}` : ''}
           </button>
-          {kinds.map((k) => (
-            <button
-              key={k.id}
-              className={kindMode === 'pick' && kindPick === k.id ? 'chip on' : 'chip'}
-              onClick={() => { setKindMode('pick'); setKindPick(k.id); }}
-            >
-              {k.name}
-            </button>
-          ))}
           <button className={kindMode === 'describe' ? 'chip on' : 'chip'} onClick={() => setKindMode('describe')}>
             describe it
           </button>
@@ -270,6 +283,32 @@ export default function NewCharacter() {
             let the world decide
           </button>
         </div>
+        {/*
+          * Grouped type → species → subspecies, and every body SHOWN: a
+          * disadvantage the player chose is part of the game, one handed out
+          * silently is a trap. The first humanoid lean cost a climber 15–19
+          * points of win rate and nothing on this page said so.
+          */}
+        {byType.map((group) => (
+          <details key={group.type} style={{ marginTop: '0.5rem' }}>
+            <summary className="label" style={{ cursor: 'pointer' }}>
+              {group.type} · {group.leaves.length}
+            </summary>
+            <div className="chips" style={{ marginTop: '0.4rem' }}>
+              {group.leaves.map((k) => (
+                <button
+                  key={k.id}
+                  className={kindMode === 'pick' && kindPick === k.id ? 'chip on' : 'chip'}
+                  onClick={() => { setKindMode('pick'); setKindPick(k.id); }}
+                  title={k.id}
+                >
+                  {k.name === k.id ? k.id.split('.').slice(1).join(' ') : k.name}
+                  {bodyOf(k) ? <span className="muted"> · {bodyOf(k)}</span> : null}
+                </button>
+              ))}
+            </div>
+          </details>
+        ))}
         {kindMode === 'describe' && (
           <div className="field" style={{ marginTop: '0.6rem' }}>
             <input
@@ -281,8 +320,8 @@ export default function NewCharacter() {
         )}
         <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
           {kindMode === 'world'
-            ? 'Drawn the way everyone else here was drawn — most people are ordinary.'
-            : 'A kind changes which needs wear on you, and how fast.'}
+            ? 'Drawn the way everyone else here was drawn — most people are the kind this world is.'
+            : 'A kind changes what your body is worth and which needs wear on you. Some are worse in a fight; that is yours to pick.'}
         </p>
       </section>
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { applyDrift } from './drift.ts';
 import { emptyPersona, NEED_MAX } from './persona.ts';
 import { defaultVoice } from '../world/fixtures.ts';
-import { FOLK, leavesOf, readSpecies, speciesFor, speciesIdFor, TYPES } from './species.ts';
+import { dominantOf, FOLK, leavesOf, readSpecies, speciesFor, speciesIdFor, TYPES } from './species.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { runDirector } from '../llm/director.ts';
@@ -166,4 +166,26 @@ test('the Director is told when somebody is not the ordinary kind', async () => 
   const plain = new FakeProvider({ structured: [] });
   await runDirector(plain, base, 'look around', 'exploration', []).catch(() => {});
   assert.doesNotMatch(plain.allSentText(), /folk/, 'the ordinary kind is not worth a word');
+});
+
+test('a world has a dominant kind, and it is a subspecies of people where there are any', () => {
+  for (let seed = 0; seed < 30; seed++) {
+    const kinds = speciesFor(seed);
+    const dominant = dominantOf(seed, kinds);
+    const node = kinds.find((k) => k.id === dominant)!;
+    assert.equal(node.level, 'subspecies', `seed ${seed}: ${dominant} is a ${node.level}, not a people`);
+    if (kinds.some((k) => k.type === 'humanoid')) {
+      assert.equal(node.type, 'humanoid', `seed ${seed}: a town of ${node.type} when humanoids live here`);
+    }
+    assert.equal(dominant, dominantOf(seed, kinds), 'the same world, the same dominant kind');
+  }
+});
+
+test('most of a town is the dominant kind', () => {
+  const kinds = speciesFor(11);
+  const dominant = dominantOf(11, kinds);
+  const drawn = Array.from({ length: 200 }, (_, i) => speciesIdFor(11, `p${i}`, kinds));
+  const share = drawn.filter((id) => id === dominant).length;
+  assert.ok(share > drawn.length / 2, `the dominant kind is ${share} of ${drawn.length}`);
+  assert.ok(share < drawn.length, 'but the others are reachable');
 });

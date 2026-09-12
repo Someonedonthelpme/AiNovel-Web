@@ -29,7 +29,7 @@ import { sword } from '../combat/fixtures.ts';
 import { presetNamed } from '../rules/ruleset.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { Stratum } from '../world/types.ts';
-import { FOLK, leavesOf, speciesFor, speciesIdFor } from '../character/species.ts';
+import { dominantOf, FOLK, leavesOf, speciesFor, speciesIdFor } from '../character/species.ts';
 import { nameSpecies } from '../character/speciesnames.ts';
 import type { Species, SpeciesChoice } from '../character/species.ts';
 
@@ -285,14 +285,14 @@ function climberSpecies(
 }
 
 /**
- * The kind a climber is when nobody chose one.
+ * The kind a climber is when nobody chose one: this world's dominant kind.
  *
- * The same kind most of the town is, which is what "ordinary" meant when it was
- * `folk` — the difference is that it is now one of this world's own subspecies.
- * 3g makes it the world's declared DOMINANT one.
+ * What "ordinary" meant when it was `folk`, except that it is now one of this
+ * world's own peoples. Nobody is left WITHOUT a kind: a climber with no species
+ * was a creature the drift rules had no numbers for, which is the hole
+ * `speciesTemplate` and this both close.
  */
-const ordinaryOf = (seed: number, kinds: readonly Species[]): string =>
-  leavesOf(kinds)[0]?.id ?? FOLK.id;
+const ordinaryOf = dominantOf;
 
 /* -------------------------------------------------------------------------- */
 /* Ground floor                                                                */
@@ -609,8 +609,8 @@ export async function runGenesis(
   const kind = climberSpecies(species, character.speciesSaid, seed, kinds, warnings);
   // No choice is the ordinary kind — which has a body too, or two ordinary
   // climbers would differ by whether anyone asked.
-  const speciesTemplate = kinds.find((k) => k.id === (kind ?? ordinaryOf(seed, kinds)))?.template;
-  const sheet = { ...character.sheet, ...(kind ? { species: kind } : {}), speciesTemplate };
+  const born = kind ?? ordinaryOf(seed, kinds);
+  const sheet = { ...character.sheet, species: born, speciesTemplate: kinds.find((k) => k.id === born)?.template };
 
   /*
    * And the roles, for the same reason: the ground floor is asked who its
