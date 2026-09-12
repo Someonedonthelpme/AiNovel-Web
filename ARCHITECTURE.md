@@ -140,7 +140,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:282](src/play/combat.ts:282)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:154](src/play/combat.ts:154)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:282](src/play/combat.ts:282)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:154](src/play/combat.ts:154)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -184,7 +184,7 @@ mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts`.
 `types.ts` · `floorgen.ts` (the only world-changing model call) · `travel.ts` ·
 `strata.ts` (which structure speaks for a floor, [strata.ts:13](src/world/strata.ts:13)) ·
 `lod.ts` (**places compress, people do not — and a static stratum's places do
-not either**, [lod.ts:72](src/world/lod.ts:72)) · `validate.ts` · `budget.ts` ·
+not either**, [lod.ts:60](src/world/lod.ts:60), [:83](src/world/lod.ts:83)) · `validate.ts` · `budget.ts` ·
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic map positions).
 
@@ -224,8 +224,8 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:463](src/play/combat.ts:463)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:597](src/play/combat.ts:597)) |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:632](src/play/combat.ts:632)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:640](src/play/combat.ts:640)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -295,7 +295,7 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 **`World`** ([world/types.ts:227](src/world/types.ts:227)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:308](src/world/types.ts:308)).
+`regionIdFor(floor) = 'floor-' + floor` ([:317](src/world/types.ts:317)).
 **"One floor is one region is one integer" was true until step 6, and is now
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
@@ -334,6 +334,16 @@ anything derives from the seed alone.
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
+- `populations` — who lives per PLACE ([types.ts:307](src/world/types.ts:307)):
+  cohorts of (subspecies, profession, size). **Absent until something has been
+  killed** — a place answers from the seed until then
+  ([population.ts:99](src/character/population.ts:99)), so an old world needs no
+  migration and a world nobody has killed in stores nothing. Keyed by place for
+  the reason `ambient` is, and because 6c makes a province one place with one
+  map. Compression folds a floor's places into ONE aggregate keyed by region id
+  ([population.ts:150](src/character/population.ts:150),
+  [lod.ts:88](src/world/lod.ts:88)), because place ids are the model's own words
+  and come back different; 6c removes compression and the aggregate with it.
 
 **`Region`** ([types.ts:105](src/world/types.ts:105), full detail) — places,
 entrance, exit, danger, creatures, and optionally `exits: Link[]`. A `Link`
@@ -347,7 +357,7 @@ floor: `kind` `static | dynamic`, an optional `parent`, a floor range, and
 optional `danger`, `theme` and `loot`. Strata NEST, so the plan is a tree and
 the innermost stratum containing a floor speaks for it
 ([strata.ts:13](src/world/strata.ts:13)). `static` is authored once and frozen —
-never compressed, so never rebuilt ([lod.ts:72](src/world/lod.ts:72)).
+never compressed, so never rebuilt ([lod.ts:83](src/world/lod.ts:83)).
 
 **`Persona`** ([character/persona.ts:295](src/character/persona.ts:295)) — the
 core every villager and the player share:
@@ -590,25 +600,79 @@ anything.
 
 ### What a foe is
 
-Somebody out of the population on that floor — and the compromise in it is worth
-knowing, because the curve was nearly lost to it.
+Somebody **drawn out of the place's population** — and the compromise in it is
+worth knowing, because the curve was nearly lost to it twice.
+
+A place holds cohorts of (subspecies, profession, size), and the draw is weighted
+by size ([crowd.ts:82](src/character/crowd.ts:82)), so a lineage that has been
+hunted down is rarer to meet. Two readers make that more than bookkeeping: the
+encounter fields **no more bodies than live there**
+([play/combat.ts:176](src/play/combat.ts:176)), and a place cleared out **opens no
+fight at all** ([play/combat.ts:276](src/play/combat.ts:276)). Each body carries
+the cohort it came from — `Combatant.kind` and `trade`
+([combat/types.ts:167](src/combat/types.ts:167)) — so what dies is taken out of
+the population it came from ([play/combat.ts:602](src/play/combat.ts:602)),
+whoever won.
+
+"No population here" and "nothing lives here any more" are **different answers**
+and the callers keep them apart ([population.ts:99](src/character/population.ts:99)):
+collapsing them would let thinning a place to nothing quietly summon back the
+statblock foes the population replaced.
+
+The word and the body agree. `Region.creatures` are words the model invented, and
+naming a foe `names[i % names.length]` meant a floor of undead could be handed a
+wolf's name; the name now **follows the lineage** — whichever creature word maps
+to this body is what it is called — and a lineage no word covers wears its own
+kind, because the engine invents no words
+([play/combat.ts:238](src/play/combat.ts:238)).
 
 `scaleFoe` still decides what it is like to **fight**: hit points, AC,
 proficiency, abilities, the attack it swings, its speed. The CHARACTER decides who
 it is: which lineage, which group (so body, habitat, kinship, law and prey all
 apply), what it knows, and what is on its body to take. Rank stands in for the
 statblock role — whelp · ordinary · veteran for minion · regular · elite
-([crowd.ts:42](src/character/crowd.ts:42)) — and `levelFor` inverts the sheet's
+([crowd.ts:43](src/character/crowd.ts:43)) — and `levelFor` inverts the sheet's
 HP formula against the statblock's so a character of that standing is as tough as
 the foe it replaces ([crowd.ts:113](src/character/crowd.ts:113)).
 
-Why not let the character's own numbers fight? Measured: they cost the player 42
-points of win rate at danger 1 (95% → 53%), because damage, AC, proficiency and
-abilities all came from the trade and its refined gear; anchoring hit points alone
-left 20 of those points on the table. A harness test pins every cell of the build
-matrix equal between statblock foes and character foes, so re-deriving the curve
-from sheets is a deliberate piece of work rather than something that happens by
-accident.
+Its **gear** is solved against that same anchor rather than tuned
+([crowd.ts:207](src/character/crowd.ts:207)): the catalogue already scales a
+weapon and a coat with the depth a thing was found at, so the search walks that
+and takes the piece whose BUILT numbers land closest to `scaleFoe`'s. AC lands
+within two for an armoured rank; damage per round lands as close as the die ladder
+reaches. So what is on a body is what the depth says a body of that standing is
+worth, which is what makes foe power and loot value one number.
+
+**Why not let the character's own numbers fight?** Measured 2026-09-12 and the
+answer is now firm: **not reachable**, and the obstacle is a design decision
+rather than an implementation. With AC solved to within two, damage per round as
+close as the ladder reaches, and hit points still anchored, melee measured
+76/64/48/35/26 against the anchored 94/86/84/47/36; handing hit points back too
+gives 65/65/63/42/19. Three walls, each measured:
+
+- **Hit points.** A danger-1 minion has 2 and a regular 8. The frailest level-one
+  body is `HP_AT_FIRST` 10, about 12 with any `vit` at all.
+- **What it swings.** A shallow foe swings 3.5 a hit; the weakest melee thing the
+  catalogue makes is a d6, which in the hands of anything with a positive ability
+  modifier is 4.5 — so damage per ROUND floors at 2.25 against an anchored 1.57.
+  Solving to the nearest gets no closer, because there is nothing closer.
+- **Reach.** Minimising damage alone armed nearly every body with a SLING, since a
+  d4 is the closest thing to a shallow swing — and foes that used to spend two
+  rounds crossing the arena opened fire on round one. Thirty points of win rate,
+  with every printed number matching within one. Fixed by filtering candidates to
+  the trade's reach; recorded because it is the clearest evidence that **matching
+  a foe term by term is not what a fight measures**.
+
+And the mirror of it: the curve is drawn against `referencePc`, which gets up to
+4d8 of damage and AC 14–18 from nothing but its level
+([statblock.ts:181](src/combat/statblock.ts:181),
+[:194](src/combat/statblock.ts:194)) — a body no character sheet can be either. The
+curve assumes a player no sheet describes AND foes no sheet describes; fixing one
+end alone is what costs twenty points whichever end is picked. DESIGN 3n-iii holds
+the three options and the user's call.
+
+A harness test pins every cell of the build matrix equal between statblock foes and
+character foes, so the curve cannot move by accident.
 
 A world stored before the species tree still meets statblock foes: inventing a
 population for it would be inventing the bodies of creatures somebody is already
@@ -658,7 +722,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:135](src/combat/combat.ts:135)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:157](src/play/combat.ts:157)): acting first from 9 squares away
+([play/combat.ts:271](src/play/combat.ts:271)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -737,14 +801,20 @@ needs and temperament; **nothing yet proves the reader half.**
 ### Waiting on a reader, by decision
 
 A foe's **signature skill** is on its sheet and never used, because `combat/ai.ts`
-cannot cast at all; step 9's AI rebuild is where that lands. A foe's **worn gear**
-is derived and carried but does not change what it is like to fight, since
-`scaleFoe` holds the curve — it exists to be looted, and giving it force means
-re-deriving the curve from sheets (3n-ii). A crowd has no **stored size**, so
-killing does not yet thin a floor: that is the reader which keeps a population from
-being a simulation nothing touches, and it is the first thing in 3n-ii. All three are written and
-read for the climber today, and none is a field pretending to be a mechanic: the
-reader is scheduled, not hoped for.
+cannot cast at all; step 9's AI rebuild is where that lands.
+
+A foe's **worn gear** is solved against the anchor and carried but does not change
+what it is like to fight, since `scaleFoe` holds the curve — it exists to be
+looted. This one is no longer waiting on a piece of work: 3n-ii measured that
+giving it force **cannot** hold the curve (see *What a foe is*), so it waits on a
+decision at 3n-iii rather than on an implementation. Written and read for the
+climber today, and not a field pretending to be a mechanic.
+
+**Cleared: a crowd's stored size.** — *"killing does not yet thin a floor"* was
+true until 3n-ii. A population is stored per place, the draw is weighted by what
+is left, the encounter is capped by it, and a cleared place opens no fight
+([population.ts:124](src/character/population.ts:124),
+[play/combat.ts:176](src/play/combat.ts:176)).
 
 ### Confirmed dead
 
@@ -929,15 +999,23 @@ checks it — because nothing moves an NPC, so nobody ever tries.
 today for want of anyone to break it, and becomes a dead law the day NPCs move
 (DESIGN step 8).
 
-**An object's identity is unique only within one bag.** `nextInstanceId` returns
-`typeId#n` against that inventory's contents
-([types.ts:242](src/items/types.ts:242)) and `addItem` assembles a NEW id
-([types.ts:280](src/items/types.ts:280)). Since refine, rarity and the law
-exemption are all keyed on the id, moving an object between owners would rename
-it and silently re-roll what it is worth. True today only because NOTHING
-transfers an object: no shop, no corpse, no companion has an inventory. It
-becomes a live bug the day foes carry gear (DESIGN 6b 3n records it as a
-prerequisite).
+**Cleared: an object's identity was unique only within one bag.** — *"moving an
+object between owners would rename it and silently re-roll what it is worth"* was
+true until 3n-ii, and was days from being live: foes now carry gear. `nextInstanceId`
+takes a NAMESPACE, so an id is unique across bags and not merely within one
+([types.ts:242](src/items/types.ts:242)); `give` moves an existing object and
+PRESERVES its id, throwing on a collision rather than renaming
+([types.ts:311](src/items/types.ts:311)) — because the only way to survive a
+collision is to change what the object is worth, which makes it a bug to hear
+about, not to paper over. Minters namespace their ids so it cannot arise: a body's
+gear is minted under where that body stands ([crowd.ts:263](src/character/crowd.ts:263)).
+
+One consequence worth knowing, and it is a design property rather than a defect: a
+refine's grant is hashed off the instance id by decision — *the thing you traded
+your refine for is THIS object* — so the namespace feeds it, and the same veteran
+standing in two places wears gear worth a point or so apart. That is why the gear
+solve is keyed on the namespace too, and why its AC lands within two of the anchor
+rather than on the nose.
 
 **Per-NPC rule knowledge** has no writer for the same reason. The only
 `ruleClaim` writer is the player's refused crossing
@@ -962,9 +1040,24 @@ from SHEETS rather than statblocks — a statblock foe's HP comes from danger, s
 identical ([harness.ts:165](src/play/harness.ts:165)). `npm run chart` prints
 both. A test pins the melee curve as the anchor 3n must not move.
 
-Two limits worth knowing before trusting a number from it: the caster's skill is
+**The live anchor is melee 96/86/83/40/5 at danger 1/2/3/4/6, ranged
+85/83/70/36/4, caster 94/94/91/90/0, tank 88/76/69/21/2.** Re-pinned 2026-09-12
+at 3n-ii: 3d recorded 97/84/77/46/3 and **3m moved it** without the doc saying
+so, which is how "the anchor must not move" was violated without anyone seeing
+it. Checked out and re-run, `npm run chart` gives the 3d numbers at `397a454`
+and these from `aea03f9` onward. **Re-pin it in the same commit as any stage
+that moves it** — a recorded number nobody re-measures is how a regression gets
+waved through.
+
+Four limits worth knowing before trusting a number from it. The caster's skill is
 authored in the harness rather than composed, and the policy prefers a skill
-UNCONDITIONALLY, so a skill that does not help reads as a small loss.
+UNCONDITIONALLY, so a skill that does not help reads as a small loss. The harness
+climber's **gear never improves** — one fixture weapon, and a coat only for the
+tank — so past about danger 5 every build reads 0–6% and the number is measuring
+an under-equipped player rather than the game: for the same floors
+`scripts/balance.ts` reports 89/84/86/56/57%, because its `referencePc` gets up
+to 4d8 and AC 14–18 from its level alone. So **the band worth trusting is danger
+1–5**, and the two scripts are not measuring the same climber.
 
 ## 13. Tuning knobs
 
@@ -1023,8 +1116,11 @@ Every balance number, and where it lives.
 | habitat band | 4–14 floors wide, centred on the group's share of the tower and widened to cover it | [habitat.ts:26](src/character/habitat.ts:26) |
 | signature skill budget | 10 for a species, 8 for a subspecies | [speciesskill.ts:92](src/character/speciesskill.ts:92) |
 | hunting | about one group in three hunts one other; the edge is ADVANTAGE | [prey.ts:19](src/character/prey.ts:19) |
-| a crowd's standing | four ordinary to one whelp to one veteran | [crowd.ts:52](src/character/crowd.ts:52) |
-| a rank's gear | whelp plain, ordinary +2, veteran +4 and armoured | [crowd.ts:45](src/character/crowd.ts:45) |
+| a crowd's standing | four ordinary to one whelp to one veteran | [crowd.ts:59](src/character/crowd.ts:59) |
+| a rank's gear CAP | whelp common +0, ordinary uncommon +2, veteran rare +4 — a ceiling, not a choice: what it actually carries is solved against the anchor, and only a whelp is bare by rule | [crowd.ts:52](src/character/crowd.ts:52) |
+| a place's population | 1–3 trades per lineage, 2–6 of each; small on purpose, since a place holding sixty would never visibly thin inside one playthrough | [population.ts:36](src/character/population.ts:36), [:45](src/character/population.ts:45) |
+| how worn looted gear is | `PRISTINE` less 15%, less up to 55% more — 31–85, used but never wrecked | [crowd.ts:326](src/character/crowd.ts:326) |
+| the gear solve's reach | 12 draws × 8 depths per slot, one term at a time; the product was 1600 builds a foe | [crowd.ts:218](src/character/crowd.ts:218) |
 | wing length | 1–6 floors, whatever the model asks | [floorgen.ts:504](src/world/floorgen.ts:504) |
 | wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:535](src/world/floorgen.ts:535) |
 | what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:552](src/world/floorgen.ts:552) |
