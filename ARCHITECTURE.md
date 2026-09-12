@@ -153,11 +153,14 @@ its pure resolver.
 
 ### `src/character/` — who someone is
 `persona.ts` (the core shared by player and villager) · `drift.ts` (two clocks,
-with hysteresis) · `species.ts` (what KIND of thing someone is — a whole-number
-multiplier on how far each need moves, [species.ts:21](src/character/species.ts:21);
-each belongs to one of eight closed `TYPES` and carries an ability `template`
-summing to zero, [species.ts:40](src/character/species.ts:40))
-· `roles.ts` (authored mechanical shapes) · `classgen.ts`
+with hysteresis) · `species.ts` (what KIND of thing someone is: a FOUR-LEVEL tree —
+type → group → species → subspecies, [species.ts:50](src/character/species.ts:50) —
+where every living thing sits at a leaf, each level adds an ability delta summing
+to zero, and needs move by a whole-number multiplier,
+[species.ts:21](src/character/species.ts:21)) · `speciesnames.ts` (the model's
+words for it) · `speciesskill.ts` (what a kind can DO) · `bodyplan.ts` (what it
+can wear) · `habitat.ts` (where it lives) · `kinship.ts` (what it makes of its
+own sort) · `roles.ts` (authored mechanical shapes) · `classgen.ts`
 (mechanics from seed) · `classnames.ts` (words from the model) · `classbuild.ts`
 (the seam) · `classes.ts`.
 
@@ -199,7 +202,7 @@ push on who somebody is rather than just land. Knowing a piece of lore **is**
 holding a belief — `loreClaim` builds an ordinary `Claim`
 ([lore.ts:99](src/play/lore.ts:99)) — so `belief.ts` carries it, `learn` and
 `tell` move it between people, and nothing needed a second knowledge system.
-Reading is a turn action and works once ([sheetaction.ts:241](src/play/sheetaction.ts:241)):
+Reading is a turn action and works once ([sheetaction.ts:242](src/play/sheetaction.ts:242)):
 a paragraph cannot be re-read for the same comfort.
 
 ### `src/rules/` — the dials, and the law
@@ -231,20 +234,20 @@ so an amended law pays out what was earned under it.
 
 **A Signet is a rule exemption.** The exemption rides on the SUBJECT —
 `Subject` is a bare kind or `{ kind, exempt }`
-([ruleset.ts:250](src/rules/ruleset.ts:250)) — not on a lookup inside
+([ruleset.ts:264](src/rules/ruleset.ts:264)) — not on a lookup inside
 `forbids`, which keeps `src/rules/` free of the play layer that knows what a
 Signet is. `playerSubject` builds one from the sheet
-([signetbook.ts:201](src/play/signetbook.ts:201)); one Signet per world, the
+([signetbook.ts:202](src/play/signetbook.ts:202)); one Signet per world, the
 first to survive the reachability proof, exempts the first law that binds the
 player ([signetbook.ts:190](src/play/signetbook.ts:190)). `descend` defaults its
 subject to a plain `'player'` ([travel.ts:168](src/world/travel.ts:168)), so a
 caller that forgets to say who is asking gets the strictest reading.
 
 **A law can change mid-run.** `amend` returns a new ruleset with one law
-rebound, imposed or struck out ([ruleset.ts:419](src/rules/ruleset.ts:419)) —
+rebound, imposed or struck out ([ruleset.ts:441](src/rules/ruleset.ts:441)) —
 never editing a preset, which every other run shares — and `AXIS_OF` says which
 axis an imposed law lands on ([ruleset.ts:222](src/rules/ruleset.ts:222)). The
-change travels as `WorldDelta.amendLaw` ([state.ts:127](src/play/state.ts:127)),
+change travels as `WorldDelta.amendLaw` ([state.ts:128](src/play/state.ts:128)),
 because the delta is what the log stores: a rule changed outside it would replay
 as one that never changed.
 
@@ -315,7 +318,7 @@ anything derives from the seed alone.
   stores the WHOLE preset rather than its name
   ([genesis.ts:623](src/session/genesis.ts:623)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
-  ([ruleset.ts:273](src/rules/ruleset.ts:273)), which is why a law can change
+  ([world/types.ts:253](src/world/types.ts:253)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:235](src/play/delta.ts:235)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
@@ -323,7 +326,7 @@ anything derives from the seed alone.
   `subjects` is.
 - `strata` — the structures this world holds ([types.ts:268](src/world/types.ts:268)).
   Genesis writes one, the tower, covering floor 0 up
-  ([genesis.ts:630](src/session/genesis.ts:630)); a climb that opens a wing adds
+  ([genesis.ts:673](src/session/genesis.ts:673)); a climb that opens a wing adds
   another ([climb.ts:148](src/play/climb.ts:148)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it.
@@ -366,7 +369,7 @@ level, hitDie, plus optionals: `spentAbilities`, `abilityPoints`, `xp`,
 † **denormalised caches**, written only alongside the list they summarise so
 they cannot drift ([sheet.ts:79](src/session/sheet.ts:79)).
 
-**`PlayState`** ([play/state.ts:25](src/play/state.ts:25)) — `world`, `sheet`,
+**`PlayState`** ([play/state.ts:26](src/play/state.ts:26)) — `world`, `sheet`,
 `pc {hp, maxHp, conditions, coin, inventory, stamina, mana}`,
 `combat` (never persisted), `ended`.
 
@@ -405,7 +408,7 @@ come from?"
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
 | `linksFrom` ([travel.ts:125](src/world/travel.ts:125)) | a region | its ways out: its own `exits`, or up/down derived from depth |
-| `playerSubject` ([signetbook.ts:201](src/play/signetbook.ts:201)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
+| `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:292](src/server/game.ts:292)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
 ---
@@ -433,8 +436,9 @@ A lorebook keys the same way ([lorebook.ts:74](src/play/lorebook.ts:74)): a swor
 found on floor nine carries the same history on a replay, and none of it travels
 in the save.
 Who is what kind keys the same way, on the world seed and the person's id
-([species.ts:137](src/character/species.ts:137)), weighted 4:1 toward the
-ordinary. And a way out found in play is NAMED from the seed, the region and the
+([species.ts:274](src/character/species.ts:274)), weighted 4:1 toward the world's
+DOMINANT kind — its own ordinary people, PEOPLE where a world has any, since a
+town of beasts is a bestiary ([species.ts:257](src/character/species.ts:257)). And a way out found in play is NAMED from the seed, the region and the
 place it leaves from ([delta.ts:190](src/play/delta.ts:190)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
@@ -452,14 +456,23 @@ emergent play-patterns), `PATH_WORDS`, the condition price table, the laws
 the five constraints the engine checks: the ground is the bottom, and residents
 do not cross floors — the eight species `TYPES` with their needs and lean
 ([species.ts:40](src/character/species.ts:40)), and the four non-ordinary species
-`KINDS`, each now naming its type ([species.ts:63](src/character/species.ts:63)).
-A species' `template` is **seeded**, not authored: its type's lean plus two single
-points moved between abilities ([species.ts:75](src/character/species.ts:75)).
-Being seeded is what lets a world stored before types read as typed:
-`readSpecies` takes the type from the dealt id and re-derives the template, so
-an old world reads exactly as a new one stores — and an untyped id no world was
-ever dealt throws rather than being guessed
-([species.ts:125](src/character/species.ts:125)). `foeSpecies` is its caller.
+the eight closed species `TYPES` with their needs
+([species.ts:80](src/character/species.ts:80)), the four `BODY_PLANS` and which
+types may be shaped like them ([bodyplan.ts:24](src/character/bodyplan.ts:24)),
+and each type's skill grammar ([speciesskill.ts:32](src/character/speciesskill.ts:32)).
+
+**Everything below a type is SEEDED.** A world deals 3–5 types, 2–4 groups each,
+1–3 species each, 1–3 subspecies each ([species.ts:157](src/character/species.ts:157)) —
+around 40 leaves. Each level moves `points` single points across 2–4 abilities, so
+a template sums to zero however many levels stack, and a delta that would push an
+ability past `CAP` (±4) is REDRAWN rather than clamped, because clamping a stat
+would break the sum that makes a template a trade
+([species.ts:142](src/character/species.ts:142)). A GROUP moves nothing: it
+categorises, and carries the body, the habitat, the kinship and the standing in
+law instead. Being seeded is what lets a stored world read: `readSpecies` finds an
+id by dealing the same seed again, the five pre-tree ids still resolve, and an id
+from neither scheme throws rather than being guessed
+([species.ts:227](src/character/species.ts:227)).
 
 > **The catalogue-agreement invariant**
 > ([traitbook.ts:158](src/play/traitbook.ts:158)) — the fold, the tree and the
@@ -484,6 +497,7 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 | **Ground floor** ([genesis.ts:333](src/session/genesis.ts:333)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
 | **Subject naming** ([subjectnames.ts:50](src/world/subjectnames.ts:50)) | `SUBJECT_NAMING_SCHEMA`, t=0.9 | **words only** — the ids are given to it and it invents none | stored on `World.subjects` |
+| **Species naming** ([speciesnames.ts:57](src/character/speciesnames.ts:57)) | `SPECIES_NAMING_SCHEMA`, t=0.9 | **words only** — one call for the whole tree, so a lineage sounds like a variant of its people; a repeated word is refused and a model that is down leaves placeholders | stored on `World.species` |
 
 **Zero model calls** for: combat, panel actions, suggested actions, interview
 questions, loot, or any trait/Signet/tree generation.
@@ -573,6 +587,25 @@ The order **is** the design: the Director proposes and commits to every branch,
 the engine rolls, the engine validates, and only then does the Writer see
 anything.
 
+### What a group is for
+
+A group carries no stats — that is the whole reason it exists, so the four things
+it DOES carry are not stat math:
+
+| mechanic | what it decides | where |
+|---|---|---|
+| **body plan** | which of the world's slots this shape has: `beastly` has no hands or feet, `winged` has no back (wings fill it, so no pack), `serpentine` no legs | [bodyplan.ts:24](src/character/bodyplan.ts:24), narrowed for a creature at [body.ts:19](src/play/body.ts:19) |
+| **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
+| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler | [kinship.ts:25](src/character/kinship.ts:25) |
+| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born | [ruleset.ts:249](src/rules/ruleset.ts:249) |
+
+A species below it gets one signature skill from `composeSkill`, and a subspecies
+the same knack at a thinner budget ([speciesskill.ts:101](src/character/speciesskill.ts:101)).
+The type's grammar is a FILTER over the stat grammar and the narrowing is
+absolute — a beast never bursts however its body leans — so the KNACK narrows
+instead: a creature composes from the best stat its kind can actually use
+([speciesskill.ts:71](src/character/speciesskill.ts:71)).
+
 ### Combat, inside that
 
 A fight opens mid-turn and the record is **not written** until it ends. The
@@ -597,7 +630,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:135](src/combat/combat.ts:135)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:138](src/play/combat.ts:138)): acting first from 9 squares away
+([play/combat.ts:157](src/play/combat.ts:157)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -644,7 +677,7 @@ resolves.
 `WorldDelta`, `TraitCondition`, `Gate`, `CONSTRAINTS` and `BINDINGS` are all
 closed. A model names things; it never invents a mechanic — nor a law, nor
 where a road goes: `revealWay` names the place a way leaves FROM and the engine
-mints the far side ([state.ts:92](src/play/state.ts:92)).
+mints the far side ([state.ts:93](src/play/state.ts:93)).
 
 **5. The redaction wall is a type, with a runtime backstop.**
 
@@ -673,6 +706,14 @@ needs and temperament; **nothing yet proves the reader half.**
 | **`treeBonuses.attack` / `.damage`** | Accumulated by `applyGrant`, read by no formula. A node granting "+1 to hit" changes nothing. |
 | **`ItemEffect.buff`** | `applyEffect` returns state unchanged and narrates *"…feels sharper"*. Drinking it consumes the potion and does nothing. |
 
+### Waiting on a reader, by decision
+
+`signatureSkill` for anything but the player — a foe carries none, because
+`combat/ai.ts` cannot cast at all; step 9's AI rebuild is where that lands. And a
+foe's BODY PLAN decides nothing until 3n gives foes gear to wear. Both are written
+and read for the climber today, and neither is a field pretending to be a mechanic:
+the reader is scheduled, not hoped for.
+
 ### Confirmed dead
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
@@ -693,7 +734,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
 ([game.ts:936](src/server/game.ts:936)); and
-[signet.test.ts:239](src/play/signet.test.ts:239) proves a claimed Signet is on
+[signet.test.ts:253](src/play/signet.test.ts:253) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
 and still pay out nothing.
@@ -743,7 +784,7 @@ an exemption from a law no world declares would be a word on a sheet, and seeds
 WHICH law from the object, so it is a fixed property of that thing. It survives
 later rebirths: the reset takes what was invested, never what the rarity earned.
 `playerSubject` reads worn gear beside signets
-([signetbook.ts:201](src/play/signetbook.ts:201)), so every `forbids` check
+([signetbook.ts:202](src/play/signetbook.ts:202)), so every `forbids` check
 honours it at once — and only while it is worn. DESIGN asks for two more payouts
 that are NOT built: a skill (nothing lets an item grant one; `activeSkills` never
 sees the inventory) and the full `NodeGrant` shape (`attack` and `damage` are
@@ -836,7 +877,7 @@ nothing outside tests"* was true until `3506255`. A wing's danger is
 seeded ([floorgen.ts:535](src/world/floorgen.ts:535)) and its loot comes from
 what the model named out of `LOOT_CATEGORIES`
 ([floorgen.ts:552](src/world/floorgen.ts:552)). The genesis tower still has
-neither ([genesis.ts:630](src/session/genesis.ts:630)), which means the
+neither ([genesis.ts:673](src/session/genesis.ts:673)), which means the
 ruleset's curve and the ordinary table — identity, not a gap.
 
 ### A knock-on
@@ -872,6 +913,26 @@ prerequisite).
 beliefs about the law ([director.ts:356](src/llm/director.ts:356)).
 
 ---
+
+## 12b. How balance is measured
+
+`scripts/balance.ts` and `npm run fight` both drive ONE character: a str
+shortsword build that takes the first option offered. Every balance number this
+project had came from it, so a change that helped that build and hurt every other
+one measured as an improvement — which is how a species lean shipped costing a
+default climber 15–19 points of win rate.
+
+`src/play/harness.ts` is the answer: four bodies that cost the same (melee,
+ranged, caster, tank) played by a policy that prefers a skill when one is
+affordable ([harness.ts:110](src/play/harness.ts:110)), and a matchup chart built
+from SHEETS rather than statblocks — a statblock foe's HP comes from danger, so
+`vit` would count for nothing and two subspecies differing only in it would read
+identical ([harness.ts:150](src/play/harness.ts:150)). `npm run chart` prints
+both. A test pins the melee curve as the anchor 3n must not move.
+
+Two limits worth knowing before trusting a number from it: the caster's skill is
+authored in the harness rather than composed, and the policy prefers a skill
+UNCONDITIONALLY, so a skill that does not help reads as a small loss.
 
 ## 13. Tuning knobs
 
@@ -938,7 +999,7 @@ Every balance number, and where it lives.
 | tree rings | 8 | [skilltree.ts:142](src/play/skilltree.ts:142) |
 | graft size | 2..5 | [graft.ts:44](src/play/graft.ts:44) |
 | emergent branch cap | 3 | [emergent.ts:139](src/play/emergent.ts:139) |
-| tower horizon | 30 | [signetbook.ts:57](src/play/signetbook.ts:57) |
+| tower horizon | 30 | [signetbook.ts:58](src/play/signetbook.ts:58) |
 | embedding dimension | 1024 (bge-m3) | [schema.ts:21](src/db/schema.ts:21) |
 
 ---
@@ -953,8 +1014,8 @@ build. `skillgen.ts` measures components; the two embedder scripts call
 became the tower.
 
 **`WorldDelta` is still hand-written verbs — ten when this was settled, twelve
-since step 6 added `revealWay` and `amendLaw` ([state.ts:92](src/play/state.ts:92),
-[:127](src/play/state.ts:127)) — and the question is now SETTLED rather than
+since step 6 added `revealWay` and `amendLaw` ([state.ts:93](src/play/state.ts:93),
+[:128](src/play/state.ts:128)) — and the question is now SETTLED rather than
 deferred.** The design called for it to become a list of `Effect`s
 sharing the skill vocabulary. Having built the second producer — deeds — the
 answer is that it should not, for three reasons that are now evidence rather
@@ -983,7 +1044,7 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 `useItem` division exactly. `drewOn`, `killed` and `spared` are NOT claimable:
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
-first: the Director says who did (`startedBy`, [state.ts:104](src/play/state.ts:104)),
+first: the Director says who did (`startedBy`, [state.ts:105](src/play/state.ts:105)),
 and being jumped is no deed ([delta.ts:462](src/play/delta.ts:462)). A fight
 with any kill is one `killed` deed, charged even in an ambush
 ([delta.ts:466](src/play/delta.ts:466)); `spared` has no writer until 6b stage 6.
@@ -1008,7 +1069,7 @@ arrives with quests (DESIGN step 7).
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
-([genesis.ts:630](src/session/genesis.ts:630)); the only writer of
+([genesis.ts:673](src/session/genesis.ts:673)); the only writer of
 `Region.exits` is a way out found in play ([delta.ts:256](src/play/delta.ts:256)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
@@ -1063,8 +1124,11 @@ classes now lean on stats and nothing is locked out.
 | **exemption** | A law set aside for one holder. What a Signet is, and what a `fine` object is while worn. Carried on the `Subject`, not looked up. |
 | **stratum** | A structure above a floor — a tower, a wing inside it. Strata nest; the innermost speaks for a floor. `static` ones are frozen. |
 | **wing** | A stratum a floor opens mid-climb. The model names it; the engine shapes it. |
-| **species** | What kind of thing somebody is: how far each need moves for them, and an ability template. `folk` is ordinary. |
-| **type** | The closed class a species belongs to (humanoid, beast, construct, undead, fey, fiend, elemental, aberration). Sets its needs and its lean. |
+| **species** | The third level of the tree: a PEOPLE, with one signature skill. |
+| **subspecies** | The leaf, and what every living thing actually is — a lineage of a people. Its template is the sum down its path. |
+| **type** | The closed class at the root (humanoid, beast, construct, undead, fey, fiend, elemental, aberration). Sets the needs and the skill grammar. |
+| **group** | The second level. Carries no stats: it decides the body plan, the habitat, who counts as kin, and what a law may bind. |
+| **dominant kind** | The subspecies most of a world's towns are — what `folk` used to mean, except it is one of this world's own peoples. |
 | **way out** | A `Link` that is not a stair. Found in play, walked with `traverse`. |
 | **declared trait** | A goal, shown with a progress bar. |
 | **emergent trait** | A *recognition* of a play pattern, never foreshadowed — *"declared traits are goals; these are recognitions"* ([emergent.ts:10](src/play/emergent.ts:10)). |
