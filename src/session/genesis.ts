@@ -32,6 +32,7 @@ import type { Stratum } from '../world/types.ts';
 import { dominantOf, FOLK, leavesOf, speciesFor, speciesIdFor } from '../character/species.ts';
 import { nameSpecies } from '../character/speciesnames.ts';
 import { signatureSkill } from '../character/speciesskill.ts';
+import { withKin } from '../character/kinship.ts';
 import type { Species, SpeciesChoice } from '../character/species.ts';
 
 /**
@@ -539,7 +540,15 @@ export async function generateGroundFloor(
    * that relationship obliges, allows and opens the axes at. Both directions
    * are written at once, because half a relationship reads as a bug.
    */
-  const edges = bondsAmong(openingEdges({}, generated.people), roles, people, generated.bonds ?? [], repairs);
+  /*
+   * And what each of them makes of the climber's KIND before a word is said.
+   *
+   * Applied under the model's own opening trust rather than over it: kinship is
+   * where a stranger starts from, and what the generator said about this person in
+   * particular is worth more than what their sort would say.
+   */
+  const withKinship = withKin(openingEdges({}, generated.people), kinds, sheet.species, Object.values(people));
+  const edges = bondsAmong(withKinship, roles, people, generated.bonds ?? [], repairs);
 
   return {
     region,

@@ -305,8 +305,16 @@ after any that touches a fight):
      `foeSpecies` picks the encounter's group from the ones living at that depth,
      and **a pack is one group** — every creature in a fight comes from one
      population, its lineage still keyed on the model's name for it.
-   - **3k–3m** the rest of the group mechanics, one each: kinship, law (may wait
-     for 6c's `territory` axis), predator and prey.
+   - **3k SHIPPED** kinship (`character/kinship.ts`): three distances, and the
+     middle one is the point — same GROUP is kin (`familiarity +1, trust +1`),
+     another group of the same TYPE is a neighbour (nothing, because people are
+     people), another TYPE starts cooler (`trust −1`). Two readers for one rule:
+     toward the player, so how a town meets you is felt on the first turn through
+     the register, and BETWEEN kin, because rumour walks edges (`spreadOf`) — so
+     news runs through your own sort first with no second mechanism. Wired at
+     genesis UNDER the model's own opening trust, since what it said about this
+     person outweighs what their sort would say.
+   - **3l–3m** the rest: law (may wait for 6c's `territory` axis), predator and prey.
 3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
    individuation into a sheet, profession and rank, derived gear, the instance-id
    fix, used looted gear; `scripts/balance.ts` holds the curve.

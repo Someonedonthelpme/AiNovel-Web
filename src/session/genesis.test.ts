@@ -11,8 +11,9 @@ import { ABILITIES } from '../combat/types.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { HARSH, STANDARD } from '../rules/ruleset.ts';
-import { dominantOf, leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
-import { PLAYER } from '../social/edge.ts';
+import { dominantOf, groupOf, leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
+import { axisOf, PLAYER } from '../social/edge.ts';
+import { withKin } from '../character/kinship.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
   let iv = startInterview(language);
@@ -403,4 +404,22 @@ test('the climber sets out knowing what their kind can do', async () => {
   const theirs = signatureSkill(42, kinds.find((k) => k.id === mine.id)!);
   assert.ok((sheet.learned ?? []).some((s) => s.id === theirs.id), `no sign of ${theirs.name}`);
   assert.ok(activeSkills(sheet).some((s) => s.id === theirs.id), 'and it is usable, not just stored');
+});
+
+test('the town a climber wakes in already knows what they are', async () => {
+  // The WIRING, not the rule: two climbers into one world, one of the town's own
+  // kind and one of another. Asserting on a single generated town's mix proves
+  // nothing — the draw is weighted 80% to the dominant kind, so every townsperson
+  // of world 42 is the same kind and there was nobody to compare them to.
+  const kinds = speciesFor(42);
+  const own = dominantOf(42, kinds);
+  const stranger = leavesOf(kinds).find((k) => groupOf(kinds, k.id) !== groupOf(kinds, own))!;
+
+  const asKin = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: own });
+  const asOther = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: stranger.id });
+
+  const trust = (r: typeof asKin) =>
+    Object.values(r.world.people).reduce((sum, p) => sum + axisOf(r.world.edges, p.id, PLAYER, 'trust'), 0);
+
+  assert.ok(trust(asKin) > trust(asOther), `as kin ${trust(asKin)}, as a stranger ${trust(asOther)}`);
 });
