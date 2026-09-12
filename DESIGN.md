@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3c shipped; stage 3 re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3c shipped; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -179,6 +179,53 @@ decided it):
   nothing. It runs on a build matrix (str melee, dex ranged, caster, tank) with
   the engine's own AI, not one fixed build taking its first option.
 
+**Decided with the user, 2026-09-12, second pass — NO MASS FOES** (supersedes
+*Mass foes are template × role × danger* above and the `mass | notable | epic`
+encounter kinds; it restores *Crowds are description; individuation CREATES*,
+which the 09-11 pass contradicted):
+
+- **Two kinds of foe only: a character drawn from a crowd, and a notable
+  character.** Nothing fights without being somebody. That ends the one exception
+  to "every living thing is at a subspecies" and gives NPCs the parity of BEING
+  the design already asked for.
+- **A crowd is a population** — groups of (subspecies, profession, size) — and
+  **populations are keyed by PLACE id**, not by region: 6c defines a province as
+  one place with one map, so nothing migrates later. Compression destroys places
+  (`Gazetteer` keeps only its summary, `world/types.ts:155`), so a compressed
+  floor keeps one aggregate; 6c removes compression and the aggregate with it.
+- **Killing thins the population** — the reader that stops the crowd being a
+  simulation nothing touches. Clear a floor's wolves and later encounters there
+  are thinner.
+- **A boss is a notable character with a mutation**, created BY FLOOR GENERATION
+  before you meet it (`Person.sheet` / `stance` / `recruited` are what it fills,
+  `world/types.ts:209`). Then rumour can carry it, the Director sees a person,
+  quests have something to point at, and 6c gets a holder to fight for a floor.
+  One extra person per landmark floor, which is nothing beside persisting minions.
+  `epic` stops being a third kind: it is a notable with a `Variant`.
+- **Role becomes two things, both from the crowd**: **profession** (what they do
+  — class, skills, gear: a hunter carries a bow) and **rank** (how good — a
+  level offset and a gear tier: whelp, ordinary, veteran). `FOE_ROLES` and
+  `HP_MULTIPLIER` (`combat/statblock.ts:18`) retire.
+- **Gear tier IS refine · enchant · rarity** — no parallel ladder. A veteran
+  carries a rare +4; loot off the body is that same object, so foe power and loot
+  value are one number. Rank caps it (whelp common +0..1, ordinary uncommon ≤+2,
+  veteran rare ≤+4, and no looted piece hands over a law exemption or a skill).
+  Gear is DERIVED at individuation from (subspecies, profession, rank, danger)
+  and stored only for a character who persists.
+- **Two prerequisites, one a bug.** `nextInstanceId` is unique only within one
+  bag (`items/types.ts:242`) and `addItem` assembles a NEW id, so looting a
+  rare +4 renames it and its bonuses silently re-roll into other stats: ids must
+  be unique per object and a transfer must preserve them. And looted gear must
+  arrive USED (`instanceOf` defaults to `PRISTINE`), or foe gear skips the smith
+  economy that `refineCost` and `enhanceCost` exist to be.
+- **Balance is anchored, not re-guessed.** Today's curve is the target: a crowd
+  character at rank r and danger d must fight like today's foe at the same
+  danger, with `scripts/balance.ts` as the regression and the build-matrix
+  harness measuring it.
+- **Names:** a crowd character is unnamed — "a young shadow-wolf", its
+  subspecies plus a rank word — because the engine invents no words. A survivor
+  is model-named at stage 7, as already planned.
+
 **Stages** (each starts with one failing test the user approves; `npm run fight`
 after any that touches a fight):
 
@@ -209,10 +256,19 @@ after any that touches a fight):
      the player's only, until step 9.
    - **3i–3m** the group mechanics, one each: body plan, habitat, kinship, law
      (may wait for 6c's `territory` axis), predator and prey.
-4. **Epic foes** — species + one mutation, on landmark floors.
-5. **Notable foes are existing people** — `Person.sheet` gets its first writer.
+3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
+   individuation into a sheet, profession and rank, derived gear, the instance-id
+   fix, used looted gear; `scripts/balance.ts` holds the curve.
+4. **Bosses are notable characters with a mutation** — created by floor
+   generation, so they can be heard about first. (Was: epic foes.)
+5. **Notable foes from existing people** — a person whose regard has gone bad
+   enough fights you; `Person.sheet` gets its other writer.
 6. **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
    the engine from HP, nerve and nature; `alive: false` and `spared` get writers.
+   Now that every foe is a character it HAS a persona, so nerve is real here
+   rather than deferred: a fearless thing never breaks, and a type with no safety
+   need cannot. A first cut of the rules: breaking at a quarter of max HP, yield
+   when cornered and flee when not.
 7. **Survivors with a future** — become people (model-named, recorded in the
    turn), keep a firsthand belief and a grudge, and the rumour system carries
    their account; a returning survivor covers "mass escalates to notable".
@@ -1688,6 +1744,15 @@ the code path is unchanged.
               · a stat grant   (the NodeGrant shape nodes/traits/Signets use)
               · a skill        (the component effect system)
               · a RULE EXEMPTION while held — the Signet mechanic on gear
+              **SHIPPED 2026-09-12** (`e9735c2`): `fine` grants
+              `ItemInstance.exempts`, drawn from the laws IN FORCE and seeded
+              from the object, kept through later rebirths; `playerSubject`
+              reads worn gear beside signets. Still missing: the SKILL payout
+              (nothing lets an item grant one — `activeSkills` never sees the
+              inventory), and widening the bonus to the full `NodeGrant`
+              (`maxHp`, pools, `ac` need their readers extended; `attack` and
+              `damage` are dead until `resolve.ts` reads them, and granting
+              them first would be the dead-field bug again)
             Expensive; some need conditions, some need materials.
             **ENHANCING RESETS REFINE AND ENCHANT.**
 ```
