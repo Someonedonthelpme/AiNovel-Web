@@ -140,7 +140,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:130](src/play/combat.ts:130)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:116](src/character/crowd.ts:116)) by `crowdFoes` ([play/combat.ts:161](src/play/combat.ts:161)). A pack comes from ONE group, chosen from the ones living at that depth ([play/combat.ts:141](src/play/combat.ts:141)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:282](src/play/combat.ts:282)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:154](src/play/combat.ts:154)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -292,7 +292,7 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 
 ### The shapes
 
-**`World`** ([world/types.ts:226](src/world/types.ts:226)) — `seed`, `language`,
+**`World`** ([world/types.ts:227](src/world/types.ts:227)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
 `regionIdFor(floor) = 'floor-' + floor` ([:308](src/world/types.ts:308)).
@@ -300,7 +300,7 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
 Depth stays on `floor`; adjacency moved to `Region.exits`
-([:132](src/world/types.ts:132)), and `generateFloor` takes the region id to
+([:133](src/world/types.ts:133)), and `generateFloor` takes the region id to
 build `into` ([floorgen.ts:318](src/world/floorgen.ts:318)); its guard against
 overwriting the town keys on that id rather than on depth 0
 ([floorgen.ts:330](src/world/floorgen.ts:330)), because an outer world may sit
@@ -319,13 +319,13 @@ anything derives from the seed alone.
   stores the WHOLE preset rather than its name
   ([genesis.ts:623](src/session/genesis.ts:623)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
-  ([world/types.ts:253](src/world/types.ts:253)), which is why a law can change
+  ([world/types.ts:254](src/world/types.ts:254)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:235](src/play/delta.ts:235)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
   `subjects` is.
-- `strata` — the structures this world holds ([types.ts:268](src/world/types.ts:268)).
+- `strata` — the structures this world holds ([types.ts:269](src/world/types.ts:269)).
   Genesis writes one, the tower, covering floor 0 up
   ([genesis.ts:673](src/session/genesis.ts:673)); a climb that opens a wing adds
   another ([climb.ts:148](src/play/climb.ts:148)).
@@ -337,12 +337,12 @@ anything derives from the seed alone.
 
 **`Region`** ([types.ts:105](src/world/types.ts:105), full detail) — places,
 entrance, exit, danger, creatures, and optionally `exits: Link[]`. A `Link`
-([:142](src/world/types.ts:142)) carries the far side's DEPTH as well as its id,
+([:143](src/world/types.ts:143)) carries the far side's DEPTH as well as its id,
 because danger and budgets have to answer before that region exists.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
-known people survive ([lod.ts:38](src/world/lod.ts:38)).
+known people survive ([lod.ts:39](src/world/lod.ts:39)).
 
-**`Stratum`** ([types.ts:59](src/world/types.ts:59)) — a structure above a
+**`Stratum`** ([types.ts:60](src/world/types.ts:60)) — a structure above a
 floor: `kind` `static | dynamic`, an optional `parent`, a floor range, and
 optional `danger`, `theme` and `loot`. Strata NEST, so the plan is a tree and
 the innermost stratum containing a floor speaks for it
@@ -446,7 +446,7 @@ logged.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
-([types.ts:236](src/world/types.ts:236), [subjects.ts:111](src/world/subjects.ts:111)),
+([types.ts:237](src/world/types.ts:237), [subjects.ts:111](src/world/subjects.ts:111)),
 because a word derived from nothing would be lost on the next derivation. The
 same split as `classSpec` on the sheet. **The ids never change**, so anything that
 matched before naming still matches after it.
@@ -600,7 +600,7 @@ apply), what it knows, and what is on its body to take. Rank stands in for the
 statblock role — whelp · ordinary · veteran for minion · regular · elite
 ([crowd.ts:42](src/character/crowd.ts:42)) — and `levelFor` inverts the sheet's
 HP formula against the statblock's so a character of that standing is as tough as
-the foe it replaces ([crowd.ts:102](src/character/crowd.ts:102)).
+the foe it replaces ([crowd.ts:113](src/character/crowd.ts:113)).
 
 Why not let the character's own numbers fight? Measured: they cost the player 42
 points of win rate at danger 1 (95% → 53%), because damage, AC, proficiency and
@@ -1101,7 +1101,7 @@ a region without them is a stack by derivation
 one fact.
 
 *No `story` stratum kind.* It would behave exactly like `static` until quests
-exist ([types.ts:71](src/world/types.ts:71) has `static | dynamic` only), so it
+exist ([types.ts:72](src/world/types.ts:72) has `static | dynamic` only), so it
 would be a word with no reader — the signature bug, introduced on purpose. It
 arrives with quests (DESIGN step 7).
 
