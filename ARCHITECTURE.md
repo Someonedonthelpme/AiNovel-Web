@@ -140,7 +140,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:130](src/play/combat.ts:130)); a mass foe is role × danger × its species' template, the species picked by `foeSpecies` from the creature's name ([play/combat.ts:103](src/play/combat.ts:103)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:130](src/play/combat.ts:130)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:116](src/character/crowd.ts:116)) by `crowdFoes` ([play/combat.ts:161](src/play/combat.ts:161)). A pack comes from ONE group, chosen from the ones living at that depth ([play/combat.ts:141](src/play/combat.ts:141)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -160,7 +160,8 @@ to zero, and needs move by a whole-number multiplier,
 [species.ts:21](src/character/species.ts:21)) · `speciesnames.ts` (the model's
 words for it) · `speciesskill.ts` (what a kind can DO) · `bodyplan.ts` (what it
 can wear) · `habitat.ts` (where it lives) · `kinship.ts` (what it makes of its
-own sort) · `roles.ts` (authored mechanical shapes) · `classgen.ts`
+own sort) · `prey.ts` (what it hunts) · `crowd.ts` (somebody out of a
+population, which is what every foe now is) · `roles.ts` (authored mechanical shapes) · `classgen.ts`
 (mechanics from seed) · `classnames.ts` (words from the model) · `classbuild.ts`
 (the seam) · `classes.ts`.
 
@@ -224,7 +225,7 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:463](src/play/combat.ts:463)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:471](src/play/combat.ts:471)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:597](src/play/combat.ts:597)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -587,6 +588,32 @@ The order **is** the design: the Director proposes and commits to every branch,
 the engine rolls, the engine validates, and only then does the Writer see
 anything.
 
+### What a foe is
+
+Somebody out of the population on that floor — and the compromise in it is worth
+knowing, because the curve was nearly lost to it.
+
+`scaleFoe` still decides what it is like to **fight**: hit points, AC,
+proficiency, abilities, the attack it swings, its speed. The CHARACTER decides who
+it is: which lineage, which group (so body, habitat, kinship, law and prey all
+apply), what it knows, and what is on its body to take. Rank stands in for the
+statblock role — whelp · ordinary · veteran for minion · regular · elite
+([crowd.ts:42](src/character/crowd.ts:42)) — and `levelFor` inverts the sheet's
+HP formula against the statblock's so a character of that standing is as tough as
+the foe it replaces ([crowd.ts:102](src/character/crowd.ts:102)).
+
+Why not let the character's own numbers fight? Measured: they cost the player 42
+points of win rate at danger 1 (95% → 53%), because damage, AC, proficiency and
+abilities all came from the trade and its refined gear; anchoring hit points alone
+left 20 of those points on the table. A harness test pins every cell of the build
+matrix equal between statblock foes and character foes, so re-deriving the curve
+from sheets is a deliberate piece of work rather than something that happens by
+accident.
+
+A world stored before the species tree still meets statblock foes: inventing a
+population for it would be inventing the bodies of creatures somebody is already
+fighting.
+
 ### What a group is for
 
 A group carries no stats — that is the whole reason it exists, so the four things
@@ -598,6 +625,7 @@ it DOES carry are not stat math:
 | **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
 | **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler | [kinship.ts:25](src/character/kinship.ts:25) |
 | **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born | [ruleset.ts:249](src/rules/ruleset.ts:249) |
+| **prey** | about one group in three hunts one other, of another type; a hunter attacks its quarry with ADVANTAGE — 46% to 79% between otherwise identical fighters, which is more than any template can say | [prey.ts:22](src/character/prey.ts:22), read at [conditions.ts:117](src/combat/conditions.ts:117) |
 
 A species below it gets one signature skill from `composeSkill`, and a subspecies
 the same knack at a thinner budget ([speciesskill.ts:101](src/character/speciesskill.ts:101)).
@@ -708,11 +736,15 @@ needs and temperament; **nothing yet proves the reader half.**
 
 ### Waiting on a reader, by decision
 
-`signatureSkill` for anything but the player — a foe carries none, because
-`combat/ai.ts` cannot cast at all; step 9's AI rebuild is where that lands. And a
-foe's BODY PLAN decides nothing until 3n gives foes gear to wear. Both are written
-and read for the climber today, and neither is a field pretending to be a mechanic:
-the reader is scheduled, not hoped for.
+A foe's **signature skill** is on its sheet and never used, because `combat/ai.ts`
+cannot cast at all; step 9's AI rebuild is where that lands. A foe's **worn gear**
+is derived and carried but does not change what it is like to fight, since
+`scaleFoe` holds the curve — it exists to be looted, and giving it force means
+re-deriving the curve from sheets (3n-ii). A crowd has no **stored size**, so
+killing does not yet thin a floor: that is the reader which keeps a population from
+being a simulation nothing touches, and it is the first thing in 3n-ii. All three are written and
+read for the climber today, and none is a field pretending to be a mechanic: the
+reader is scheduled, not hoped for.
 
 ### Confirmed dead
 
@@ -927,7 +959,7 @@ ranged, caster, tank) played by a policy that prefers a skill when one is
 affordable ([harness.ts:110](src/play/harness.ts:110)), and a matchup chart built
 from SHEETS rather than statblocks — a statblock foe's HP comes from danger, so
 `vit` would count for nothing and two subspecies differing only in it would read
-identical ([harness.ts:150](src/play/harness.ts:150)). `npm run chart` prints
+identical ([harness.ts:165](src/play/harness.ts:165)). `npm run chart` prints
 both. A test pins the melee curve as the anchor 3n must not move.
 
 Two limits worth knowing before trusting a number from it: the caster's skill is
@@ -985,8 +1017,14 @@ Every balance number, and where it lives.
 | **danger** | the stratum's own curve, else its parent's, else `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [strata.ts:51](src/world/strata.ts:51), [budget.ts:32](src/world/budget.ts:32) |
 | depth below ground | 3 | [ruleset.ts:314](src/rules/ruleset.ts:314) |
 | species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:21](src/character/species.ts:21) |
-| species template | type lean ±2 on one pair, then two single points moved; sums to zero, no ability past ±4 | [species.ts:40](src/character/species.ts:40), [:75](src/character/species.ts:75) |
-| kinds per world / share who are ordinary | 1–3 besides folk / 80% | [species.ts:123](src/character/species.ts:123), [:145](src/character/species.ts:145) |
+| species tree | 3–5 types · 2–4 groups each · 1–3 species each · 1–3 subspecies each (~40 leaves) | [species.ts:157](src/character/species.ts:157) |
+| a level's delta | 2 points across 2–4 abilities for a type and a species, 1 for a subspecies, 0 for a group; sums to zero; redrawn if it would pass `CAP` ±4 | [species.ts:68](src/character/species.ts:68), [:103](src/character/species.ts:103) |
+| share of a town who are the dominant kind | 80% | [species.ts:274](src/character/species.ts:274) |
+| habitat band | 4–14 floors wide, centred on the group's share of the tower and widened to cover it | [habitat.ts:26](src/character/habitat.ts:26) |
+| signature skill budget | 10 for a species, 8 for a subspecies | [speciesskill.ts:92](src/character/speciesskill.ts:92) |
+| hunting | about one group in three hunts one other; the edge is ADVANTAGE | [prey.ts:19](src/character/prey.ts:19) |
+| a crowd's standing | four ordinary to one whelp to one veteran | [crowd.ts:52](src/character/crowd.ts:52) |
+| a rank's gear | whelp plain, ordinary +2, veteran +4 and armoured | [crowd.ts:45](src/character/crowd.ts:45) |
 | wing length | 1–6 floors, whatever the model asks | [floorgen.ts:504](src/world/floorgen.ts:504) |
 | wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:535](src/world/floorgen.ts:535) |
 | what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:552](src/world/floorgen.ts:552) |
@@ -1129,6 +1167,12 @@ classes now lean on stats and nothing is locked out.
 | **type** | The closed class at the root (humanoid, beast, construct, undead, fey, fiend, elemental, aberration). Sets the needs and the skill grammar. |
 | **group** | The second level. Carries no stats: it decides the body plan, the habitat, who counts as kin, and what a law may bind. |
 | **dominant kind** | The subspecies most of a world's towns are — what `folk` used to mean, except it is one of this world's own peoples. |
+| **profession** | What a member of a crowd does, and so what it fights with: hunter, watcher, brute, raider. |
+| **rank** | How good one is: whelp, ordinary, veteran. Stands in for the statblock role, which is what anchors the curve. |
+| **prey** | The group a group hunts. A hunter rolls with advantage against it. |
+| **profession** | What a member of a crowd does, and so what it fights with. Hunter, watcher, brute, raider. |
+| **rank** | How good a member of a crowd is: whelp, ordinary, veteran. Stands in for the statblock role, which is what anchors the curve. |
+| **prey** | The group a group hunts. A hunter rolls with advantage against it. |
 | **way out** | A `Link` that is not a stair. Found in play, walked with `traverse`. |
 | **declared trait** | A goal, shown with a progress bar. |
 | **emergent trait** | A *recognition* of a play pattern, never foreshadowed — *"declared traits are goals; these are recognitions"* ([emergent.ts:10](src/play/emergent.ts:10)). |
