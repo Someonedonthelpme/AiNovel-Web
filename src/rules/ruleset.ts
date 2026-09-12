@@ -232,7 +232,21 @@ export const AXIS_OF: Record<Constraint, RuleAxis> = {
  * check anywhere may assume the player is the exception.
  */
 export const BINDINGS = ['all', 'residents', 'player'] as const;
-export type Binding = (typeof BINDINGS)[number];
+export type BindingKind = (typeof BINDINGS)[number];
+
+/**
+ * Whom a law binds, and the fourth case is a KIND of being.
+ *
+ * `{ group: id }` binds a law to one group of the world's species tree — "the
+ * hollow may not hold land". The vocabulary stays closed even though the id is
+ * the world's own: a group is drawn from the seed, so the set is finite and
+ * knowable, and `validateDelta` refuses a group no world holds rather than
+ * letting the Director legislate about nobody. A GROUP and not a species,
+ * because a group is already the unit that carries what a kind is treated as —
+ * its body, where it lives, who counts as its own — and law is the fourth of
+ * those, not a fifth vocabulary.
+ */
+export type Binding = BindingKind | { group: string };
 
 export const SUBJECT_KINDS = ['player', 'resident'] as const;
 export type SubjectKind = (typeof SUBJECT_KINDS)[number];
@@ -247,13 +261,21 @@ export type SubjectKind = (typeof SUBJECT_KINDS)[number];
  * check that had to fetch the holder is a check that will one day be called
  * without one, which is the hardcoded "the player is exempt" this step removed.
  */
-export type Subject = SubjectKind | { kind: SubjectKind; exempt: readonly Constraint[] };
+export type Subject = SubjectKind | {
+  kind: SubjectKind;
+  exempt?: readonly Constraint[];
+  /** Which group of beings they are, for a law that binds one. */
+  group?: string;
+};
 
 const kindOf = (subject: Subject): SubjectKind =>
   typeof subject === 'string' ? subject : subject.kind;
 
 const exemptFrom = (subject: Subject, constraint: Constraint): boolean =>
-  typeof subject !== 'string' && subject.exempt.includes(constraint);
+  typeof subject !== 'string' && (subject.exempt ?? []).includes(constraint);
+
+const groupOfSubject = (subject: Subject): string | undefined =>
+  typeof subject === 'string' ? undefined : subject.group;
 
 export type Law = {
   axis: RuleAxis;
@@ -430,8 +452,12 @@ export const amend = (rules: Ruleset, constraint: Constraint, binds: Binding | n
  */
 export const ruleClaim = (constraint: Constraint): Claim => ({ kind: 'rule', rule: constraint });
 
-const bindsSubject = (binds: Binding, subject: Subject): boolean =>
-  binds === 'all' || (binds === 'player' ? kindOf(subject) === 'player' : kindOf(subject) === 'resident');
+const bindsSubject = (binds: Binding, subject: Subject): boolean => {
+  // A law about a kind of being binds whoever IS one, player or resident alike:
+  // "the hollow may not hold land" is not a rule about where somebody was born.
+  if (typeof binds !== 'string') return groupOfSubject(subject) === binds.group;
+  return binds === 'all' || (binds === 'player' ? kindOf(subject) === 'player' : kindOf(subject) === 'resident');
+};
 
 /**
  * The law stopping this subject from doing this, or `null` if nothing does.

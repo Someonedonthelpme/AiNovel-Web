@@ -1,6 +1,7 @@
 import { ABILITIES } from '../combat/types.ts';
 import { RATION_ID } from '../items/catalogue.ts';
 import { equippedHoldings } from '../items/types.ts';
+import { groupOf } from '../character/species.ts';
 import type { PlayState } from './state.ts';
 import type { Reachable, Signet } from './signet.ts';
 import { admissible } from './signet.ts';
@@ -215,7 +216,14 @@ export function playerSubject(state: PlayState): Subject {
     .filter((c): c is Constraint => Boolean(c));
 
   const exempt = [...fromSignets, ...fromGear];
-  return exempt.length > 0 ? { kind: 'player', exempt } : 'player';
+  /*
+   * And WHAT they are, for a law that binds a kind of being rather than a
+   * station: "the hollow may not hold land" is about the climber's group, not
+   * about whether they were born here.
+   */
+  const group = state.sheet.species ? groupOf(state.world.species ?? [], state.sheet.species) : undefined;
+  if (exempt.length === 0 && !group) return 'player';
+  return { kind: 'player', ...(exempt.length > 0 ? { exempt } : {}), ...(group ? { group } : {}) };
 }
 
 /* -------------------------------------------------------------------------- */

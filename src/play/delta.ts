@@ -99,9 +99,22 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     // that could name its own constraint would be writing laws nothing
     // enforces — the exact failure the closed vocabulary exists to prevent.
     const { constraint, binds } = proposed.amendLaw;
+    /*
+     * A law may bind a KIND of being, and that is the one binding whose
+     * vocabulary belongs to the world rather than the engine — so it is checked
+     * against the world's own tree. A group nothing in this world is would be a
+     * law about nobody, which is the failure the closed vocabulary exists to
+     * prevent, and a SPECIES is refused as well: law binds a group, like body,
+     * habitat and kinship.
+     */
+    const named = binds !== null && typeof binds === 'object' ? binds.group : null;
     if (!(CONSTRAINTS as readonly string[]).includes(constraint)) {
       rejected.push(`amendLaw "${constraint}": no such rule in this engine`);
-    } else if (binds !== null && !(BINDINGS as readonly string[]).includes(binds)) {
+    } else if (named !== null) {
+      const group = (state.world.species ?? []).find((k) => k.id === named && k.level === 'group');
+      if (!group) rejected.push(`amendLaw "${constraint}": "${named}" is no group this world holds`);
+      else delta.amendLaw = { constraint, binds };
+    } else if (binds !== null && !(BINDINGS as readonly string[]).includes(binds as string)) {
       rejected.push(`amendLaw "${constraint}": "${binds}" binds nobody`);
     } else {
       delta.amendLaw = { constraint, binds };

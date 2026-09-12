@@ -79,11 +79,19 @@ const deltaSchema = obj(
      */
     amendLaw: { type: 'string', enum: ['none', ...CONSTRAINTS] },
     amendBinds: { type: 'string', enum: ['none', ...BINDINGS] },
+    /**
+     * Or a KIND of being, by the id of a group listed in the brief.
+     *
+     * The one id in this schema that belongs to the world rather than the engine,
+     * which is why it is free text and why `validateDelta` refuses a group no
+     * world holds. Set with `amendLaw`; it overrides `amendBinds`.
+     */
+    amendGroup: { type: 'string' },
   },
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
-    'amendLaw', 'amendBinds', 'revealWay',
+    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay',
   ],
 );
 
@@ -140,6 +148,7 @@ export type FlatDelta = {
   amendLaw: string;
   /** Whom it now binds — or 'none' to lift it entirely. */
   amendBinds: string;
+  amendGroup: string;
 };
 
 export type Outcome = { narrate: string; delta: FlatDelta };
@@ -228,9 +237,14 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   // conversion, not the trust boundary.
   const amendLaw = meaningful(flat.amendLaw) ? flat.amendLaw : null;
   if (amendLaw) {
+    // A group outranks a station: "the hollow may not hold land" is a law about
+    // what somebody IS, and saying it binds residents as well would be two rules.
+    const group = meaningful(flat.amendGroup) ? flat.amendGroup.trim() : '';
     delta.amendLaw = {
       constraint: amendLaw as Constraint,
-      binds: meaningful(flat.amendBinds) ? (flat.amendBinds as Binding) : null,
+      binds: group
+        ? { group }
+        : meaningful(flat.amendBinds) ? (flat.amendBinds as Binding) : null,
     };
   }
 
@@ -359,6 +373,18 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     ? `What the player has worked out about the law: ${workedOut.join('; ')}`
     : '';
 
+  /*
+   * The KINDS a law may be written about, by id.
+   *
+   * `amendGroup` is the one field whose vocabulary is this world's rather than
+   * the engine's, so the model has to be shown the ids or it can only guess —
+   * and a guess is refused by `validateDelta`, which reads as the Director being
+   * ignored. Groups only: a law binds a group, like body, habitat and kinship.
+   */
+  const groups = (state.world.species ?? [])
+    .filter((k) => k.level === 'group')
+    .map((k) => `${k.id} (${k.name})`);
+
   return [
     // The STRUCTURE this floor belongs to, when the world names one: a dungeon
     // inside a tower should read as the dungeon, not as "floor 9".
@@ -371,6 +397,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     bonds.length ? `What they are to each other:\n${bonds.join('\n')}` : '',
     lawsOnThem,
     playerKnows,
+    groups.length ? `Kinds a law can name (amendGroup, ids exactly as written): ${groups.join(', ')}` : '',
     heard.length ? `What they think you have done (belief, not fact):\n${heard.join('\n')}` : '',
     canonFacts.length ? `Already true (do not contradict):\n${canonFacts.map((f) => `  - ${f}`).join('\n')}` : '',
     /*

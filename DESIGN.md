@@ -314,7 +314,17 @@ after any that touches a fight):
      news runs through your own sort first with no second mechanism. Wired at
      genesis UNDER the model's own opening trust, since what it said about this
      person outweighs what their sort would say.
-   - **3l–3m** the rest: law (may wait for 6c's `territory` axis), predator and prey.
+   - **3l SHIPPED** law: `Binding` gains `{ group }`, so a law can be written about
+     a KIND of being — "the hollow may not take from the tower" — and it binds
+     whoever IS one, player or resident alike, since that is a rule about what
+     somebody is rather than where they were born. The vocabulary stays closed the
+     way it must: a group id belongs to the world, so `validateDelta` refuses a
+     group no world holds AND refuses a species, because law binds a group like
+     body, habitat and kinship do. `playerSubject` carries the climber's group;
+     `amendGroup` gives the Director the writer, and the brief lists the ids or a
+     guess would just be refused. 6c's `territory` axis adds *what* can be
+     forbidden; this is *whom*.
+   - **3m** predator and prey — the last group mechanic.
 3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
    individuation into a sheet, profession and rank, derived gear, the instance-id
    fix, used looted gear; `scripts/balance.ts` holds the curve.
