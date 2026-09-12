@@ -17,6 +17,7 @@ import { playState } from './fixtures.ts';
 import type { PlayState } from './state.ts';
 import { groundFloor } from '../world/fixtures.ts';
 import type { Region } from '../world/types.ts';
+import type { Species } from '../character/species.ts';
 
 /**
  * A player with more than one build, for measuring what a change does.
@@ -92,13 +93,25 @@ export function chooseAction(state: PlayState): CombatAction | null {
     ?? null;
 }
 
-const onFloor = (danger: number, seed: number, sheetOf: CharacterSheet, inventory: Inventory): PlayState => {
-  const floor: Region = { ...groundFloor(), id: 'floor-h', floor: 2, danger, creatures: ['a'] };
+const onFloor = (
+  danger: number,
+  seed: number,
+  sheetOf: CharacterSheet,
+  inventory: Inventory,
+  kinds?: readonly Species[],
+): PlayState => {
+  const floor: Region = { ...groundFloor(), id: 'floor-h', floor: Math.max(2, danger), danger, creatures: ['a', 'b', 'c'] };
   const base = playState();
   const state: PlayState = {
     ...base,
     sheet: sheetOf,
-    world: { ...base.world, seed, turn: seed, currentRegion: 'floor-h', regions: { 'floor-h': floor }, currentPlace: 'town' },
+    world: {
+      ...base.world, seed, turn: seed,
+      // With a tree, the foes are CHARACTERS out of the floor's population;
+      // without one they are statblocks, as a world stored before kinds still is.
+      ...(kinds ? { species: [...kinds] } : {}),
+      currentRegion: 'floor-h', regions: { 'floor-h': floor }, currentPlace: 'town',
+    },
     pc: { ...base.pc, inventory },
   };
   return applyDelta(state, { startCombat: true });
@@ -109,6 +122,8 @@ export type Measured = { rate: number; trials: number; hpLeft: number; actions: 
 /** Win rate over `trials` seeded fights, and every decision the policy took. */
 export function measure(opts: {
   build: BuildName; danger: number; trials?: number; template?: Partial<Abilities>; level?: number;
+  /** A world's species tree, when the foes should be characters out of it. */
+  kinds?: readonly Species[];
 }): Measured {
   const trials = opts.trials ?? 100;
   const sheetOf = buildSheet(opts.build, opts.level ?? 1, opts.template);
@@ -118,7 +133,7 @@ export function measure(opts: {
   let hp = 0;
 
   for (let seed = 0; seed < trials; seed++) {
-    let state = beginEncounter(onFloor(opts.danger, seed, sheetOf, inventory));
+    let state = beginEncounter(onFloor(opts.danger, seed, sheetOf, inventory, opts.kinds));
     for (let i = 0; i < 300 && state.combat && !state.combat.over; i++) {
       if (!awaitingPlayer(state)) break;
       const action = chooseAction(state);

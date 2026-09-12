@@ -70,3 +70,20 @@ test('a climber with no hands does not set out wielding a sword', () => {
   assert.equal(equippedAttack(asBeast.pc.inventory), null, 'nothing is in a paw');
   assert.ok(equippedAttack(asPerson.pc.inventory), 'and a person sets out armed');
 });
+
+test('swapping statblocks for characters did not move the curve', () => {
+  // Stage 3n's whole risk. Built from the sheet alone, a foe's damage, AC and
+  // abilities came from its trade and gear, and a danger-1 fight fell from 95% to
+  // 53%; anchoring hit points alone left it at 75%. `scaleFoe` decides what it is
+  // like to FIGHT and the character decides who it is, so these must be equal.
+  const kinds = speciesFor(11);
+  for (const danger of [1, 2, 4]) {
+    const plain = measure({ build: 'melee', danger, trials: 40 });
+    const people = measure({ build: 'melee', danger, trials: 40, kinds });
+    assert.equal(
+      Math.round(plain.rate * 100),
+      Math.round(people.rate * 100),
+      `danger ${danger}: ${Math.round(plain.rate * 100)}% against statblocks, ${Math.round(people.rate * 100)}% against characters`,
+    );
+  }
+});

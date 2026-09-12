@@ -1,6 +1,10 @@
 import { autoTurn } from '../combat/ai.ts';
 import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, startCombat } from '../combat/combat.ts';
-import { buildEncounter, kindForFloor } from '../combat/encounter.ts';
+import { buildEncounter, composition, freeCellsNear, kindForFloor } from '../combat/encounter.ts';
+import { scaleFoe } from '../combat/statblock.ts';
+import type { FoeRole } from '../combat/statblock.ts';
+import { crowdFighter, crowdMember } from '../character/crowd.ts';
+import type { Rank } from '../character/crowd.ts';
 import { cellKey, distance, hasLineOfSight } from '../combat/grid.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
 import { bumpCounter } from '../character/persona.ts';
@@ -133,6 +137,92 @@ export function foeSpecies(world: PlayState['world'], name: string, floor = 0): 
   return readSpecies(world.seed, from[Math.floor(mulberry32(hash)() * from.length)]);
 }
 
+/** Which group's population this floor's foes come out of. */
+export function packAt(world: PlayState['world'], floor: number): string | undefined {
+  const kinds = world.species ?? [];
+  if (kinds.length === 0) return undefined;
+  const groups = groupsAt(world.seed, kinds, floor);
+  return groups[Math.floor(mulberry32((world.seed ^ 0xf100 ^ (floor * 31)) >>> 0)() * groups.length)]?.id;
+}
+
+/**
+ * The foes, as CHARACTERS out of the floor's population.
+ *
+ * There are no mass foes any more: every one of these has a lineage, a trade, a
+ * standing, a sheet and gear on its body — which is what makes loot come off the
+ * thing you beat rather than off the floor's table. Their hit points are pinned to
+ * the statblock role each rank replaces (`crowd.ts`), so the curve this was all
+ * balanced against does not move.
+ *
+ * A world with no species tree — one stored before it existed — still gets
+ * statblock foes, because inventing a population for it would be inventing the
+ * bodies of creatures somebody is already fighting.
+ */
+function crowdFoes(
+  state: PlayState,
+  danger: number,
+  floor: number,
+  grid: Grid,
+  origin: Vec,
+  taken: Set<string>,
+): Combatant[] {
+  const kinds = state.world.species ?? [];
+  const pack = packAt(state.world, floor);
+  if (!pack) return [];
+
+  const roles = composition(danger, kindForFloor(floor));
+  const cells = freeCellsNear(grid, origin, taken, roles.length);
+  const names = activeRegion(state.world)?.creatures ?? [];
+
+  return roles.map((role, i) => {
+    const rank = RANK_OF[role];
+    const who = { ...crowdMember(state.world.seed, kinds, pack, floor, i), rank };
+    const { sheet, inventory } = crowdFighter(state.world.seed, kinds, who, danger);
+    const group = groupOf(kinds, who.subspecies);
+    const hunts = group ? preyOf(state.world.seed, kinds, group) : undefined;
+
+    /*
+     * ITS FIGHT NUMBERS ARE THE ANCHORED ONES, and this is not a shortcut.
+     *
+     * Built from the sheet, every number came from the character: hit points from
+     * level and `vit`, damage from a catalogue weapon and refine, AC from worn
+     * armour and `agi`, proficiency from level. Measured, that made a danger-1
+     * fight fall from 95% to 53% — the curve every floor was balanced against,
+     * moved by a change that was supposed to leave it alone.
+     *
+     * So `scaleFoe` still decides what it is like to FIGHT: hit points, AC,
+     * proficiency, abilities and the attack it swings. The character decides everything
+     * else — what kind of thing it is, what it hunts, what it knows, and what is
+     * on its body to take. Re-deriving the curve from sheets is its own piece of
+     * work, and it needs the build matrix pointed at it rather than a guess here.
+     */
+    const stats = scaleFoe(danger, role);
+    const built = toCombatant(sheet, `foe${i + 1}`, inventory);
+
+    return {
+      ...built,
+      side: 'foe' as const,
+      hp: stats.hp,
+      maxHp: stats.hp,
+      ac: stats.ac,
+      proficiency: stats.proficiency,
+      // Abilities too: `attackBonus` and the damage bonus both read them, so a
+      // brute's +3 str was worth 20 points of the player's win rate on its own.
+      abilities: stats.abilities,
+      attacks: [stats.attack],
+      speed: stats.speed,
+      // The model's word for what lives here; the engine decided everything else.
+      name: names.length ? names[i % names.length] : who.profession,
+      pos: cells[i] ?? origin,
+      ...(group ? { group } : {}),
+      ...(hunts ? { hunts } : {}),
+    };
+  });
+}
+
+/** A statblock role, as a standing in a crowd. */
+const RANK_OF: Record<FoeRole, Rank> = { minion: 'whelp', regular: 'ordinary', elite: 'veteran', boss: 'veteran' };
+
 /**
  * Start a fight on the current floor.
  *
@@ -149,20 +239,24 @@ export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'):
   const me = playerCombatant(state);
   const ambushed = startedBy === 'them';
 
-  const foes = buildEncounter({
+  /*
+   * Being jumped means they are already on you. Going first across the open arena
+   * only spent the turn closing the gap, which handed the PLAYER the first swing —
+   * an ambush measured as raising your odds.
+   */
+  const origin = ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) };
+  const taken = new Set([cellKey(me.pos)]);
+  const asCharacters = crowdFoes(state, danger, region?.floor ?? 0, grid, origin, taken);
+
+  const foes = asCharacters.length > 0 ? asCharacters : buildEncounter({
     danger,
     // A landmark is a DEPTH, not a danger level: the two part ways in any world
     // whose curve is not the identity, and a stratum can set its own.
     kind: kindForFloor(region?.floor ?? 0),
     names: region?.creatures,
     grid,
-    /*
-     * Being jumped means they are already on you. Going first across the open
-     * arena only spent the turn closing the gap, which handed the PLAYER the
-     * first swing — an ambush measured as raising your odds.
-     */
-    origin: ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },
-    taken: new Set([cellKey(me.pos)]),
+    origin,
+    taken,
     templateOf: (name) => foeSpecies(state.world, name, region?.floor ?? 0).template,
     // And what it IS, so a hunter brings its appetite into the fight.
     kindOf: (name) => {

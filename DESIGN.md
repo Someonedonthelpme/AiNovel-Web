@@ -333,9 +333,26 @@ after any that touches a fight):
      identical fighters, which is far more than any template can say and the reason
      a chart beats a ladder. The picker marks a hunted lineage, because an edge
      that large handed out silently is the trap 3g exists to prevent.
-3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
-   individuation into a sheet, profession and rank, derived gear, the instance-id
-   fix, used looted gear; `scripts/balance.ts` holds the curve.
+3n. **Every foe is a character** — **SHIPPED in part, 2026-09-12.** A foe is drawn
+   out of the floor's population (`character/crowd.ts`): a lineage, a PROFESSION
+   (what it fights with) and a RANK (whelp · ordinary · veteran, pinned to the
+   `FOE_ROLE` it replaces), built as a sheet with derived gear on its body and its
+   kind's knack on its sheet. `FOE_ROLES` survive as the anchor rather than as the
+   foe. A world stored before kinds still meets statblock foes, since inventing a
+   population for it would be inventing the bodies of creatures somebody is already
+   fighting.
+   **What the curve cost, measured:** built from the sheet alone a danger-1 fight
+   fell from 95% to 53% (damage, AC, proficiency and abilities all came from the
+   trade and its gear); anchoring hit points alone left it at 75%. `scaleFoe` now
+   decides what it is like to FIGHT — hp, ac, proficiency, abilities, attack,
+   speed — and the character decides WHO it is: kind, group, prey, knack, gear to
+   loot. A harness test pins every cell equal so nobody moves it silently.
+   **Left for 3n-ii:** populations keyed by place id with a stored size, so killing
+   THINS a floor (the reader that keeps a crowd from being a simulation nothing
+   touches); the `nextInstanceId` collision so looted gear keeps its worth; looted
+   gear arriving used; `Region.creatures` tied to the floor's population; and
+   re-deriving the curve from sheets, which is the work that would let a character's
+   own numbers fight.
 4. **Bosses are notable characters with a mutation** — created by floor
    generation, so they can be heard about first. (Was: epic foes.)
 5. **Notable foes from existing people** — a person whose regard has gone bad
