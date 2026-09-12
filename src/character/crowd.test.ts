@@ -7,7 +7,11 @@ import { groupsAt } from './habitat.ts';
 import { scaleFoe } from '../combat/statblock.ts';
 import { composition } from '../combat/encounter.ts';
 import { ROLE_OF } from './crowd.ts';
-import { maxHpFor } from '../session/sheet.ts';
+import { maxHpFor, toCombatant } from '../session/sheet.ts';
+import { bow, sword } from '../combat/fixtures.ts';
+
+/** What each trade fights at arm's length or beyond — the table `crowd.ts` keys on. */
+const TRADE_REACH = { hunter: bow.range, watcher: sword.range, brute: sword.range, raider: sword.range };
 import { addItem, countOf, emptyInventory, findHolding, give } from '../items/types.ts';
 import { PRISTINE } from '../items/instance.ts';
 import { bonusOf } from '../items/refine.ts';
@@ -127,6 +131,62 @@ test('gear off a body arrives USED, and still worth taking', () => {
     for (const h of inventory.held) {
       assert.ok(h.instance.condition < PRISTINE, `a ${rank}'s ${h.item.id} came off a body pristine`);
       assert.ok(h.instance.condition > PRISTINE / 4, `a ${rank}'s ${h.item.id} arrived worthless — used, not wrecked`);
+    }
+  }
+});
+
+/*
+ * Gear is SOLVED against the anchor rather than tuned, so what is on a body is
+ * worth what the depth says a body of that standing is worth — which is what
+ * makes loot off the body and foe power one number.
+ */
+
+test('what a body carries lands on the anchor: AC within two, reach kept', () => {
+  /*
+   * TWO, not one, and measured rather than chosen: a refine's grant is hashed
+   * off the instance id by decision, so the same veteran standing in two places
+   * wears gear worth a point or so apart and the solve cannot land on the nose.
+   * Across every rank, depth and namespace the worst miss is 2.
+   *
+   * Whelps are left out on purpose — one carries nothing worth taking, so it
+   * wears no coat at all and is up to 7 under the anchor at depth. That is what
+   * "nothing worth taking" means, and it costs no balance while hit points are
+   * the anchored term.
+   */
+  for (const danger of [1, 2, 3, 5, 8, 16, 26]) {
+    for (const rank of ['ordinary', 'veteran'] as const) {
+      const who = { ...member(0, danger), rank };
+      const { sheet, inventory } = crowdFighter(11, kinds, who, danger, 'body');
+      const built = toCombatant(sheet, 'f', inventory);
+      const anchor = scaleFoe(danger, ROLE_OF[rank]);
+
+      assert.ok(
+        Math.abs(built.ac - anchor.ac) <= 2,
+        `d${danger} ${rank}: ac ${built.ac} against the anchored ${anchor.ac}`,
+      );
+      // A trade decides reach. Solving damage without it armed nearly every
+      // body with a sling and cost thirty points of the player's win rate.
+      const ranged = TRADE_REACH[who.profession] > 1;
+      assert.equal(built.attacks[0].range > 1, ranged, `d${danger} ${who.profession}: wrong reach`);
+    }
+  }
+});
+
+test('gear grows with the depth it was taken from', () => {
+  const shallow = crowdFighter(11, kinds, { ...member(0, 1), rank: 'veteran' }, 1, 'a');
+  const deep = crowdFighter(11, kinds, { ...member(0, 26), rank: 'veteran' }, 26, 'b');
+  const dice = (i: typeof shallow) => i.inventory.held[0].item.attack!.damage.sides;
+  assert.ok(dice(deep) > dice(shallow), `a depth-26 blade (d${dice(deep)}) is no better than a depth-1 one`);
+});
+
+test('a rank caps what can come off the body, however deep', () => {
+  for (const danger of [1, 8, 26]) {
+    for (const [rank, cap] of [['whelp', 0], ['ordinary', 2], ['veteran', 4]] as const) {
+      const { inventory } = crowdFighter(11, kinds, { ...member(0, danger), rank }, danger, 'body');
+      for (const h of inventory.held) {
+        assert.ok((h.instance.refine ?? 0) <= cap, `d${danger} ${rank}: +${h.instance.refine} past its cap`);
+        assert.ok(!h.instance.exempts, 'a looted piece hands over a law exemption');
+      }
     }
   }
 });

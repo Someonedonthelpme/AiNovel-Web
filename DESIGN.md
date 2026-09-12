@@ -248,8 +248,16 @@ after any that touches a fight):
      `npm run chart`. Four bodies that cost the same (melee/ranged/caster/tank),
      a policy that CASTS rather than always swinging, a chart built from SHEETS
      so `vit` counts, and the melee curve recorded as the anchor 3n must not
-     move. First numbers: melee 97/84/77/46/3% at danger 1/2/3/4/6, ranged
-     86/81/70/40/4, caster 94/93/91/90/0, tank 91/72/64/22/1.
+     move. First numbers, 2026-09-12: melee 97/84/77/46/3% at danger 1/2/3/4/6,
+     ranged 86/81/70/40/4, caster 94/93/91/90/0, tank 91/72/64/22/1.
+     **Re-pinned 2026-09-12, 3n-ii:** those numbers are what 3d measured and are
+     kept as the record; **3m moved them** and the doc was not updated, which is
+     how "must not move" was violated without anyone seeing it. Checked out and
+     re-run, `npm run chart` gives melee 97/84/77/46/3 at `397a454` (3d) and
+     **96/86/83/40/5 from `aea03f9` (the prey edge) onward** — d3 up six, d4
+     down six. **The live anchor is melee 96/86/83/40/5, ranged 85/83/70/36/4,
+     caster 94/94/91/90/0, tank 88/76/69/21/2**, unchanged by 3n and by 3n-ii.
+     Re-pin it in the same commit as any stage that moves it.
    - **3e SHIPPED** the tree: type → group → species → subspecies (flat on the
      World, parents before children), leans dealt per level and passed down, a
      group moving nothing, every person and the climber at a SUBSPECIES,
@@ -347,12 +355,56 @@ after any that touches a fight):
    decides what it is like to FIGHT — hp, ac, proficiency, abilities, attack,
    speed — and the character decides WHO it is: kind, group, prey, knack, gear to
    loot. A harness test pins every cell equal so nobody moves it silently.
-   **Left for 3n-ii:** populations keyed by place id with a stored size, so killing
-   THINS a floor (the reader that keeps a crowd from being a simulation nothing
-   touches); the `nextInstanceId` collision so looted gear keeps its worth; looted
-   gear arriving used; `Region.creatures` tied to the floor's population; and
-   re-deriving the curve from sheets, which is the work that would let a character's
-   own numbers fight.
+   **3n-ii SHIPPED, 2026-09-12, except the curve.** Populations are stored per
+   PLACE (`character/population.ts`) — cohorts of (subspecies, profession, size),
+   derived from the seed until the first kill writes them down, so no migration
+   and a world nobody has killed in stores nothing. The draw comes from the
+   cohorts weighted by size, the composition is capped by who is left, and a
+   place cleared out opens NO fight; a foe carries its cohort (`Combatant.kind`,
+   `trade`) so the dead can be taken out of it. Compression folds a floor's
+   places into one aggregate keyed by region id, since place ids are the model's
+   words and come back different. The word and the body now agree: the name
+   FOLLOWS the lineage, and a lineage no creature word covers wears its own kind.
+   Gear is solved against the anchor rather than tuned (`gearFor`), so what is
+   on a body scales with depth and is what you would loot; ids are namespaced so
+   `give` can hand an object over without renaming it and re-rolling its
+   bonuses; and it arrives USED.
+
+   **Left for 3n-iii — re-deriving the curve from sheets. Measured 2026-09-12:
+   NOT REACHABLE, and the reason is a design decision, not an implementation.**
+   Decided with the user that the anchor is the WIN RATE, not per-foe numbers —
+   and the win rate still cannot be held, because `scaleFoe`'s shallow end
+   describes things that are not people. Three independent walls, each measured:
+   - **Hit points.** A danger-1 minion has 2 and a regular 8; the frailest
+     level-one body is `HP_AT_FIRST` 10, about 12 with any `vit` at all.
+   - **What it swings.** A shallow foe swings 3.5 a hit; the weakest melee thing
+     the catalogue makes is a d6, and in the hands of anything with a positive
+     ability mod that is 4.5 — so damage per ROUND floors at 2.25 against an
+     anchored 1.57. Solving to the nearest gets no closer; there is nothing
+     closer.
+   - **Reach.** Minimising damage alone armed nearly every body with a SLING,
+     because a d4 is the closest thing to a shallow swing — and foes that used
+     to spend two rounds crossing the arena opened fire on round one. That cost
+     thirty points of win rate with every printed number matching within one.
+     Fixed by filtering candidates to the trade's reach; recorded because it is
+     the clearest evidence that per-term matching is not what a fight measures.
+   With AC solved to within two, damage per round to the nearest reachable, and
+   hit points still anchored, the curve measured **76/64/48/35/26** against the
+   anchored **94/86/84/47/36** (melee, at `expectedPcLevel` per depth, 200
+   trials). Handing back hit points as well gives **65/65/63/42/19**.
+
+   So `scaleFoe` still decides hit points and the fight, and the character
+   decides who it is and what is on it to take. **The user's call, at 3n-iii:**
+   (a) re-tune `scaleFoe`'s shallow end to what a character can be and accept
+   floors 1–5 getting about twenty points harder, re-measuring `balance.ts`, xp
+   and loot pacing against the new curve; (b) keep hit points anchored and
+   accept the same twenty points; (c) leave it as it is, exactly anchored, and
+   let a foe's own numbers stay what it is worth rather than what it fights
+   like. Shipped today is (c). A fourth exists and is bigger: the curve is drawn
+   against `referencePc`, which gets up to 4d8 of damage and AC 14–18 from
+   nothing but its level — a body no character sheet can be either. The curve
+   assumes a player no sheet describes and foes no sheet describes; fixing one
+   end without the other is what makes every option above cost twenty points.
 4. **Bosses are notable characters with a mutation** — created by floor
    generation, so they can be heard about first. (Was: epic foes.)
 5. **Notable foes from existing people** — a person whose regard has gone bad
