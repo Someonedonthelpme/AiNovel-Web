@@ -142,6 +142,16 @@ export type Combatant = {
   conditions: ActiveCondition[];
   attacks: Attack[];
   /**
+   * What KIND of thing this is, and what kind it hunts — both group ids.
+   *
+   * On the combatant rather than looked up, for the reason exemptions travel on a
+   * `Subject`: the combat engine resolves a swing and has no business knowing what
+   * a species tree is. Absent on anything built without one, which is every
+   * combatant in a world that holds no kinds.
+   */
+  group?: string;
+  hunts?: string;
+  /**
    * Party members drop to dying at 0 HP and roll death saves; foes just die.
    * `dead` is terminal in both cases.
    */

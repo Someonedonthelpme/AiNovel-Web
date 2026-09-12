@@ -324,7 +324,15 @@ after any that touches a fight):
      `amendGroup` gives the Director the writer, and the brief lists the ids or a
      guess would just be refused. 6c's `territory` axis adds *what* can be
      forbidden; this is *whom*.
-   - **3m** predator and prey — the last group mechanic.
+   - **3m SHIPPED** predator and prey (`character/prey.ts`): about one group in
+     three hunts one other group, always of another TYPE, seeded. The edge is
+     ADVANTAGE, not a bonus — a flat `+n` to hit has no reader in `resolve.ts`,
+     which is why `treeBonuses.attack` has been dead since it was written — read in
+     `attackModifiers` from two new combatant fields, `group` and `hunts`, carried
+     in for the player and for every foe. Measured 46% → 79% between otherwise
+     identical fighters, which is far more than any template can say and the reason
+     a chart beats a ladder. The picker marks a hunted lineage, because an edge
+     that large handed out silently is the trap 3g exists to prevent.
 3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
    individuation into a sheet, profession and rank, derived gear, the instance-id
    fix, used looted gear; `scripts/balance.ts` holds the curve.

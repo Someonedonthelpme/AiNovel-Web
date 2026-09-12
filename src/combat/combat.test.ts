@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
 import { attack, attackOptions, checkVictory, currentActor, endTurn, movementOptions, moveTo, startCombat } from './combat.ts';
-import { addCondition } from './conditions.ts';
+import { addCondition, attackModifiers } from './conditions.ts';
 import { cellKey } from './grid.ts';
 import { abilities, bow, combatant, d20Sequence, sword } from './fixtures.ts';
 import { canAct } from './tempo.ts';
@@ -269,4 +269,18 @@ test('agility rolls initiative, not dexterity', () => {
   // The same roll for both, so only the modifier can separate them.
   const state = startCombat(d20Sequence(10, 10), [quick, steady], open());
   assert.equal(state.order[0], 'hero', 'the fast one should act first, not the accurate one');
+});
+
+test('a hunter has the edge on what it hunts, and only on that', () => {
+  // The one thing a stat template cannot say: templates put creatures in order,
+  // so nothing in a body says "this one is bad news for YOU in particular".
+  const hunter = combatant('wolf', { side: 'foe', group: 'beast.g1', pos: { x: 1, y: 0 } });
+  const quarry = hero({ group: 'humanoid.g2' });
+  const stranger = hero({ group: 'undead.g1' });
+
+  const hunts = (a: Combatant, b: Combatant) =>
+    attackModifiers({ ...a, hunts: 'humanoid.g2' }, b, 1).advantage;
+
+  assert.equal(hunts(hunter, quarry), 'advantage', 'it has caught its own kind of prey');
+  assert.equal(hunts(hunter, stranger), 'none', 'and nothing extra against anything else');
 });

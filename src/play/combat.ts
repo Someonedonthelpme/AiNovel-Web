@@ -23,7 +23,8 @@ import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
-import { FOLK, leavesUnder, readSpecies } from '../character/species.ts';
+import { FOLK, groupOf, leavesUnder, readSpecies } from '../character/species.ts';
+import { preyOf } from '../character/prey.ts';
 import { groupsAt } from '../character/habitat.ts';
 import type { Grown } from '../character/species.ts';
 
@@ -73,8 +74,14 @@ export function combatRng(state: PlayState): Rng {
 /** The player character as they currently stand — wounds and all. */
 export function playerCombatant(state: PlayState): Combatant {
   const base = toCombatant(state.sheet, 'pc');
+  // What kind of thing they are, and what they hunt: a climber is somebody's prey
+  // and somebody's predator like everything else alive.
+  const kinds = state.world.species ?? [];
+  const group = state.sheet.species ? groupOf(kinds, state.sheet.species) : undefined;
+
   return {
     ...base,
+    ...(group ? { group, ...(preyOf(state.world.seed, kinds, group) ? { hunts: preyOf(state.world.seed, kinds, group)! } : {}) } : {}),
     hp: Math.min(state.pc.hp, base.maxHp),
     /*
      * POOLS ARE CARRIED IN, and this was a real hole.
@@ -157,6 +164,12 @@ export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'):
     origin: ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) },
     taken: new Set([cellKey(me.pos)]),
     templateOf: (name) => foeSpecies(state.world, name, region?.floor ?? 0).template,
+    // And what it IS, so a hunter brings its appetite into the fight.
+    kindOf: (name) => {
+      const kinds = state.world.species ?? [];
+      const group = groupOf(kinds, foeSpecies(state.world, name, region?.floor ?? 0).id);
+      return group ? { group, hunts: preyOf(state.world.seed, kinds, group) } : {};
+    },
   });
 
   const rng = combatRng(state);

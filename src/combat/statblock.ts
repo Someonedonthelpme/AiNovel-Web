@@ -111,6 +111,9 @@ export type FoeSpec = {
   pos: Vec;
   /** Its species' ability template, on top of role and danger. Sums to zero. */
   template?: Partial<Abilities>;
+  /** What kind of thing it is, and what kind it hunts. Both group ids. */
+  group?: string;
+  hunts?: string;
 };
 
 /** Turn a scaled role plus a name into something the combat engine can run. */
@@ -141,6 +144,8 @@ export function makeFoe(spec: FoeSpec, danger: number): Combatant {
     pos: spec.pos,
     conditions: [],
     attacks: [stats.attack],
+    ...(spec.group ? { group: spec.group } : {}),
+    ...(spec.hunts ? { hunts: spec.hunts } : {}),
     dead: false,
     dying: false,
     deathSaves: { successes: 0, failures: 0 },

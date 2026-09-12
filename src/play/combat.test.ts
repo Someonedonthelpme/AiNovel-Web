@@ -8,8 +8,9 @@ import {
 import { scaleFoe } from '../combat/statblock.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { speciesFor } from '../character/species.ts';
-import { livesAt } from '../character/habitat.ts';
-import { groupOf } from '../character/species.ts';
+import { bandOf, livesAt } from '../character/habitat.ts';
+import { groupOf, leavesUnder } from '../character/species.ts';
+import { preyOf } from '../character/prey.ts';
 import type { CombatAction } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
 import { xpToNext } from './progress.ts';
@@ -485,4 +486,29 @@ test('what you meet on a floor lives there, and a pack is one group', () => {
     const [group] = [...groups];
     assert.ok(livesAt(11, kinds, group!, floor), `floor ${floor}: ${group} does not live there`);
   }
+});
+
+test('what hunts you has the edge in a real fight, both ways round', () => {
+  const kinds = speciesFor(11);
+  const groups = kinds.filter((n) => n.level === 'group');
+  const hunter = groups.find((g) => preyOf(11, kinds, g.id))!;
+  const quarry = preyOf(11, kinds, hunter.id)!;
+
+  // A climber of the hunted kind, on a floor the hunters live on.
+  const prey = leavesUnder(kinds, quarry)[0];
+  const band = bandOf(11, kinds, hunter.id);
+  const base = onFloorTwo();
+  const region = { ...base.world.regions['floor-2'], floor: band.from, danger: 4, creatures: ['a'] };
+  const start = {
+    ...base,
+    sheet: { ...base.sheet, species: prey.id },
+    world: { ...base.world, seed: 11, species: kinds, regions: { 'floor-2': region } },
+  };
+
+  const combat = beginEncounter(start).combat!;
+  assert.equal(combat.combatants['pc'].group, groupOf(kinds, prey.id), 'the climber is a kind of thing');
+
+  const foe = Object.values(combat.combatants).find((c) => c.side === 'foe')!;
+  assert.ok(foe.group, 'and so is what it meets');
+  if (foe.group === hunter.id) assert.equal(foe.hunts, quarry, 'a hunter brings its appetite into the fight');
 });

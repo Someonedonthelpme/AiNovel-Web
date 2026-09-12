@@ -113,11 +113,19 @@ export function attackModifiers(attacker: Combatant, target: Combatant, distance
     hasCondition(target, 'unconscious') ||
     target.dying;
 
+  /*
+   * AND WHETHER THIS IS WHAT IT HUNTS. The whole of the predator mechanic, and
+   * advantage rather than a bonus because the engine already has advantage — a
+   * flat `+n` to hit has no reader anywhere in `resolve.ts`, which is why
+   * `treeBonuses.attack` has been dead since it was written.
+   */
+  const hunting = Boolean(attacker.hunts) && attacker.hunts === target.group;
+
   const proneHelps = hasCondition(target, 'prone') && melee;
   const proneHinders = hasCondition(target, 'prone') && !melee;
 
   return {
-    advantage: combineAdvantage(targetExposed || proneHelps, attackerImpaired || proneHinders),
+    advantage: combineAdvantage(targetExposed || proneHelps || hunting, attackerImpaired || proneHinders),
     // A hit on a helpless creature within reach is automatically a critical.
     autoCrit: melee && (hasCondition(target, 'unconscious') || target.dying),
   };

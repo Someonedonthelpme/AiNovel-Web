@@ -78,6 +78,8 @@ export type EncounterOptions = {
   taken?: Set<string>;
   /** A creature's species template, by its name. Absent: role and danger alone. */
   templateOf?: (name: string) => Partial<Abilities>;
+  /** What kind of thing it is, and what it hunts, by its name. */
+  kindOf?: (name: string) => { group?: string; hunts?: string };
 };
 
 export function buildEncounter(opts: EncounterOptions): Combatant[] {
@@ -88,7 +90,7 @@ export function buildEncounter(opts: EncounterOptions): Combatant[] {
 
   const specs: FoeSpec[] = roles.map((role, i) => {
     const name = opts.names?.length ? opts.names[i % opts.names.length] : role;
-    return { id: `foe${i + 1}`, name, role, pos: cells[i] ?? opts.origin, template: opts.templateOf?.(name) };
+    return { id: `foe${i + 1}`, name, role, pos: cells[i] ?? opts.origin, template: opts.templateOf?.(name), ...opts.kindOf?.(name) };
   });
 
   return specs.map((spec) => makeFoe(spec, opts.danger));

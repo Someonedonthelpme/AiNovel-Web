@@ -7,7 +7,8 @@ import {
   defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
 } from '../../src/session/sheet.ts';
 import type { CharacterClass } from '../../src/character/classes.ts';
-import { dominantOf, leavesOf, speciesFor, TYPES } from '../../src/character/species.ts';
+import { dominantOf, groupOf, leavesOf, speciesFor, TYPES } from '../../src/character/species.ts';
+import { huntedBy } from '../../src/character/prey.ts';
 import type { Species } from '../../src/character/species.ts';
 import { questionFor, STAGES } from '../../src/session/interview.ts';
 import type { Language } from '../../src/session/interview.ts';
@@ -79,6 +80,17 @@ export default function NewCharacter() {
   const byType = TYPES
     .map((t) => ({ type: t.id, leaves: leaves.filter((k) => k.type === t.id) }))
     .filter((g) => g.leaves.length > 0);
+
+  /*
+   * What hunts your sort, shown for the same reason the body is: a hunter rolls
+   * with ADVANTAGE on its prey, which is worth more in a fight than any template
+   * (46% to 79% between otherwise identical fighters). A disadvantage the player
+   * picked is the game; one nobody mentioned is a trap.
+   */
+  const huntersOf = (kind: Species): number => {
+    const group = groupOf(kinds, kind.id);
+    return group ? huntedBy(seed, kinds, group).length : 0;
+  };
   const [kindMode, setKindMode] = useState<'ordinary' | 'pick' | 'describe' | 'world'>('ordinary');
   const [kindPick, setKindPick] = useState('');
   const [kindWords, setKindWords] = useState('');
@@ -304,6 +316,7 @@ export default function NewCharacter() {
                 >
                   {k.name === k.id ? k.id.split('.').slice(1).join(' ') : k.name}
                   {bodyOf(k) ? <span className="muted"> · {bodyOf(k)}</span> : null}
+                  {huntersOf(k) > 0 ? <span className="muted"> · hunted</span> : null}
                 </button>
               ))}
             </div>
