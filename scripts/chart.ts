@@ -8,7 +8,7 @@
  *
  *   node --experimental-strip-types scripts/chart.ts [worldSeed] [danger]
  */
-import { speciesFor } from '../src/character/species.ts';
+import { leavesOf, speciesFor } from '../src/character/species.ts';
 import { BUILDS, chart, measure } from '../src/play/harness.ts';
 
 const seed = Number(process.argv[2] ?? 7);
@@ -24,14 +24,26 @@ for (const build of BUILDS) {
   console.log(build.padEnd(9) + row.join(''));
 }
 
-const kinds = speciesFor(seed).map((k) => ({ name: k.id, template: k.template }));
+/*
+ * SUBSPECIES only, and a sample of them: a type and a group are categories, not
+ * bodies, and a world deals tens of leaves — every pair of 40 of them is 1,600
+ * match-ups nobody reads. `HOW_MANY` spreads across the tree rather than taking
+ * the first few, which would all share one type.
+ */
+const HOW_MANY = Number(process.argv[4] ?? 8);
+const leaves = leavesOf(speciesFor(seed));
+const step = Math.max(1, Math.floor(leaves.length / HOW_MANY));
+const kinds = leaves.filter((_, i) => i % step === 0).slice(0, HOW_MANY)
+  .map((k) => ({ name: k.id, template: k.template ?? {} }));
+console.log(`${leaves.length} subspecies in this world; charting ${kinds.length} of them
+`);
 const matrix = chart(kinds, danger);
 
 console.log(`\n=== who beats whom (row beats column, %), as ${BUILDS[0]} ===`);
-console.log(''.padEnd(12) + kinds.map((k) => k.name.slice(0, 6).padStart(7)).join(''));
+console.log(''.padEnd(26) + kinds.map((k) => k.name.slice(-6).padStart(7)).join(''));
 matrix.forEach((row, i) => {
   console.log(
-    kinds[i].name.slice(0, 11).padEnd(12)
+    kinds[i].name.padEnd(26)
     + row.map((v) => `${Math.round(v * 100)}`.padStart(7)).join('')
     + '   ' + JSON.stringify(kinds[i].template),
   );

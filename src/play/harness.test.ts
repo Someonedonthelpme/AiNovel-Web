@@ -35,9 +35,16 @@ test('the chart reads vit, which a foe-statblock chart cannot', () => {
 
 test('the difficulty curve is where it was measured', () => {
   // The anchor for 3n: swapping statblock foes for characters must not move this.
-  // Measured 2026-09-12 with these 40 seeds, not guessed. A band, so an
-  // unrelated tweak does not fail it, and deterministic, so it never flakes.
-  const baseline: Record<number, number> = { 1: 98, 2: 88, 3: 80, 4: 50 };
+  /*
+   * Measured with these 40 seeds, not guessed. A band, so an unrelated tweak does
+   * not fail it, and deterministic, so it never flakes.
+   *
+   * RE-ANCHORED at 3e: a world with no species list now gives its foes an EMPTY
+   * body, where `readSpecies` used to invent folk's template for them. The curve
+   * moved because the foes did (d2 88→93, d3 80→88, d4 50→40), not because
+   * anything regressed.
+   */
+  const baseline: Record<number, number> = { 1: 98, 2: 93, 3: 88, 4: 40 };
   for (const [danger, was] of Object.entries(baseline)) {
     const now = Math.round(measure({ build: 'melee', danger: Number(danger), trials: 40 }).rate * 100);
     assert.ok(Math.abs(now - was) <= 8, `danger ${danger}: ${now}% against a recorded ${was}%`);

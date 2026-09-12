@@ -1,6 +1,7 @@
 import { mulberry32 } from '../engine/roll.ts';
 import type { Need } from './persona.ts';
-import type { Abilities, Ability } from '../combat/types.ts';
+import { ABILITIES } from '../combat/types.ts';
+import type { Abilities } from '../combat/types.ts';
 
 /**
  * What KIND of thing somebody is.
@@ -21,142 +22,236 @@ export type Species = {
   id: string;
   name: string;
   needs?: Partial<Record<Need, number>>;
-  /** Absent on a world stored before types existed — 6b stage 3b reads those. */
+  /** Absent on a world stored before types existed — `readSpecies` reads those. */
   type?: TypeId;
-  /** Ability shifts from the type's lean plus this species' own; sums to zero. */
+  /** Where in the tree this sits. Absent on a world stored before the tree. */
+  level?: Level;
+  /** The node above. A type has none. */
+  parent?: string;
+  /** What THIS level moved, before anything above it. */
+  delta?: Partial<Abilities>;
+  /** Everything down the path, summed. What a body is actually worth. */
   template?: Partial<Abilities>;
 };
 
-/** A species as a world is dealt it now: always typed, always templated. */
-export type Grown = Species & { type: TypeId; template: Partial<Abilities> };
+/** A node as a world is dealt it now: always typed, always templated. */
+export type Grown = Species & {
+  type: TypeId;
+  level: Level;
+  delta: Partial<Abilities>;
+  template: Partial<Abilities>;
+};
 
-const BODY: readonly Ability[] = ['str', 'dex', 'agi'];
-const MIND: readonly Ability[] = ['con', 'int', 'wis', 'cha', 'luk'];
+/**
+ * Four levels, like *Homo sapiens sapiens*, and every living thing sits at the
+ * leaf. A type is closed and authored; everything below it is dealt from the
+ * seed and named by the model (6b stage 3f).
+ */
+export const LEVELS = ['type', 'group', 'species', 'subspecies'] as const;
+export type Level = (typeof LEVELS)[number];
+
+/** How many of each level a world deals per parent. */
+const FAN: Record<Level, [number, number]> = {
+  type: [3, 5], group: [2, 4], species: [1, 3], subspecies: [1, 3],
+};
+
+/**
+ * How much each level moves.
+ *
+ * A GROUP MOVES NOTHING: its purpose is to categorise, not to be a step of
+ * evolution — it carries the body plan, habitat, kinship, law standing and
+ * prey it is known for instead (DESIGN 6b, group mechanics).
+ */
+const POINTS: Record<Level, number> = { type: 2, group: 0, species: 2, subspecies: 1 };
+
+/** No ability on any node passes this, so nothing a world deals is unplayable. */
+export const CAP = 4;
 
 /**
  * The TYPES a species belongs to — closed and authored, like every vocabulary
- * the engine resolves. A type is what differs MECHANICALLY: how its needs move,
- * and which way its body leans. The lean sums to zero, so no type is simply
- * stronger than another; it only trades one thing for another.
+ * the engine resolves. A type differs MECHANICALLY through needs: a type with no
+ * safety need never flees, and with no company need it cannot be parleyed.
  *
- * A lean trades WITHIN a group — body for body (`str dex agi`), mind for mind
- * (`con int wis cha luk`) — and never touches `vit`. A zero sum is not a fair
- * trade across groups: humanoid's first lean, `cha +2 / vit −2`, took a point of
- * HP off every default climber and 15–19 points of win rate with it.
- *
- * No lean buys `str` either: it is both to-hit and damage for a melee climber,
- * so `str +2` for `dex −2` measured +3 to +15 points of win rate. Body leans
- * trade `dex` and `agi` — and even that is not even: beast's `agi +2` measured
- * about level, construct's `agi −2` cost 5–9 points. Open in DESIGN.
+ * Its LEAN is not authored. It is dealt per world with every other level, so the
+ * same type is not the same body in two worlds — and a lean may touch any stat,
+ * `vit` included. Fairness is not the goal: a body that is worse in a fight is
+ * allowed, so long as the picker shows it. `CAP` is what keeps it playable.
  */
 export const TYPES = [
-  { id: 'humanoid', needs: {}, lean: { cha: 2, luk: -2 } },
-  { id: 'beast', needs: { purpose: 0, company: 2 }, lean: { agi: 2, dex: -2 } },
-  { id: 'construct', needs: { food: 0 }, lean: { dex: 2, agi: -2 } },
-  { id: 'undead', needs: { food: 0, rest: 0, company: 0 }, lean: { con: 2, cha: -2 } },
-  { id: 'fey', needs: { safety: 2, purpose: 2 }, lean: { luk: 2, con: -2 } },
-  { id: 'fiend', needs: { food: 0, company: 0 }, lean: { cha: 2, wis: -2 } },
-  { id: 'elemental', needs: { food: 0, rest: 0, company: 0, purpose: 0 }, lean: { con: 2, int: -2 } },
-  { id: 'aberration', needs: { company: 0, safety: 2 }, lean: { int: 2, cha: -2 } },
-] as const satisfies readonly { id: string; needs: Partial<Record<Need, number>>; lean: Partial<Abilities> }[];
+  { id: 'humanoid', needs: {} },
+  { id: 'beast', needs: { purpose: 0, company: 2 } },
+  { id: 'construct', needs: { food: 0 } },
+  { id: 'undead', needs: { food: 0, rest: 0, company: 0 } },
+  { id: 'fey', needs: { safety: 2, purpose: 2 } },
+  { id: 'fiend', needs: { food: 0, company: 0 } },
+  { id: 'elemental', needs: { food: 0, rest: 0, company: 0, purpose: 0 } },
+  { id: 'aberration', needs: { company: 0, safety: 2 } },
+] as const satisfies readonly { id: string; needs: Partial<Record<Need, number>> }[];
 
 export type TypeId = (typeof TYPES)[number]['id'];
 
-/** The ordinary kind. Every world has it, and most people are it. */
+/** The ordinary kind. Kept for worlds stored before the tree; goes at 3g. */
 export const FOLK: Species = { id: 'folk', name: 'folk', type: 'humanoid' };
 
 /**
- * The kinds a world may draw from.
+ * What a level moves: `points` single points, across 2–4 stats, summing to zero.
  *
- * Setting-neutral words, the same way `subjects.ts` keeps its fallbacks neutral:
- * the SHAPES are what the engine reads, and a world's own nouns for them belong
- * to the naming pass that dresses subjects and roles. Needs come from the type.
+ * Moving points rather than adding them is what keeps the sum at zero however
+ * many levels stack, and the pool is drawn from every ability, so a species can
+ * be built thick and stupid or quick and frail.
  */
-const KINDS: readonly { id: string; name: string; type: TypeId }[] = [
-  { id: 'made', name: 'the made', type: 'construct' },
-  { id: 'hollow', name: 'the hollow', type: 'undead' },
-  { id: 'beast', name: 'beasts', type: 'beast' },
-  { id: 'touched', name: 'the touched', type: 'fey' },
-];
+function deltaOf(rng: () => number, points: number): Partial<Abilities> {
+  if (points === 0) return {};
 
-/**
- * A species' abilities: its type's lean, then two single points moved between
- * abilities, seeded by the world and the species. Moving a point rather than
- * adding one is what keeps the sum at zero.
- */
-function templateFor(seed: number, id: string, type: TypeId): Partial<Abilities> {
-  let hash = (seed ^ 0x7e3a) >>> 0;
-  for (const ch of id) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
-  const rng = mulberry32(hash);
-
-  const template: Partial<Abilities> = { ...TYPES.find((t) => t.id === type)!.lean };
-  // Never vit, and never across a group — for the reasons the leans obey both.
-  const movable = [...BODY, ...MIND];
-  for (let i = 0; i < 2; i++) {
-    const from = movable[Math.floor(rng() * movable.length)];
-    const others = (BODY.includes(from) ? BODY : MIND).filter((a) => a !== from);
-    const to = others[Math.floor(rng() * others.length)];
-    template[from] = (template[from] ?? 0) - 1;
-    template[to] = (template[to] ?? 0) + 1;
+  const width = 2 + Math.floor(rng() * 3);
+  const pool = [...ABILITIES].sort(() => rng() - 0.5).slice(0, width);
+  const delta: Partial<Abilities> = {};
+  for (let i = 0; i < points; i++) {
+    const from = pool[Math.floor(rng() * pool.length)];
+    const rest = pool.filter((a) => a !== from);
+    const to = rest[Math.floor(rng() * rest.length)];
+    delta[from] = (delta[from] ?? 0) - 1;
+    delta[to] = (delta[to] ?? 0) + 1;
   }
-  return template;
+  for (const ability of Object.keys(delta) as (keyof Abilities)[]) {
+    if (delta[ability] === 0) delete delta[ability];
+  }
+  return delta;
 }
 
-const grow = (seed: number, kind: { id: string; name: string; type: TypeId }): Grown => {
-  const needs = TYPES.find((t) => t.id === kind.type)!.needs;
-  return {
-    ...kind,
-    ...(Object.keys(needs).length ? { needs } : {}),
-    template: templateFor(seed, kind.id, kind.type),
-  };
+const sum = (a: Partial<Abilities>, b: Partial<Abilities>): Partial<Abilities> => {
+  const out: Partial<Abilities> = { ...a };
+  for (const [ability, by] of Object.entries(b) as [keyof Abilities, number][]) {
+    const total = (out[ability] ?? 0) + by;
+    if (total === 0) delete out[ability];
+    else out[ability] = total;
+  }
+  return out;
 };
 
-const FOLK_KIND = { id: FOLK.id, name: FOLK.name, type: 'humanoid' as const };
+const within = (template: Partial<Abilities>): boolean =>
+  Object.values(template).every((by) => Math.abs(by ?? 0) <= CAP);
 
 /**
- * A species as a stored world holds it, typed and templated.
+ * A delta that keeps the running total inside `CAP`.
  *
- * A world saved before types existed has neither. Its ids are the ones a world
- * was dealt, so the type comes from them and the template is re-derived from the
- * same seed — an old world reads exactly as a new one stores, with no migration.
- * An untyped id outside that list was never written by this code: refused, since
- * guessing a type would quietly give somebody the wrong body.
+ * Redrawn rather than clamped: clamping a stat would break the zero sum that
+ * makes a template a TRADE, and a level that cannot find a legal move simply
+ * moves nothing — rarer than it sounds, since the pool is nine wide.
  */
-export function readSpecies(seed: number, stored: Species): Grown {
-  const type = stored.type ?? [FOLK_KIND, ...KINDS].find((k) => k.id === stored.id)?.type;
-  if (!type) throw new Error(`species "${stored.id}" has no type and is not a kind any world was dealt`);
-  return { ...stored, type, template: stored.template ?? templateFor(seed, stored.id, type) };
+function fittingDelta(rng: () => number, points: number, above: Partial<Abilities>): Partial<Abilities> {
+  for (let tries = 0; tries < 12; tries++) {
+    const delta = deltaOf(rng, points);
+    if (within(sum(above, delta))) return delta;
+  }
+  return {};
 }
 
 /**
- * The kinds THIS world holds.
+ * The tree THIS world holds, flat, parents before children.
  *
- * Dealt from a shuffled deck rather than drawn, so a world never lists one kind
- * twice — the same fix duplicate Signets and duplicate subjects both needed.
+ * Flat because every reader wants one node by id — the Director naming a
+ * person's kind, drift asking how a need moves, a foe asking for a body — and a
+ * nested shape would make all three walk it.
  */
 export function speciesFor(seed: number): Grown[] {
   const rng = mulberry32((seed ^ 0x59ec) >>> 0);
-  const deck = [...KINDS].sort(() => rng() - 0.5);
-  const want = 1 + Math.floor(rng() * 3);
-  return [FOLK_KIND, ...deck.slice(0, want)].map((k) => grow(seed, k));
+  const nodes: Grown[] = [];
+
+  const types = [...TYPES].sort(() => rng() - 0.5);
+  const howMany = (level: Level) => FAN[level][0] + Math.floor(rng() * (FAN[level][1] - FAN[level][0] + 1));
+
+  const grow = (level: Level, parent: Grown, depth: number): void => {
+    for (let i = 0; i < howMany(level); i++) {
+      const id = `${parent.id}.${level[0]}${i + 1}`;
+      const delta = fittingDelta(rng, POINTS[level], parent.template);
+      const node: Grown = {
+        id,
+        // A placeholder until the model names it (3f): readable, and never shown
+        // to a player as it stands.
+        name: id,
+        type: parent.type,
+        level,
+        parent: parent.id,
+        delta,
+        template: sum(parent.template, delta),
+        ...(parent.needs ? { needs: parent.needs } : {}),
+      };
+      nodes.push(node);
+      if (depth + 1 < LEVELS.length) grow(LEVELS[depth + 1], node, depth + 1);
+    }
+  };
+
+  for (const type of types.slice(0, howMany('type'))) {
+    const delta = fittingDelta(rng, POINTS.type, {});
+    const node: Grown = {
+      id: type.id,
+      name: type.id,
+      type: type.id,
+      level: 'type',
+      delta,
+      template: delta,
+      ...(Object.keys(type.needs).length ? { needs: type.needs } : {}),
+    };
+    nodes.push(node);
+    grow('group', node, 1);
+  }
+
+  return nodes;
+}
+
+/** The leaves — the subspecies, which is what a living thing actually is. */
+export const leavesOf = (nodes: readonly Species[]): Species[] =>
+  nodes.filter((n) => n.level === 'subspecies');
+
+/**
+ * A node as a stored world holds it.
+ *
+ * A world saved before the tree has neither type nor template. A tree id carries
+ * its type in its first segment and its path in the rest, so the node is found by
+ * dealing the same seed again — an old world reads exactly as a new one stores,
+ * with no migration. An id from neither scheme was never written by this code:
+ * refused, since guessing would quietly give somebody the wrong body.
+ */
+export function readSpecies(seed: number, stored: Species): Grown {
+  if (stored.type && stored.template && stored.level) return stored as Grown;
+
+  const dealt = speciesFor(seed).find((n) => n.id === stored.id);
+  if (dealt) return { ...dealt, ...stored, type: dealt.type, level: dealt.level, delta: dealt.delta, template: dealt.template };
+
+  const legacy = LEGACY[stored.id];
+  if (!legacy) throw new Error(`species "${stored.id}" is not one any world was dealt`);
+  return { ...stored, type: legacy, level: 'subspecies', delta: {}, template: {} };
 }
 
 /**
- * Which kind a particular person is.
+ * The five ids worlds were dealt before the tree, and what they were.
+ *
+ * They keep working — a stored person is that kind — but they carry no body:
+ * their templates were dealt by a generator that no longer exists, and inventing
+ * numbers for them would change a character somebody is already playing.
+ */
+const LEGACY: Record<string, TypeId> = {
+  folk: 'humanoid', made: 'construct', hollow: 'undead', beast: 'beast', touched: 'fey',
+};
+
+/**
+ * Which kind a particular person is — a SUBSPECIES, like every living thing.
  *
  * Seeded from the world and their id, so it is the same on every replay and
- * needs nothing stored to be reproducible. Weighted hard toward the ordinary:
- * a town where one person in four is a construct is a menagerie, not a town.
+ * needs nothing stored to be reproducible. Weighted hard toward one kind: a town
+ * where one person in four is a construct is a menagerie, not a town. WHICH kind
+ * is the first leaf until 3g makes it the world's dominant one.
  */
 export function speciesIdFor(seed: number, personId: string, kinds: readonly Species[] = []): string {
-  const others = kinds.filter((k) => k.id !== FOLK.id);
-  if (others.length === 0) return FOLK.id;
+  const leaves = leavesOf(kinds);
+  if (leaves.length === 0) return FOLK.id;
 
   let hash = (seed ^ 0x9e37) >>> 0;
   for (const ch of personId) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
   const rng = mulberry32(hash);
 
-  return rng() < 0.8 ? FOLK.id : others[Math.floor(rng() * others.length)].id;
+  return rng() < 0.8 ? leaves[0].id : leaves[Math.floor(rng() * leaves.length)].id;
 }
 
 /**

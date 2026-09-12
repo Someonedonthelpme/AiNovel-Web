@@ -10,7 +10,7 @@ import { ABILITIES } from '../combat/types.ts';
 import { abilitiesOf } from './fixtures.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
 import { HARSH, STANDARD } from '../rules/ruleset.ts';
-import { speciesFor, speciesIdFor } from '../character/species.ts';
+import { leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
 import { PLAYER } from '../social/edge.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
@@ -130,13 +130,18 @@ test('a world holds kinds, and the people in it are one of them', async () => {
   const r = await runGenesis(wholeGenesis(), completed(), 42);
 
   assert.ok((r.world.species ?? []).length > 0, 'a world names the kinds that live in it');
-  assert.equal(r.world.species?.[0].id, 'folk');
+  // RESPECIFIED 2026-09-12 (3e): the first node is a TYPE, not folk, and a
+  // person is a SUBSPECIES — a type or a group is a category, not a body.
+  assert.ok(TYPES.some((t) => t.id === r.world.species?.[0].id), 'the tree starts at a type');
 
   const townsfolk = Object.values(r.world.people);
   assert.ok(townsfolk.length > 0, 'the ground floor has to have people to be a test');
   for (const person of townsfolk) {
     assert.ok(person.species, `${person.id} is not any kind of thing`);
-    assert.ok(r.world.species?.some((k) => k.id === person.species), 'and it is a kind this world holds');
+    assert.ok(
+      leavesOf(r.world.species ?? []).some((k) => k.id === person.species),
+      `${person.id} is a ${person.species}, which is not a subspecies this world holds`,
+    );
   }
 });
 
@@ -337,7 +342,7 @@ test('the climber chooses their kind: picked, described, or left to the world', 
   // Every villager got a kind and the climber never did, so `applyDrift` read a
   // species for the player that nothing had written.
   const kinds = speciesFor(42);
-  const other = kinds[1];
+  const other = leavesOf(kinds)[1];   // a SUBSPECIES: what a climber can be
 
   const picked = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: other.id });
   assert.equal(picked.sheet.species, other.id, 'a kind the world holds, chosen by name');
@@ -351,18 +356,20 @@ test('the climber chooses their kind: picked, described, or left to the world', 
   assert.match(asked.allSentText(), /brass, never eats/, 'and was shown them');
 
   const invented = await runGenesis(wholeGenesis(character({ species: 'dragon' })), completed(), 42, 'standard', 'dynamic', { describe: 'x' });
-  assert.ok(kinds.some((k) => k.id === invented.sheet.species), 'never a kind the world lacks');
+  assert.ok(leavesOf(kinds).some((k) => k.id === invented.sheet.species), 'never a kind the world lacks');
 });
 
 test('the climber is born with their kind\'s template, on top of point buy', async () => {
-  const other = speciesFor(42)[1];
+  const other = leavesOf(speciesFor(42))[1];   // a SUBSPECIES: what a climber can be
   const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic', { pick: other.id });
   const without = finalAbilities({ ...sheet, speciesTemplate: undefined });
-  for (const a of ABILITIES) assert.equal(finalAbilities(sheet)[a], without[a] + (other.template[a] ?? 0), a);
+  for (const a of ABILITIES) assert.equal(finalAbilities(sheet)[a], without[a] + (other.template?.[a] ?? 0), a);
 });
 
 test('a climber who never chose a kind is ordinary, with the ordinary template', async () => {
-  const folk = speciesFor(42)[0];
+  // RESPECIFIED 2026-09-12 (3e): "ordinary" was folk; it is now the kind most of
+  // the town is, which is this world's first subspecies until 3g declares one.
+  const folk = leavesOf(speciesFor(42))[0];
   const { sheet } = await runGenesis(wholeGenesis(), completed(), 42, 'standard', 'dynamic');
   assert.deepEqual(sheet.speciesTemplate, folk.template);
 });

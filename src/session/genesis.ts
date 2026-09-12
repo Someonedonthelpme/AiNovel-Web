@@ -29,7 +29,7 @@ import { sword } from '../combat/fixtures.ts';
 import { presetNamed } from '../rules/ruleset.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { Stratum } from '../world/types.ts';
-import { FOLK, speciesFor, speciesIdFor } from '../character/species.ts';
+import { FOLK, leavesOf, speciesFor, speciesIdFor } from '../character/species.ts';
 import type { Species, SpeciesChoice } from '../character/species.ts';
 
 /**
@@ -275,10 +275,23 @@ function climberSpecies(
   if (!choice) return undefined;
   if ('decide' in choice) return speciesIdFor(seed, PLAYER, kinds);
   const asked = 'pick' in choice ? choice.pick : said;
-  if (kinds.some((k) => k.id === asked)) return asked;
-  warnings.push(`species "${asked ?? ''}" is not a kind this world holds; the climber is ${FOLK.name}`);
-  return FOLK.id;
+  // A climber is a SUBSPECIES, like everything else alive: a type or a group is
+  // a category, not a body, so picking one is picking nothing in particular.
+  if (leavesOf(kinds).some((k) => k.id === asked)) return asked;
+  const ordinary = ordinaryOf(seed, kinds);
+  warnings.push(`species "${asked ?? ''}" is not a kind this world holds; the climber is ${ordinary}`);
+  return ordinary;
 }
+
+/**
+ * The kind a climber is when nobody chose one.
+ *
+ * The same kind most of the town is, which is what "ordinary" meant when it was
+ * `folk` — the difference is that it is now one of this world's own subspecies.
+ * 3g makes it the world's declared DOMINANT one.
+ */
+const ordinaryOf = (seed: number, kinds: readonly Species[]): string =>
+  leavesOf(kinds)[0]?.id ?? FOLK.id;
 
 /* -------------------------------------------------------------------------- */
 /* Ground floor                                                                */
@@ -590,7 +603,7 @@ export async function runGenesis(
   const kind = climberSpecies(species, character.speciesSaid, seed, kinds, warnings);
   // No choice is the ordinary kind — which has a body too, or two ordinary
   // climbers would differ by whether anyone asked.
-  const speciesTemplate = kinds.find((k) => k.id === (kind ?? FOLK.id))?.template;
+  const speciesTemplate = kinds.find((k) => k.id === (kind ?? ordinaryOf(seed, kinds)))?.template;
   const sheet = { ...character.sheet, ...(kind ? { species: kind } : {}), speciesTemplate };
 
   /*

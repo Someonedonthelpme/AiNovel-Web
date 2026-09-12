@@ -250,9 +250,16 @@ after any that touches a fight):
      so `vit` counts, and the melee curve recorded as the anchor 3n must not
      move. First numbers: melee 97/84/77/46/3% at danger 1/2/3/4/6, ranged
      86/81/70/40/4, caster 94/93/91/90/0, tank 91/72/64/22/1.
-   - **3e** the tree: type → group → species → subspecies, dynamic leans passed
-     down, every person and the climber at a subspecies, `readSpecies` mapping
-     today's five ids onto it.
+   - **3e SHIPPED** the tree: type → group → species → subspecies (flat on the
+     World, parents before children), leans dealt per level and passed down, a
+     group moving nothing, every person and the climber at a SUBSPECIES,
+     `readSpecies` finding a stored id by dealing the same seed again and the
+     five pre-tree ids still readable. Leans may touch any stat with a ±4 cap per
+     ability, kept by REDRAWING a delta rather than clamping it, so a template
+     still sums to zero. World 42 deals 40 subspecies. Three tests were
+     RESPECIFIED (folk is no longer "the ordinary kind") and the harness curve
+     re-anchored, because a world with no species list now gives its foes an
+     empty body instead of folk's invented template.
    - **3f** model naming at genesis, words only.
    - **3g** a dominant subspecies replaces folk; the grouped picker shows each
      template.
