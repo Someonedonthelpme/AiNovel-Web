@@ -244,8 +244,12 @@ after any that touches a fight):
    simulation (a zero sum can still be stronger in a fight: `str` outweighs
    `cha`) · the lean fix shipped (`27da4db`). **Re-planned 2026-09-12** after
    the four-level decision above; each is test-first:
-   - **3d** the build-matrix harness and `npm run chart` — first, so every later
-     step is measured by a player with more than one build.
+   - **3d SHIPPED** the build-matrix harness (`src/play/harness.ts`) and
+     `npm run chart`. Four bodies that cost the same (melee/ranged/caster/tank),
+     a policy that CASTS rather than always swinging, a chart built from SHEETS
+     so `vit` counts, and the melee curve recorded as the anchor 3n must not
+     move. First numbers: melee 97/84/77/46/3% at danger 1/2/3/4/6, ranged
+     86/81/70/40/4, caster 94/93/91/90/0, tank 91/72/64/22/1.
    - **3e** the tree: type → group → species → subspecies, dynamic leans passed
      down, every person and the climber at a subspecies, `readSpecies` mapping
      today's five ids onto it.

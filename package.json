@@ -17,7 +17,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "fight": "node --experimental-strip-types scripts/fight.ts"
+    "fight": "node --experimental-strip-types scripts/fight.ts",
+    "chart": "node --experimental-strip-types scripts/chart.ts"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
