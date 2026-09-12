@@ -7,6 +7,10 @@ import { CANDIDATE_SIGNETS, DROPPABLE_FAMILIES, reachableIn, signetsFor, TOWER_H
 import { COUNTERS } from './traits.ts';
 import type { TraitContext } from './traits.ts';
 import { addItem, emptyInventory, equip, withInstance } from '../items/types.ts';
+import { weapon } from '../items/catalogue.ts';
+import { leavesOf, speciesFor } from '../character/species.ts';
+import { planFor } from '../character/bodyplan.ts';
+import { gearRulesFor } from './body.ts';
 import type { Item } from '../items/types.ts';
 import { forbids, STANDARD } from '../rules/ruleset.ts';
 import { playerSubject } from './signetbook.ts';
@@ -290,4 +294,24 @@ test('a law set aside by what you carry is set aside only while you carry it', (
 
   assert.equal(forbids(world, playerSubject(carrying), 'takeLoot'), null, 'worn, it sets the law aside');
   assert.ok(forbids(world, playerSubject(stowed), 'takeLoot'), 'in the bag, it does nothing');
+});
+
+test('a climber equips with their own body, not the world\'s', () => {
+  // Without this the body plan is one more stored field nothing reads: a
+  // handless climber would still wield a sword.
+  const base = playState();
+  const kinds = speciesFor(11);
+  const beastly = leavesOf(kinds).find((k) => planFor(11, kinds, k.id) === 'beastly')!;
+  const axe = weapon(mulberry32(3), 1);
+
+  const asBeast = { ...base, sheet: { ...base.sheet, species: beastly.id }, world: { ...base.world, seed: 11, species: kinds } };
+  const bag = addItem(base.pc.inventory, axe);
+  const held = bag.held[bag.held.length - 1].instance.id;
+
+  assert.match(
+    equip(bag, held, gearRulesFor({ ...asBeast, pc: { ...asBeast.pc, inventory: bag } })).error ?? '',
+    /nowhere on you/,
+    'a paw is not a hand',
+  );
+  assert.equal(equip(bag, held, gearRulesFor({ ...base, pc: { ...base.pc, inventory: bag } })).error, null);
 });

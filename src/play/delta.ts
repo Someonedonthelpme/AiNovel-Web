@@ -18,6 +18,7 @@ import { amend, BINDINGS, CONSTRAINTS, rulesOf } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
+import { gearRulesFor } from './body.ts';
 import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import type { CombatAction } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
@@ -324,7 +325,7 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   // Carrying and recovering. These run after the world has moved, so resting
   // at a place you have just walked into is resolved where you now stand.
   if (delta.equipItem) {
-    const equipped = equip(next.pc.inventory, delta.equipItem);
+    const equipped = equip(next.pc.inventory, delta.equipItem, gearRulesFor(next));
     if (!equipped.error) next = { ...next, pc: { ...next.pc, inventory: equipped.inventory } };
   }
 

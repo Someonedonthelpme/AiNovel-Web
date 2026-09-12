@@ -287,7 +287,16 @@ after any that touches a fight):
      points of win rate at danger 2/3/4 — near free, partly because the harness
      policy prefers a skill over a swing unconditionally, which is its own
      weakness to fix. Foes carry none: `combat/ai.ts` cannot cast until step 9.
-   - **3i–3m** the group mechanics, one each: body plan, habitat, kinship, law
+   - **3i SHIPPED** body plan (`character/bodyplan.ts`): four authored shapes —
+     `upright`, `beastly` (no hands, no feet), `winged` (wings fill the BACK, so no
+     pack), `serpentine` (no legs) — allowed per type, dealt per GROUP and
+     inherited by its species and lineages, since a body plan is what the category
+     is FOR. A plan REMOVES slots rather than declaring its own, so a world that
+     adds a slot gets it everywhere and a plan that removes nothing is today's
+     behaviour. Readers on day one: `body.ts` narrows the ruleset at both equip
+     paths and at CREATION, so a handless climber carries its weapon instead of
+     wielding it. A world stored before bodies keeps the world's body.
+   - **3j–3m** the rest of the group mechanics, one each: habitat, kinship, law
      (may wait for 6c's `territory` axis), predator and prey.
 3n. **Every foe is a character** (new, 2026-09-12) — crowd populations on places,
    individuation into a sheet, profession and rank, derived gear, the instance-id

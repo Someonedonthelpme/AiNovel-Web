@@ -1,5 +1,6 @@
 import type { DirectorDeed } from '../social/deed.ts';
 import { rulesOf, STANDARD } from '../rules/ruleset.ts';
+import { bodyRulesFor } from './body.ts';
 import type { Binding, Constraint, Ruleset } from '../rules/ruleset.ts';
 import type { ActiveCondition, CombatState } from '../combat/types.ts';
 import type { CombatAction } from './combat.ts';
@@ -160,7 +161,12 @@ export type TurnRecord = {
 export type PlayEvent = { kind: 'start' } | TurnRecord | SheetRecord | ClimbRecord;
 
 export function initialPlayState(world: World, sheet: CharacterSheet): PlayState {
-  const inventory = startingInventory(sheet, rulesOf(world));
+  /*
+   * A climber sets out wearing what their BODY can wear: a handless kind carries
+   * its weapon rather than wielding it. The narrowing lives in `body.ts` because
+   * `startingInventory` takes a ruleset and knows nothing of species.
+   */
+  const inventory = startingInventory(sheet, bodyRulesFor(world, sheet));
   // One point in hand at level one, so the tree is something to engage with
   // from the first screen rather than a picture of what might happen later.
   sheet = { ...sheet, skillPoints: sheet.skillPoints ?? 1 };

@@ -1,4 +1,5 @@
 import { rulesOf } from '../rules/ruleset.ts';
+import { gearRulesFor } from './body.ts';
 import { attachPart, detachPart, findHolding, putIn, removeItem, takeOut, withInstance } from '../items/types.ts';
 import { enchant, enchantCost, enhance, enhanceCost, refine, refineCost, repair, repairCost } from '../items/refine.ts';
 import type { Attempt } from '../items/refine.ts';
@@ -175,7 +176,7 @@ export function applySheetAction(state: PlayState, action: SheetAction): SheetRe
     }
 
     case 'equip': {
-      const worn = equip(state.pc.inventory, action.item, rulesOf(state.world));
+      const worn = equip(state.pc.inventory, action.item, gearRulesFor(state));
       if (worn.error) return { state, error: worn.error, note: null };
       return settle({ ...state, pc: { ...state.pc, inventory: worn.inventory } }, state, 'equipped');
     }
