@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3c shipped; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; **3o all-from-sheet planned, before 4**; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -221,10 +221,37 @@ which the 09-11 pass contradicted):
 - **Balance is anchored, not re-guessed.** Today's curve is the target: a crowd
   character at rank r and danger d must fight like today's foe at the same
   danger, with `scripts/balance.ts` as the regression and the build-matrix
-  harness measuring it.
+  harness measuring it. **To be reversed at stage 3o** (decided 2026-09-13, below):
+  3n-ii measured the anchor as a made-up body balanced against a made-up body, so
+  the target becomes a curve drawn sheet against sheet. Stands until 3o ships.
 - **Names:** a crowd character is unnamed — "a young shadow-wolf", its
   subspecies plus a rank word — because the engine invents no words. A survivor
   is model-named at stage 7, as already planned.
+
+**Decided with the user, 2026-09-13** (answers 3n-iii; supersedes *Balance is
+anchored, not re-guessed* once stage 3o ships):
+
+- **Anchor plus delta, now.** A REQUIREMENT CHANGE, stated side by side:
+  - *Was (3n, `ae9fff7`):* a character foe fights with `scaleFoe`'s abilities,
+    exactly — so it fights identically to a statblock foe, and the harness pin
+    asserts the two curves EQUAL.
+  - *Now:* a character foe fights with `scaleFoe`'s abilities PLUS its kind's
+    template — what `makeFoe` has always given a statblock foe. The pin asserts
+    the two curves agree within a BAND.
+  - *Why:* 3n silently dropped the template, so for every world with kinds the
+    subspecies a foe belonged to never reached the fight — it sat on the sheet
+    and nothing read it. Found while checking whether stage 4 could stand apart:
+    a boss's mutation is the same shape, a delta on a template, and would have
+    been just as inert. Measured with paired seeds at 400 trials, the delta moves
+    the two curves apart by −4.5 to +4.3 points with no consistent sign — which
+    is what "holds on average, and the kind still matters" looks like.
+  - *Rejected:* keeping exact equality (keeps a regression to pass a test), and
+    going straight to all-from-sheet (floors 1–5 become a flat coin flip until
+    the prerequisites in 3o exist).
+- **All from sheet is the destination, as stage 3o.** No `scaleFoe`, no
+  `referencePc`: a climber is a sheet, so a curve drawn sheet against sheet is
+  the only one that describes the game anybody plays. Planned, not built — it has
+  prerequisites, below.
 
 **Stages** (each starts with one failing test the user approves; `npm run fight`
 after any that touches a fight):
@@ -410,6 +437,49 @@ after any that touches a fight):
    nothing but its level — a body no character sheet can be either. The curve
    assumes a player no sheet describes and foes no sheet describes; fixing one
    end without the other is what makes every option above cost twenty points.
+   **Answered 2026-09-13:** none of the three. *Anchor plus delta* now (the kind's
+   template back on top of the anchor), and the fourth option — everything from
+   the sheet, on both sides — planned as stage 3o. See the 2026-09-13 block above.
+
+3o. **All from sheet** — planned 2026-09-13, not built.
+   - **What:** a fight between a climber and a foe is decided by their two sheets
+     and nothing else. `scaleFoe`, `referencePc` and `scripts/balance.ts` retire;
+     the character foe's override in `crowdFoes` is deleted rather than patched.
+   - **Why:** the anchored curve is a made-up player (`referencePc`: 4d8, AC 14–18
+     from level alone) balanced against made-up foes (`scaleFoe`: a danger-1
+     minion with 2 hit points). Neither is a body the game can hold, so the curve
+     describes nothing a player meets. And every mechanic that lives on a sheet —
+     template, mutation, gear, knack — only bites when the sheet fights.
+   - **Measured, so nobody flips it as a flag.** Everything from the sheet today
+     gives melee 59/59/57/42/19 at danger 1–5 against the anchored 94/86/84/47/36;
+     a tank wins 33% on floor 1. Fielding only whelps below danger 6 barely helps
+     (61/61/63/57/62) — the wall is the level-one BODY, about 12 hit points
+     whatever its rank — and the curve goes flat then drops to 4% at danger 6.
+   - **Prerequisites, in order:**
+     1. **The chart measures character foes.** `npm run chart`'s build matrix
+        calls `measure` without `kinds` (`scripts/chart.ts:23`), so it has only
+        ever measured STATBLOCK foes: every "chart unchanged" said about a crowd
+        change measured nothing. Point it at a world's kinds first, or 3o has no
+        instrument.
+     2. **The harness climber gains gear with depth.** It carries one fixture
+        weapon for ever, so past about danger 5 every build reads 0–6% and the
+        number measures an under-equipped player. Deep floors cannot be judged
+        until it gears up the way a real climber does.
+     3. **A frailty dial for bodies that are not climbers.** The one thing rank
+        cannot do: make a shallow creature frailer than a level-one climber. Still
+        a sheet rule — e.g. a crowd body does not get the first level's hit-point
+        grant, or a shallow crowd fields small bodies — so it is "from sheet" with
+        a rule separating a rat from a climber.
+   - **Decided:** the destination; the three prerequisites; that it reverses
+     *Balance is anchored, not re-guessed*; that `balance.ts` retires with
+     `referencePc` rather than being kept as a second, contradicting regression.
+   - **Open, for the user:** **what should a level-one climber's win rate on floor 1
+     be?** Today's answer is 94%. That number is 3o's first approved assertion;
+     the shape past it (how fast it falls, where the cliff is) follows from it.
+   - **Done means:** `crowdFoes` builds no `scaleFoe` stats; `referencePc` and
+     `scripts/balance.ts` are gone; the chart's matrix measures character foes
+     against a climber who gears up; and the build matrix sits within the band the
+     user approves at every danger it covers.
 4. **Bosses are notable characters with a mutation** — created by floor
    generation, so they can be heard about first. (Was: epic foes.)
 5. **Notable foes from existing people** — a person whose regard has gone bad
