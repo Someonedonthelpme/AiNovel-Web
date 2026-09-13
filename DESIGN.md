@@ -20,11 +20,11 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; **3o all-from-sheet planned, before 4**; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; next is stage 4; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
-| 9 | Companions, summon, shared combat machinery | **not started** | no matching module |
+| 9 | Companions, summon, shared combat machinery | **not started** | no matching module; **unblocks the rest of 6b stage 3o** (combat balance, deferred 2026-09-13) |
 | 10 | The creation page | **partial** | `app/new/page.tsx` has point buy and the interview; not the two-phase redesign with presets and a rules view |
 | 11 | The long tail | **not started** | — |
 
@@ -252,6 +252,17 @@ anchored, not re-guessed* once stage 3o ships):
   `referencePc`: a climber is a sheet, so a curve drawn sheet against sheet is
   the only one that describes the game anybody plays. Planned, not built — it has
   prerequisites, below.
+- **Combat balance work pauses until a player can recruit companions** (user's
+  call, later the same day). That is the rest of 3o — the frailty dial, the
+  sheet-against-sheet curve, and re-measuring the tables flagged CONTAMINATED —
+  and it now waits on step 9. *Why:* every curve so far is a SOLO climber's, and
+  the encounter composition is tuned around exactly that ("action economy decides
+  solo fights", `combat/encounter.ts:37`); a party changes the numbers all of it
+  rests on, so a floor-1 target set now would be set twice. *What keeps running:*
+  every existing combat test and pin — nothing is skipped or disabled, and the
+  statblock anchor stays guarded. *The cost, accepted:* stage 4 now comes first,
+  so a boss's mutation ships under anchor plus delta and can only shift ability
+  scores — not hit points, not AC — until 3o lands.
 
 **Stages** (each starts with one failing test the user approves; `npm run fight`
 after any that touches a fight):
@@ -446,7 +457,10 @@ after any that touches a fight):
    template back on top of the anchor), and the fourth option — everything from
    the sheet, on both sides — planned as stage 3o. See the 2026-09-13 block above.
 
-3o. **All from sheet** — planned 2026-09-13, not built.
+3o. **All from sheet** — planned 2026-09-13, not built. **DEFERRED until step 9
+   (companions)**, 2026-09-13: prerequisites 1–2 shipped, the rest waits — see the
+   2026-09-13 block above. When it resumes, its curve is measured with the party a
+   climber can actually field, not a solo body.
    - **What:** a fight between a climber and a foe is decided by their two sheets
      and nothing else. `scaleFoe`, `referencePc` and `scripts/balance.ts` retire;
      the character foe's override in `crowdFoes` is deleted rather than patched.
