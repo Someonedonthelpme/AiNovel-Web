@@ -26,7 +26,9 @@ import { armour, weapon } from '../items/catalogue.ts';
 import { addItem, emptyInventory, equip, equippedAttack } from '../items/types.ts';
 import { armourClassFor, finalAbilities } from '../session/sheet.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import { groundFloor, world } from '../world/fixtures.ts';
+import { generatedFloor, groundFloor, world } from '../world/fixtures.ts';
+import { generateFloor } from '../world/floorgen.ts';
+import { FakeProvider } from '../llm/provider.ts';
 import type { PlayState, TurnRecord } from './state.ts';
 import type { Region } from '../world/types.ts';
 
@@ -663,4 +665,48 @@ test('the player fights with what they are wearing and wielding', () => {
   assert.equal(pc.ac, armourClassFor(state.sheet, bag), 'the AC on the sheet is the AC in the fight');
   assert.deepEqual(pc.attacks, [equippedAttack(bag)], 'the blade in hand is the one it swings');
   assert.deepEqual(pc.abilities, finalAbilities(state.sheet, bag), 'with what its gear grants');
+});
+
+/*
+ * 6b stage 4: the boss fight is the person the landmark floor made — built
+ * through the real floor generator, not by hand.
+ */
+async function bossFloor(base: PlayState, danger?: number) {
+  const kinds = speciesFor(11);
+  const w = { ...base.world, seed: 11, species: kinds };
+  const r = await generateFloor(
+    new FakeProvider({ structured: [generatedFloor({ bossName: 'the Warden of Ash', bossOneLine: 'holds the tenth stair' })] }),
+    w, 10, base.sheet,
+  );
+  const boss = r.people[r.region.boss ?? ''];
+  assert.ok(boss, 'the landmark floor made a boss');
+  const region = { ...r.region, ...(danger === undefined ? {} : { danger }) };
+  const state: PlayState = {
+    ...base,
+    world: { ...w, regions: { [region.id]: region }, currentRegion: region.id, currentPlace: region.entrance, people: { ...w.people, ...r.people } },
+  };
+  return { state, boss, region, kinds };
+}
+
+test('the boss fight IS the person the floor made: the boss anchor plus its kind', async () => {
+  const { state, boss, region, kinds } = await bossFloor(onFloorTwo());
+  const foes = foesOf(beginEncounter(state));
+
+  assert.equal(foes.length, 1, 'a boss fights alone');
+  assert.equal(foes[0].person, boss.id, 'the thing you fight is the person the floor made');
+  const anchor = scaleFoe(region.danger, 'boss').abilities;
+  const template = kinds.find((k) => k.id === boss.sheet!.species)!.template ?? {};
+  for (const a of ABILITIES) assert.equal(foes[0].abilities[a], anchor[a] + (template[a] ?? 0), `${a}`);
+});
+
+test('a boss you killed stays dead, and the next fight there is the crowd', async () => {
+  const { state, boss } = await bossFloor(winnable(), 1);
+  const { state: fought } = fightItOut(beginEncounter(state));
+  assert.equal(fought.combat?.victor, 'party', 'the party has to win for this to say anything');
+
+  const after = concludeCombat(fought).state;
+  assert.equal(after.world.people[boss.id].alive, false, 'a boss you killed is dead');
+  const next = foesOf(beginEncounter(after));
+  assert.ok(next.length > 0, 'something still lives here');
+  assert.ok(next.every((f) => f.person !== boss.id), 'and it is not the boss come back');
 });

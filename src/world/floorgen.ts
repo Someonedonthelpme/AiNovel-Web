@@ -44,6 +44,8 @@ import { validateRegion } from './validate.ts';
 import { dangerAt, stratumAt } from './strata.ts';
 import type { Stratum } from './types.ts';
 import { speciesIdFor } from '../character/species.ts';
+import { bossMember, crowdFighter } from '../character/crowd.ts';
+import { kindForFloor } from '../combat/encounter.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import { LOOT_CATEGORIES } from '../items/catalogue.ts';
 import type { LootCategory, LootProfile } from '../items/catalogue.ts';
@@ -137,6 +139,9 @@ export function floorSchema(floor: number) {
       wingFloors: { type: 'integer', minimum: 1, maximum: 6 },
       /** What the wing is KNOWN for finding, from a closed list. Empty for most. */
       wingKnownFor: { type: 'array', items: { type: 'string', enum: [...LOOT_CATEGORIES] }, maxItems: 2 },
+      /** Who holds a landmark floor — a name and one line. Empty on every other floor. */
+      bossName: str,
+      bossOneLine: str,
       /** Who these people already are to each other. The template decides what that COSTS. */
       bonds: {
         type: 'array',
@@ -144,7 +149,7 @@ export function floorSchema(floor: number) {
         items: obj({ a: str, b: str, role: str }, ['a', 'b', 'role']),
       },
     },
-    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds', 'wingName', 'wingFloors', 'wingKnownFor'],
+    ['name', 'biome', 'culture', 'places', 'entrance', 'exit', 'people', 'creatures', 'bonds', 'wingName', 'wingFloors', 'wingKnownFor', 'bossName', 'bossOneLine'],
   );
 }
 
@@ -153,6 +158,9 @@ export type GeneratedFloor = {
   wingName?: string;
   wingFloors?: number;
   wingKnownFor?: string[];
+  /** A landmark floor's holder, in the model's words. Empty on every other floor. */
+  bossName?: string;
+  bossOneLine?: string;
   name: string;
   biome: string;
   culture: string;
@@ -224,6 +232,9 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
       : `At most ${settlements.max} place(s) may have kind "settlement".`,
     'Every id in a place\'s people list must be an id in the people array.',
     '"creatures" names what lives and hunts here. Names only, no statistics.',
+    kindForFloor(floor) === 'boss'
+      ? 'This is a LANDMARK floor: somebody holds it. bossName is what they are called and bossOneLine who they are, in one line. What they ARE, and how dangerous, is decided outside you.'
+      : 'bossName and bossOneLine are EMPTY on this floor.',
     // Asked for `candour` and `loyalty` long after both were deleted, and never
     // for the two that replaced them. A model answering fields that are thrown
     // away is a model spending its attention on nothing.
@@ -436,6 +447,15 @@ export async function generateFloor(
     if (!people[id] && world.people[id]) people[id] = world.people[id];
   }
 
+  /*
+   * A LANDMARK FLOOR IS HELD BY SOMEBODY, made here before anyone meets them, so
+   * they can be heard about first and so the fight on this floor is against a
+   * person rather than a statblock. The model supplies the name; the engine
+   * supplies everything that matters.
+   */
+  const holder = holderOf(world, floor, regionId, generated, danger);
+  if (holder) people[holder.id] = holder;
+
   const known = new Set(Object.keys(people));
   const dropped: string[] = [];
   const region: Region = {
@@ -473,6 +493,8 @@ export async function generateFloor(
   const pruned = pruneDangling(region.places, people);
   region.places = pruned.places;
   if (pruned.dropped.length) repairs.push(`dropped actions naming nobody: ${pruned.dropped.join(', ')}`);
+
+  if (holder) region.boss = holder.id;
 
   const check = validateRegion(region, people);
   if (!check.ok) {
@@ -557,3 +579,44 @@ function lootKnownFor(named: readonly string[]): LootProfile | undefined {
 
 /** What a model writes when it means "this floor opens nothing". */
 const EMPTY_WING = new Set(['', 'none', 'null', 'n/a', '-', 'ไม่มี']);
+
+/**
+ * The person who holds a landmark floor, or null when there is none to make.
+ *
+ * None on an ordinary floor whatever the model wrote, none in a world with no
+ * kinds (it keeps the crowd boss it always had), and none if the model named
+ * nobody — the engine invents no words. A holder who already exists is RETURNED,
+ * not remade: people are never compressed, so coming back to a rebuilt floor
+ * finds the same one, and a dead boss stays dead.
+ */
+function holderOf(world: World, floor: number, regionId: RegionId, generated: GeneratedFloor, danger: number): Person | null {
+  if (kindForFloor(floor) !== 'boss') return null;
+  const kinds = world.species ?? [];
+  if (kinds.length === 0) return null;
+
+  const id = `boss-${regionId}`;
+  if (world.people[id]) return world.people[id];
+
+  const name = generated.bossName?.trim();
+  const who = bossMember(world.seed, kinds, floor);
+  if (!name || !who) return null;
+
+  const { sheet } = crowdFighter(world.seed, kinds, who, danger, id);
+  return {
+    id,
+    name,
+    homeRegion: regionId,
+    oneLine: generated.bossOneLine?.trim() || name,
+    tags: [],
+    species: who.subspecies,
+    alive: true,
+    lastSeenTurn: world.turn,
+    status: 'superior',
+    voice: repairVoice({ selfPronoun: '', underStress: '', addressBands: {}, particleBands: {}, tics: [] }).value,
+    temperament: neutralTemperament(),
+    needs: metNeeds(),
+    counters: {},
+    pressure: neutralTemperament(),
+    sheet: { ...sheet, name },
+  };
+}

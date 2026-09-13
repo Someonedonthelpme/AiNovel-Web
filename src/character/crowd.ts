@@ -14,7 +14,8 @@ import { toCombatant } from '../session/sheet.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { HP_AT_FIRST, HP_PER_LEVEL } from '../session/sheet.ts';
 import { planFor, slotsFor } from './bodyplan.ts';
-import { sizeIn } from './population.ts';
+import { derivePopulation, sizeIn } from './population.ts';
+import { packAt } from './habitat.ts';
 import type { Cohort, Profession } from './population.ts';
 import type { Species } from './species.ts';
 import { signatureSkill } from './speciesskill.ts';
@@ -99,6 +100,22 @@ export function crowdMember(
     profession: from.profession,
     rank: RANK_DRAW[Math.floor(rng() * RANK_DRAW.length)],
   };
+}
+
+/**
+ * Who holds a landmark floor: one of the floor's own kind, at the top of its
+ * standing.
+ *
+ * Seeded on the world and the floor ALONE, so the floor model calling it
+ * something else changes nothing about what it is — the model names a boss, the
+ * engine decides it. Drawn from the population that lives at that depth, so a
+ * floor of ash-walkers is held by an ash-walker. Null for a world with no kinds.
+ */
+export function bossMember(seed: number, nodes: readonly Species[], floor: number): Member | null {
+  const group = packAt(seed, nodes, floor);
+  if (!group) return null;
+  const drawn = crowdMember(seed, derivePopulation(seed, nodes, group, 'boss', floor), floor, 0);
+  return drawn ? { ...drawn, rank: 'veteran' } : null;
 }
 
 /**

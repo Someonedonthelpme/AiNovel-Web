@@ -131,6 +131,15 @@ export type Region = {
    * `linksFrom`. That is every world saved before this existed.
    */
   exits?: Link[];
+  /**
+   * The person who HOLDS this floor, on a landmark floor.
+   *
+   * On the region rather than a flag on the person, because holding is a fact
+   * about the floor: it is what a fight here is against, and what 6c's ownership
+   * will one day contest. The person lives in `World.people`, never compressed,
+   * so a floor rebuilt from its gazetteer finds its holder again — dead or alive.
+   */
+  boss?: PersonId;
 };
 
 /**

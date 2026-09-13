@@ -1,5 +1,6 @@
 import { neutralTemperament, metNeeds } from '../character/persona.ts';
 import type { NpcVoice, Person, Place, PlaceId, Region, World } from './types.ts';
+import type { GeneratedFloor } from './floorgen.ts';
 
 export function place(id: PlaceId, over: Partial<Place> = {}): Place {
   return {
@@ -140,3 +141,26 @@ export function world(over: Partial<World> = {}): World {
     ...over,
   };
 }
+
+/** What the floor model returns for an ordinary three-place floor. */
+export const generatedFloor = (over: Partial<GeneratedFloor> = {}): GeneratedFloor => ({
+  bonds: [],
+  name: 'The Grey Grove',
+  biome: 'dead forest',
+  culture: 'poachers and worse',
+  places: [
+    { id: 'landing', name: 'the landing', kind: 'gate', description: 'stone steps', connections: ['grove'], people: [], affordances: ['catch your breath'] },
+    { id: 'grove', name: 'the grove', kind: 'wild', description: 'grey trees', connections: ['landing', 'rise'], people: ['kell'], affordances: ['search the undergrowth'] },
+    { id: 'rise', name: 'the second stair', kind: 'gate', description: 'a spiral', connections: ['grove'], people: [], affordances: ['climb'] },
+  ],
+  entrance: 'landing',
+  exit: 'rise',
+  people: [{
+    id: 'kell', name: 'Kell', oneLine: 'knows the grove', tags: ['poacher'], trust: 0, status: 'peer',
+    selfPronoun: 'ข้า', underStress: 'กู',
+    addressDistant: 'เจ้า', addressWarm: 'เอ็ง', particleDistant: 'วะ', particleWarm: 'นะ',
+    intuition: 1, feeling: 2, nerve: 2, discipline: -1,
+  }],
+  creatures: ['หมาป่าเงา'],
+  ...over,
+});

@@ -78,7 +78,7 @@ The governing rule, repeated in a dozen file headers:
 the model does not have to produce is a field it cannot get wrong*
 ([schema.ts:13](src/session/schema.ts:13),
 [classnames.ts:11](src/character/classnames.ts:11),
-[floorgen.ts:61](src/world/floorgen.ts:61),
+[floorgen.ts:63](src/world/floorgen.ts:63),
 [director.ts:31](src/llm/director.ts:31)).
 
 ---
@@ -149,7 +149,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:287](src/play/combat.ts:287)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:157](src/play/combat.ts:157)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:311](src/play/combat.ts:311)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:280](src/character/crowd.ts:280)) by `crowdFoes` ([play/combat.ts:159](src/play/combat.ts:159)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -233,8 +233,8 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:637](src/play/combat.ts:637)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:645](src/play/combat.ts:645)) |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:672](src/play/combat.ts:672)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:680](src/play/combat.ts:680)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -301,18 +301,18 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 
 ### The shapes
 
-**`World`** ([world/types.ts:227](src/world/types.ts:227)) — `seed`, `language`,
+**`World`** ([world/types.ts:236](src/world/types.ts:236)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:317](src/world/types.ts:317)).
+`regionIdFor(floor) = 'floor-' + floor` ([:326](src/world/types.ts:326)).
 **"One floor is one region is one integer" was true until step 6, and is now
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
 Depth stays on `floor`; adjacency moved to `Region.exits`
 ([:133](src/world/types.ts:133)), and `generateFloor` takes the region id to
-build `into` ([floorgen.ts:318](src/world/floorgen.ts:318)); its guard against
+build `into` ([floorgen.ts:329](src/world/floorgen.ts:329)); its guard against
 overwriting the town keys on that id rather than on depth 0
-([floorgen.ts:330](src/world/floorgen.ts:330)), because an outer world may sit
+([floorgen.ts:341](src/world/floorgen.ts:341)), because an outer world may sit
 at depth 0 perfectly legally. A region with no
 `exits` derives up and down from depth ([travel.ts:125](src/world/travel.ts:125))
 — every world saved before this.
@@ -328,13 +328,13 @@ anything derives from the seed alone.
   stores the WHOLE preset rather than its name
   ([genesis.ts:623](src/session/genesis.ts:623)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
-  ([world/types.ts:254](src/world/types.ts:254)), which is why a law can change
+  ([world/types.ts:263](src/world/types.ts:263)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:235](src/play/delta.ts:235)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
   `subjects` is.
-- `strata` — the structures this world holds ([types.ts:269](src/world/types.ts:269)).
+- `strata` — the structures this world holds ([types.ts:278](src/world/types.ts:278)).
   Genesis writes one, the tower, covering floor 0 up
   ([genesis.ts:673](src/session/genesis.ts:673)); a climb that opens a wing adds
   another ([climb.ts:148](src/play/climb.ts:148)).
@@ -343,7 +343,7 @@ anything derives from the seed alone.
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
-- `populations` — who lives per PLACE ([types.ts:307](src/world/types.ts:307)):
+- `populations` — who lives per PLACE ([types.ts:316](src/world/types.ts:316)):
   cohorts of (subspecies, profession, size). **Absent until something has been
   killed** — a place answers from the seed until then
   ([population.ts:99](src/character/population.ts:99)), so an old world needs no
@@ -355,8 +355,11 @@ anything derives from the seed alone.
   and come back different; 6c removes compression and the aggregate with it.
 
 **`Region`** ([types.ts:105](src/world/types.ts:105), full detail) — places,
-entrance, exit, danger, creatures, and optionally `exits: Link[]`. A `Link`
-([:143](src/world/types.ts:143)) carries the far side's DEPTH as well as its id,
+entrance, exit, danger, creatures, optionally `exits: Link[]`, and on a landmark
+floor `boss` — the person who HOLDS it ([:142](src/world/types.ts:142)), on the
+region because holding is a fact about the floor, with the person themselves in
+`World.people`, never compressed, so a rebuilt floor finds its holder again. A `Link`
+([:152](src/world/types.ts:152)) carries the far side's DEPTH as well as its id,
 because danger and budgets have to answer before that region exists.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
 known people survive ([lod.ts:39](src/world/lod.ts:39)).
@@ -465,7 +468,7 @@ logged.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
-([types.ts:237](src/world/types.ts:237), [subjects.ts:111](src/world/subjects.ts:111)),
+([types.ts:246](src/world/types.ts:246), [subjects.ts:111](src/world/subjects.ts:111)),
 because a word derived from nothing would be lost on the next derivation. The
 same split as `classSpec` on the sheet. **The ids never change**, so anything that
 matched before naming still matches after it.
@@ -512,7 +515,7 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 | **Director** ([director.ts:477](src/llm/director.ts:477)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:80](src/llm/director.ts:80)) and the PLACE a new way out leaves from (`revealWay`, [:62](src/llm/director.ts:62)) — never where it goes | indirectly — only the validated delta and the refusal reasons |
 | **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
-| **Floor** ([floorgen.ts:343](src/world/floorgen.ts:343)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:136](src/world/floorgen.ts:136)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:504](src/world/floorgen.ts:504)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:139](src/world/floorgen.ts:139)) | **yes, in full** — inside `ClimbRecord.built` |
+| **Floor** ([floorgen.ts:354](src/world/floorgen.ts:354)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:138](src/world/floorgen.ts:138)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:526](src/world/floorgen.ts:526)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:141](src/world/floorgen.ts:141)); on a landmark floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:143](src/world/floorgen.ts:143)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:592](src/world/floorgen.ts:592), [:598](src/world/floorgen.ts:598)) | **yes, in full** — inside `ClimbRecord.built` |
 | **Character** ([genesis.ts:147](src/session/genesis.ts:147)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
 | **Ground floor** ([genesis.ts:333](src/session/genesis.ts:333)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
@@ -613,14 +616,14 @@ Somebody **drawn out of the place's population** — and the compromise in it is
 worth knowing, because the curve was nearly lost to it twice.
 
 A place holds cohorts of (subspecies, profession, size), and the draw is weighted
-by size ([crowd.ts:82](src/character/crowd.ts:82)), so a lineage that has been
+by size ([crowd.ts:83](src/character/crowd.ts:83)), so a lineage that has been
 hunted down is rarer to meet. Two readers make that more than bookkeeping: the
 encounter fields **no more bodies than live there**
-([play/combat.ts:179](src/play/combat.ts:179)), and a place cleared out **opens no
-fight at all** ([play/combat.ts:281](src/play/combat.ts:281)). Each body carries
+([play/combat.ts:197](src/play/combat.ts:197)), and a place cleared out **opens no
+fight at all** ([play/combat.ts:305](src/play/combat.ts:305)). Each body carries
 the cohort it came from — `Combatant.kind` and `trade`
 ([combat/types.ts:167](src/combat/types.ts:167)) — so what dies is taken out of
-the population it came from ([play/combat.ts:607](src/play/combat.ts:607)),
+the population it came from ([play/combat.ts:631](src/play/combat.ts:631)),
 whoever won.
 
 "No population here" and "nothing lives here any more" are **different answers**
@@ -633,11 +636,11 @@ naming a foe `names[i % names.length]` meant a floor of undead could be handed a
 wolf's name; the name now **follows the lineage** — whichever creature word maps
 to this body is what it is called — and a lineage no word covers wears its own
 kind, because the engine invents no words
-([play/combat.ts:243](src/play/combat.ts:243)).
+([play/combat.ts:267](src/play/combat.ts:267)).
 
 `scaleFoe` still decides what it is like to **fight**: hit points, AC,
 proficiency, the attack it swings, its speed — and its abilities, **plus its kind's
-template** ([play/combat.ts:220](src/play/combat.ts:220)), through the same
+template** ([play/combat.ts:254](src/play/combat.ts:254)), through the same
 `withTemplate` a statblock foe has always had
 ([statblock.ts:128](src/combat/statblock.ts:128)). Amended 2026-09-13: from 3n
 until then a character foe fought with raw `scaleFoe` abilities, so its kind sat
@@ -648,12 +651,12 @@ only a shift that crosses a modifier boundary does anything. The CHARACTER decid
 it is: which lineage, which group (so body, habitat, kinship, law and prey all
 apply), what it knows, and what is on its body to take. Rank stands in for the
 statblock role — whelp · ordinary · veteran for minion · regular · elite
-([crowd.ts:43](src/character/crowd.ts:43)) — and `levelFor` inverts the sheet's
+([crowd.ts:44](src/character/crowd.ts:44)) — and `levelFor` inverts the sheet's
 HP formula against the statblock's so a character of that standing is as tough as
-the foe it replaces ([crowd.ts:113](src/character/crowd.ts:113)).
+the foe it replaces ([crowd.ts:130](src/character/crowd.ts:130)).
 
 Its **gear** is solved against that same anchor rather than tuned
-([crowd.ts:207](src/character/crowd.ts:207)): the catalogue already scales a
+([crowd.ts:224](src/character/crowd.ts:224)): the catalogue already scales a
 weapon and a coat with the depth a thing was found at, so the search walks that
 and takes the piece whose BUILT numbers land closest to `scaleFoe`'s. AC lands
 within two for an armoured rank; damage per round lands as close as the die ladder
@@ -699,6 +702,19 @@ within SEVEN points at danger 1, 2 and 4
 ([harness.test.ts:93](src/play/harness.test.ts:93)). It was exact equality until
 2026-09-13, which held only because the template was missing; with it the two
 differ by −4.5 to +4.3 points, measured with paired seeds, and no consistent sign.
+
+**A landmark floor is held by somebody** (6b stage 4). Floor generation makes the
+holder before anyone meets them — a person with a sheet, of the kind that lives
+at that depth, decided by the seed and the floor alone so the model's name for
+them changes nothing about what they are ([crowd.ts:114](src/character/crowd.ts:114)).
+While they live, the fight on that floor is against THEM, alone, on the boss
+role's anchor plus their kind ([play/combat.ts:184](src/play/combat.ts:184)); the
+combatant carries `person`, so a holder killed is written dead — the first writer
+`Person.alive = false` has had ([play/combat.ts:645](src/play/combat.ts:645)) —
+and is never counted out of a population they were not drawn from
+([play/combat.ts:637](src/play/combat.ts:637)). After that the floor's fights are
+the crowd's. No mutation yet: that arrives with the kin tree, after quests. A floor
+generated before this, or one the model named nobody for, keeps the crowd boss.
 
 A world stored before the species tree still meets statblock foes: inventing a
 population for it would be inventing the bodies of creatures somebody is already
@@ -748,7 +764,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:135](src/combat/combat.ts:135)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:276](src/play/combat.ts:276)): acting first from 9 squares away
+([play/combat.ts:300](src/play/combat.ts:300)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -832,7 +848,7 @@ and carry weight's drag on speed did nothing in a fight: a player whose sheet sa
 AC 17 fought at 11, swinging the background's 1d6 with a d12 in hand. `fd16f7a`
 gave `toCombatant` the parameter the same day the play path was written without
 it, and no test crossed the two. It now passes the inventory
-([play/combat.ts:84](src/play/combat.ts:84)). Found building 3o's harness climber:
+([play/combat.ts:86](src/play/combat.ts:86)). Found building 3o's harness climber:
 a geared climber measured identical to an ungeared one.
 
 ### Waiting on a reader, by decision
@@ -851,15 +867,20 @@ climber today, and not a field pretending to be a mechanic.
 true until 3n-ii. A population is stored per place, the draw is weighted by what
 is left, the encounter is capped by it, and a cleared place opens no fight
 ([population.ts:124](src/character/population.ts:124),
-[play/combat.ts:179](src/play/combat.ts:179)).
+[play/combat.ts:197](src/play/combat.ts:197)).
 
 ### Confirmed dead
+
+**Cleared: `Person.sheet`** — *listed here as dead* until 6b stage 4. A landmark
+floor's holder is given one at generation ([floorgen.ts:592](src/world/floorgen.ts:592))
+and the fight reads it ([play/combat.ts:184](src/play/combat.ts:184)). `recruited`
+and `stance` are still dead.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
 `Signet.hint` · `Gazetteer.openThreads` (read by the rehydration prompt, written
 by nothing — always `[]`) · `Gazetteer.compressedAtTurn` ·
 `Person.agenda` / `agendaPace` (and [agenda.ts](src/world/agenda.ts) itself,
-which nothing imports) · `Person.sheet` / `recruited` / `stance` ·
+which nothing imports) · `Person.recruited` / `stance` ·
 `Person.tags` / `homeRegion` · `Fact.people` (no column — dropped on write) ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
@@ -1013,9 +1034,9 @@ the climber ordinary, which is now a choice rather than a gap.
 
 **Cleared: `Stratum.danger` and `Stratum.loot`.** — *"read … and written by
 nothing outside tests"* was true until `3506255`. A wing's danger is
-seeded ([floorgen.ts:535](src/world/floorgen.ts:535)) and its loot comes from
+seeded ([floorgen.ts:557](src/world/floorgen.ts:557)) and its loot comes from
 what the model named out of `LOOT_CATEGORIES`
-([floorgen.ts:552](src/world/floorgen.ts:552)). The genesis tower still has
+([floorgen.ts:574](src/world/floorgen.ts:574)). The genesis tower still has
 neither ([genesis.ts:673](src/session/genesis.ts:673)), which means the
 ruleset's curve and the ordinary table — identity, not a gap.
 
@@ -1045,7 +1066,7 @@ PRESERVES its id, throwing on a collision rather than renaming
 ([types.ts:311](src/items/types.ts:311)) — because the only way to survive a
 collision is to change what the object is worth, which makes it a bug to hear
 about, not to paper over. Minters namespace their ids so it cannot arise: a body's
-gear is minted under where that body stands ([crowd.ts:263](src/character/crowd.ts:263)).
+gear is minted under where that body stands ([crowd.ts:280](src/character/crowd.ts:280)).
 
 One consequence worth knowing, and it is a design property rather than a defect: a
 refine's grant is hashed off the instance id by decision — *the thing you traded
@@ -1188,14 +1209,14 @@ Every balance number, and where it lives.
 | habitat band | 4–14 floors wide, centred on the group's share of the tower and widened to cover it | [habitat.ts:26](src/character/habitat.ts:26) |
 | signature skill budget | 10 for a species, 8 for a subspecies | [speciesskill.ts:92](src/character/speciesskill.ts:92) |
 | hunting | about one group in three hunts one other; the edge is ADVANTAGE | [prey.ts:19](src/character/prey.ts:19) |
-| a crowd's standing | four ordinary to one whelp to one veteran | [crowd.ts:59](src/character/crowd.ts:59) |
-| a rank's gear CAP | whelp common +0, ordinary uncommon +2, veteran rare +4 — a ceiling, not a choice: what it actually carries is solved against the anchor, and only a whelp is bare by rule | [crowd.ts:52](src/character/crowd.ts:52) |
+| a crowd's standing | four ordinary to one whelp to one veteran | [crowd.ts:60](src/character/crowd.ts:60) |
+| a rank's gear CAP | whelp common +0, ordinary uncommon +2, veteran rare +4 — a ceiling, not a choice: what it actually carries is solved against the anchor, and only a whelp is bare by rule | [crowd.ts:53](src/character/crowd.ts:53) |
 | a place's population | 1–3 trades per lineage, 2–6 of each; small on purpose, since a place holding sixty would never visibly thin inside one playthrough | [population.ts:36](src/character/population.ts:36), [:45](src/character/population.ts:45) |
-| how worn looted gear is | `PRISTINE` less 15%, less up to 55% more — 31–85, used but never wrecked | [crowd.ts:326](src/character/crowd.ts:326) |
-| the gear solve's reach | 12 draws × 8 depths per slot, one term at a time; the product was 1600 builds a foe | [crowd.ts:218](src/character/crowd.ts:218) |
-| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:504](src/world/floorgen.ts:504) |
-| wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:535](src/world/floorgen.ts:535) |
-| what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:552](src/world/floorgen.ts:552) |
+| how worn looted gear is | `PRISTINE` less 15%, less up to 55% more — 31–85, used but never wrecked | [crowd.ts:343](src/character/crowd.ts:343) |
+| the gear solve's reach | 12 draws × 8 depths per slot, one term at a time; the product was 1600 builds a foe | [crowd.ts:235](src/character/crowd.ts:235) |
+| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:526](src/world/floorgen.ts:526) |
+| wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:557](src/world/floorgen.ts:557) |
+| what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:574](src/world/floorgen.ts:574) |
 | loot profile | a multiplier per category on the standing chance; absent is ×1 | [catalogue.ts:254](src/items/catalogue.ts:254) |
 | places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:14](src/world/budget.ts:14) |
 | people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:20](src/world/budget.ts:20) |

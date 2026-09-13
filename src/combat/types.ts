@@ -167,6 +167,13 @@ export type Combatant = {
   kind?: string;
   trade?: string;
   /**
+   * The person this combatant IS, when it is somebody rather than one of a crowd.
+   * What lets a fight write back to them — a boss killed here is dead in the
+   * world — and what keeps them from being counted out of a population they were
+   * never drawn from.
+   */
+  person?: string;
+  /**
    * Party members drop to dying at 0 HP and roll death saves; foes just die.
    * `dead` is terminal in both cases.
    */

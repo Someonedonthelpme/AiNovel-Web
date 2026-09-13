@@ -7,36 +7,18 @@ import { placeBudget } from './budget.ts';
 import { floorSchema, generateFloor } from './floorgen.ts';
 import type { GeneratedFloor } from './floorgen.ts';
 import { compressRegion } from './lod.ts';
-import { firstFloor, person, world } from './fixtures.ts';
+import { firstFloor, generatedFloor, person, world } from './fixtures.ts';
 import { activeRegion } from './travel.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import { validateRegion } from './validate.ts';
 import { dangerAt } from './strata.ts';
 import { isFull } from './types.ts';
+import { groupOf, speciesFor } from '../character/species.ts';
+import { packAt } from '../character/habitat.ts';
 
 const pc = sheet();
 
-const generated = (over: Partial<GeneratedFloor> = {}): GeneratedFloor => ({
-  bonds: [],
-  name: 'The Grey Grove',
-  biome: 'dead forest',
-  culture: 'poachers and worse',
-  places: [
-    { id: 'landing', name: 'the landing', kind: 'gate', description: 'stone steps', connections: ['grove'], people: [], affordances: ['catch your breath'] },
-    { id: 'grove', name: 'the grove', kind: 'wild', description: 'grey trees', connections: ['landing', 'rise'], people: ['kell'], affordances: ['search the undergrowth'] },
-    { id: 'rise', name: 'the second stair', kind: 'gate', description: 'a spiral', connections: ['grove'], people: [], affordances: ['climb'] },
-  ],
-  entrance: 'landing',
-  exit: 'rise',
-  people: [{
-    id: 'kell', name: 'Kell', oneLine: 'knows the grove', tags: ['poacher'], trust: 0, status: 'peer',
-    selfPronoun: 'ข้า', underStress: 'กู',
-    addressDistant: 'เจ้า', addressWarm: 'เอ็ง', particleDistant: 'วะ', particleWarm: 'นะ',
-    intuition: 1, feeling: 2, nerve: 2, discipline: -1,
-  }],
-  creatures: ['หมาป่าเงา'],
-  ...over,
-});
+const generated = generatedFloor;
 
 const provider = (floor = generated()) => new FakeProvider({ structured: [floor] });
 
@@ -274,4 +256,34 @@ test('a wing gets a seeded danger curve, and a loot profile from the closed list
 
   const plain = (await generateFloor(provider(generated({ wingName: 'The Cellar', wingFloors: 2 })), inTower, 4, pc)).stratum!;
   assert.equal(plain.loot, undefined, 'a wing known for nothing pays from the ordinary table');
+});
+
+/*
+ * 6b stage 4 (approved 2026-09-14): a boss is a notable character the floor
+ * creates before you meet it. The model NAMES it; the engine decides what it is.
+ * No mutation yet — that arrives with the kin tree, after quests.
+ */
+const kinds = speciesFor(11);
+const withKinds = () => ({ ...world({ seed: 11 }), species: kinds });
+const withBoss = (name = 'the Warden of Ash') => generated({ bossName: name, bossOneLine: 'holds the tenth stair' });
+
+test('a landmark floor is generated with exactly one boss, of the kind that lives there', async () => {
+  const r = await generateFloor(provider(withBoss()), withKinds(), 10, pc);
+  const boss = r.people[r.region.boss ?? ''];
+  assert.ok(boss?.sheet, 'the floor holds a boss who can fight');
+  assert.equal(groupOf(kinds, boss.sheet!.species!), packAt(11, kinds, 10), 'of the kind that lives on that floor');
+});
+
+test('only a landmark floor holds a boss, and the engine decides who it is', async () => {
+  const seven = await generateFloor(provider(withBoss()), withKinds(), 7, pc);
+  assert.equal(seven.region.boss, undefined, 'floor 7 is no landmark, whatever the model says');
+
+  const one = await generateFloor(provider(withBoss()), withKinds(), 10, pc);
+  const two = await generateFloor(provider(withBoss('another name')), withKinds(), 10, pc);
+  assert.ok(one.region.boss && two.region.boss, 'both landmark floors hold a boss');
+  assert.equal(
+    two.people[two.region.boss].sheet!.species,
+    one.people[one.region.boss].sheet!.species,
+    'the model names it; the engine decides what it is',
+  );
 });

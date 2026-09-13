@@ -3,8 +3,10 @@ import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, 
 import { buildEncounter, composition, freeCellsNear, kindForFloor } from '../combat/encounter.ts';
 import { scaleFoe, withTemplate } from '../combat/statblock.ts';
 import type { FoeRole } from '../combat/statblock.ts';
-import { crowdFighter, crowdMember } from '../character/crowd.ts';
-import type { Rank } from '../character/crowd.ts';
+import { bossMember, crowdFighter, crowdMember } from '../character/crowd.ts';
+import type { Member, Rank } from '../character/crowd.ts';
+import type { Inventory } from '../items/types.ts';
+import type { CharacterSheet } from '../session/sheet.ts';
 import { cellKey, distance, hasLineOfSight } from '../combat/grid.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
 import { bumpCounter } from '../character/persona.ts';
@@ -171,20 +173,51 @@ function crowdFoes(
   // summon back the statblock foes the population replaced.
   if (!cohorts) return null;
 
+  const names = region?.creatures ?? [];
+
+  /*
+   * A LANDMARK FLOOR'S HOLDER, while they live. The floor made a person to hold
+   * it (`floorgen.ts`), so the fight is against THEM — alone, whatever the crowd
+   * here looks like, because they were never one of it. Once they are dead the
+   * floor is an ordinary one: its fights are the crowd's.
+   */
+  const holder = region?.boss ? state.world.people[region.boss] : undefined;
+  if (holder?.alive && holder.sheet) {
+    const who = { ...bossMember(state.world.seed, kinds, floor)!, subspecies: holder.sheet.species! };
+    const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, holder.id);
+    const [cell] = freeCellsNear(grid, origin, taken, 1);
+    return [{ ...asFoe(holder.sheet, inventory, who, 'boss', 0, cell ?? origin), name: holder.name, person: holder.id }];
+  }
+
   /*
    * NO MORE BODIES THAN LIVE HERE. This is the cap that makes the population
    * bite: the composition says what the depth is worth, and the crowd says how
    * much of it is actually available. A cleared place fields nobody at all.
    */
-  const roles = composition(danger, kindForFloor(floor)).slice(0, sizeIn(cohorts));
+  const roles = composition(danger, holder ? 'skirmish' : kindForFloor(floor)).slice(0, sizeIn(cohorts));
   const cells = freeCellsNear(grid, origin, taken, roles.length);
-  const names = region?.creatures ?? [];
 
   return roles.map((role, i) => {
     const rank = RANK_OF[role];
     const drawn = crowdMember(state.world.seed, cohorts, floor, i)!;
     const who = { ...drawn, rank };
     const { sheet, inventory } = crowdFighter(state.world.seed, kinds, who, danger, `${state.world.currentPlace}:${i}`);
+    return {
+      ...asFoe(sheet, inventory, who, role, i, cells[i] ?? origin),
+      /*
+       * THE WORD AND THE BODY AGREE. `Region.creatures` are words the model
+       * invented, and naming a foe `names[i % names.length]` meant a floor of
+       * undead could be handed a wolf's name — the word said one thing and the
+       * sheet another. So the name follows the body: whichever creature word
+       * maps to THIS lineage (`foeSpecies` keys a lineage on the name) is what
+       * it is called, and a lineage no word covers wears its own, since the
+       * engine invents no words.
+       */
+      name: nameFor(state.world, names, who.subspecies, floor) ?? `${who.rank} ${who.subspecies}`,
+    };
+  });
+
+  function asFoe(sheet: CharacterSheet, inventory: Inventory, who: Member, role: FoeRole, i: number, pos: Vec): Combatant {
     const group = groupOf(kinds, who.subspecies);
     const hunts = group ? preyOf(state.world.seed, kinds, group) : undefined;
 
@@ -198,10 +231,11 @@ function crowdFoes(
      * moved by a change that was supposed to leave it alone.
      *
      * So `scaleFoe` still decides what it is like to FIGHT: hit points, AC,
-     * proficiency, abilities and the attack it swings. The character decides everything
-     * else — what kind of thing it is, what it hunts, what it knows, and what is
-     * on its body to take. Re-deriving the curve from sheets is its own piece of
-     * work, and it needs the build matrix pointed at it rather than a guess here.
+     * proficiency, the attack it swings, and its abilities PLUS its kind's
+     * template. The character decides everything else — what kind of thing it
+     * is, what it hunts, what it knows, and what is on its body to take.
+     * Re-deriving the curve from sheets is DESIGN 6b stage 3o, deferred until a
+     * climber can recruit companions.
      */
     const stats = scaleFoe(danger, role);
     const built = toCombatant(sheet, `foe${i + 1}`, inventory);
@@ -220,23 +254,13 @@ function crowdFoes(
       abilities: withTemplate(stats.abilities, sheet.speciesTemplate),
       attacks: [stats.attack],
       speed: stats.speed,
-      /*
-       * THE WORD AND THE BODY AGREE. `Region.creatures` are words the model
-       * invented, and naming a foe `names[i % names.length]` meant a floor of
-       * undead could be handed a wolf's name — the word said one thing and the
-       * sheet another. So the name follows the body: whichever creature word
-       * maps to THIS lineage (`foeSpecies` keys a lineage on the name) is what
-       * it is called, and a lineage no word covers wears its own, since the
-       * engine invents no words.
-       */
-      name: nameFor(state.world, names, who.subspecies, floor) ?? `${who.rank} ${who.subspecies}`,
-      pos: cells[i] ?? origin,
+      pos,
       kind: who.subspecies,
       trade: who.profession,
       ...(group ? { group } : {}),
       ...(hunts ? { hunts } : {}),
     };
-  });
+  }
 }
 
 /** The floor's own word for this lineage, if it has one. */
@@ -609,8 +633,19 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     state.world.currentRegion,
     state.world.currentPlace,
     activeRegion(state.world)?.floor ?? 0,
-    fallen.flatMap((c) => (c.kind && c.trade ? [{ subspecies: c.kind, profession: c.trade as never }] : [])),
+    // A PERSON is not thinned out of a crowd they were never drawn from.
+    fallen.flatMap((c) => (c.kind && c.trade && !c.person ? [{ subspecies: c.kind, profession: c.trade as never }] : [])),
   );
+
+  /*
+   * And a person you killed is DEAD. The first writer `Person.alive = false` has
+   * ever had: until a fight could be against somebody, nothing a fight did could
+   * reach one. Only killing, for now — yielding, fleeing and capture are stage 6.
+   */
+  let people = state.world.people;
+  for (const body of fallen) {
+    if (body.person && people[body.person]) people = { ...people, [body.person]: { ...people[body.person], alive: false } };
+  }
 
   let counters = state.sheet.counters;
   for (const _ of killed) counters = bumpCounter(counters, COUNTERS.kills);
@@ -659,7 +694,7 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     state: {
       ...state,
       combat: null,
-      world: { ...state.world, ...(populations ? { populations } : {}) },
+      world: { ...state.world, people, ...(populations ? { populations } : {}) },
       sheet,
       pc: {
         ...state.pc,
