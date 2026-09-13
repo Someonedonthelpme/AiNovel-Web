@@ -698,6 +698,13 @@ small to be a tree).
   shares a stat or a grammar** with the kin tree. Today `requiresAll` only looks
   inside one tree, and a book's first node stands free (`entry: 'parallel'`,
   `skills/book.ts:239`).
+- **The group base tier is a mix** (user, 2026-09-14): the group's MECHANICS are
+  its **notables** — body, habitat, kinship, prey, law, but only those that apply
+  to this group, since two groups in three hunt nothing and no world is born with
+  a group law — with themed stat and passive **minors** between them. A notable
+  may grant a NEW skill or UPGRADE one. **Rarer kinds get stronger notables.**
+  Worth knowing when this is built: rarity then scales two ways at once — more
+  tiers and stronger nodes — against a cost of quests and scarcity alone.
 - **The origin's free skill may apply to the class tree too**, whose `Origin`
   node grants nothing today (`play/skilltree.ts:470`).
 
@@ -710,7 +717,6 @@ small to be a tree).
   a skill"* — settle when this is built.
 
 ### Open, for the user
-- **What the group base tier contains** (being explained 2026-09-14).
 - **What carries over** when mutation or a species change rebuilds the tree.
 - **What a gear skill's requirement can be**, and where gear skills come from.
 - **What the class tree's origin skill is**, if it gets one.
