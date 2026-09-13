@@ -463,15 +463,22 @@ after any that touches a fight):
      (61/61/63/57/62) — the wall is the level-one BODY, about 12 hit points
      whatever its rank — and the curve goes flat then drops to 4% at danger 6.
    - **Prerequisites, in order:**
-     1. **The chart measures character foes.** `npm run chart`'s build matrix
-        calls `measure` without `kinds` (`scripts/chart.ts:23`), so it has only
-        ever measured STATBLOCK foes: every "chart unchanged" said about a crowd
-        change measured nothing. Point it at a world's kinds first, or 3o has no
-        instrument.
-     2. **The harness climber gains gear with depth.** It carries one fixture
-        weapon for ever, so past about danger 5 every build reads 0–6% and the
-        number measures an under-equipped player. Deep floors cannot be judged
-        until it gears up the way a real climber does.
+     1. **SHIPPED 2026-09-13 — the chart measures character foes.** Was: its
+        matrix called `measure` without `kinds`, so it had only ever measured
+        STATBLOCK foes, and every "chart unchanged" said about a crowd change
+        measured nothing. Documented in ARCHITECTURE §12b.
+     2. **SHIPPED 2026-09-13 — the harness climber is a climber at that depth.**
+        Levelled by `expectedPcLevel`, carrying armour and a weapon of its own
+        reach from the floor above, starting kit only on floor 1. Documented in
+        ARCHITECTURE §12b. **Two fixes had to land first, both found building it:**
+        the PLAYER's gear never reached a fight at all (`58095bd`), and the
+        harness climber fought on the fixture's 11 hit points whatever its level
+        (`6da4040`). The first values run 99–100% for melee through danger 6,
+        59% at 10, 49% at 14 and 4% at 20. Two rows collapse for reasons in the
+        model rather than the game — the sling is the catalogue's only ranged
+        weapon, and the harness caster's skill is a flat 6 no gear grows — and
+        **`expectedPcLevel` will need a new home**, since it lives in
+        `statblock.ts`, which this stage retires.
      3. **A frailty dial for bodies that are not climbers.** The one thing rank
         cannot do: make a shallow creature frailer than a level-one climber. Still
         a sheet rule — e.g. a crowd body does not get the first level's hit-point

@@ -9,18 +9,28 @@
  *   node --experimental-strip-types scripts/chart.ts [worldSeed] [danger]
  */
 import { leavesOf, speciesFor } from '../src/character/species.ts';
-import { BUILDS, chart, measure } from '../src/play/harness.ts';
+import { BUILDS, chart, matrixRow } from '../src/play/harness.ts';
 
 const seed = Number(process.argv[2] ?? 7);
 const danger = Number(process.argv[3] ?? 3);
-const DANGERS = [1, 2, 3, 4, 6];
+/**
+ * Out to 20, because the climber now levels and gears with the depth it fights —
+ * past 6 the old level-one climber read 0–6% everywhere, which measured nothing.
+ */
+const DANGERS = [1, 2, 3, 4, 6, 10, 14, 20];
 
 console.log(`world ${seed}, danger ${danger}\n`);
 
-console.log('=== the build matrix (win %, 100 fights each) ===');
+/*
+ * Against the CHARACTER foes this world's kinds put in front of a climber at each
+ * depth. It measured statblock foes against a level-one body until 2026-09-13, so
+ * no change to a crowd foe could ever show here; the statblock curve is still
+ * pinned, in `harness.test.ts`.
+ */
+console.log('=== the build matrix (win %, 100 fights each, character foes, a climber at that depth) ===');
 console.log('build'.padEnd(9) + DANGERS.map((d) => `d${d}`.padStart(6)).join(''));
 for (const build of BUILDS) {
-  const row = DANGERS.map((d) => `${Math.round(measure({ build, danger: d, trials: 100 }).rate * 100)}%`.padStart(6));
+  const row = matrixRow(build, DANGERS, { seed, trials: 100 }).map((rate) => `${Math.round(rate * 100)}%`.padStart(6));
   console.log(build.padEnd(9) + row.join(''));
 }
 

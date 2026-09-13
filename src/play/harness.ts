@@ -2,11 +2,12 @@ import { simulateFight } from '../combat/encounter.ts';
 import { bow, sword } from '../combat/fixtures.ts';
 import type { Abilities, Grid } from '../combat/types.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import { armour } from '../items/catalogue.ts';
+import { armour, weapon } from '../items/catalogue.ts';
+import { expectedPcLevel } from '../combat/statblock.ts';
 import { addItem, emptyInventory, equip } from '../items/types.ts';
-import type { Inventory } from '../items/types.ts';
+import type { Inventory, Item } from '../items/types.ts';
 import { background, sheet } from '../session/fixtures.ts';
-import { derive, toCombatant } from '../session/sheet.ts';
+import { derive, finalAbilities, toCombatant } from '../session/sheet.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { flat, instant, self, single } from '../skills/effect.ts';
 import type { Effect } from '../skills/effect.ts';
@@ -18,6 +19,7 @@ import type { PlayState } from './state.ts';
 import { groundFloor } from '../world/fixtures.ts';
 import type { Region } from '../world/types.ts';
 import type { Species } from '../character/species.ts';
+import { speciesFor } from '../character/species.ts';
 
 /**
  * A player with more than one build, for measuring what a change does.
@@ -67,6 +69,72 @@ export function buildSheet(build: BuildName, level = 1, template?: Partial<Abili
     ...(build === 'caster' ? { learned: [BOLT] } : {}),
     ...(template ? { speciesTemplate: template } : {}),
   });
+}
+
+/**
+ * A climber at the depth it fights — levelled, and carrying what it found.
+ *
+ * The harness climber used to be one body at every depth: level one, a fixture
+ * weapon, a coat only for the tank. Past about danger 5 every build then read 0–6%,
+ * which measured an under-equipped player rather than the game. This is what
+ * somebody who got that far would be:
+ *
+ * - LEVEL from `expectedPcLevel`, the curve the game was built to. It lives in
+ *   `statblock.ts`, which 3o retires, so it needs a new home then.
+ * - GEAR the tower drops one floor above the fight — what they found on the way,
+ *   not what is here — unrefined, of the build's own reach and the ability it
+ *   hits with: a ranged build keeps shooting, a caster takes the finesse blade.
+ *   Every build wears the armour; nobody at depth fights in their shirt.
+ *
+ * ponytail: gear is the catalogue's drop at that floor, not a simulated climb —
+ * no refine, no rarity, no choosing between finds. Simulate the climb if the
+ * smith economy ever needs measuring.
+ *
+ * NOT MODELLED, and it matters for one row: a caster's power is its skill, which
+ * the harness authors as a flat 6, and gear does not touch skills — so the caster
+ * does not grow with depth however much it carries.
+ */
+export function climberAt(
+  build: BuildName,
+  depth: number,
+  template?: Partial<Abilities>,
+): { sheet: CharacterSheet; inventory: Inventory } {
+  const sheetOf = buildSheet(build, expectedPcLevel(depth), template);
+  // Nothing has been found on the first floor yet: there is no floor above it,
+  // so a climber there carries what it set out with, and nothing invented.
+  if (depth <= 1) return { sheet: sheetOf, inventory: kitFor(build) };
+  const found = depth - 1;
+
+  const shoots = build === 'ranged';
+  const abilities = finalAbilities(sheetOf);
+  const hitsWith = shoots ? 'dex' : abilities.str >= abilities.dex ? 'str' : 'dex';
+
+  // The catalogue picks a weapon's kind from its first draw, so a different seed
+  // is how to reach a different kind. Bounded, and loud if nothing fits: a build
+  // quietly handed the wrong weapon is a measurement of something else.
+  let arm: Item | null = null;
+  for (let k = 0; k < 64 && !arm; k++) {
+    const one = weapon(mulberry32(k), found);
+    if ((one.attack!.range > 1) === shoots && one.attack!.ability === hitsWith) arm = one;
+  }
+  if (!arm) throw new Error(`no ${shoots ? 'ranged' : 'melee'} ${hitsWith} weapon at floor ${found} for ${build}`);
+
+  let bag = addItem(emptyInventory(), arm);
+  bag = equip(bag, bag.held[0].instance.id).inventory;
+  bag = addItem(bag, armour(mulberry32(7), found));
+  bag = equip(bag, bag.held[1].instance.id).inventory;
+  return { sheet: sheetOf, inventory: bag };
+}
+
+/**
+ * One row of the build matrix, exactly as `npm run chart` prints it: a climber at
+ * each depth against the CHARACTER foes a world with kinds actually meets. The
+ * chart used to measure statblock foes only, so no change to a crowd foe could
+ * ever show in it.
+ */
+export function matrixRow(build: BuildName, dangers: readonly number[], opts: { seed: number; trials: number }): number[] {
+  const kinds = speciesFor(opts.seed);
+  return dangers.map((danger) => measure({ build, danger, trials: opts.trials, kinds, atDepth: true }).rate);
 }
 
 /** What they are wearing. Only the tank bothers with a coat. */
@@ -132,10 +200,22 @@ export function measure(opts: {
   build: BuildName; danger: number; trials?: number; template?: Partial<Abilities>; level?: number;
   /** A world's species tree, when the foes should be characters out of it. */
   kinds?: readonly Species[];
+  /**
+   * A climber at the danger it fights (`climberAt`) rather than today's level-one
+   * body. Opt-in, so the pins recorded against that body keep their meaning; the
+   * chart turns it on. It decides the level, so asking for both is a mistake.
+   */
+  atDepth?: boolean;
 }): Measured {
+  if (opts.atDepth && opts.level !== undefined) {
+    throw new Error(`measure: atDepth decides the level, so level ${opts.level} cannot also be given`);
+  }
   const trials = opts.trials ?? 100;
-  const sheetOf = buildSheet(opts.build, opts.level ?? 1, opts.template);
-  const inventory = kitFor(opts.build);
+  const climber = opts.atDepth
+    ? climberAt(opts.build, opts.danger, opts.template)
+    : { sheet: buildSheet(opts.build, opts.level ?? 1, opts.template), inventory: kitFor(opts.build) };
+  const sheetOf = climber.sheet;
+  const inventory = climber.inventory;
   const actions: CombatAction[] = [];
   let wins = 0;
   let hp = 0;

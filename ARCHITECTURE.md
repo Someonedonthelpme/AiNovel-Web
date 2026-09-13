@@ -664,7 +664,7 @@ worth, which is what makes foe power and loot value one number.
 answer is now firm: **not reachable**, and the obstacle is a design decision
 rather than an implementation. **The win rates in this paragraph are CONTAMINATED
 past danger 1, re-measure pending** (flagged 2026-09-13): the harness climber fought
-on the fixture's 11 hit points whatever its level ([harness.ts:123](src/play/harness.ts:123)
+on the fixture's 11 hit points whatever its level ([harness.ts:191](src/play/harness.ts:191)
 is the fix), in both rows. The three walls are per-term and stand. With AC solved to within two, damage per round as
 close as the ladder reaches, and hit points still anchored, melee measured
 76/64/48/35/26 against the anchored 94/86/84/47/36; handing hit points back too
@@ -696,7 +696,7 @@ the three options and the user's call.
 
 A harness test pins the melee curve between statblock foes and character foes
 within SEVEN points at danger 1, 2 and 4
-([harness.test.ts:91](src/play/harness.test.ts:91)). It was exact equality until
+([harness.test.ts:93](src/play/harness.test.ts:93)). It was exact equality until
 2026-09-13, which held only because the template was missing; with it the two
 differ by −4.5 to +4.3 points, measured with paired seeds, and no consistent sign.
 
@@ -1071,23 +1071,45 @@ default climber 15–19 points of win rate.
 
 `src/play/harness.ts` is the answer: four bodies that cost the same (melee,
 ranged, caster, tank) played by a policy that prefers a skill when one is
-affordable ([harness.ts:88](src/play/harness.ts:88)), and a matchup chart built
+affordable ([harness.ts:156](src/play/harness.ts:156)), and a matchup chart built
 from SHEETS rather than statblocks — a statblock foe's HP comes from danger, so
 `vit` would count for nothing and two subspecies differing only in it would read
-identical ([harness.ts:173](src/play/harness.ts:173)). `npm run chart` prints
-both. A test pins the melee curve as the anchor 3n must not move.
+identical ([harness.ts:253](src/play/harness.ts:253)). `npm run chart` prints
+both.
 
-**The live anchor is melee 97/90/88/46/5 at danger 1/2/3/4/6, ranged
-85/83/70/36/4, caster 94/94/91/90/3, tank 96/86/78/38/2** — and it is a curve
-against STATBLOCK foes only: `npm run chart`'s matrix calls `measure` without a
-species tree ([chart.ts:23](scripts/chart.ts:23)), so no change to character foes
-can move it. The only instrument on character foes is the harness pin above.
-Pointing the chart at them is DESIGN 3o's first prerequisite.
-**Re-pinned twice on 2026-09-13.** First tank, 88/76/69/21/2 → 90/77/70/28/2: its
+**TWO CURVES, and they are not the same instrument** (since 2026-09-13).
+
+- **The statblock anchor** is the curve every floor was balanced against: melee
+  against statblock foes, a level-one climber with its fixture kit. It is pinned
+  in tests, not printed — "the difficulty curve is where it was measured"
+  ([harness.test.ts:45](src/play/harness.test.ts:45)) and the ±7 pin between
+  statblock and character foes. **Its last printed values, at `6da4040`: melee
+  97/90/88/46/5 at danger 1/2/3/4/6, ranged 85/83/70/36/4, caster 94/94/91/90/3,
+  tank 96/86/78/38/2.** `measure` still gives exactly this by default.
+- **The chart's matrix** ([chart.ts:33](scripts/chart.ts:33)) is 3o's instrument:
+  the CHARACTER foes a world with kinds meets ([harness.ts:135](src/play/harness.ts:135)),
+  fought by a climber at that depth — levelled by `expectedPcLevel`, carrying the
+  armour and a weapon of its own reach the tower dropped one floor above, and only
+  its starting kit on floor 1 ([harness.ts:97](src/play/harness.ts:97)). Until
+  2026-09-13 it measured the statblock anchor, so no change to a crowd foe could
+  ever show in it. **First values, world 7:**
+
+  | build | d1 | d2 | d3 | d4 | d6 | d10 | d14 | d20 |
+  |---|---|---|---|---|---|---|---|---|
+  | melee | 99 | 100 | 99 | 99 | 98 | 59 | 49 | 4 |
+  | ranged | 85 | 84 | 80 | 76 | 42 | 2 | 3 | 3 |
+  | caster | 93 | 94 | 94 | 94 | 87 | 7 | 10 | 3 |
+  | tank | 96 | 99 | 99 | 99 | 94 | 45 | 26 | 2 |
+
+  Two rows collapse for reasons in the MODEL, not the game: the only ranged weapon
+  the catalogue makes is the sling, so a ranged climber at depth carries one; and a
+  caster's power is a skill the harness authors as a flat 6, which no gear grows.
+
+**Re-pinned twice on 2026-09-13**, both in the statblock anchor. First tank, 88/76/69/21/2 → 90/77/70/28/2: its
 coat started working when the player's gear began reaching fights at all (see
 *Cleared: a player's gear* in §12). Then melee, tank and caster, when the harness
 climber began fighting on its own pools rather than the fixture's 11 hit points
-([harness.ts:123](src/play/harness.ts:123)) — melee from 96/86/83/40/5, tank from
+([harness.ts:191](src/play/harness.ts:191)) — melee from 96/86/83/40/5, tank from
 90/77/70/28/2, caster d6 from 0 (its mana had been clipped too). Ranged did not
 move: its maximum is under 11. **Every harness number taken at a level above one
 before that fix described a climber on 11 hit points**, whatever its level.
@@ -1099,15 +1121,15 @@ and these from `aea03f9` onward. **Re-pin it in the same commit as any stage
 that moves it** — a recorded number nobody re-measures is how a regression gets
 waved through.
 
-Four limits worth knowing before trusting a number from it. The caster's skill is
+Limits worth knowing before trusting a number from it. The caster's skill is
 authored in the harness rather than composed, and the policy prefers a skill
-UNCONDITIONALLY, so a skill that does not help reads as a small loss. The harness
-climber's **gear never improves** — one fixture weapon, and a coat only for the
-tank — so past about danger 5 every build reads 0–6% and the number is measuring
-an under-equipped player rather than the game: for the same floors
-`scripts/balance.ts` reports 89/84/86/56/57%, because its `referencePc` gets up
-to 4d8 and AC 14–18 from its level alone. So **the band worth trusting is danger
-1–5**, and the two scripts are not measuring the same climber.
+UNCONDITIONALLY, so a skill that does not help reads as a small loss. The climber
+at depth is the catalogue's drop one floor up, not a simulated climb — no refine,
+no rarity, no choosing between finds. And `scripts/balance.ts` measures something
+else again: its `referencePc` gets up to 4d8 and AC 14–18 from its level alone, so
+it reads 89/84/86/56/57% at floors 8–30. **Amended 2026-09-13:** this said the
+harness climber's gear never improved and only danger 1–5 could be trusted —
+true of the statblock anchor's body, not of the chart's.
 
 ## 13. Tuning knobs
 

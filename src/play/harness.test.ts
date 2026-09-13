@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ABILITIES } from '../combat/types.ts';
 import { finalAbilities, maxHpFor } from '../session/sheet.ts';
-import { BUILDS, buildSheet, chart, measure, onFloor } from './harness.ts';
+import { BUILDS, buildSheet, chart, climberAt, matrixRow, measure, onFloor } from './harness.ts';
+import { toCombatant } from '../session/sheet.ts';
+import { swing } from '../character/crowd.ts';
 import { leavesOf, speciesFor } from '../character/species.ts';
 import { planFor } from '../character/bodyplan.ts';
 import { initialPlayState } from './state.ts';
@@ -113,4 +115,31 @@ test('a measured climber fights with its own hit points, not the fixture\'s', ()
   const pc = beginEncounter(onFloor(10, 0, sheetOf, emptyInventory())).combat!.combatants['pc'];
   assert.equal(pc.hp, maxHpFor(sheetOf, emptyInventory()), `a level-11 climber fights with ${pc.hp}`);
   assert.equal(pc.hp, pc.maxHp, 'and starts the fight whole');
+});
+
+/*
+ * 3o, first two prerequisites (approved 2026-09-13). The harness climber was one
+ * body at every depth — level one, a fixture weapon, a coat only for the tank —
+ * so past about danger 5 every number measured an under-equipped player rather
+ * than the game. And the chart's matrix measured statblock foes only.
+ */
+const fighterOf = (c: ReturnType<typeof climberAt>) => toCombatant(c.sheet, 'x', c.inventory);
+
+test('the harness climber is a climber at the depth it fights: levelled, and carrying what it found', () => {
+  const shallow = climberAt('melee', 1);
+  const deep = climberAt('melee', 20);
+  const [s, d] = [fighterOf(shallow), fighterOf(deep)];
+  assert.ok(deep.sheet.level > shallow.sheet.level, `a deeper climber has levelled: ${shallow.sheet.level} → ${deep.sheet.level}`);
+  assert.ok(swing(d.attacks[0], d.abilities) > swing(s.attacks[0], s.abilities), 'hits harder with what it found on the way down');
+  assert.ok(d.ac > s.ac, `and wears better: ac ${s.ac} → ${d.ac}`);
+  assert.ok(fighterOf(climberAt('ranged', 20)).attacks[0].range > 1, 'a ranged build still shoots');
+});
+
+test("the chart's build matrix measures the foes a world with kinds actually meets", () => {
+  const cells = matrixRow('melee', [1, 2, 4], { seed: 7, trials: 40 });
+  const kinds = speciesFor(7);
+  const asCharacters = [1, 2, 4].map((d) => measure({ build: 'melee', danger: d, trials: 40, kinds, atDepth: true }).rate);
+  const asStatblocks = [1, 2, 4].map((d) => measure({ build: 'melee', danger: d, trials: 40, atDepth: true }).rate);
+  assert.deepEqual(cells, asCharacters, 'the chart prints the fight against characters, by a climber at that depth');
+  assert.notDeepEqual(asCharacters, asStatblocks, 'statblock foes must give a different row, or this cannot tell them apart');
 });
