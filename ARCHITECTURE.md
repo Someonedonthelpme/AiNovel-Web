@@ -657,7 +657,10 @@ answer is now firm: **not reachable**, and the obstacle is a design decision
 rather than an implementation. With AC solved to within two, damage per round as
 close as the ladder reaches, and hit points still anchored, melee measured
 76/64/48/35/26 against the anchored 94/86/84/47/36; handing hit points back too
-gives 65/65/63/42/19. Three walls, each measured:
+gives 59/59/57/42/19 (re-measured 2026-09-13 with the final solve; a figure of
+65/65/63 written first came from a solve that still armed foes with slings), and
+fielding only whelps below danger 6 barely moves it (61/61/63/57/62), because the
+wall is the level-one body rather than its gear. Three walls, each measured:
 
 - **Hit points.** A danger-1 minion has 2 and a regular 8. The frailest level-one
   body is `HP_AT_FIRST` 10, about 12 with any `vit` at all.

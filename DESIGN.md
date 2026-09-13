@@ -391,7 +391,12 @@ after any that touches a fight):
    With AC solved to within two, damage per round to the nearest reachable, and
    hit points still anchored, the curve measured **76/64/48/35/26** against the
    anchored **94/86/84/47/36** (melee, at `expectedPcLevel` per depth, 200
-   trials). Handing back hit points as well gives **65/65/63/42/19**.
+   trials). Handing back hit points as well — every number from the sheet — gives
+   **59/59/57/42/19** (re-measured 2026-09-13; the 65/65/63 first written here
+   came from a solve that still armed foes with slings). Fielding only whelps
+   below danger 6 barely moves it — **61/61/63/57/62**, then 4% at danger 6 — because
+   the wall is the level-one BODY, not its gear: a whelp and an ordinary are both
+   about 12 hit points at the shallow end.
 
    So `scaleFoe` still decides hit points and the fight, and the character
    decides who it is and what is on it to take. **The user's call, at 3n-iii:**
