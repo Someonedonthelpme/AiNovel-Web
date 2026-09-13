@@ -78,7 +78,10 @@ export function combatRng(state: PlayState): Rng {
 
 /** The player character as they currently stand — wounds and all. */
 export function playerCombatant(state: PlayState): Combatant {
-  const base = toCombatant(state.sheet, 'pc');
+  // WITH what they carry. Without the inventory here, no found weapon, coat,
+  // refine or rarity ever reached a fight: the sheet said one AC and the fight
+  // used another, and the blade in hand was never the one swung.
+  const base = toCombatant(state.sheet, 'pc', state.pc.inventory);
   // What kind of thing they are, and what they hunt: a climber is somebody's prey
   // and somebody's predator like everything else alive.
   const kinds = state.world.species ?? [];

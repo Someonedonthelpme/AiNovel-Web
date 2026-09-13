@@ -22,6 +22,10 @@ import { believes } from '../character/belief.ts';
 import { PLAYER } from '../social/edge.ts';
 import { STANDARD } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
+import { armour, weapon } from '../items/catalogue.ts';
+import { addItem, emptyInventory, equip, equippedAttack } from '../items/types.ts';
+import { armourClassFor, finalAbilities } from '../session/sheet.ts';
+import { mulberry32 } from '../engine/roll.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
 import type { PlayState, TurnRecord } from './state.ts';
 import type { Region } from '../world/types.ts';
@@ -638,4 +642,25 @@ test("a foe fights with its kind's template on top of the anchor", () => {
     }
   }
   assert.ok(felt > 0, 'no foe had a template, so this asserts nothing');
+});
+
+/*
+ * THE PLAYER FIGHTS WITH WHAT THEY CARRY. Found 2026-09-13 while building the
+ * harness climber for 3o: `playerCombatant` called `toCombatant` without the
+ * inventory, so since 2026-09-02 no found weapon, coat, refine, enchant or
+ * rarity grant had ever reached a fight — the sheet said AC 17 and the fight used
+ * 11, swinging the background's 1d6 while a d12 was in hand.
+ */
+test('the player fights with what they are wearing and wielding', () => {
+  let bag = addItem(emptyInventory(), armour(mulberry32(3), 20));
+  bag = equip(bag, bag.held[0].instance.id).inventory;
+  bag = addItem(bag, weapon(mulberry32(5), 25));
+  bag = equip(bag, bag.held[1].instance.id).inventory;
+  const base = onFloorTwo();
+  const state = { ...base, pc: { ...base.pc, inventory: bag } };
+
+  const pc = beginEncounter(state).combat!.combatants['pc'];
+  assert.equal(pc.ac, armourClassFor(state.sheet, bag), 'the AC on the sheet is the AC in the fight');
+  assert.deepEqual(pc.attacks, [equippedAttack(bag)], 'the blade in hand is the one it swings');
+  assert.deepEqual(pc.abilities, finalAbilities(state.sheet, bag), 'with what its gear grants');
 });

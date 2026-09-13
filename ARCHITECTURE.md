@@ -149,7 +149,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:284](src/play/combat.ts:284)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:154](src/play/combat.ts:154)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:287](src/play/combat.ts:287)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:157](src/play/combat.ts:157)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -233,8 +233,8 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:634](src/play/combat.ts:634)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:642](src/play/combat.ts:642)) |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:637](src/play/combat.ts:637)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:645](src/play/combat.ts:645)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -616,11 +616,11 @@ A place holds cohorts of (subspecies, profession, size), and the draw is weighte
 by size ([crowd.ts:82](src/character/crowd.ts:82)), so a lineage that has been
 hunted down is rarer to meet. Two readers make that more than bookkeeping: the
 encounter fields **no more bodies than live there**
-([play/combat.ts:176](src/play/combat.ts:176)), and a place cleared out **opens no
-fight at all** ([play/combat.ts:278](src/play/combat.ts:278)). Each body carries
+([play/combat.ts:179](src/play/combat.ts:179)), and a place cleared out **opens no
+fight at all** ([play/combat.ts:281](src/play/combat.ts:281)). Each body carries
 the cohort it came from — `Combatant.kind` and `trade`
 ([combat/types.ts:167](src/combat/types.ts:167)) — so what dies is taken out of
-the population it came from ([play/combat.ts:604](src/play/combat.ts:604)),
+the population it came from ([play/combat.ts:607](src/play/combat.ts:607)),
 whoever won.
 
 "No population here" and "nothing lives here any more" are **different answers**
@@ -633,11 +633,11 @@ naming a foe `names[i % names.length]` meant a floor of undead could be handed a
 wolf's name; the name now **follows the lineage** — whichever creature word maps
 to this body is what it is called — and a lineage no word covers wears its own
 kind, because the engine invents no words
-([play/combat.ts:240](src/play/combat.ts:240)).
+([play/combat.ts:243](src/play/combat.ts:243)).
 
 `scaleFoe` still decides what it is like to **fight**: hit points, AC,
 proficiency, the attack it swings, its speed — and its abilities, **plus its kind's
-template** ([play/combat.ts:217](src/play/combat.ts:217)), through the same
+template** ([play/combat.ts:220](src/play/combat.ts:220)), through the same
 `withTemplate` a statblock foe has always had
 ([statblock.ts:128](src/combat/statblock.ts:128)). Amended 2026-09-13: from 3n
 until then a character foe fought with raw `scaleFoe` abilities, so its kind sat
@@ -745,7 +745,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:135](src/combat/combat.ts:135)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:273](src/play/combat.ts:273)): acting first from 9 squares away
+([play/combat.ts:276](src/play/combat.ts:276)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -821,6 +821,17 @@ needs and temperament; **nothing yet proves the reader half.**
 | **`treeBonuses.attack` / `.damage`** | Accumulated by `applyGrant`, read by no formula. A node granting "+1 to hit" changes nothing. |
 | **`ItemEffect.buff`** | `applyEffect` returns state unchanged and narrates *"…feels sharper"*. Drinking it consumes the potion and does nothing. |
 
+**Cleared: a player's gear.** — *the player's inventory never reached a fight*
+was true from 2026-09-02 until 2026-09-13, and it belonged in this table without
+anyone knowing. `playerCombatant` built the player with `toCombatant` and no
+inventory, so every found weapon and coat, every refine, enchant and rarity grant,
+and carry weight's drag on speed did nothing in a fight: a player whose sheet said
+AC 17 fought at 11, swinging the background's 1d6 with a d12 in hand. `fd16f7a`
+gave `toCombatant` the parameter the same day the play path was written without
+it, and no test crossed the two. It now passes the inventory
+([play/combat.ts:84](src/play/combat.ts:84)). Found building 3o's harness climber:
+a geared climber measured identical to an ungeared one.
+
 ### Waiting on a reader, by decision
 
 A foe's **signature skill** is on its sheet and never used, because `combat/ai.ts`
@@ -837,7 +848,7 @@ climber today, and not a field pretending to be a mechanic.
 true until 3n-ii. A population is stored per place, the draw is weighted by what
 is left, the encounter is capped by it, and a cleared place opens no fight
 ([population.ts:124](src/character/population.ts:124),
-[play/combat.ts:176](src/play/combat.ts:176)).
+[play/combat.ts:179](src/play/combat.ts:179)).
 
 ### Confirmed dead
 
@@ -1064,11 +1075,13 @@ identical ([harness.ts:165](src/play/harness.ts:165)). `npm run chart` prints
 both. A test pins the melee curve as the anchor 3n must not move.
 
 **The live anchor is melee 96/86/83/40/5 at danger 1/2/3/4/6, ranged
-85/83/70/36/4, caster 94/94/91/90/0, tank 88/76/69/21/2** — and it is a curve
+85/83/70/36/4, caster 94/94/91/90/0, tank 90/77/70/28/2** — and it is a curve
 against STATBLOCK foes only: `npm run chart`'s matrix calls `measure` without a
 species tree ([chart.ts:23](scripts/chart.ts:23)), so no change to character foes
 can move it. The only instrument on character foes is the harness pin above.
-Pointing the chart at them is DESIGN 3o's first prerequisite. Re-pinned 2026-09-12
+Pointing the chart at them is DESIGN 3o's first prerequisite.
+**Re-pinned 2026-09-13:** tank was 88/76/69/21/2. Its coat started working when the
+player's gear began reaching fights at all — see *Cleared: a player's gear* in §12. Re-pinned 2026-09-12
 at 3n-ii: 3d recorded 97/84/77/46/3 and **3m moved it** without the doc saying
 so, which is how "the anchor must not move" was violated without anyone seeing
 it. Checked out and re-run, `npm run chart` gives the 3d numbers at `397a454`
