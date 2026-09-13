@@ -6,7 +6,7 @@ import { armour } from '../items/catalogue.ts';
 import { addItem, emptyInventory, equip } from '../items/types.ts';
 import type { Inventory } from '../items/types.ts';
 import { background, sheet } from '../session/fixtures.ts';
-import { toCombatant } from '../session/sheet.ts';
+import { derive, toCombatant } from '../session/sheet.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { flat, instant, self, single } from '../skills/effect.ts';
 import type { Effect } from '../skills/effect.ts';
@@ -93,7 +93,7 @@ export function chooseAction(state: PlayState): CombatAction | null {
     ?? null;
 }
 
-const onFloor = (
+export const onFloor = (
   danger: number,
   seed: number,
   sheetOf: CharacterSheet,
@@ -102,6 +102,7 @@ const onFloor = (
 ): PlayState => {
   const floor: Region = { ...groundFloor(), id: 'floor-h', floor: Math.max(2, danger), danger, creatures: ['a', 'b', 'c'] };
   const base = playState();
+  const derived = derive(sheetOf, inventory);
   const state: PlayState = {
     ...base,
     sheet: sheetOf,
@@ -112,7 +113,14 @@ const onFloor = (
       ...(kinds ? { species: [...kinds] } : {}),
       currentRegion: 'floor-h', regions: { 'floor-h': floor }, currentPlace: 'town',
     },
-    pc: { ...base.pc, inventory },
+    /*
+     * ITS OWN POOLS, not the fixture's. The fixture climber is level one with 11
+     * hit points, and a fight opens with the lesser of what you carry in and your
+     * maximum — so a level-11 sheet measured here fought on 11 of its 92, and
+     * every table taken at a level above one described a body far weaker than
+     * its level. Whole, because a measurement is of a fight, not of a bad day.
+     */
+    pc: { ...base.pc, inventory, hp: derived.maxHp, maxHp: derived.maxHp, stamina: derived.maxStamina, mana: derived.maxMana },
   };
   return applyDelta(state, { startCombat: true });
 };

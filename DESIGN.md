@@ -415,6 +415,11 @@ after any that touches a fight):
      thirty points of win rate with every printed number matching within one.
      Fixed by filtering candidates to the trade's reach; recorded because it is
      the clearest evidence that per-term matching is not what a fight measures.
+   **CONTAMINATED, re-measure pending (flagged 2026-09-13):** every win rate in this
+   paragraph past danger 1 was taken with a harness climber fighting on the
+   fixture's 11 hit points whatever its level — both the anchored and the sheet
+   rows, so the comparison was like-for-like but the numbers are wrong. The three
+   walls below are per-term and taken straight off sheets, so they stand.
    With AC solved to within two, damage per round to the nearest reachable, and
    hit points still anchored, the curve measured **76/64/48/35/26** against the
    anchored **94/86/84/47/36** (melee, at `expectedPcLevel` per depth, 200
@@ -450,7 +455,9 @@ after any that touches a fight):
      minion with 2 hit points). Neither is a body the game can hold, so the curve
      describes nothing a player meets. And every mechanic that lives on a sheet —
      template, mutation, gear, knack — only bites when the sheet fights.
-   - **Measured, so nobody flips it as a flag.** Everything from the sheet today
+   - **Measured, so nobody flips it as a flag** — *but CONTAMINATED past danger 1,
+     re-measure pending (2026-09-13): the harness climber fought on 11 hit points
+     whatever its level; see the 3n-iii note above.* Everything from the sheet today
      gives melee 59/59/57/42/19 at danger 1–5 against the anchored 94/86/84/47/36;
      a tank wins 33% on floor 1. Fielding only whelps below danger 6 barely helps
      (61/61/63/57/62) — the wall is the level-one BODY, about 12 hit points

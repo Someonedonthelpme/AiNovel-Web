@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ABILITIES } from '../combat/types.ts';
-import { finalAbilities } from '../session/sheet.ts';
-import { BUILDS, buildSheet, chart, measure } from './harness.ts';
+import { finalAbilities, maxHpFor } from '../session/sheet.ts';
+import { BUILDS, buildSheet, chart, measure, onFloor } from './harness.ts';
 import { leavesOf, speciesFor } from '../character/species.ts';
 import { planFor } from '../character/bodyplan.ts';
 import { initialPlayState } from './state.ts';
 import { sheet } from '../session/fixtures.ts';
 import { world as worldFixture } from '../world/fixtures.ts';
-import { equippedAttack } from '../items/types.ts';
+import { emptyInventory, equippedAttack } from '../items/types.ts';
+import { beginEncounter } from './combat.ts';
 
 const total = (of: Partial<Record<string, number>>) =>
   ABILITIES.reduce((sum, a) => sum + (of[a] ?? 0), 0);
@@ -97,4 +98,19 @@ test('swapping statblocks for characters moves the curve by no more than a kind'
       `danger ${danger}: ${plain}% against statblocks, ${people}% against characters`,
     );
   }
+});
+
+/*
+ * Found 2026-09-13: `onFloor` copied the fixture's `pc`, which carries 11 hit
+ * points, and `playerCombatant` fights with the lesser of that and the sheet's
+ * maximum. So `measure({ level: 11 })` ran a 92-hp body on 11, every table taken
+ * at `expectedPcLevel` measured a climber far weaker than its level, and even the
+ * level-one tank fought on 11 of its 13.
+ */
+test('a measured climber fights with its own hit points, not the fixture\'s', () => {
+  const sheetOf = buildSheet('melee', 11);
+  // Opened exactly the way `measure` opens every fight it counts.
+  const pc = beginEncounter(onFloor(10, 0, sheetOf, emptyInventory())).combat!.combatants['pc'];
+  assert.equal(pc.hp, maxHpFor(sheetOf, emptyInventory()), `a level-11 climber fights with ${pc.hp}`);
+  assert.equal(pc.hp, pc.maxHp, 'and starts the fight whole');
 });

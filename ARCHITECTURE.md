@@ -662,7 +662,10 @@ worth, which is what makes foe power and loot value one number.
 
 **Why not let the character's own numbers fight?** Measured 2026-09-12 and the
 answer is now firm: **not reachable**, and the obstacle is a design decision
-rather than an implementation. With AC solved to within two, damage per round as
+rather than an implementation. **The win rates in this paragraph are CONTAMINATED
+past danger 1, re-measure pending** (flagged 2026-09-13): the harness climber fought
+on the fixture's 11 hit points whatever its level ([harness.ts:123](src/play/harness.ts:123)
+is the fix), in both rows. The three walls are per-term and stand. With AC solved to within two, damage per round as
 close as the ladder reaches, and hit points still anchored, melee measured
 76/64/48/35/26 against the anchored 94/86/84/47/36; handing hit points back too
 gives 59/59/57/42/19 (re-measured 2026-09-13 with the final solve; a figure of
@@ -693,7 +696,7 @@ the three options and the user's call.
 
 A harness test pins the melee curve between statblock foes and character foes
 within SEVEN points at danger 1, 2 and 4
-([harness.test.ts:90](src/play/harness.test.ts:90)). It was exact equality until
+([harness.test.ts:91](src/play/harness.test.ts:91)). It was exact equality until
 2026-09-13, which held only because the template was missing; with it the two
 differ by −4.5 to +4.3 points, measured with paired seeds, and no consistent sign.
 
@@ -1068,21 +1071,28 @@ default climber 15–19 points of win rate.
 
 `src/play/harness.ts` is the answer: four bodies that cost the same (melee,
 ranged, caster, tank) played by a policy that prefers a skill when one is
-affordable ([harness.ts:110](src/play/harness.ts:110)), and a matchup chart built
+affordable ([harness.ts:88](src/play/harness.ts:88)), and a matchup chart built
 from SHEETS rather than statblocks — a statblock foe's HP comes from danger, so
 `vit` would count for nothing and two subspecies differing only in it would read
-identical ([harness.ts:165](src/play/harness.ts:165)). `npm run chart` prints
+identical ([harness.ts:173](src/play/harness.ts:173)). `npm run chart` prints
 both. A test pins the melee curve as the anchor 3n must not move.
 
-**The live anchor is melee 96/86/83/40/5 at danger 1/2/3/4/6, ranged
-85/83/70/36/4, caster 94/94/91/90/0, tank 90/77/70/28/2** — and it is a curve
+**The live anchor is melee 97/90/88/46/5 at danger 1/2/3/4/6, ranged
+85/83/70/36/4, caster 94/94/91/90/3, tank 96/86/78/38/2** — and it is a curve
 against STATBLOCK foes only: `npm run chart`'s matrix calls `measure` without a
 species tree ([chart.ts:23](scripts/chart.ts:23)), so no change to character foes
 can move it. The only instrument on character foes is the harness pin above.
 Pointing the chart at them is DESIGN 3o's first prerequisite.
-**Re-pinned 2026-09-13:** tank was 88/76/69/21/2. Its coat started working when the
-player's gear began reaching fights at all — see *Cleared: a player's gear* in §12. Re-pinned 2026-09-12
-at 3n-ii: 3d recorded 97/84/77/46/3 and **3m moved it** without the doc saying
+**Re-pinned twice on 2026-09-13.** First tank, 88/76/69/21/2 → 90/77/70/28/2: its
+coat started working when the player's gear began reaching fights at all (see
+*Cleared: a player's gear* in §12). Then melee, tank and caster, when the harness
+climber began fighting on its own pools rather than the fixture's 11 hit points
+([harness.ts:123](src/play/harness.ts:123)) — melee from 96/86/83/40/5, tank from
+90/77/70/28/2, caster d6 from 0 (its mana had been clipped too). Ranged did not
+move: its maximum is under 11. **Every harness number taken at a level above one
+before that fix described a climber on 11 hit points**, whatever its level.
+
+Re-pinned 2026-09-12 at 3n-ii: 3d recorded 97/84/77/46/3 and **3m moved it** without the doc saying
 so, which is how "the anchor must not move" was violated without anyone seeing
 it. Checked out and re-run, `npm run chart` gives the 3d numbers at `397a454`
 and these from `aea03f9` onward. **Re-pin it in the same commit as any stage
