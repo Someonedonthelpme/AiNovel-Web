@@ -149,7 +149,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:282](src/play/combat.ts:282)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:154](src/play/combat.ts:154)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:284](src/play/combat.ts:284)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:263](src/character/crowd.ts:263)) by `crowdFoes` ([play/combat.ts:154](src/play/combat.ts:154)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -233,8 +233,8 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief only ([director.ts:349](src/llm/director.ts:349)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:632](src/play/combat.ts:632)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:640](src/play/combat.ts:640)) |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:634](src/play/combat.ts:634)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:642](src/play/combat.ts:642)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -617,10 +617,10 @@ by size ([crowd.ts:82](src/character/crowd.ts:82)), so a lineage that has been
 hunted down is rarer to meet. Two readers make that more than bookkeeping: the
 encounter fields **no more bodies than live there**
 ([play/combat.ts:176](src/play/combat.ts:176)), and a place cleared out **opens no
-fight at all** ([play/combat.ts:276](src/play/combat.ts:276)). Each body carries
+fight at all** ([play/combat.ts:278](src/play/combat.ts:278)). Each body carries
 the cohort it came from — `Combatant.kind` and `trade`
 ([combat/types.ts:167](src/combat/types.ts:167)) — so what dies is taken out of
-the population it came from ([play/combat.ts:602](src/play/combat.ts:602)),
+the population it came from ([play/combat.ts:604](src/play/combat.ts:604)),
 whoever won.
 
 "No population here" and "nothing lives here any more" are **different answers**
@@ -633,10 +633,18 @@ naming a foe `names[i % names.length]` meant a floor of undead could be handed a
 wolf's name; the name now **follows the lineage** — whichever creature word maps
 to this body is what it is called — and a lineage no word covers wears its own
 kind, because the engine invents no words
-([play/combat.ts:238](src/play/combat.ts:238)).
+([play/combat.ts:240](src/play/combat.ts:240)).
 
 `scaleFoe` still decides what it is like to **fight**: hit points, AC,
-proficiency, abilities, the attack it swings, its speed. The CHARACTER decides who
+proficiency, the attack it swings, its speed — and its abilities, **plus its kind's
+template** ([play/combat.ts:217](src/play/combat.ts:217)), through the same
+`withTemplate` a statblock foe has always had
+([statblock.ts:128](src/combat/statblock.ts:128)). Amended 2026-09-13: from 3n
+until then a character foe fought with raw `scaleFoe` abilities, so its kind sat
+on its sheet and never reached the fight, while an old world's statblock foes
+still got theirs. Only the nine scores take the template — hit points and AC stay
+anchored, so a `vit` or `agi` shift reaches soak and tempo but not hp or AC, and
+only a shift that crosses a modifier boundary does anything. The CHARACTER decides who
 it is: which lineage, which group (so body, habitat, kinship, law and prey all
 apply), what it knows, and what is on its body to take. Rank stands in for the
 statblock role — whelp · ordinary · veteran for minion · regular · elite
@@ -677,14 +685,17 @@ wall is the level-one body rather than its gear. Three walls, each measured:
 
 And the mirror of it: the curve is drawn against `referencePc`, which gets up to
 4d8 of damage and AC 14–18 from nothing but its level
-([statblock.ts:181](src/combat/statblock.ts:181),
-[:194](src/combat/statblock.ts:194)) — a body no character sheet can be either. The
+([statblock.ts:194](src/combat/statblock.ts:194),
+[:207](src/combat/statblock.ts:207)) — a body no character sheet can be either. The
 curve assumes a player no sheet describes AND foes no sheet describes; fixing one
 end alone is what costs twenty points whichever end is picked. DESIGN 3n-iii holds
 the three options and the user's call.
 
-A harness test pins every cell of the build matrix equal between statblock foes and
-character foes, so the curve cannot move by accident.
+A harness test pins the melee curve between statblock foes and character foes
+within SEVEN points at danger 1, 2 and 4
+([harness.test.ts:90](src/play/harness.test.ts:90)). It was exact equality until
+2026-09-13, which held only because the template was missing; with it the two
+differ by −4.5 to +4.3 points, measured with paired seeds, and no consistent sign.
 
 A world stored before the species tree still meets statblock foes: inventing a
 population for it would be inventing the bodies of creatures somebody is already
@@ -734,7 +745,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:135](src/combat/combat.ts:135)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:271](src/play/combat.ts:271)): acting first from 9 squares away
+([play/combat.ts:273](src/play/combat.ts:273)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -1053,7 +1064,11 @@ identical ([harness.ts:165](src/play/harness.ts:165)). `npm run chart` prints
 both. A test pins the melee curve as the anchor 3n must not move.
 
 **The live anchor is melee 96/86/83/40/5 at danger 1/2/3/4/6, ranged
-85/83/70/36/4, caster 94/94/91/90/0, tank 88/76/69/21/2.** Re-pinned 2026-09-12
+85/83/70/36/4, caster 94/94/91/90/0, tank 88/76/69/21/2** — and it is a curve
+against STATBLOCK foes only: `npm run chart`'s matrix calls `measure` without a
+species tree ([chart.ts:23](scripts/chart.ts:23)), so no change to character foes
+can move it. The only instrument on character foes is the harness pin above.
+Pointing the chart at them is DESIGN 3o's first prerequisite. Re-pinned 2026-09-12
 at 3n-ii: 3d recorded 97/84/77/46/3 and **3m moved it** without the doc saying
 so, which is how "the anchor must not move" was violated without anyone seeing
 it. Checked out and re-run, `npm run chart` gives the 3d numbers at `397a454`

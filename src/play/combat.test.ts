@@ -6,6 +6,7 @@ import {
   concludeCombat, foeSpecies, notableEvents, takeCombatAction,
 } from './combat.ts';
 import { scaleFoe } from '../combat/statblock.ts';
+import { composition, kindForFloor } from '../combat/encounter.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { speciesFor } from '../character/species.ts';
 import { bandOf, livesAt, packAt } from '../character/habitat.ts';
@@ -609,4 +610,32 @@ test('the word and the body agree: a foe is what it is called', () => {
       assert.ok(foe.name.includes(foe.kind!), `${foe.name} names neither a creature nor its own kind`);
     }
   }
+});
+
+/*
+ * ANCHOR PLUS DELTA, 2026-09-13. Since 3n a crowd foe's abilities were raw
+ * `scaleFoe`, so its kind's template sat on its sheet and never reached the
+ * fight — while a world stored before kinds still got it through `makeFoe`. The
+ * anchor keeps the curve; the kind is the delta on top of it, as it always was.
+ */
+test("a foe fights with its kind's template on top of the anchor", () => {
+  const kinds = speciesFor(11);
+  let felt = 0;
+  for (const floor of [2, 5, 9, 14, 22]) {
+    const base = onFloorTwo();
+    const danger = Math.max(1, floor);
+    const region = { ...base.world.regions['floor-2'], floor, danger, creatures: ['a', 'b', 'c'] };
+    const start = { ...base, world: { ...base.world, seed: 11, species: kinds, regions: { 'floor-2': region } } };
+
+    const roles = composition(danger, kindForFloor(floor));
+    for (const [i, foe] of foesOf(beginEncounter(start)).entries()) {
+      const anchor = scaleFoe(danger, roles[i]).abilities;
+      const template = kinds.find((k) => k.id === foe.kind)!.template ?? {};
+      if (Object.values(template).some((by) => by)) felt++;
+      for (const a of ABILITIES) {
+        assert.equal(foe.abilities[a], anchor[a] + (template[a] ?? 0), `floor ${floor} ${foe.kind} ${a}: the kind never reached the fight`);
+      }
+    }
+  }
+  assert.ok(felt > 0, 'no foe had a template, so this asserts nothing');
 });

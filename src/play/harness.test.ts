@@ -71,19 +71,30 @@ test('a climber with no hands does not set out wielding a sword', () => {
   assert.ok(equippedAttack(asPerson.pc.inventory), 'and a person sets out armed');
 });
 
-test('swapping statblocks for characters did not move the curve', () => {
-  // Stage 3n's whole risk. Built from the sheet alone, a foe's damage, AC and
-  // abilities came from its trade and gear, and a danger-1 fight fell from 95% to
-  // 53%; anchoring hit points alone left it at 75%. `scaleFoe` decides what it is
-  // like to FIGHT and the character decides who it is, so these must be equal.
+/*
+ * RESPECIFIED 2026-09-13, anchor plus delta (DESIGN 6b, the 2026-09-13 block).
+ *
+ * Was: "swapping statblocks for characters did not move the curve", asserting the
+ * two curves EQUAL. Stage 3n's whole risk: built from the sheet alone a danger-1
+ * fight fell from 95% to 53%, so `scaleFoe` decided what it is like to fight and
+ * the character only who it is. Equality held for a reason nobody meant — a
+ * character foe's kind template never reached the fight at all, which was the
+ * regression. The kind is now a delta on the anchor, as it always was for a
+ * statblock foe, so the curves agree within a BAND rather than exactly.
+ *
+ * Measured with paired seeds: −4.5 to +4.3 points at 400 trials, and +1/−4/+2
+ * at the 100 used here. Seven leaves margin and still catches a real shift. That
+ * the delta reaches the fight at all is pinned separately, in combat.test.ts, so
+ * this band cannot pass because the template has quietly gone missing again.
+ */
+test('swapping statblocks for characters moves the curve by no more than a kind', () => {
   const kinds = speciesFor(11);
   for (const danger of [1, 2, 4]) {
-    const plain = measure({ build: 'melee', danger, trials: 40 });
-    const people = measure({ build: 'melee', danger, trials: 40, kinds });
-    assert.equal(
-      Math.round(plain.rate * 100),
-      Math.round(people.rate * 100),
-      `danger ${danger}: ${Math.round(plain.rate * 100)}% against statblocks, ${Math.round(people.rate * 100)}% against characters`,
+    const plain = measure({ build: 'melee', danger, trials: 100 }).rate * 100;
+    const people = measure({ build: 'melee', danger, trials: 100, kinds }).rate * 100;
+    assert.ok(
+      Math.abs(people - plain) <= 7,
+      `danger ${danger}: ${plain}% against statblocks, ${people}% against characters`,
     );
   }
 });

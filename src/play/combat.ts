@@ -1,7 +1,7 @@
 import { autoTurn } from '../combat/ai.ts';
 import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, startCombat } from '../combat/combat.ts';
 import { buildEncounter, composition, freeCellsNear, kindForFloor } from '../combat/encounter.ts';
-import { scaleFoe } from '../combat/statblock.ts';
+import { scaleFoe, withTemplate } from '../combat/statblock.ts';
 import type { FoeRole } from '../combat/statblock.ts';
 import { crowdFighter, crowdMember } from '../character/crowd.ts';
 import type { Rank } from '../character/crowd.ts';
@@ -212,7 +212,9 @@ function crowdFoes(
       proficiency: stats.proficiency,
       // Abilities too: `attackBonus` and the damage bonus both read them, so a
       // brute's +3 str was worth 20 points of the player's win rate on its own.
-      abilities: stats.abilities,
+      // Its KIND is the one delta that goes back on: a template sums to zero, so
+      // the curve holds, and what you meet is still a kind of thing.
+      abilities: withTemplate(stats.abilities, sheet.speciesTemplate),
       attacks: [stats.attack],
       speed: stats.speed,
       /*

@@ -116,12 +116,25 @@ export type FoeSpec = {
   hunts?: string;
 };
 
+/**
+ * The anchor, plus what KIND of thing this is.
+ *
+ * One helper for both kinds of foe, because they had drifted apart: a statblock
+ * foe got its template here, and a character foe — built from a sheet and then
+ * handed `scaleFoe`'s abilities to hold the curve — silently lost it for a
+ * whole stage. A template sums to zero, so the curve holds on average and which
+ * kind you meet still matters.
+ */
+export function withTemplate(abilities: Abilities, template: Partial<Abilities> | undefined): Abilities {
+  const out = { ...abilities };
+  for (const [a, by] of Object.entries(template ?? {}) as [Ability, number][]) out[a] += by;
+  return out;
+}
+
 /** Turn a scaled role plus a name into something the combat engine can run. */
 export function makeFoe(spec: FoeSpec, danger: number): Combatant {
   const scaled = scaleFoe(danger, spec.role);
-  const abilities = { ...scaled.abilities };
-  for (const [a, by] of Object.entries(spec.template ?? {}) as [Ability, number][]) abilities[a] += by;
-  const stats = { ...scaled, abilities };
+  const stats = { ...scaled, abilities: withTemplate(scaled.abilities, spec.template) };
   return {
     id: spec.id,
     name: spec.name,
