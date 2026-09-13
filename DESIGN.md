@@ -23,6 +23,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; next is stage 4; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
+| 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module; **unblocks the rest of 6b stage 3o** (combat balance, deferred 2026-09-13) |
 | 10 | The creation page | **partial** | `app/new/page.tsx` has point buy and the interview; not the two-phase redesign with presets and a rules view |
@@ -126,6 +127,7 @@ Decided with the user:
     player's picker groups type → species → subspecies; "describe it" maps onto a
     subspecies. The player's species applies the same template.
   - Scale: at most ~60 entries per world, stored on the World.
+- **SUPERSEDED 2026-09-14 by *The kin tree*: a mutation recreates the kin tree with a new theme, rather than being a delta on a template.** Kept as history:
 - **Mutations are a `Variant`, not a trait**: `{ id, name, grant: NodeGrant }`
   from a closed authored list (grown, twisted, hungering, ancient, …). A
   subspecies and a mutation are the same shape — a delta on a template — for a
@@ -510,6 +512,9 @@ after any that touches a fight):
      user approves at every danger it covers.
 4. **Bosses are notable characters with a mutation** — created by floor
    generation, so they can be heard about first. (Was: epic foes.)
+   **Amended 2026-09-14 (user):** bosses are built NOW, **without a mutation** —
+   no mutation field, not even a marker. Mutation arrives with *The kin tree*,
+   after quests, where it recreates the tree rather than shifting a template.
 5. **Notable foes from existing people** — a person whose regard has gone bad
    enough fights you; `Person.sheet` gets its other writer.
 6. **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
@@ -644,6 +649,76 @@ tiles with floors stacked. Last.
 **This supersedes every other ordering in this file.** Four had accumulated
 ("Work in order", "Work order", "Work", "THE PLAN"), each written before the
 next round of design, and they now disagree. Read this one.
+
+## The kin tree — decided in part, not built
+
+Brainstormed with the user 2026-09-13 and 2026-09-14. **Waits on quests (step 7)**:
+its tier gates are kin quests, and mutation and species change come with it.
+
+**What.** A second skill tree beside the class tree, for what a creature is
+rather than what it trained as. Vertical: tiers stacked one above another, each
+new tier opened by a **kin quest**.
+
+**Why.** A group is already a theme rather than a stat block (it adds no ability
+shift, only its five mechanics), a species' signature skill exists and nobody
+carries it (every creature is at a subspecies, so the budget-10 species skill has
+no holder), and the class tree is about disciplines. A kind needed somewhere to
+grow. *Rejected:* every node free-standing like a book's branch (the user's first
+idea, replaced by tiers); letting a subspecies simply carry both skills (too
+small to be a tree).
+
+### Decided
+- **Shape.** Tier 1 holds the **origin** — a node that starts unlocked and carries
+  a **free action skill** — plus the **group base** and the **species skill**.
+  Every tier after that, each behind a kin quest, belongs to the **lineage**
+  (subspecies). Rarity therefore adds depth to your own lineage.
+- **Species rarity**, on the SUBSPECIES (the level every body is and the level
+  populations count): common · rare · epic · legendary · mythic. **Tiers = quests
+  + 1**: common 1 quest / 2 tiers, rare 2 / 3, epic 3 / 4, legendary 4 / 5, mythic
+  5 / 6.
+- **Rarity is a free pick at creation.** The cost of a rare kind is more quests
+  and SCARCITY: rarity applies to populations, so a mythic climber has almost no
+  kin in the world to trust, help or quest with.
+- **Buying nodes: using kin skills earns kin XP**, counted once per fight or
+  scene rather than per cast so it cannot be farmed; XP buys nodes in unlocked
+  tiers. Needs a new counter with a writer (`counters.test.ts` refuses one without).
+- **The subspecies tiers UPGRADE the species skill** into one knack rather than
+  adding a second, unrelated skill. (Assumed default, not contradicted.)
+- **Climber first.** Foes and NPCs get kin trees when their AI can cast (step 9).
+  (Assumed default, not contradicted.)
+- **Another kind's branches cannot be learned.** Instead a creature can **CHANGE
+  SPECIES through a quest or an event** — the vampire's bite. The engine decides
+  that a change happens and to what, from a closed vocabulary, as it does for
+  laws.
+- **Mutation RECREATES the tree** with a new theme drawn from the mutation's type,
+  rather than topping it up with a branch. Supersedes 6b's *Mutations are a
+  Variant*.
+- **Cross-tree requirements.** A book's branch, or any branch that grows later,
+  may require nodes in BOTH trees when it relates to both — **related means it
+  shares a stat or a grammar** with the kin tree. Today `requiresAll` only looks
+  inside one tree, and a book's first node stands free (`entry: 'parallel'`,
+  `skills/book.ts:239`).
+- **The origin's free skill may apply to the class tree too**, whose `Origin`
+  node grants nothing today (`play/skilltree.ts:470`).
+
+### Gear skills (same brainstorm)
+- **Not bought**, and usable only while EQUIPPED.
+- **Active or passive**, and new skills — not only the law exemption a `fine`
+  item already carries (`items/instance.ts:73`).
+- **Still has a requirement to use.**
+- **Conflicts with** 6b's rank cap, *"no looted piece hands over a law exemption or
+  a skill"* — settle when this is built.
+
+### Open, for the user
+- **What the group base tier contains** (being explained 2026-09-14).
+- **What carries over** when mutation or a species change rebuilds the tree.
+- **What a gear skill's requirement can be**, and where gear skills come from.
+- **What the class tree's origin skill is**, if it gets one.
+
+**Done means:** a climber has a kin tree whose tier count follows their
+subspecies' rarity; each tier past the first opens on a kin quest; kin XP from use
+buys its nodes; the origin's skill works from the first turn; a species change
+and a mutation each rebuild it by the rule the user settles.
 
 ## What is already done
 
