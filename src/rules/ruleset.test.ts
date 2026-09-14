@@ -564,7 +564,7 @@ test('each preset gets its own laws array', () => {
 /** The same claim for the law vocabulary: a constraint nothing checks is a dead field. */
 const PROVEN_CONSTRAINTS = [
   'descendBelowGround',  // travel.ts, and the panel that offers the way down
-  'crossFloors',         // the Director brief; enforced by construction until anybody can move
+  'crossFloors',         // the Director brief, and who may come for you from another floor (play/combat.ts)
   'gainLevels',          // grantXp, asked by both payouts — the climb and the fight
   'takeLoot',            // concludeCombat: both rolls skipped together
   'keepMemories',        // the crossing, in the fold

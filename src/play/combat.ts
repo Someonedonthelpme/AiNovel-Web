@@ -29,10 +29,12 @@ import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
-import { FOLK, groupOf, leavesUnder, readSpecies } from '../character/species.ts';
+import { FOLK, groupOf, leavesUnder, readSpecies, speciesIdFor } from '../character/species.ts';
+import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
+import type { Person } from '../world/types.ts';
 import { preyOf } from '../character/prey.ts';
 import { groupsAt, packAt } from '../character/habitat.ts';
-import { populationAt, sizeIn, thinPopulation } from '../character/population.ts';
+import { populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
 import type { Grown } from '../character/species.ts';
 
 /**
@@ -190,6 +192,19 @@ function crowdFoes(
   }
 
   /*
+   * SOMEBODY WITH A GRUDGE, come for you. Alone and in place of the crowd, as a
+   * holder is, so the fight stays on one anchor — elite: notable, not a boss.
+   * `beginEncounter` has already written the sheet they fight with.
+   */
+  const comer = comingFor(state, floor);
+  if (comer?.sheet) {
+    const who = memberOf(state.world, comer);
+    const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, comer.id);
+    const [cell] = freeCellsNear(grid, origin, taken, 1);
+    return [{ ...asFoe(comer.sheet, inventory, who, 'elite', 0, cell ?? origin), name: comer.name, person: comer.id }];
+  }
+
+  /*
    * NO MORE BODIES THAN LIVE HERE. This is the cap that makes the population
    * bite: the composition says what the depth is worth, and the crowd says how
    * much of it is actually available. A cleared place fields nobody at all.
@@ -273,6 +288,72 @@ function nameFor(
   return names.find((name) => foeSpecies(world, name, floor).id === subspecies);
 }
 
+/**
+ * Who comes for you this fight, if anybody (DESIGN 6b stage 5).
+ *
+ * A living person with a grudge they are not too afraid to act on
+ * (`hostileToward`), who is on this floor or whom `crossFloors` does not hold —
+ * the law's first enforcer. One at a time, the most resentful first and then by
+ * id. A landmark's living holder goes first; the grudge waits.
+ *
+ * Their floor is their home region's, because nothing moves people yet. A home
+ * no longer on the map counts as ELSEWHERE, so a missing record never carries a
+ * grudge past the law. `ponytail: no pursuit — they are simply in your next
+ * fight; 6c replaces this with movement.`
+ */
+function comingFor(state: PlayState, floor: number): Person | null {
+  const { world } = state;
+  const kinds = world.species ?? [];
+  if (kinds.length === 0) return null;
+
+  const region = activeRegion(world);
+  const holder = region?.boss ? world.people[region.boss] : undefined;
+  if (holder?.alive && holder.sheet) return null;
+
+  const mayReach = (p: Person): boolean => {
+    if (world.regions[p.homeRegion]?.floor === floor) return true;
+    const group = groupOf(kinds, memberOf(world, p).subspecies);
+    return !forbids(world, { kind: 'resident', ...(group ? { group } : {}) }, 'crossFloors');
+  };
+  const resentment = (p: Person) => axisOf(world.edges, p.id, PLAYER, 'resentment');
+
+  const [first] = Object.values(world.people)
+    .filter((p) => p.alive && hostileToward(world.edges, p.id) && mayReach(p))
+    .sort((a, b) => resentment(b) - resentment(a) || a.id.localeCompare(b.id));
+  return first ?? null;
+}
+
+/**
+ * A person, as somebody who fights: their kind, a trade drawn from the seed and
+ * their id, at the top of a crowd's standing.
+ *
+ * `ponytail: the trade is seeded, not chosen — a smith can come at you as a
+ * raider. Give people a trade when one reads wrong in play.`
+ */
+function memberOf(world: PlayState['world'], person: Person): Member {
+  let hash = (world.seed ^ 0x5eed) >>> 0;
+  for (const ch of person.id) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  return {
+    subspecies: person.sheet?.species ?? person.species ?? speciesIdFor(world.seed, person.id, world.species ?? []),
+    profession: PROFESSIONS[Math.floor(mulberry32(hash)() * PROFESSIONS.length)],
+    rank: 'veteran',
+  };
+}
+
+/**
+ * `Person.sheet`'s other writer: whoever comes for you gets a sheet the first
+ * time they fight, built at that fight's danger and kept, because a person
+ * persists. Deterministic in stored state, so a replay writes the same one.
+ */
+function armComer(state: PlayState, floor: number, danger: number): PlayState {
+  const comer = comingFor(state, floor);
+  if (!comer || comer.sheet) return state;
+
+  const { sheet } = crowdFighter(state.world.seed, state.world.species ?? [], memberOf(state.world, comer), danger, comer.id);
+  const people = { ...state.world.people, [comer.id]: { ...comer, sheet: { ...sheet, name: comer.name } } };
+  return { ...state, world: { ...state.world, people } };
+}
+
 /** A statblock role, as a standing in a crowd. */
 const RANK_OF: Record<FoeRole, Rank> = { minion: 'whelp', regular: 'ordinary', elite: 'veteran', boss: 'veteran' };
 
@@ -283,10 +364,11 @@ const RANK_OF: Record<FoeRole, Rank> = { minion: 'whelp', regular: 'ordinary', e
  * because the difficulty curve is the whole progression and cannot be
  * re-invented per encounter by a model.
  */
-export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'): PlayState {
-  if (state.combat && !state.combat.over) return state;
+export function beginEncounter(before: PlayState, startedBy?: 'player' | 'them'): PlayState {
+  if (before.combat && !before.combat.over) return before;
 
-  const region = activeRegion(state.world);
+  const region = activeRegion(before.world);
+  const state = armComer(before, region?.floor ?? 0, region?.danger ?? 0);
   const danger = region?.danger ?? 0;
   const grid = arenaFor(state.world.seed + state.world.turn, danger);
   const me = playerCombatant(state);
@@ -302,7 +384,7 @@ export function beginEncounter(state: PlayState, startedBy?: 'player' | 'them'):
   const asCharacters = crowdFoes(state, danger, region?.floor ?? 0, grid, origin, taken);
   // Nobody lives here any more, so nobody attacks: the one visible end of
   // thinning a place, and deterministic in stored state, so a replay agrees.
-  if (asCharacters && asCharacters.length === 0) return state;
+  if (asCharacters && asCharacters.length === 0) return before;
 
   const foes = asCharacters ?? buildEncounter({
     danger,

@@ -91,6 +91,21 @@ export const axisOf = (edges: Edges | undefined, from: string, to: string, axis:
 export const trustToward = (edges: Edges | undefined, who: string): number =>
   axisOf(edges, who, PLAYER, 'trust');
 
+/** How much of a grudge it takes before somebody acts on it. */
+export const GRUDGE_THRESHOLD = 3;
+
+/**
+ * Whether `who` would fight the player: a grudge they are not too afraid to act on.
+ *
+ * RESENTMENT, not regard — thinking you worthless is contempt, not a grudge. And
+ * somebody more afraid of you than angry keeps away. DERIVED, never stored: a
+ * flag would be wrong the moment an edge moved.
+ */
+export function hostileToward(edges: Edges | undefined, who: string): boolean {
+  const resentment = axisOf(edges, who, PLAYER, 'resentment');
+  return resentment >= GRUDGE_THRESHOLD && axisOf(edges, who, PLAYER, 'fear') < resentment;
+}
+
 /**
  * Move one axis, forming the edge if these two had nothing between them.
  *

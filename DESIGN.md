@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; next is stage 5; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; next is stage 6; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
@@ -516,8 +516,26 @@ after any that touches a fight):
    **Amended 2026-09-14 (user):** bosses are built NOW, **without a mutation** —
    no mutation field, not even a marker. Mutation arrives with *The kin tree*,
    after quests, where it recreates the tree rather than shifting a template.
-5. **Notable foes from existing people** — a person whose regard has gone bad
+5. **SHIPPED 2026-09-14 — ARCHITECTURE edits proposed, not yet applied.**
+   **Notable foes from existing people** — a person whose regard has gone bad
    enough fights you; `Person.sheet` gets its other writer.
+   **Decided with the user, 2026-09-14:**
+   - **The trigger is resentment, not regard.** Hostile when `resentment ≥ 3` and
+     `fear < resentment` (`social/edge.ts:44`, range −3..+4). Low regard is contempt,
+     not a grudge. Someone who is more afraid of you than angry avoids you, and
+     that gives `fear` a reader.
+   - **Derived, not stored.** `Stance` is a companion order (`hold | press |
+     protect | free`, `world/types.ts:192`), not hostility. A hostility flag would
+     go stale the moment an edge moves, so hostility is read from the edges.
+   - **They come for you.** They don't wait for you to cross paths. Before 6c
+     there is no movement, so for now this means the person joins the player's
+     next encounter. 6c replaces that with real pursuit.
+   - **Only as far as the law lets them.** Someone on another floor comes only
+     when `crossFloors` does not forbid them (`forbids(world, { kind: 'resident',
+     group }, 'crossFloors')`). `STANDARD` binds residents (`rules/ruleset.ts:342`),
+     so by default a grudge stays on its own floor. This makes the law's first
+     real enforcer: until now only the Director brief read it
+     (`llm/director.ts:363`).
 6. **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
    the engine from HP, nerve and nature; `alive: false` and `spared` get writers.
    Now that every foe is a character it HAS a persona, so nerve is real here

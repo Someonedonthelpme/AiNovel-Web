@@ -8,7 +8,7 @@ import {
 import { scaleFoe } from '../combat/statblock.ts';
 import { composition, kindForFloor } from '../combat/encounter.ts';
 import { ABILITIES } from '../combat/types.ts';
-import { speciesFor } from '../character/species.ts';
+import { speciesFor, speciesIdFor } from '../character/species.ts';
 import { bandOf, livesAt, packAt } from '../character/habitat.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { groupOf, leavesUnder } from '../character/species.ts';
@@ -19,8 +19,9 @@ import { xpToNext } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import { counterOf } from '../character/persona.ts';
 import { believes } from '../character/belief.ts';
-import { PLAYER } from '../social/edge.ts';
-import { STANDARD } from '../rules/ruleset.ts';
+import { nudge, PLAYER } from '../social/edge.ts';
+import { amend, STANDARD } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
 import { armour, weapon } from '../items/catalogue.ts';
 import { addItem, emptyInventory, equip, equippedAttack } from '../items/types.ts';
@@ -709,4 +710,77 @@ test('a boss you killed stays dead, and the next fight there is the crowd', asyn
   const next = foesOf(beginEncounter(after));
   assert.ok(next.length > 0, 'something still lives here');
   assert.ok(next.every((f) => f.person !== boss.id), 'and it is not the boss come back');
+});
+
+/*
+ * 6b stage 5: a person whose grudge has gone far enough COMES FOR YOU — as far as
+ * the law lets them. `crossFloors` binds residents in STANDARD, so by default a
+ * grudge stays on its own floor.
+ */
+
+/** Somebody holding a grudge against the player, living in `home`. */
+function grudge(state: PlayState, who: string, home: string): PlayState {
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      people: { ...state.world.people, [who]: { ...state.world.people[who], homeRegion: home } },
+      edges: nudge(state.world.edges, who, PLAYER, 'resentment', 3),
+    },
+  };
+}
+
+const withRules = (state: PlayState, rules: Ruleset): PlayState => ({ ...state, world: { ...state.world, rules } });
+
+test('a grudge on your floor comes for you: the next fight is them, alone', () => {
+  const state = grudge(populated(), 'smith', 'floor-2');
+  const after = beginEncounter(state);
+  const foes = foesOf(after);
+  assert.equal(foes.length, 1, 'they come alone');
+  assert.equal(foes[0].person, 'smith', 'the fight is the person holding the grudge');
+  const sheet = after.world.people.smith.sheet;
+  assert.ok(sheet, 'Person.sheet gets its other writer');
+
+  const anchor = scaleFoe((state.world.regions['floor-2'] as Region).danger, 'elite').abilities;
+  const template = speciesFor(11).find((k) => k.id === sheet.species)?.template ?? {};
+  for (const a of ABILITIES) assert.equal(foes[0].abilities[a], anchor[a] + (template[a] ?? 0), `${a}`);
+});
+
+test('a grudge on another floor comes only when the law lets them cross', () => {
+  const base = populated();
+  const kinds = speciesFor(11);
+  const far = grudge(
+    { ...base, world: { ...base.world, regions: { ...base.world.regions, 'floor-0': groundFloor() } } },
+    'smith', 'floor-0',
+  );
+  const smithsGroup = groupOf(kinds, speciesIdFor(11, 'smith', kinds));
+  assert.ok(smithsGroup, 'the smith is a kind of thing, or the group law says nothing');
+  const smithFights = (s: PlayState) => foesOf(beginEncounter(s)).some((f) => f.person === 'smith');
+
+  assert.equal(smithFights(far), false, 'STANDARD keeps residents on their own floor');
+  assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', null))), true, 'strike the law and they cross');
+  assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', { group: smithsGroup }))), false, 'a law on their kind holds them too');
+  assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', 'player'))), true, 'a law on the player does not bind them');
+});
+
+test('a person you killed does not come for you again', () => {
+  const base = winnable();
+  const start = grudge({ ...base, world: { ...base.world, seed: 11, species: speciesFor(11) } }, 'smith', 'floor-2');
+  const opened = beginEncounter(start);
+  assert.equal(foesOf(opened)[0]?.person, 'smith', 'the fight has to be against them for this to say anything');
+
+  const { state: fought } = fightItOut(opened);
+  assert.equal(fought.combat?.victor, 'party', 'the party has to win for this to say anything');
+  const after = concludeCombat(fought).state;
+  assert.equal(after.world.people.smith.alive, false, 'a person you killed is dead');
+  const next = foesOf(beginEncounter(after));
+  assert.ok(next.length > 0, 'something still lives here');
+  assert.ok(next.every((f) => f.person !== 'smith'), 'and it is not them come back');
+});
+
+test('on a landmark floor the holder fights first; the grudge waits', async () => {
+  const { state, boss, region } = await bossFloor(onFloorTwo());
+  const foes = foesOf(beginEncounter(grudge(state, 'smith', region.id)));
+  assert.equal(foes.length, 1, 'still one fight, one foe');
+  assert.equal(foes[0].person, boss.id, 'and it is the holder');
 });

@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  axisOf, EDGE_AXES, EDGE_MAX, EDGE_MIN, edgeBetween, nudge, nudgeAll,
+  axisOf, EDGE_AXES, EDGE_MAX, EDGE_MIN, edgeBetween, hostileToward, nudge, nudgeAll,
   openingEdges, PLAYER, reachedBy, regardedBy, setRoles, trustToward,
 } from './edge.ts';
 import type { EdgeAxis, Edges } from './edge.ts';
-import { witnessDeed } from './deed.ts';
+import { markOf, witnessDeed } from './deed.ts';
 import { applyDelta, applyTurn } from '../play/delta.ts';
 import { playState } from '../play/fixtures.ts';
 import type { TurnRecord } from '../play/state.ts';
@@ -236,6 +236,19 @@ test('an opening edge never overwrites one already earned', () => {
   const held = nudge({}, 'kell', PLAYER, 'trust', 3);
   const after = openingEdges(held, [{ id: 'kell', trust: 1 }]);
   assert.equal(trustToward(after, 'kell'), 4, 'it adds, and clamps — it does not reset');
+});
+
+/*
+ * 6b stage 5: a person whose grudge has gone far enough fights you. The axis is
+ * RESENTMENT, not regard — contempt is not a grudge — and fear holds it back.
+ */
+test('a grudge they are not too afraid to act on makes them hostile', () => {
+  const toward = (axes: Partial<Record<EdgeAxis, number>>) => nudgeAll({}, 'ora', PLAYER, axes);
+  assert.equal(hostileToward(toward({ resentment: 3 }), 'ora'), true);
+  assert.equal(hostileToward(toward({ resentment: 2 }), 'ora'), false, 'a grudge short of 3');
+  assert.equal(hostileToward(toward({ resentment: 3, fear: 3 }), 'ora'), false, 'fear holds them back');
+  assert.equal(hostileToward(toward({ regard: -3 }), 'ora'), false, 'contempt is not a grudge');
+  assert.equal(hostileToward(toward(markOf('humiliated').onToward), 'ora'), true, 'a real deed reaches it');
 });
 
 test('the Director cannot swing a relationship end to end in one turn', () => {
