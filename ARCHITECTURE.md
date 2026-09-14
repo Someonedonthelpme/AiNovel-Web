@@ -729,8 +729,8 @@ it DOES carry are not stat math:
 |---|---|---|
 | **body plan** | which of the world's slots this shape has: `beastly` has no hands or feet, `winged` has no back (wings fill it, so no pack), `serpentine` no legs | [bodyplan.ts:24](src/character/bodyplan.ts:24), narrowed for a creature at [body.ts:19](src/play/body.ts:19) |
 | **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
-| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler | [kinship.ts:25](src/character/kinship.ts:25) |
-| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born | [ruleset.ts:249](src/rules/ruleset.ts:249) |
+| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:550](src/session/genesis.ts:550)): a generated floor's arrivals get plain opening edges ([floorgen.ts:508](src/world/floorgen.ts:508)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
+| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:337](src/rules/ruleset.ts:337)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:242](src/llm/director.ts:242)) | [ruleset.ts:249](src/rules/ruleset.ts:249) |
 | **prey** | about one group in three hunts one other, of another type; a hunter attacks its quarry with ADVANTAGE — 46% to 79% between otherwise identical fighters, which is more than any template can say | [prey.ts:22](src/character/prey.ts:22), read at [conditions.ts:117](src/combat/conditions.ts:117) |
 
 A species below it gets one signature skill from `composeSkill`, and a subspecies
@@ -800,6 +800,17 @@ move from a panel without a turn ever being taken.
 ([sessions.ts:18](src/db/sessions.ts:18)), and a test says so. This has been
 broken twice: once by omitting `sheet`/`ended` from snapshots (fixed by
 migration 0001), once by climbing (fixed by making the climb an event).
+**It does not hold across a change to the fight rules, and nothing guards it**
+(promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes,
+and a fold re-resolves them with today's code ([delta.ts:565](src/play/delta.ts:565)).
+Loading folds from the latest snapshot or from origin
+([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
+snapshotted back to back ([game.ts:678](src/server/game.ts:678)), so normal play
+never re-runs an old fight. But delete the snapshots of any session older than a
+fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, and `58095bd`,
+which made worn gear count — and its old fights replay differently. No rules
+version is stamped anywhere. The test passes because it runs under one version of
+the rules.
 
 **2. Dice are recorded, never re-rolled.** Where a roll can be derived from
 state instead, it is — which is why a whole fight stores only decisions.
