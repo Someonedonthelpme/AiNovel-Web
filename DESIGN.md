@@ -516,7 +516,7 @@ after any that touches a fight):
    **Amended 2026-09-14 (user):** bosses are built NOW, **without a mutation** —
    no mutation field, not even a marker. Mutation arrives with *The kin tree*,
    after quests, where it recreates the tree rather than shifting a template.
-5. **SHIPPED 2026-09-14 — ARCHITECTURE edits proposed, not yet applied.**
+5. **SHIPPED 2026-09-14 — documented in ARCHITECTURE §9.**
    **Notable foes from existing people** — a person whose regard has gone bad
    enough fights you; `Person.sheet` gets its other writer.
    **Decided with the user, 2026-09-14:**
