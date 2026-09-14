@@ -561,6 +561,10 @@ ruler of nations.
 - A holder (a person, or the player) on a **province, a floor or a stratum**.
   Which levels can be owned at all is the world's LAW, in a closed vocabulary on
   a new `territory` axis (who may hold land, who may build).
+- **A world may be BORN with a group law** here, as part of its preset — today
+  none is, and only the Director's `amendGroup` ever writes one (ARCHITECTURE §9,
+  law row). "The hollow may not hold land" is exactly a `territory` law bound to a
+  group. (Moved from HANDOFF 2026-09-14.)
 - Acquired by **negotiation** (the Director proposes; the engine checks trust,
   standing and a coin price), **conquest** (6b's defeat outcomes against the
   holder), or **reward** (quests, step 7).
@@ -916,6 +920,13 @@ permissiveness.
 silently across two migrations — fix with step 3, which touches `skillgen.ts`.
 The ~20-entry dead-field ledger in `ARCHITECTURE.md` is the running list;
 each entry names the step that gives it a reader.
+
+**Kinship on generated floors.** Only the town born at world creation gets it
+(ARCHITECTURE §9, kinship row): a floor's arrivals are built with `openingEdges`
+alone, so people met deeper meet the climber as nobody in particular and their
+kin cannot pass rumour between them. Wire `withKin` into floor generation with
+whichever step next changes it — 6b stage 4 went in and did not. (Moved from
+HANDOFF 2026-09-14.)
 
 ---
 
