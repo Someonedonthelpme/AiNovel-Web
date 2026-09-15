@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; next is stage 6; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; next is stage 7; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
@@ -536,12 +536,26 @@ after any that touches a fight):
      so by default a grudge stays on its own floor. This makes the law's first
      real enforcer: until now only the Director brief read it
      (`llm/director.ts:363`).
-6. **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
+6. **SHIPPED 2026-09-15, without `captured` — documented in ARCHITECTURE §9.**
+   **Defeat is not death** — `killed | yielded | fled | captured`, resolved by
    the engine from HP, nerve and nature; `alive: false` and `spared` get writers.
    Now that every foe is a character it HAS a persona, so nerve is real here
    rather than deferred: a fearless thing never breaks, and a type with no safety
    need cannot. A first cut of the rules: breaking at a quarter of max HP, yield
    when cornered and flee when not.
+   **Decided with the user, 2026-09-15:**
+   - **Nerve moves the line:** `floor(maxHp × (3 − nerve) / 12)` — a quarter at 0,
+     never at +3, half at −3. "A fearless thing never breaks" falls out of it.
+   - **Undead, construct and elemental have no safety need**, so they never break.
+     No type had `safety: 0` before, which left the type rule unreachable.
+   - **A yielded foe's fate is chosen after the fight**: kill or spare.
+   - **`captured` is deferred to stage 7**, where a captive becomes somebody —
+     nothing would read one before.
+   - Defaults taken and approved with the assertions: cornered means a standing
+     enemy within one square; every beaten foe pays XP; a fled foe is simply gone;
+     a yielded foe cannot be struck mid-fight; losing leaves no choice.
+   - **Committed despite a large shift at depth** (melee d10 59 → 81, caster 7 →
+     46): tuning the curve is 3o's, which waits on step 9.
 7. **Survivors with a future** — become people (model-named, recorded in the
    turn), keep a firsthand belief and a grudge, and the rumour system carries
    their account; a returning survivor covers "mass escalates to notable".

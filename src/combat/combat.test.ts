@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mulberry32 } from '../engine/roll.ts';
-import { attack, attackOptions, checkVictory, currentActor, endTurn, movementOptions, moveTo, startCombat } from './combat.ts';
+import { attack, attackOptions, checkVictory, currentActor, endTurn, movementOptions, moveTo, settle, startCombat } from './combat.ts';
 import { addCondition, attackModifiers } from './conditions.ts';
 import { cellKey } from './grid.ts';
 import { abilities, bow, combatant, d20Sequence, sword } from './fixtures.ts';
@@ -283,4 +283,17 @@ test('a hunter has the edge on what it hunts, and only on that', () => {
 
   assert.equal(hunts(hunter, quarry), 'advantage', 'it has caught its own kind of prey');
   assert.equal(hunts(hunter, stranger), 'none', 'and nothing extra against anything else');
+});
+
+/*
+ * 6b stage 6: defeat is not death. A foe at its break line leaves the board —
+ * YIELDING when somebody is on it, FLEEING when nobody is.
+ */
+test('a foe at its break line yields if somebody is on it, and flees if not', () => {
+  const near = settle(startCombat(d20Sequence(10), [hero(), orc({ hp: 4, breaksAt: 5 })], open()));
+  assert.equal(near.broken?.orc?.as, 'yielded');
+  assert.equal(near.combatants.orc, undefined, 'and it is off the board');
+
+  const far = settle(startCombat(d20Sequence(10), [hero(), orc({ hp: 4, breaksAt: 5, pos: { x: 8, y: 0 } })], open()));
+  assert.equal(far.broken?.orc?.as, 'fled');
 });

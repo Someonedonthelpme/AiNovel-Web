@@ -20,7 +20,7 @@ import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
 import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
-import type { CombatAction } from './combat.ts';
+import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
@@ -443,7 +443,7 @@ function edgesAfter(state: PlayState, record: TurnRecord): Edges | undefined {
  * things it already resolves. A deed inferred from prose would be a model
  * deciding a consequence, which is the one thing this codebase does not allow.
  */
-function deedsIn(state: PlayState, record: TurnRecord, killed: number): Deed[] {
+function deedsIn(state: PlayState, record: TurnRecord, killed: number, spared: CombatOutcome['spared'] = []): Deed[] {
   const at = state.world.currentPlace;
   const out: Deed[] = [];
 
@@ -479,6 +479,11 @@ function deedsIn(state: PlayState, record: TurnRecord, killed: number): Deed[] {
   // foe is nobody in particular, and three rats are not three times the notoriety.
   if (killed > 0) out.push({ kind: 'killed', doer: PLAYER, at });
 
+  // Letting somebody live who had yielded — `spared`'s first writer. A person
+  // feels it as the one spared; a crowd foe let go is one deed, like a kill.
+  for (const who of spared) if (who.person) out.push({ kind: 'spared', doer: PLAYER, toward: who.person, at });
+  if (spared.some((who) => !who.person)) out.push({ kind: 'spared', doer: PLAYER, at });
+
   return out;
 }
 
@@ -496,7 +501,9 @@ function afterDeeds(world: World, deeds: readonly Deed[], rules: Ruleset): World
   const place = region?.detail === 'full'
     ? region.places.find((p) => p.id === world.currentPlace)
     : undefined;
-  const present = place?.people ?? [];
+  // Somebody spared was there to be spared, whether or not they live at this place.
+  const spared = deeds.flatMap((d) => (d.kind === 'spared' && d.toward ? [d.toward] : []));
+  const present = [...new Set([...(place?.people ?? []), ...spared])];
 
   let edges = world.edges;
   let people = world.people;
@@ -558,6 +565,7 @@ export type TurnOutcome = {
 export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   let moved = applyDelta(state, record.delta);
   let killed = 0;
+  let spared: CombatOutcome['spared'] = [];
 
   if (record.delta.startCombat) {
     const fight = beginEncounter(moved, record.delta.startedBy);
@@ -571,6 +579,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
       const outcome = concludeCombat(fighting);
       moved = outcome.state;
       killed = outcome.killed.length;
+      spared = outcome.spared;
     } else {
       // LIVE. The fight is opened and left running; the caller drives it, and
       // records the decisions onto this turn when it ends.
@@ -594,7 +603,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
 
   const player = applyDrift(moved.sheet, causes.pc, rules, kindOf(moved.sheet));
   let world = afterTraffic(
-    afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record, killed), rules),
+    afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record, killed, spared), rules),
     rules,
   );
   let shifts: AxisChange[] = [];

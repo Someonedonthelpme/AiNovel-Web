@@ -1,5 +1,5 @@
 import { autoTurn } from '../combat/ai.ts';
-import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, startCombat } from '../combat/combat.ts';
+import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, settle, startCombat } from '../combat/combat.ts';
 import { buildEncounter, composition, freeCellsNear, kindForFloor } from '../combat/encounter.ts';
 import { scaleFoe, withTemplate } from '../combat/statblock.ts';
 import type { FoeRole } from '../combat/statblock.ts';
@@ -9,7 +9,8 @@ import type { Inventory } from '../items/types.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { cellKey, distance, hasLineOfSight } from '../combat/grid.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
-import { bumpCounter } from '../character/persona.ts';
+import { bumpCounter, dispositionOf } from '../character/persona.ts';
+import type { Persona } from '../character/persona.ts';
 import { addItem } from '../items/types.ts';
 import { rollCoin, rollLoot } from '../items/catalogue.ts';
 import type { Drop } from '../items/catalogue.ts';
@@ -29,7 +30,7 @@ import { activeRegion } from '../world/travel.ts';
 import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
-import { FOLK, groupOf, leavesUnder, readSpecies, speciesIdFor } from '../character/species.ts';
+import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from '../character/species.ts';
 import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
 import type { Person } from '../world/types.ts';
 import { preyOf } from '../character/prey.ts';
@@ -188,7 +189,7 @@ function crowdFoes(
     const who = { ...bossMember(state.world.seed, kinds, floor)!, subspecies: holder.sheet.species! };
     const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, holder.id);
     const [cell] = freeCellsNear(grid, origin, taken, 1);
-    return [{ ...asFoe(holder.sheet, inventory, who, 'boss', 0, cell ?? origin), name: holder.name, person: holder.id }];
+    return [{ ...asFoe(holder.sheet, inventory, who, 'boss', 0, cell ?? origin, holder), name: holder.name, person: holder.id }];
   }
 
   /*
@@ -201,7 +202,7 @@ function crowdFoes(
     const who = memberOf(state.world, comer);
     const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, comer.id);
     const [cell] = freeCellsNear(grid, origin, taken, 1);
-    return [{ ...asFoe(comer.sheet, inventory, who, 'elite', 0, cell ?? origin), name: comer.name, person: comer.id }];
+    return [{ ...asFoe(comer.sheet, inventory, who, 'elite', 0, cell ?? origin, comer), name: comer.name, person: comer.id }];
   }
 
   /*
@@ -232,7 +233,11 @@ function crowdFoes(
     };
   });
 
-  function asFoe(sheet: CharacterSheet, inventory: Inventory, who: Member, role: FoeRole, i: number, pos: Vec): Combatant {
+  function asFoe(
+    sheet: CharacterSheet, inventory: Inventory, who: Member, role: FoeRole, i: number, pos: Vec,
+    /** Whose nerve it fights with: the person, when it is somebody. */
+    mind: Pick<Persona, 'temperament' | 'needs'> = sheet,
+  ): Combatant {
     const group = groupOf(kinds, who.subspecies);
     const hunts = group ? preyOf(state.world.seed, kinds, group) : undefined;
 
@@ -254,6 +259,7 @@ function crowdFoes(
      */
     const stats = scaleFoe(danger, role);
     const built = toCombatant(sheet, `foe${i + 1}`, inventory);
+    const breaksAt = breakPoint(stats.hp, dispositionOf(mind).nerve, needScale(kinds.find((k) => k.id === who.subspecies), 'safety'));
 
     return {
       ...built,
@@ -274,6 +280,7 @@ function crowdFoes(
       trade: who.profession,
       ...(group ? { group } : {}),
       ...(hunts ? { hunts } : {}),
+      ...(breaksAt > 0 ? { breaksAt } : {}),
     };
   }
 }
@@ -354,6 +361,17 @@ function armComer(state: PlayState, floor: number, danger: number): PlayState {
   return { ...state, world: { ...state.world, people } };
 }
 
+/**
+ * The hit points at or under which a foe breaks (DESIGN 6b stage 6).
+ *
+ * A quarter of its maximum at nerve 0, and nerve moves the line: at +3 there is
+ * none — a fearless thing never breaks — and at −3 it is half. A kind with no
+ * safety need has nothing to fear losing and never breaks at all. Zero means
+ * never, because a foe only breaks while it is still standing.
+ */
+export const breakPoint = (maxHp: number, nerve: number, safety: number): number =>
+  safety === 0 ? 0 : Math.max(0, Math.floor((maxHp * (3 - nerve)) / 12));
+
 /** A statblock role, as a standing in a crowd. */
 const RANK_OF: Record<FoeRole, Rank> = { minion: 'whelp', regular: 'ordinary', elite: 'veteran', boss: 'veteran' };
 
@@ -427,14 +445,38 @@ export type CombatAction =
   | { kind: 'move'; to: Vec }
   /** An active skill. `target` only when the skill needs one. */
   | { kind: 'skill'; skill: string; target?: string }
-  | { kind: 'end' };
+  | { kind: 'end' }
+  /** A yielded foe's fate, once the fight is won. */
+  | { kind: 'spare'; target: string }
+  | { kind: 'kill'; target: string };
 
 export type CombatOption = { action: CombatAction; label: string };
+
+/** Foes who yielded to a party that won, and have not yet been told what happens to them. */
+function awaitingFate(combat: CombatState): Combatant[] {
+  if (!combat.over || combat.victor !== 'party') return [];
+  return Object.values(combat.broken ?? {}).filter((b) => b.as === 'yielded' && !b.fate).map((b) => b.who);
+}
+
+/**
+ * Whether a fight still needs the player: it is going on, or it is won and
+ * somebody who yielded is waiting on their fate. What the server holds a fight
+ * open on, so a yielded foe cannot be concluded past.
+ */
+export const fightOpen = (state: PlayState): boolean =>
+  Boolean(state.combat) && (!state.combat!.over || awaitingFate(state.combat!).length > 0);
 
 /** Legal moves only — the same invariant the engine's option lists already hold. */
 export function combatOptions(state: PlayState): CombatOption[] {
   const combat = state.combat;
-  if (!combat || combat.over) return [];
+  if (!combat) return [];
+  // Won, and somebody yielded: what happens to them is the only thing left to decide.
+  if (combat.over) {
+    return awaitingFate(combat).flatMap((who): CombatOption[] => [
+      { action: { kind: 'kill', target: who.id }, label: `kill ${who.name}` },
+      { action: { kind: 'spare', target: who.id }, label: `spare ${who.name}` },
+    ]);
+  }
   const actor = currentActor(combat);
   if (!actor || actor.side !== 'party') return [];
 
@@ -505,7 +547,8 @@ function skillTargets(combat: CombatState, actor: Combatant, range: number): Com
 /** Is it the player's move? */
 export const awaitingPlayer = (state: PlayState): boolean => {
   const combat = state.combat;
-  if (!combat || combat.over) return false;
+  if (!combat) return false;
+  if (combat.over) return awaitingFate(combat).length > 0;
   return currentActor(combat)?.side === 'party';
 };
 
@@ -565,7 +608,20 @@ function settleCast(state: PlayState, combat: CombatState): CombatState {
   return { ...combat, combatants };
 }
 
+/** Decide what happens to a foe who yielded. Nothing is rolled: it is the player's call. */
+function decideFate(state: PlayState, action: { kind: 'spare' | 'kill'; target: string }): CombatStep {
+  const combat = state.combat;
+  const held = combat?.broken?.[action.target];
+  if (!combat || !held || !awaitingFate(combat).some((w) => w.id === action.target)) {
+    return { state, events: [], error: `${action.target} is not waiting on you` };
+  }
+  const fate = action.kind === 'kill' ? 'killed' : 'spared';
+  const broken = { ...combat.broken, [action.target]: { ...held, fate } as const };
+  return { state: { ...state, combat: { ...combat, broken } }, events: [], error: null };
+}
+
 export function takeCombatAction(state: PlayState, action: CombatAction): CombatStep {
+  if (action.kind === 'spare' || action.kind === 'kill') return decideFate(state, action);
   const combat = state.combat;
   if (!combat || combat.over) return { state, events: [], error: 'no fight is happening' };
   if (!awaitingPlayer(state)) return { state, events: [], error: 'it is not your move' };
@@ -647,7 +703,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
          * just how the two paths came to be written, and it quietly cost you
          * your movement every time you used a skill.
          */
-        next = { ...next, combatants };
+        next = settle({ ...next, combatants });
         if (!canAct(paid)) next = endTurn(rng, next).state;
         }
       }
@@ -680,6 +736,8 @@ export type CombatOutcome = {
   victor: 'party' | 'foe' | 'draw' | null;
   /** Named foes put down, for the tallies traits will read. */
   killed: string[];
+  /** Foes who yielded and were let go — the people among them by id, for the deed. */
+  spared: { name: string; person?: string }[];
   /** What the fight yielded, so the UI can say so. */
   loot: Drop[];
   coin: number;
@@ -695,11 +753,21 @@ export type CombatOutcome = {
  */
 export function concludeCombat(state: PlayState): CombatOutcome {
   const combat = state.combat;
-  if (!combat) return { state, victor: null, killed: [], loot: [], coin: 0, xp: 0, levelled: null };
+  if (!combat) return { state, victor: null, killed: [], spared: [], loot: [], coin: 0, xp: 0, levelled: null };
 
   const pc = combat.combatants['pc'];
-  const fallen = Object.values(combat.combatants).filter((c) => c.side === 'foe' && c.dead);
+  /*
+   * DEFEAT IS NOT DEATH (6b stage 6). Who broke is off the board: a yielded foe
+   * the player chose to kill is killed like any other, one they spared lives, and
+   * one that fled or was never decided on simply got away.
+   */
+  const broke = Object.values(combat.broken ?? {});
+  const executed = broke.filter((b) => b.fate === 'killed').map((b) => b.who);
+  const fallen = [...Object.values(combat.combatants).filter((c) => c.side === 'foe' && c.dead), ...executed];
   const killed = fallen.map((c) => c.name);
+  const spared = broke
+    .filter((b) => b.fate === 'spared')
+    .map((b) => ({ name: b.who.name, ...(b.who.person ? { person: b.who.person } : {}) }));
 
   /*
    * THE PLACE IS THINNER FOR IT.
@@ -722,7 +790,8 @@ export function concludeCombat(state: PlayState): CombatOutcome {
   /*
    * And a person you killed is DEAD. The first writer `Person.alive = false` has
    * ever had: until a fight could be against somebody, nothing a fight did could
-   * reach one. Only killing, for now — yielding, fleeing and capture are stage 6.
+   * reach one. Only killing: a foe who fled or was spared is still alive, and
+   * capture waits for stage 7.
    */
   let people = state.world.people;
   for (const body of fallen) {
@@ -750,7 +819,9 @@ export function concludeCombat(state: PlayState): CombatOutcome {
   // differently lucky one.
   if (combat.victor === 'party') {
     const rng = combatRng(state);
-    xp = xpForFight(floor, sheet.level, killed.length);
+    // Every foe BEATEN pays, not only the dead — or breaking would cut what a win
+    // is worth and push the player to kill.
+    xp = xpForFight(floor, sheet.level, killed.length + broke.filter((b) => b.fate !== 'killed').length);
     const granted = grantXp(sheet, xp, forbids(state.world, playerSubject(state), 'gainLevels') === null);
     sheet = granted.sheet;
     levelled = granted.levelled;
@@ -795,6 +866,7 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     },
     victor: combat.victor,
     killed,
+    spared,
     loot,
     coin: coin - state.pc.coin,
     xp,
@@ -823,6 +895,8 @@ export function notableEvents(events: CombatEvent[]): string[] {
       else if (event.hit && event.targetHpAfter <= event.targetHpBefore / 4) {
         notable.push(`${event.target} is barely standing`);
       }
+    } else if (event.kind === 'broke') {
+      notable.push(event.as === 'yielded' ? `${event.actor} yields` : `${event.actor} flees`);
     } else if (event.kind === 'deathSave' && event.died) {
       notable.push(`${event.actor} stops moving`);
     } else if (event.kind === 'deathSave' && event.outcome === 'criticalSuccess') {

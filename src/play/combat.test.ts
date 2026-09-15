@@ -2,24 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { currentActor } from '../combat/combat.ts';
 import {
-  ARENA_SIZE, arenaFor, awaitingPlayer, beginEncounter, combatOptions,
+  ARENA_SIZE, arenaFor, awaitingPlayer, beginEncounter, breakPoint, combatOptions,
   concludeCombat, foeSpecies, notableEvents, takeCombatAction,
 } from './combat.ts';
 import { scaleFoe } from '../combat/statblock.ts';
 import { composition, kindForFloor } from '../combat/encounter.ts';
 import { ABILITIES } from '../combat/types.ts';
-import { speciesFor, speciesIdFor } from '../character/species.ts';
+import { speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
 import { bandOf, livesAt, packAt } from '../character/habitat.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { groupOf, leavesUnder } from '../character/species.ts';
 import { preyOf } from '../character/prey.ts';
-import type { CombatAction } from './combat.ts';
+import type { CombatAction, CombatOption } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
 import { xpToNext } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import { counterOf } from '../character/persona.ts';
 import { believes } from '../character/belief.ts';
-import { nudge, PLAYER } from '../social/edge.ts';
+import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
@@ -73,13 +73,16 @@ function winnable(over: Partial<PlayState> = {}): PlayState {
   };
 }
 
-/** Fight to a conclusion, always taking the first legal option. */
-function fightItOut(start: PlayState, cap = 200) {
+/**
+ * Fight to a conclusion, always taking the first legal option — through the fate
+ * of anybody who yielded, since a fight is not finished until that is decided.
+ */
+function fightItOut(start: PlayState, cap = 200, pick = (options: CombatOption[]) => options[0]) {
   let state = start;
   const actions: CombatAction[] = [];
-  for (let i = 0; i < cap && state.combat && !state.combat.over; i++) {
+  for (let i = 0; i < cap && state.combat; i++) {
     if (!awaitingPlayer(state)) break;
-    const [option] = combatOptions(state);
+    const option = pick(combatOptions(state));
     if (!option) break;
     actions.push(option.action);
     state = takeCombatAction(state, option.action).state;
@@ -783,4 +786,77 @@ test('on a landmark floor the holder fights first; the grudge waits', async () =
   const foes = foesOf(beginEncounter(grudge(state, 'smith', region.id)));
   assert.equal(foes.length, 1, 'still one fight, one foe');
   assert.equal(foes[0].person, boss.id, 'and it is the holder');
+});
+
+/*
+ * 6b stage 6: DEFEAT IS NOT DEATH. A character foe breaks at a line its nerve
+ * moves, yields if somebody is on it and flees if not, and a yielded foe's fate
+ * is the player's choice once the fight is won.
+ */
+
+test('nerve moves the break line, and a kind with no fear never breaks', () => {
+  assert.equal(breakPoint(20, 0, 1), 5, 'nerve 0 breaks at a quarter');
+  assert.equal(breakPoint(20, -3, 1), 10, 'a coward breaks at half');
+  assert.equal(breakPoint(20, 3, 1), 0, 'a fearless thing never breaks');
+  assert.equal(breakPoint(20, 0, 0), 0, 'nor does a kind with no safety need');
+  for (const id of ['undead', 'construct', 'elemental']) {
+    assert.equal((TYPES.find((t) => t.id === id)!.needs as { safety?: number }).safety, 0, id);
+  }
+});
+
+/** A fight whose one foe is on its break line, beside the player or across the arena. */
+function brokenFight(where: 'beside' | 'away'): PlayState {
+  const open = openFight(populated());
+  const combat = open.combat!;
+  const pc = combat.combatants['pc'];
+  const foe = Object.values(combat.combatants).find((c) => c.side === 'foe')!;
+  const pos = where === 'beside' ? { x: pc.pos.x + 1, y: pc.pos.y } : { x: pc.pos.x + 6, y: pc.pos.y };
+  const board = { pc, [foe.id]: { ...foe, hp: 1, breaksAt: 5, pos } };
+  return takeCombatAction({ ...open, combat: { ...combat, combatants: board } }, { kind: 'end' }).state;
+}
+
+test('when the last foe yields you have won, and you still owe it a fate', () => {
+  const s = brokenFight('beside');
+  assert.equal(s.combat!.victor, 'party');
+  assert.equal(Object.values(s.combat!.broken ?? {})[0]?.as, 'yielded');
+  assert.equal(awaitingPlayer(s), true, 'the fight is not finished');
+  assert.deepEqual(combatOptions(s).map((o) => o.action.kind).sort(), ['kill', 'spare']);
+});
+
+test('spare a person and they live and remember it; kill them and they are dead', () => {
+  // Danger 4, not winnable()'s 1: at danger 1 the smith has 12 hit points and one
+  // blow carries them from above the line straight to nothing, so they never break.
+  const base = winnable();
+  const deeper = { ...(base.world.regions['floor-2'] as Region), danger: 4 };
+  const pre = grudge(
+    { ...base, world: { ...base.world, seed: 11, species: speciesFor(11), regions: { 'floor-2': deeper } } },
+    'smith', 'floor-2',
+  );
+  const choosing = (kind: 'spare' | 'kill') => fightItOut(openFight(pre), 200, (o) => o.find((x) => x.action.kind === kind) ?? o[0]).actions;
+
+  const sparing = choosing('spare');
+  assert.ok(sparing.some((a) => a.kind === 'spare'), 'the smith has to yield for this to say anything');
+  const spared = applyTurn(pre, combatTurn(sparing)).state;
+  assert.equal(spared.world.people.smith.alive, true);
+  assert.ok(axisOf(spared.world.edges, 'smith', PLAYER, 'obligation') > 0, '`spared` finally has a writer');
+
+  const killed = applyTurn(pre, combatTurn(choosing('kill'))).state;
+  assert.equal(killed.world.people.smith.alive, false);
+});
+
+test('a foe that fled or was spared is not thinned from the crowd', () => {
+  const here = (s: PlayState) => populationAt(s.world, 'floor-2', 'town', 2);
+
+  const fled = brokenFight('away');
+  assert.equal(Object.values(fled.combat!.broken ?? {})[0]?.as, 'fled');
+  assert.deepEqual(here(concludeCombat(fled).state), here(fled));
+
+  const yielded = brokenFight('beside');
+  const foe = Object.keys(yielded.combat!.broken ?? {})[0];
+  const spared = takeCombatAction(yielded, { kind: 'spare', target: foe }).state;
+  assert.deepEqual(here(concludeCombat(spared).state), here(yielded));
+});
+
+test('a statblock foe carries no break line', () => {
+  assert.ok(foesOf(beginEncounter(onFloorTwo())).every((f) => f.breaksAt === undefined));
 });

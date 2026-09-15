@@ -80,11 +80,12 @@ export const CAP = 4;
 export const TYPES = [
   { id: 'humanoid', needs: {} },
   { id: 'beast', needs: { purpose: 0, company: 2 } },
-  { id: 'construct', needs: { food: 0 } },
-  { id: 'undead', needs: { food: 0, rest: 0, company: 0 } },
+  // No safety need: nothing to fear losing, so they never break (6b stage 6).
+  { id: 'construct', needs: { food: 0, safety: 0 } },
+  { id: 'undead', needs: { food: 0, rest: 0, company: 0, safety: 0 } },
   { id: 'fey', needs: { safety: 2, purpose: 2 } },
   { id: 'fiend', needs: { food: 0, company: 0 } },
-  { id: 'elemental', needs: { food: 0, rest: 0, company: 0, purpose: 0 } },
+  { id: 'elemental', needs: { food: 0, rest: 0, company: 0, purpose: 0, safety: 0 } },
   { id: 'aberration', needs: { company: 0, safety: 2 } },
 ] as const satisfies readonly { id: string; needs: Partial<Record<Need, number>> }[];
 

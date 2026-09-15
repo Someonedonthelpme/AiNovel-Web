@@ -174,6 +174,13 @@ export type Combatant = {
    */
   person?: string;
   /**
+   * The hit points at or under which this foe BREAKS and leaves the fight
+   * (DESIGN 6b stage 6). Set by the play layer from the foe's nerve and its kind,
+   * because the engine resolves a swing and knows neither. Absent never breaks:
+   * the player, a statblock foe, and anything fearless.
+   */
+  breaksAt?: number;
+  /**
    * Party members drop to dying at 0 HP and roll death saves; foes just die.
    * `dead` is terminal in both cases.
    */
@@ -264,7 +271,22 @@ export type CombatEvent =
   | ConditionResult
   | { kind: 'roundStart'; round: number }
   | { kind: 'turnStart'; actor: string }
-  | { kind: 'combatEnd'; victor: Side | 'draw' };
+  | { kind: 'combatEnd'; victor: Side | 'draw' }
+  | { kind: 'broke'; actor: string; as: BrokeAs };
+
+/** How a foe that broke left the fight: somebody was on it, or nobody was. */
+export type BrokeAs = 'yielded' | 'fled';
+
+/**
+ * A foe that broke. Off the board, so nothing that asks who is still fighting
+ * has to learn a second way of being out of it.
+ */
+export type Broken = {
+  who: Combatant;
+  as: BrokeAs;
+  /** What the player decided for one that yielded. Absent until they do. */
+  fate?: 'spared' | 'killed';
+};
 
 export type CombatState = {
   round: number;
@@ -279,4 +301,6 @@ export type CombatState = {
   over: boolean;
   victor: Side | 'draw' | null;
   log: CombatEvent[];
+  /** Foes who broke, by id. Absent until one does. */
+  broken?: Record<string, Broken>;
 };

@@ -23,7 +23,7 @@ import { visibleSignets } from '../play/signet.ts';
 import { signetsFor } from '../play/signetbook.ts';
 import { climb, exitStatus, travelTo } from '../play/climb.ts';
 import {
-  awaitingPlayer, combatOptions, notableEvents, takeCombatAction,
+  awaitingPlayer, combatOptions, fightOpen, notableEvents, takeCombatAction,
 } from '../play/combat.ts';
 import { settleFight } from '../play/delta.ts';
 import type { CombatAction } from '../play/combat.ts';
@@ -268,7 +268,8 @@ function combatViewOf(state: PlayState, log: string[]): CombatView | null {
   return {
     round: combat.round,
     yourTurn: awaitingPlayer(state),
-    over: combat.over,
+    // Not over while somebody who yielded is waiting on you: the choice is shown as options.
+    over: !fightOpen(state),
     victor: combat.victor,
     grid: { width: combat.grid.width, height: combat.grid.height, walls: [...combat.grid.walls] },
     fighters: Object.values(combat.combatants).map((c) => ({
@@ -547,7 +548,7 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
 
   // A fight is one event, and its record cannot be written until the decisions
   // are known. Hold it open and let the caller drive it.
-  if (result.state.combat && !result.state.combat.over) {
+  if (fightOpen(result.state)) {
     fights.set(id, { pre: state, state: result.state, draft: result.record, actions: [], log: [] });
     return {
       view: viewOf(id, result.state, await transcriptOf(id), []),
@@ -668,7 +669,7 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   fight.actions.push(action);
   fight.log = [...fight.log, ...notableEvents(step.events)];
 
-  if (fight.state.combat && !fight.state.combat.over) {
+  if (fightOpen(fight.state)) {
     fights.set(id, fight);
     return { view: viewOf(id, fight.state, await transcriptOf(id), fight.log), error: null, finished: false };
   }
@@ -680,7 +681,9 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   fights.delete(id);
 
   const combat = fight.state.combat;
-  const down = Object.values(combat?.combatants ?? {}).filter((c) => c.side === 'foe' && c.dead).length;
+  // Beaten, not only dead: whoever broke is off the board.
+  const down = Object.values(combat?.combatants ?? {}).filter((c) => c.side === 'foe' && c.dead).length
+    + Object.keys(combat?.broken ?? {}).length;
   const tail = [
     ...fight.log,
     combat?.victor === 'party'

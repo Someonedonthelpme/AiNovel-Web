@@ -50,11 +50,41 @@ export function checkVictory(state: CombatState): Side | 'draw' | null {
   return null;
 }
 
+/**
+ * FOES AT THEIR BREAK LINE LEAVE THE BOARD (DESIGN 6b stage 6).
+ *
+ * One that somebody is standing on — a party member up and within a square —
+ * YIELDS; one with nobody on it FLEES. Taken off the board rather than flagged,
+ * so every check that asks who is still fighting keeps asking `dead` and needs
+ * no second rule. Deterministic in the board, so a replay breaks the same foes.
+ *
+ * `ponytail: "somebody within a square" stands in for "cornered", and a fleeing
+ * foe is simply gone — no path out is simulated. Model escape routes when being
+ * cornered needs to mean walls.`
+ */
+export function settle(state: CombatState): CombatState {
+  let next = state;
+  for (const who of Object.values(state.combatants)) {
+    if (who.side !== 'foe' || who.dead || who.breaksAt === undefined) continue;
+    if (who.hp <= 0 || who.hp > who.breaksAt) continue;
+
+    const cornered = standing(next, 'party').some((c) => distance(c.pos, who.pos) <= 1);
+    const as = cornered ? 'yielded' : 'fled';
+    const { [who.id]: _gone, ...combatants } = next.combatants;
+    next = log(
+      { ...next, combatants, broken: { ...next.broken, [who.id]: { who, as } } },
+      { kind: 'broke', actor: who.id, as },
+    );
+  }
+  return next;
+}
+
 function settleIfOver(state: CombatState): CombatState {
   if (state.over) return state;
-  const victor = checkVictory(state);
-  if (!victor) return state;
-  return log({ ...state, over: true, victor }, { kind: 'combatEnd', victor });
+  const settled = settle(state);
+  const victor = checkVictory(settled);
+  if (!victor) return settled;
+  return log({ ...settled, over: true, victor }, { kind: 'combatEnd', victor });
 }
 
 /**
