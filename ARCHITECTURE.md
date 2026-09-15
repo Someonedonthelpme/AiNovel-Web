@@ -284,7 +284,7 @@ language**) · `local.ts` / `localProvider.ts` · `similarity.ts` / `canon.ts`.
 ### `src/db/`, `src/server/`, `app/`
 `db/schema.ts` (four tables) · `db/sessions.ts` (append, fold, snapshot) ·
 `db/facts.ts` (pgvector canon) · `server/game.ts` (every view, plus the
-in-memory fight store) · seven thin route handlers under `app/api/`.
+in-memory fight store) · eight thin route handlers under `app/api/`.
 
 ---
 
@@ -952,7 +952,12 @@ which nothing imports) · `Person.recruited` / `stance` ·
 `Person.tags` · `Fact.people` (no column — dropped on write) ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
-`CharacterSheet.hitDie` (read by no formula since HP moved to VIT).
+`CharacterSheet.hitDie` (read by no formula since HP moved to VIT) ·
+`Combatant.size` ([types.ts:140](src/combat/types.ts:140)) — written `large` for a
+statblock boss and `medium` for everyone else
+([statblock.ts:156](src/combat/statblock.ts:156),
+[sheet.ts:473](src/session/sheet.ts:473)) and read by nothing, so a landmark holder
+fighting at `medium` changes nothing.
 
 **Cleared by the claim path.** — *"`CharacterSheet.signets`: never written by
 any code path … the whole branch is inert in play"* was **reversed on
@@ -1423,6 +1428,14 @@ character climbs FOR and away from.
 class decides *"which disciplines your skill tree can ever hold"* and that
 *"what a class is locked out of stays locked out"*. Disciplines were purged;
 classes now lean on stats and nothing is locked out.
+
+**A malformed request is a 500, not a 400.** Six of the eight route handlers turn
+every thrown error into `status: 500`, `POST /api/sessions` among them
+([route.ts:24](app/api/sessions/route.ts:24)). So a species choice that
+`speciesChoiceOf` refuses, with a message naming what was wrong
+([game.ts:590](src/server/game.ts:590)), reaches the client as a server fault. The
+only 400s are written by hand: a missing seed, a missing combat action, and a
+refused climb target.
 
 ---
 
