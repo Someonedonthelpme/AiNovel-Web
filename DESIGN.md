@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; next is stage 7; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; next is stage 7.1 (grudges travel, and send their people); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
@@ -556,9 +556,57 @@ after any that touches a fight):
      a yielded foe cannot be struck mid-fight; losing leaves no choice.
    - **Committed despite a large shift at depth** (melee d10 59 → 81, caster 7 →
      46): tuning the curve is 3o's, which waits on step 9.
-7. **Survivors with a future** — become people (model-named, recorded in the
+7. **SHIPPED 2026-09-17, without model naming — documented in ARCHITECTURE §9.**
+   **Survivors with a future** — become people (model-named, recorded in the
    turn), keep a firsthand belief and a grudge, and the rumour system carries
    their account; a returning survivor covers "mass escalates to notable".
+   **Decided with the user, 2026-09-17:**
+   - **Not every survivor becomes a person.** Stage 6 made breaking common, and
+     `world.people` is never compressed. A person is made only for a foe who
+     FLED BADLY BEATEN (at or under half its break line) or who was SPARED. Any
+     other survivor goes back into the crowd, which was never thinned for it.
+   - **The grudge decides whether they come back.** Fleeing badly beaten leaves
+     resentment 3 toward the player (2 for fleeing, 1 more for the beating). That
+     is exactly stage 5's threshold, so they come for you: this is how a crowd foe
+     grows into a notable. Sparing leaves the `spared` deed's obligation instead.
+   - **They fight at veteran rank.** Their sheet is built from the kind and trade
+     they fought with, and it is kept.
+   - **They live where they broke.** Home is the current region, and they are
+     added to that place's people. So they witness that turn's deeds firsthand,
+     through the machinery that already runs, and the Director sees them there.
+   - **Not model-named in this stage.** The pick was "the Writer names them in its
+     existing call", but no model is called when a fight ends (`actInCombat` →
+     `settleFight` → `appendTurn`, `server/game.ts:678`). They keep their kind's
+     word. Naming waits for a later turn that has a model call to carry it.
+   - **`captured` moves to step 9**, where joining the party gives a captive a
+     reader.
+   - **Not tested here:** the rumour system carrying their account. A new
+     survivor has no edges except toward the player, so spreading reaches nobody
+     yet.
+7.1. **Grudges travel, and send their people** (added by the user, 2026-09-17).
+   A grudge no longer drops its bearer into your next fight. It sends somebody
+   who then TRAVELS, turn by turn: *"on play turn 8 the notable sends his man
+   from city A; I am two nodes away, so he arrives in two play turns."* The
+   "send" half is the second act in *What a grudge can DO* below.
+   **Decided with the user, 2026-09-17:**
+   - **Everyone a grudge sends travels**, the bearer included. Stage 5's instant
+     `comingFor` becomes the departure, and arriving is what opens the fight.
+   - **The bearer may send somebody they `command`** instead of coming
+     themselves.
+   **Open, for the user, before assertions:**
+   - **What a step costs.** One place per play turn is the lazy unit. 6c says
+     distance is travel time, so a big forest would cost more later.
+   - **Whom they head for.** Where you ARE (perfect pursuit, retargeted each
+     turn), or where they last HEARD you were (the rumour system as the tracker,
+     which is the more dynamic option).
+   - **Crossing floors.** A stair is a link. `crossFloors` already decides who
+     may take one.
+   - **Arriving where fighting is refused.** Danger 0 (town) refuses combat. Do
+     they wait outside, or does a grudge override the refusal?
+   - **When they set out.** On the turn the grudge crosses the threshold, and
+     never again while one of theirs is already on the road?
+   - **Where it is stored.** A journey is state that must replay: a
+     `world.journeys` list that the fold advances, next to `populations`.
 8. **Parley** — a Director turn inside a fight, its verdict recorded in the
    action so the fight stays one replayable event.
 9. ~~**Subspecies** — deferred until a world needs them.~~ Folded into stage 3
@@ -566,6 +614,39 @@ after any that touches a fight):
 
 **Out of scope here:** recruiting stops at a `stance` of *willing to join*;
 joining the party is step 9 (companions).
+
+### What a grudge can DO — under discussion, 2026-09-17
+
+The user wants a grudge to act through what the person HAS: *"my foe is a noble
+on this floor, so he can send his guard after me, or ban me from a place he
+owns."* Today a grudge does exactly one thing: the person joins your next fight
+(stage 5, `comingFor`).
+
+The shape proposed: **a closed list of GRUDGE ACTS, chosen by the engine from what
+the person holds.** It is closed for the same reason laws are: an act the model
+invents enforces nothing. The model narrates the act; it never picks it.
+
+| act | what it needs | exists today? |
+|---|---|---|
+| **come themselves** | a sheet, and the law letting them reach you | built (stage 5) |
+| **send their people** | someone they may `command`: six of the eleven role kinds grant it, `power` (master/servant) among them (`social/roles.ts:112`) | the role edges and permission exist; only the Director brief reads `command` (`llm/director.ts:485`), and no fight does |
+| **bar you from what they hold** | a place they hold, and a `territory` law with a scope | no: 6c §1 and §3 |
+| **turn people against you** | a deed carried along their edges | the spread exists; a person cannot yet START a deed |
+| **put a price on you** | coin, and people who want it | no: there is no economy (6c §5) |
+| **wait** | nothing | the default when nothing else is possible |
+
+**Open, for the user:**
+- **When does a person act?** Today it happens only when a fight opens, which
+  suits "come" and "send" and nothing else. A ban or a bounty needs acting OFF
+  screen, which is step 8's missing scheduler (`world/agenda.ts` is a pure
+  function of elapsed turns; nothing stores or runs an act).
+- **Which act do they pick?** A proposed rule: the strongest act they are able
+  to take, where strongest is a fixed ranking. The alternative is weighting by
+  persona, so a cautious noble sends guards and a bold one comes himself. That
+  gives nerve a second reader.
+- **Where it goes in THE ORDER.** "Send their people" is buildable right after
+  stage 7 on existing role edges. "Bar you" belongs to 6c, and the rest to 6c or
+  step 8.
 
 **Objections recorded:** 60 templates can read alike even when their numbers
 differ — accept, revisit with real worlds. **Open (measured 2026-09-11, 3c-ii):**

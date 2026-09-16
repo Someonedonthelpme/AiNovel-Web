@@ -805,7 +805,7 @@ test('nerve moves the break line, and a kind with no fear never breaks', () => {
 });
 
 /** A fight whose foes are on their break line, beside the player or across the arena. */
-function brokenFight(where: 'beside' | 'away', howMany = 1): PlayState {
+function brokenFight(where: 'beside' | 'away', howMany = 1, hp = 1): PlayState {
   const open = openFight(populated());
   const combat = open.combat!;
   const pc = combat.combatants['pc'];
@@ -814,7 +814,7 @@ function brokenFight(where: 'beside' | 'away', howMany = 1): PlayState {
   for (let i = 0; i < howMany; i++) {
     const pos = where === 'beside' ? { x: pc.pos.x + 1, y: pc.pos.y + i } : { x: pc.pos.x + 6, y: pc.pos.y + i };
     const id = i === 0 ? foe.id : `${foe.id}-${i}`;
-    board[id] = { ...foe, id, hp: 1, breaksAt: 5, pos };
+    board[id] = { ...foe, id, hp, breaksAt: 5, pos };
   }
   return takeCombatAction({ ...open, combat: { ...combat, combatants: board } }, { kind: 'end' }).state;
 }
@@ -903,4 +903,53 @@ test('a person spared where they do not live still feels it', () => {
 
   const spared = applyTurn(pre, combatTurn(sparing)).state;
   assert.ok(axisOf(spared.world.edges, 'smith', PLAYER, 'obligation') > 0);
+});
+
+/*
+ * 6b stage 7: SURVIVORS WITH A FUTURE. A foe that fled badly beaten, or was
+ * spared, becomes somebody. One that fled with a grudge comes back, which is how
+ * a crowd foe grows into a notable.
+ */
+
+/** Who exists after that did not before. */
+const newPeople = (before: PlayState, after: PlayState): string[] =>
+  Object.keys(after.world.people).filter((id) => !before.world.people[id]);
+
+/** Who lives at a place in the current region. */
+const peopleAt = (state: PlayState, place: string): string[] =>
+  (state.world.regions[state.world.currentRegion] as Region).places.find((p) => p.id === place)?.people ?? [];
+
+test('a foe that fled badly beaten is somebody now, and holds a grudge', () => {
+  const fled = brokenFight('away', 1, 1);
+  const after = concludeCombat(fled).state;
+  const [who] = newPeople(fled, after);
+  assert.ok(who, 'a survivor with a future becomes a person');
+  assert.equal(after.world.people[who].homeRegion, 'floor-2');
+  assert.ok(peopleAt(after, 'town').includes(who), 'and lives where it broke');
+  assert.ok(after.world.people[who].sheet, 'with a sheet to come back with');
+  assert.equal(axisOf(after.world.edges, who, PLAYER, 'resentment'), 3);
+});
+
+test('a foe that fled lightly goes back to the crowd', () => {
+  const fled = brokenFight('away', 1, 3);  // 3 is above half its line of 5
+  assert.deepEqual(newPeople(fled, concludeCombat(fled).state), []);
+});
+
+test('a spared crowd foe is somebody, and the deed is toward them', () => {
+  const yielded = brokenFight('beside');
+  const target = Object.keys(yielded.combat!.broken!)[0];
+  const out = concludeCombat(takeCombatAction(yielded, { kind: 'spare', target }).state);
+  const [who] = newPeople(yielded, out.state);
+  assert.ok(who);
+  assert.equal(out.spared[0].person, who, 'so `spared` lands on them');
+});
+
+test('a survivor with a grudge comes back: a crowd foe grown into a notable', () => {
+  const fled = brokenFight('away', 1, 1);
+  const after = concludeCombat(fled).state;
+  const [who] = newPeople(fled, after);
+  assert.ok(who, 'there has to be a survivor for this to say anything');
+  const foes = foesOf(beginEncounter(after));
+  assert.equal(foes.length, 1);
+  assert.equal(foes[0].person, who);
 });

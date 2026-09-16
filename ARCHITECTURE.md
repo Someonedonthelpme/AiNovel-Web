@@ -149,7 +149,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:411](src/play/combat.ts:411)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:280](src/character/crowd.ts:280)) by `crowdFoes` ([play/combat.ts:162](src/play/combat.ts:162)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:413](src/play/combat.ts:413)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:280](src/character/crowd.ts:280)) by `crowdFoes` ([play/combat.ts:164](src/play/combat.ts:164)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -232,9 +232,9 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
-| `crossFloors` | movement | the Director brief ([director.ts:363](src/llm/director.ts:363)), and who may come for you from another floor ([combat.ts:323](src/play/combat.ts:323)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:825](src/play/combat.ts:825)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:833](src/play/combat.ts:833)) |
+| `crossFloors` | movement | the Director brief ([director.ts:363](src/llm/director.ts:363)), and who may come for you from another floor ([combat.ts:325](src/play/combat.ts:325)) — see §12 |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:872](src/play/combat.ts:872)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:880](src/play/combat.ts:880)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:211](src/play/climb.ts:211)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
@@ -619,11 +619,11 @@ A place holds cohorts of (subspecies, profession, size), and the draw is weighte
 by size ([crowd.ts:83](src/character/crowd.ts:83)), so a lineage that has been
 hunted down is rarer to meet. Two readers make that more than bookkeeping: the
 encounter fields **no more bodies than live there**
-([play/combat.ts:213](src/play/combat.ts:213)), and a place cleared out **opens no
-fight at all** ([play/combat.ts:405](src/play/combat.ts:405)). Each body carries
+([play/combat.ts:215](src/play/combat.ts:215)), and a place cleared out **opens no
+fight at all** ([play/combat.ts:407](src/play/combat.ts:407)). Each body carries
 the cohort it came from — `Combatant.kind` and `trade`
 ([combat/types.ts:167](src/combat/types.ts:167)) — so what dies is taken out of
-the population it came from ([play/combat.ts:781](src/play/combat.ts:781)),
+the population it came from ([play/combat.ts:780](src/play/combat.ts:780)),
 whoever won.
 
 "No population here" and "nothing lives here any more" are **different answers**
@@ -636,11 +636,11 @@ naming a foe `names[i % names.length]` meant a floor of undead could be handed a
 wolf's name; the name now **follows the lineage** — whichever creature word maps
 to this body is what it is called — and a lineage no word covers wears its own
 kind, because the engine invents no words
-([play/combat.ts:289](src/play/combat.ts:289)).
+([play/combat.ts:291](src/play/combat.ts:291)).
 
 `scaleFoe` still decides what it is like to **fight**: hit points, AC,
 proficiency, the attack it swings, its speed — and its abilities, **plus its kind's
-template** ([play/combat.ts:275](src/play/combat.ts:275)), through the same
+template** ([play/combat.ts:277](src/play/combat.ts:277)), through the same
 `withTemplate` a statblock foe has always had
 ([statblock.ts:128](src/combat/statblock.ts:128)). Amended 2026-09-13: from 3n
 until then a character foe fought with raw `scaleFoe` abilities, so its kind sat
@@ -708,11 +708,11 @@ holder before anyone meets them — a person with a sheet, of the kind that live
 at that depth, decided by the seed and the floor alone so the model's name for
 them changes nothing about what they are ([crowd.ts:114](src/character/crowd.ts:114)).
 While they live, the fight on that floor is against THEM, alone, on the boss
-role's anchor plus their kind ([play/combat.ts:187](src/play/combat.ts:187)); the
+role's anchor plus their kind ([play/combat.ts:189](src/play/combat.ts:189)); the
 combatant carries `person`, so a holder killed is written dead — the first writer
-`Person.alive = false` has had ([play/combat.ts:796](src/play/combat.ts:796)) —
+`Person.alive = false` has had ([play/combat.ts:795](src/play/combat.ts:795)) —
 and is never counted out of a population they were not drawn from
-([play/combat.ts:787](src/play/combat.ts:787)). After that the floor's fights are
+([play/combat.ts:786](src/play/combat.ts:786)). After that the floor's fights are
 the crowd's. No mutation yet: that arrives with the kin tree, after quests. A floor
 generated before this, or one the model named nobody for, keeps the crowd boss.
 
@@ -722,22 +722,22 @@ below the resentment ([edge.ts:104](src/social/edge.ts:104)). Resentment rather
 than regard, because contempt is not a grudge; and not `Person.stance`, which is
 an order to a companion, not hostility. Whoever qualifies is in your next fight,
 alone and in place of the crowd, on the elite anchor plus their kind
-([play/combat.ts:200](src/play/combat.ts:200)). One at a time, the most resentful
+([play/combat.ts:202](src/play/combat.ts:202)). One at a time, the most resentful
 first, and a landmark's living holder before any of them
-([play/combat.ts:318](src/play/combat.ts:318)). Where they are is their
+([play/combat.ts:320](src/play/combat.ts:320)). Where they are is their
 `homeRegion`'s floor, because nothing moves people; someone on another floor comes
 only if `crossFloors` does not forbid them as a resident of their group
-([play/combat.ts:323](src/play/combat.ts:323)), so under `STANDARD` a grudge stays
+([play/combat.ts:325](src/play/combat.ts:325)), so under `STANDARD` a grudge stays
 on its own floor, and a home no longer on the map counts as another floor. Their
 sheet is written the first time they fight, at that fight's danger, and kept
-([play/combat.ts:355](src/play/combat.ts:355)); one killed is written dead the way
+([play/combat.ts:357](src/play/combat.ts:357)); one killed is written dead the way
 a holder is. Nothing pursues anybody yet: 6c replaces "in your next fight" with
 movement.
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
 ([types.ts:182](src/combat/types.ts:182)), set where it is built
-([play/combat.ts:262](src/play/combat.ts:262)): `floor(maxHp × (3 − nerve) / 12)`
-([play/combat.ts:372](src/play/combat.ts:372)) — a quarter at nerve 0, half at −3,
+([play/combat.ts:264](src/play/combat.ts:264)): `floor(maxHp × (3 − nerve) / 12)`
+([play/combat.ts:374](src/play/combat.ts:374)) — a quarter at nerve 0, half at −3,
 none at +3 — and none at all for a kind with no safety need, which is undead,
 construct and elemental ([species.ts:84](src/character/species.ts:84)). Nerve is
 the person's own for a holder or a grudge; a crowd foe's sheet is a blank persona,
@@ -751,19 +751,36 @@ means "out of the fight". A blow that carries a foe from above its line to nothi
 kills it; breaking needs a blow that leaves it standing.
 
 A yielded foe's fate is the PLAYER's once the fight is won: the fight is not
-finished while one is waiting ([play/combat.ts:466](src/play/combat.ts:466)), the
-only options are `kill` and `spare` ([:474](src/play/combat.ts:474)), and both are
+finished while one is waiting ([play/combat.ts:468](src/play/combat.ts:468)), the
+only options are `kill` and `spare` ([:476](src/play/combat.ts:476)), and both are
 `CombatAction`s, so they ride in `combatActions` and replay like any decision
-([:612](src/play/combat.ts:612)). The server holds the fight open on the same test
+([:614](src/play/combat.ts:614)). The server holds the fight open on the same test
 ([game.ts:672](src/server/game.ts:672)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
-([play/combat.ts:765](src/play/combat.ts:765)); spared writes the `spared` deed,
+([play/combat.ts:767](src/play/combat.ts:767)); spared writes the `spared` deed,
 toward the person if it was one ([delta.ts:484](src/play/delta.ts:484)), and whoever
 was spared is counted present to feel it ([delta.ts:506](src/play/delta.ts:506)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
-([play/combat.ts:824](src/play/combat.ts:824)). Losing or drawing decides nothing:
+([play/combat.ts:871](src/play/combat.ts:871)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
-until stage 7.
+until step 9, where joining the party gives it one.
+
+**Survivors with a future** (6b stage 7). A foe that FLED BADLY BEATEN — at or under
+half its break line ([play/combat.ts:817](src/play/combat.ts:817)) — or that was
+SPARED becomes a person. Any other survivor goes back into the crowd, which was
+never thinned for it, because `world.people` is never compressed and breaking is
+common. A new person's id is the region, the turn and the body
+([:823](src/play/combat.ts:823)), so a replay makes the same one. They have the
+kind and trade they fought with, at a veteran's standing
+([:942](src/play/combat.ts:942)), and keep their kind's word for a name: nothing
+calls a model when a fight ends. They live where they broke, added to that
+place's people ([:835](src/play/combat.ts:835)), so they witness the turn's deeds
+firsthand and the Director sees them there. Fleeing badly beaten leaves resentment
+`FLED_GRUDGE + BEATEN_GRUDGE`, which is 3 ([:828](src/play/combat.ts:828)):
+exactly the grudge threshold, so they come back, and a crowd foe has grown into a
+notable. A foe that already was a person gains the grudge and is not made twice. A
+spared one is the person the `spared` deed lands on
+([:844](src/play/combat.ts:844)).
 
 A world stored before the species tree still meets statblock foes: inventing a
 population for it would be inventing the bodies of creatures somebody is already
@@ -813,7 +830,7 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:165](src/combat/combat.ts:165)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:400](src/play/combat.ts:400)): acting first from 9 squares away
+([play/combat.ts:402](src/play/combat.ts:402)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
@@ -858,8 +875,9 @@ snapshotted back to back ([game.ts:679](src/server/game.ts:679)), so normal play
 never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
-grudge in place of the crowd, and stage 6, which takes a foe off the board at its
-break line — and its old fights replay differently. No rules
+grudge in place of the crowd, stage 6, which takes a foe off the board at its
+break line, and stage 7, which makes some of those foes into people — and its old
+fights replay differently. No rules
 version is stamped anywhere. The test passes because it runs under one version of
 the rules.
 
@@ -910,7 +928,7 @@ and carry weight's drag on speed did nothing in a fight: a player whose sheet sa
 AC 17 fought at 11, swinging the background's 1d6 with a d12 in hand. `fd16f7a`
 gave `toCombatant` the parameter the same day the play path was written without
 it, and no test crossed the two. It now passes the inventory
-([play/combat.ts:89](src/play/combat.ts:89)). Found building 3o's harness climber:
+([play/combat.ts:91](src/play/combat.ts:91)). Found building 3o's harness climber:
 a geared climber measured identical to an ungeared one.
 
 ### Waiting on a reader, by decision
@@ -929,19 +947,19 @@ climber today, and not a field pretending to be a mechanic.
 true until 3n-ii. A population is stored per place, the draw is weighted by what
 is left, the encounter is capped by it, and a cleared place opens no fight
 ([population.ts:124](src/character/population.ts:124),
-[play/combat.ts:213](src/play/combat.ts:213)).
+[play/combat.ts:215](src/play/combat.ts:215)).
 
 ### Confirmed dead
 
 **Cleared: `Person.sheet`** — *listed here as dead* until 6b stage 4. A landmark
 floor's holder is given one at generation ([floorgen.ts:592](src/world/floorgen.ts:592))
-and the fight reads it ([play/combat.ts:187](src/play/combat.ts:187)). `recruited`
+and the fight reads it ([play/combat.ts:189](src/play/combat.ts:189)). `recruited`
 and `stance` are still dead. Stage 5 gave it a second writer: whoever comes for you
-with a grudge gets one at their first fight ([play/combat.ts:355](src/play/combat.ts:355)).
+with a grudge gets one at their first fight ([play/combat.ts:357](src/play/combat.ts:357)).
 
 **Cleared: `Person.homeRegion`** — *listed here as dead* until 6b stage 5, which
 reads it as where a person IS, to decide whether a grudge is on your floor
-([play/combat.ts:321](src/play/combat.ts:321)). Still written only at generation;
+([play/combat.ts:323](src/play/combat.ts:323)). Still written only at generation;
 see `crossFloors` under *Enforced by construction*.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
@@ -1127,7 +1145,7 @@ would have worked.
 residents may not leave, and nothing else checks it — because nothing moves an
 NPC, so nobody ever tries."* True until 6b stage 5, when it gained its first
 enforcer: a person with a grudge on another floor comes for you only when the law
-does not forbid them ([play/combat.ts:323](src/play/combat.ts:323)). For everything
+does not forbid them ([play/combat.ts:325](src/play/combat.ts:325)). For everything
 else it is still true by construction. `Person.homeRegion` is written at
 generation and never updated, and the Director brief
 ([director.ts:363](src/llm/director.ts:363)) is the only check on what gets
@@ -1283,7 +1301,8 @@ Every balance number, and where it lives.
 | need range | 0..10 | [persona.ts:125](src/character/persona.ts:125) |
 | trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
 | grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:95](src/social/edge.ts:95) |
-| break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:372](src/play/combat.ts:372), [combat/combat.ts:71](src/combat/combat.ts:71) |
+| survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:931](src/play/combat.ts:931) |
+| break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:374](src/play/combat.ts:374), [combat/combat.ts:71](src/combat/combat.ts:71) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |
 | short / long rest turns | 1 / 8 | [rest.ts:25](src/play/rest.ts:25) |
 | base speed / floor | 6 (+AGI mod) / 3 | [sheet.ts](src/session/sheet.ts) |

@@ -9,7 +9,8 @@ import type { Inventory } from '../items/types.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { cellKey, distance, hasLineOfSight } from '../combat/grid.ts';
 import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
-import { bumpCounter, dispositionOf } from '../character/persona.ts';
+import { bumpCounter, dispositionOf, metNeeds, neutralTemperament } from '../character/persona.ts';
+import { repairVoice } from '../session/repair.ts';
 import type { Persona } from '../character/persona.ts';
 import { addItem } from '../items/types.ts';
 import { rollCoin, rollLoot } from '../items/catalogue.ts';
@@ -31,11 +32,12 @@ import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
 import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from '../character/species.ts';
-import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
-import type { Person } from '../world/types.ts';
+import { axisOf, hostileToward, nudge, PLAYER } from '../social/edge.ts';
+import type { Person, Region } from '../world/types.ts';
 import { preyOf } from '../character/prey.ts';
 import { groupsAt, packAt } from '../character/habitat.ts';
 import { populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
+import type { Profession } from '../character/population.ts';
 import type { Grown } from '../character/species.ts';
 
 /**
@@ -765,9 +767,6 @@ export function concludeCombat(state: PlayState): CombatOutcome {
   const executed = broke.filter((b) => b.fate === 'killed').map((b) => b.who);
   const fallen = [...Object.values(combat.combatants).filter((c) => c.side === 'foe' && c.dead), ...executed];
   const killed = fallen.map((c) => c.name);
-  const spared = broke
-    .filter((b) => b.fate === 'spared')
-    .map((b) => ({ name: b.who.name, ...(b.who.person ? { person: b.who.person } : {}) }));
 
   /*
    * THE PLACE IS THINNER FOR IT.
@@ -791,12 +790,60 @@ export function concludeCombat(state: PlayState): CombatOutcome {
    * And a person you killed is DEAD. The first writer `Person.alive = false` has
    * ever had: until a fight could be against somebody, nothing a fight did could
    * reach one. Only killing: a foe who fled or was spared is still alive, and
-   * capture waits for stage 7.
+   * capture waits for step 9.
    */
   let people = state.world.people;
   for (const body of fallen) {
     if (body.person && people[body.person]) people = { ...people, [body.person]: { ...people[body.person], alive: false } };
   }
+
+  /*
+   * SURVIVORS WITH A FUTURE (6b stage 7). A foe that fled BADLY BEATEN — at or
+   * under half its break line — or that was spared becomes somebody. Any other
+   * survivor goes back into the crowd, which was never thinned for it. Not every
+   * survivor, because `world.people` is never compressed and breaking is common.
+   *
+   * Fleeing leaves a grudge of exactly stage 5's threshold, so they come back:
+   * that is how a crowd foe grows into a notable. They live where they broke, so
+   * they witness this turn's deeds firsthand and the Director sees them there.
+   * Their id is the region, the turn and the body, so a replay makes the same
+   * person.
+   */
+  const here = activeRegion(state.world);
+  let edges = state.world.edges;
+  const madeHere: string[] = [];
+  const became: Record<string, string> = {};
+  for (const b of broke) {
+    const beaten = b.as === 'fled' && b.who.hp <= (b.who.breaksAt ?? 0) / 2;
+    if (!beaten && b.fate !== 'spared') continue;
+
+    let who = b.who.person;
+    if (!who) {
+      if (!here || !b.who.kind || !b.who.trade) continue;
+      who = `survivor:${here.id}:${state.world.turn}:${b.who.id}`;
+      people = { ...people, [who]: survivorOf(state, here, b.who, who) };
+      madeHere.push(who);
+    }
+    became[b.who.id] = who;
+    if (beaten) edges = nudge(edges, who, PLAYER, 'resentment', FLED_GRUDGE + BEATEN_GRUDGE);
+  }
+  const regions = here && madeHere.length
+    ? {
+        ...state.world.regions,
+        [here.id]: {
+          ...here,
+          places: here.places.map((p) => (p.id === state.world.currentPlace ? { ...p, people: [...p.people, ...madeHere] } : p)),
+        },
+      }
+    : state.world.regions;
+
+  // Whoever was spared, by the person they now are — so the deed lands on them.
+  const spared = broke
+    .filter((b) => b.fate === 'spared')
+    .map((b) => {
+      const person = became[b.who.id] ?? b.who.person;
+      return { name: b.who.name, ...(person ? { person } : {}) };
+    });
 
   let counters = state.sheet.counters;
   for (const _ of killed) counters = bumpCounter(counters, COUNTERS.kills);
@@ -847,7 +894,13 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     state: {
       ...state,
       combat: null,
-      world: { ...state.world, people, ...(populations ? { populations } : {}) },
+      world: {
+        ...state.world,
+        people,
+        ...(populations ? { populations } : {}),
+        ...(edges !== state.world.edges ? { edges } : {}),
+        ...(regions !== state.world.regions ? { regions } : {}),
+      },
       sheet,
       pc: {
         ...state.pc,
@@ -871,6 +924,39 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     coin: coin - state.pc.coin,
     xp,
     levelled,
+  };
+}
+
+/** A grudge a survivor carries for fleeing, and for the beating that made it flee. */
+const FLED_GRUDGE = 2;
+const BEATEN_GRUDGE = 1;
+
+/**
+ * A survivor, as a person: the kind and trade it fought with, at a veteran's
+ * standing, because what comes back is a notable.
+ *
+ * `ponytail: it keeps its kind's word for a name — nothing calls a model when a
+ * fight ends. Name survivors when a later turn has a model call to carry it.`
+ */
+function survivorOf(state: PlayState, region: Region, body: Combatant, id: string): Person {
+  const who: Member = { subspecies: body.kind!, profession: body.trade as Profession, rank: 'veteran' };
+  const { sheet } = crowdFighter(state.world.seed, state.world.species ?? [], who, region.danger, id);
+  return {
+    id,
+    name: body.name,
+    homeRegion: region.id,
+    oneLine: body.name,
+    tags: [],
+    species: body.kind,
+    alive: true,
+    lastSeenTurn: state.world.turn,
+    status: 'peer',
+    voice: repairVoice({ selfPronoun: '', underStress: '', addressBands: {}, particleBands: {}, tics: [] }).value,
+    temperament: neutralTemperament(),
+    needs: metNeeds(),
+    counters: {},
+    pressure: neutralTemperament(),
+    sheet: { ...sheet, name: body.name },
   };
 }
 
