@@ -804,14 +804,18 @@ test('nerve moves the break line, and a kind with no fear never breaks', () => {
   }
 });
 
-/** A fight whose one foe is on its break line, beside the player or across the arena. */
-function brokenFight(where: 'beside' | 'away'): PlayState {
+/** A fight whose foes are on their break line, beside the player or across the arena. */
+function brokenFight(where: 'beside' | 'away', howMany = 1): PlayState {
   const open = openFight(populated());
   const combat = open.combat!;
   const pc = combat.combatants['pc'];
   const foe = Object.values(combat.combatants).find((c) => c.side === 'foe')!;
-  const pos = where === 'beside' ? { x: pc.pos.x + 1, y: pc.pos.y } : { x: pc.pos.x + 6, y: pc.pos.y };
-  const board = { pc, [foe.id]: { ...foe, hp: 1, breaksAt: 5, pos } };
+  const board: Record<string, typeof pc> = { pc };
+  for (let i = 0; i < howMany; i++) {
+    const pos = where === 'beside' ? { x: pc.pos.x + 1, y: pc.pos.y + i } : { x: pc.pos.x + 6, y: pc.pos.y + i };
+    const id = i === 0 ? foe.id : `${foe.id}-${i}`;
+    board[id] = { ...foe, id, hp: 1, breaksAt: 5, pos };
+  }
   return takeCombatAction({ ...open, combat: { ...combat, combatants: board } }, { kind: 'end' }).state;
 }
 
@@ -859,4 +863,44 @@ test('a foe that fled or was spared is not thinned from the crowd', () => {
 
 test('a statblock foe carries no break line', () => {
   assert.ok(foesOf(beginEncounter(onFloorTwo())).every((f) => f.breaksAt === undefined));
+});
+
+/*
+ * Approved 2026-09-16: three guards stage 6 left untested.
+ */
+
+test('killing a holder does not thin the crowd they were never part of', async () => {
+  const { state, region } = await bossFloor(winnable(), 1);
+  const here = (s: PlayState) => populationAt(s.world, region.id, s.world.currentPlace, region.floor);
+  const after = concludeCombat(fightItOut(beginEncounter(state)).state);  // the first option kills
+  assert.ok(after.killed.length > 0, 'the holder has to die for this to say anything');
+  assert.ok(here(state), 'and the floor has to have a crowd to thin');
+  assert.deepEqual(here(after.state), here(state));
+});
+
+test('a foe that fled pays the same XP as one that was killed', () => {
+  // TWO foes: `xpForFight` pays at least one foe's worth, so a single fled foe
+  // pays the same whether or not fleeing counts, and the test would say nothing.
+  const fled = concludeCombat(brokenFight('away', 2));
+  let yielded = brokenFight('beside', 2);
+  for (const target of Object.keys(yielded.combat!.broken!)) yielded = takeCombatAction(yielded, { kind: 'kill', target }).state;
+  const killed = concludeCombat(yielded);
+  assert.equal(killed.killed.length, 2, 'both have to be killed for this to say anything');
+  assert.ok(fled.xp > 0, 'a win has to pay for this to say anything');
+  assert.equal(fled.xp, killed.xp);
+});
+
+test('a person spared where they do not live still feels it', () => {
+  const base = winnable();
+  const deeper = { ...(base.world.regions['floor-2'] as Region), danger: 4 };
+  const elsewhere = { ...deeper, places: deeper.places.map((p) => ({ ...p, people: p.people.filter((id) => id !== 'smith') })) };
+  const pre = grudge(
+    { ...base, world: { ...base.world, seed: 11, species: speciesFor(11), regions: { 'floor-2': elsewhere } } },
+    'smith', 'floor-2',
+  );
+  const sparing = fightItOut(openFight(pre), 200, (o) => o.find((x) => x.action.kind === 'spare') ?? o[0]).actions;
+  assert.ok(sparing.some((a) => a.kind === 'spare'), 'the smith has to yield for this to say anything');
+
+  const spared = applyTurn(pre, combatTurn(sparing)).state;
+  assert.ok(axisOf(spared.world.edges, 'smith', PLAYER, 'obligation') > 0);
 });
