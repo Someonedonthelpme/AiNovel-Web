@@ -8,6 +8,7 @@ import { openingEdges, PLAYER } from '../social/edge.ts';
 import { rolesFor } from '../social/roles.ts';
 import { bondsAmong } from '../world/floorgen.ts';
 import { nameRoles } from '../social/rolenames.ts';
+import { nameCalendar } from '../world/calendar.ts';
 import type { Role } from '../social/roles.ts';
 import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
@@ -647,11 +648,15 @@ export async function runGenesis(
 
   const ground = await generateGroundFloor(provider, interview, sheet, roles, seed);
 
+  // The calendar's words (7.1e). Asked LAST, and the game does without them.
+  const calendar = await nameCalendar(provider, interview.answers.world ?? '', interview.language);
+
   const world: World = {
     seed,
     language: interview.language,
     subjects,
     roles,
+    calendar,
     /*
      * The world keeps the ruleset it was BORN under, in full.
      *

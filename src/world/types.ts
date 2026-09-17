@@ -295,6 +295,8 @@ export type World = {
    */
   clock?: number;
   journeys?: import('../play/journey.ts').Journey[];
+  /** What this world calls its calendar. Absent means the fallback words (`calendarWords`). */
+  calendar?: import('./calendar.ts').CalendarWords;
   /**
    * How each region regards the player.
    *

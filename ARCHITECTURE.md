@@ -304,7 +304,7 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 **`World`** ([world/types.ts:236](src/world/types.ts:236)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:334](src/world/types.ts:334)).
+`regionIdFor(floor) = 'floor-' + floor` ([:336](src/world/types.ts:336)).
 **"One floor is one region is one integer" was true until step 6, and is now
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
@@ -326,24 +326,24 @@ anything derives from the seed alone.
   ([subjects.ts:111](src/world/subjects.ts:111)).
 - `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. Genesis
   stores the WHOLE preset rather than its name
-  ([genesis.ts:623](src/session/genesis.ts:623)), so retuning a preset cannot
+  ([genesis.ts:624](src/session/genesis.ts:624)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:263](src/world/types.ts:263)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:239](src/play/delta.ts:239)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
-  ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
+  ([genesis.ts:623](src/session/genesis.ts:623)). Stored for the same reason
   `subjects` is.
 - `strata` — the structures this world holds ([types.ts:278](src/world/types.ts:278)).
   Genesis writes one, the tower, covering floor 0 up
-  ([genesis.ts:673](src/session/genesis.ts:673)); a climb that opens a wing adds
+  ([genesis.ts:678](src/session/genesis.ts:678)); a climb that opens a wing adds
   another ([climb.ts:149](src/play/climb.ts:149)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it.
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
-- `populations` — who lives per PLACE ([types.ts:324](src/world/types.ts:324)):
+- `populations` — who lives per PLACE ([types.ts:326](src/world/types.ts:326)):
   cohorts of (subspecies, profession, size). **Absent until something has been
   killed** — a place answers from the seed until then
   ([population.ts:99](src/character/population.ts:99)), so an old world needs no
@@ -516,8 +516,8 @@ Eight calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34)
 | **Writer** ([writer.ts:243](src/llm/writer.ts:243)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:260](src/llm/writer.ts:260)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:354](src/world/floorgen.ts:354)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:138](src/world/floorgen.ts:138)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:526](src/world/floorgen.ts:526)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:141](src/world/floorgen.ts:141)); on a landmark floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:143](src/world/floorgen.ts:143)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:592](src/world/floorgen.ts:592), [:598](src/world/floorgen.ts:598)) | **yes, in full** — inside `ClimbRecord.built` |
-| **Character** ([genesis.ts:147](src/session/genesis.ts:147)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
-| **Ground floor** ([genesis.ts:333](src/session/genesis.ts:333)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
+| **Character** ([genesis.ts:148](src/session/genesis.ts:148)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
+| **Ground floor** ([genesis.ts:334](src/session/genesis.ts:334)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
 | **Subject naming** ([subjectnames.ts:50](src/world/subjectnames.ts:50)) | `SUBJECT_NAMING_SCHEMA`, t=0.9 | **words only** — the ids are given to it and it invents none | stored on `World.subjects` |
 | **Species naming** ([speciesnames.ts:57](src/character/speciesnames.ts:57)) | `SPECIES_NAMING_SCHEMA`, t=0.9 | **words only** — one call for the whole tree, so a lineage sounds like a variant of its people; a repeated word is refused and a model that is down leaves placeholders | stored on `World.species` |
@@ -799,7 +799,7 @@ it DOES carry are not stat math:
 |---|---|---|
 | **body plan** | which of the world's slots this shape has: `beastly` has no hands or feet, `winged` has no back (wings fill it, so no pack), `serpentine` no legs | [bodyplan.ts:24](src/character/bodyplan.ts:24), narrowed for a creature at [body.ts:19](src/play/body.ts:19) |
 | **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
-| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:550](src/session/genesis.ts:550)): a generated floor's arrivals get plain opening edges ([floorgen.ts:508](src/world/floorgen.ts:508)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
+| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:551](src/session/genesis.ts:551)): a generated floor's arrivals get plain opening edges ([floorgen.ts:508](src/world/floorgen.ts:508)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
 | **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:337](src/rules/ruleset.ts:337)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:242](src/llm/director.ts:242)) | [ruleset.ts:249](src/rules/ruleset.ts:249) |
 | **prey** | about one group in three hunts one other, of another type; a hunter attacks its quarry with ADVANTAGE — 46% to 79% between otherwise identical fighters, which is more than any template can say | [prey.ts:22](src/character/prey.ts:22), read at [conditions.ts:117](src/combat/conditions.ts:117) |
 
@@ -1124,7 +1124,7 @@ written by nothing … the player is always the ordinary kind"* was true until
 `50ef7c7`. Drift still reads it ([delta.ts:624](src/play/delta.ts:624)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
-([genesis.ts:272](src/session/genesis.ts:272),
+([genesis.ts:273](src/session/genesis.ts:273),
 [species.ts:156](src/character/species.ts:156)). Skipping the step still leaves
 the climber ordinary, which is now a choice rather than a gap.
 
@@ -1133,7 +1133,7 @@ nothing outside tests"* was true until `3506255`. A wing's danger is
 seeded ([floorgen.ts:557](src/world/floorgen.ts:557)) and its loot comes from
 what the model named out of `LOOT_CATEGORIES`
 ([floorgen.ts:574](src/world/floorgen.ts:574)). The genesis tower still has
-neither ([genesis.ts:673](src/session/genesis.ts:673)), which means the
+neither ([genesis.ts:678](src/session/genesis.ts:678)), which means the
 ruleset's curve and the ordinary table — identity, not a gap.
 
 ### A knock-on
@@ -1414,7 +1414,7 @@ arrives with quests (DESIGN step 7).
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
-([genesis.ts:673](src/session/genesis.ts:673)); the only writer of
+([genesis.ts:678](src/session/genesis.ts:678)); the only writer of
 `Region.exits` is a way out found in play ([delta.ts:260](src/play/delta.ts:260)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
