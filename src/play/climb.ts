@@ -2,7 +2,8 @@ import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import type { FloorResult } from '../world/floorgen.ts';
-import { ascend, descend, installRegion, traverse } from '../world/travel.ts';
+import { ascend, clockOf, descend, installRegion, linkCost, traverse } from '../world/travel.ts';
+import { advanceJourneys } from './journey.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { adopt, firsthand } from '../character/belief.ts';
 import { forbids, ruleClaim } from '../rules/ruleset.ts';
@@ -192,7 +193,11 @@ async function cross(
  * depth fall-off, because a first descent into somewhere is by definition not
  * something that can be farmed. Going back over old ground pays nothing.
  */
-function arrive(state: PlayState, world: World): { state: PlayState; xp: number; levelled: LevelUp | null } {
+function arrive(state: PlayState, crossed: World): { state: PlayState; xp: number; levelled: LevelUp | null } {
+  // A crossing is a link too (7.1b): it covers its time, and whoever is on the road covers it with you.
+  const clock = clockOf(state.world) + linkCost(crossed, state.world.currentRegion, crossed.currentRegion);
+  const world = advanceJourneys({ ...crossed, clock }, clockOf(state.world), clock);
+
   let counters = bumpCounter(state.sheet.counters, COUNTERS.floorsClimbed);
 
   const deepest = world.deepestFloor;

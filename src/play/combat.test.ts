@@ -20,6 +20,8 @@ import { COUNTERS } from './traits.ts';
 import { counterOf } from '../character/persona.ts';
 import { believes } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
+import { journeysOf, RECOVERY, setOut } from './journey.ts';
+import { linkCost } from '../world/travel.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
@@ -30,7 +32,7 @@ import { mulberry32 } from '../engine/roll.ts';
 import { generatedFloor, groundFloor, world } from '../world/fixtures.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import { FakeProvider } from '../llm/provider.ts';
-import type { PlayState, TurnRecord } from './state.ts';
+import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import type { Region } from '../world/types.ts';
 
 /** A dangerous floor, since nothing hunts at ground level. */
@@ -546,6 +548,12 @@ test('what hunts you has the edge in a real fight, both ways round', () => {
  * as the object it was, worn by the thing that carried it.
  */
 
+/** `winnable` in a world with kinds. */
+function winnableWithKinds(): PlayState {
+  const base = winnable();
+  return { ...base, world: { ...base.world, seed: 11, species: speciesFor(11) } };
+}
+
 /** A world with kinds, on a floor worth fighting on. */
 function populated(over: Partial<PlayState['world']> = {}): PlayState {
   const base = onFloorTwo();
@@ -719,23 +727,51 @@ test('a boss you killed stays dead, and the next fight there is the crowd', asyn
  * 6b stage 5: a person whose grudge has gone far enough COMES FOR YOU — as far as
  * the law lets them. `crossFloors` binds residents in STANDARD, so by default a
  * grudge stays on its own floor.
+ *
+ * RESPECIFIED 2026-09-17 (stage 7.1b, DESIGN 6b 7.1): a grudge no longer drops its
+ * bearer into your next fight. They TRAVEL, and arriving is what opens the fight.
+ * So a grudge here comes with a journey that has already reached you, unless the
+ * test says otherwise.
  */
 
-/** Somebody holding a grudge against the player, living in `home`. */
-function grudge(state: PlayState, who: string, home: string): PlayState {
+/** Somebody holding a grudge against the player, living in `home` — and, unless told not to, already arrived. */
+function grudge(state: PlayState, who: string, home: string, { arrived = true } = {}): PlayState {
+  const here = { region: state.world.currentRegion, place: state.world.currentPlace };
   return {
     ...state,
     world: {
       ...state.world,
       people: { ...state.world.people, [who]: { ...state.world.people[who], homeRegion: home } },
       edges: nudge(state.world.edges, who, PLAYER, 'resentment', 3),
+      ...(arrived ? { journeys: [...journeysOf(state.world), { who, for: who, ...here, progress: 0, departs: 0 }] } : {}),
     },
   };
 }
 
+/** A turn, played live, with this delta. */
+const takeTurn = (state: PlayState, delta: WorldDelta): PlayState =>
+  applyTurn(state, { ...combatTurn([]), combatActions: undefined, delta }).state;
+
+/** Let time pass in turns of up to three ticks, stopping if a fight opens. */
+function passTime(state: PlayState, ticks: number): PlayState {
+  let s = state;
+  for (let left = ticks; left > 0 && !s.combat; left -= Math.min(3, left)) s = takeTurn(s, { timeSpent: Math.min(3, left) });
+  return s;
+}
+
+const journeyOf = (state: PlayState, who: string) => journeysOf(state.world).find((j) => j.who === who);
+
+/** Somebody with a grudge, on the road from `place` in `region`. */
+function travelling(state: PlayState, who: string, region: string, place: string | null): PlayState {
+  const s = grudge(state, who, region, { arrived: false });
+  return { ...s, world: { ...s.world, journeys: [{ who, for: who, region, place, progress: 0, departs: 0 }] } };
+}
+
 const withRules = (state: PlayState, rules: Ruleset): PlayState => ({ ...state, world: { ...state.world, rules } });
 
-test('a grudge on your floor comes for you: the next fight is them, alone', () => {
+// Was: "a grudge on your floor comes for you: the next fight is them, alone".
+// Respecified by 7.1b: only an ARRIVED grudge is in the fight.
+test('when their journey reaches you, the fight is them, alone', () => {
   const state = grudge(populated(), 'smith', 'floor-2');
   const after = beginEncounter(state);
   const foes = foesOf(after);
@@ -749,16 +785,19 @@ test('a grudge on your floor comes for you: the next fight is them, alone', () =
   for (const a of ABILITIES) assert.equal(foes[0].abilities[a], anchor[a] + (template[a] ?? 0), `${a}`);
 });
 
-test('a grudge on another floor comes only when the law lets them cross', () => {
+// Was: "a grudge on another floor comes only when the law lets them cross", read
+// at the moment a fight opened. Respecified by 7.1b: the law is read on the ROAD —
+// a journey takes a stair only where `crossFloors` lets them.
+test('a journey takes a stair only where the law lets them cross', () => {
   const base = populated();
   const kinds = speciesFor(11);
-  const far = grudge(
+  const far = travelling(
     { ...base, world: { ...base.world, regions: { ...base.world.regions, 'floor-0': groundFloor() } } },
-    'smith', 'floor-0',
+    'smith', 'floor-0', 'town',
   );
   const smithsGroup = groupOf(kinds, speciesIdFor(11, 'smith', kinds));
   assert.ok(smithsGroup, 'the smith is a kind of thing, or the group law says nothing');
-  const smithFights = (s: PlayState) => foesOf(beginEncounter(s)).some((f) => f.person === 'smith');
+  const smithFights = (s: PlayState) => foesOf(passTime(s, 30)).some((f) => f.person === 'smith');
 
   assert.equal(smithFights(far), false, 'STANDARD keeps residents on their own floor');
   assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', null))), true, 'strike the law and they cross');
@@ -781,7 +820,8 @@ test('a person you killed does not come for you again', () => {
   assert.ok(next.every((f) => f.person !== 'smith'), 'and it is not them come back');
 });
 
-test('on a landmark floor the holder fights first; the grudge waits', async () => {
+// Was: "... the grudge waits". Respecified by 7.1b: it is an ARRIVED grudge that waits.
+test('on a landmark floor the holder fights first; an arrived grudge waits', async () => {
   const { state, boss, region } = await bossFloor(onFloorTwo());
   const foes = foesOf(beginEncounter(grudge(state, 'smith', region.id)));
   assert.equal(foes.length, 1, 'still one fight, one foe');
@@ -944,12 +984,71 @@ test('a spared crowd foe is somebody, and the deed is toward them', () => {
   assert.equal(out.spared[0].person, who, 'so `spared` lands on them');
 });
 
+// Was: the survivor was simply in the next fight. Respecified by 7.1b: they SET
+// OUT, recover first, and the fight opens when they arrive.
 test('a survivor with a grudge comes back: a crowd foe grown into a notable', () => {
   const fled = brokenFight('away', 1, 1);
-  const after = concludeCombat(fled).state;
-  const [who] = newPeople(fled, after);
+  const out = concludeCombat(fled);
+  const [who] = newPeople(fled, out.state);
   assert.ok(who, 'there has to be a survivor for this to say anything');
-  const foes = foesOf(beginEncounter(after));
+  assert.deepEqual(out.fled, [who]);
+
+  const after = { ...out.state, world: setOut(fled.world, out.state.world, out.fled) };
+  assert.ok(journeyOf(after, who), 'the grudge sets out');
+  assert.equal(foesOf(passTime(after, RECOVERY - 1)).length, 0, 'but not before they have recovered');
+  const foes = foesOf(passTime(after, RECOVERY + 3));
   assert.equal(foes.length, 1);
   assert.equal(foes[0].person, who);
+});
+
+/*
+ * 6b stage 7.1b: JOURNEYS. A grudge sets out, travels on the clock, and arriving
+ * is what opens the fight.
+ */
+
+test('a grudge that has not reached you is not in your fight', () => {
+  const s = grudge(populated(), 'smith', 'floor-2', { arrived: false });
+  assert.ok(foesOf(beginEncounter(s)).every((f) => f.person !== 'smith'));
+});
+
+test('a grudge sets out on the turn it is fed, once', () => {
+  const humiliate: WorldDelta = { deed: { kind: 'humiliated', toward: 'smith' } };
+  const s = takeTurn(populated(), humiliate);
+  assert.equal(journeysOf(s.world).filter((j) => j.for === 'smith').length, 1);
+  const again = takeTurn({ ...s, combat: null }, humiliate);
+  assert.equal(journeysOf(again.world).filter((j) => j.for === 'smith').length, 1, 'never a second party');
+});
+
+test('a journey moves along links on the clock, and arrives when the time is spent', () => {
+  const base = populated();
+  const s = travelling({ ...base, world: { ...base.world, currentPlace: 'well' } }, 'smith', 'floor-2', 'market');
+  const toTown = linkCost(s.world, 'market', 'town');
+  const toWell = linkCost(s.world, 'town', 'well');
+
+  const halfway = passTime(s, toTown);
+  assert.equal(journeyOf(halfway, 'smith')?.place, 'town');
+  assert.equal(halfway.combat, null);
+  const there = passTime(halfway, toWell);
+  assert.equal(foesOf(there)[0]?.person, 'smith', 'arriving opens the fight');
+});
+
+test('an arrival-opened fight replays from the log', () => {
+  const start = grudge(winnableWithKinds(), 'smith', 'floor-2');
+  const draft: TurnRecord = { ...combatTurn([]), combatActions: undefined, delta: {} };
+  const { actions } = fightItOut(applyTurn(start, draft).state);
+  assert.ok(actions.length > 0, 'a fight has to have opened for this to say anything');
+  const live = settleFight({ pre: start, draft, actions });
+  assert.deepEqual(live.state, foldPlay(start, [live.record]));
+});
+
+test('where fighting is refused they wait at the gate, and strike once you are somewhere it is not', () => {
+  const base = populated();
+  const town = { ...base, world: { ...base.world, regions: { ...base.world.regions, 'floor-0': groundFloor() }, currentRegion: 'floor-0' } };
+  const s = withRules(travelling(town, 'smith', 'floor-0', 'gate'), amend(STANDARD, 'crossFloors', null));
+  const waited = passTime(s, 9);
+  assert.equal(waited.combat, null, 'no fight in town');
+  assert.equal(journeyOf(waited, 'smith')?.place, 'gate', 'and they go no further than the gate');
+
+  const out = { ...waited, world: { ...waited.world, currentRegion: 'floor-2' } };
+  assert.equal(foesOf(passTime(out, 30))[0]?.person, 'smith');
 });

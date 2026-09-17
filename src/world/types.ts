@@ -294,6 +294,7 @@ export type World = {
    * every fight. Absent means a world stored before the clock; `clockOf` reads it.
    */
   clock?: number;
+  journeys?: import('../play/journey.ts').Journey[];
   /**
    * How each region regards the player.
    *

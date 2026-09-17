@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
 import { applyClimb, climb, exitStatus, godown } from './climb.ts';
+import { clockOf, linkCost } from '../world/travel.ts';
 import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
@@ -324,4 +325,14 @@ test('a floor can begin a new wing, and the wing survives a fold', () => {
 
   const replayed = foldPlay(base, [record]);
   assert.deepEqual(replayed.world.strata?.['wing-1'], wing, 'and a reload still knows about it');
+});
+
+// 6b stage 7.1b: a climb is a crossing too, so it covers time on the world clock.
+test('climbing covers time on the clock', async () => {
+  // A clock that is not the turn count, or a world reading its turns would pass this for free.
+  const stair = atTheStair();
+  const before = { ...stair, world: { ...stair.world, clock: 100 } };
+  const r = await climb(provider(), before);
+  assert.equal(r.error, null);
+  assert.equal(clockOf(r.state.world), 100 + linkCost(before.world, 'floor-0', 'floor-1'));
 });

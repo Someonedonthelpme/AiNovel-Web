@@ -19,7 +19,8 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
-import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
+import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
+import { advanceJourneys, setOut } from './journey.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
@@ -573,11 +574,17 @@ export type TurnOutcome = {
 
 export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   let moved = applyDelta(state, record.delta);
+  // Whoever is on the road covers the time this turn took (7.1b).
+  moved = { ...moved, world: advanceJourneys(moved.world, clockOf(state.world), clockOf(moved.world)) };
   let killed = 0;
   let spared: CombatOutcome['spared'] = [];
+  let fled: string[] = [];
 
-  if (record.delta.startCombat) {
-    const fight = beginEncounter(moved, record.delta.startedBy);
+  // A fight opens when the Director says so, or when somebody ARRIVES — derived
+  // from state, so a replay opens the same one.
+  const arriving = !record.delta.startCombat && arrivalOpens(moved);
+  if (record.delta.startCombat || arriving) {
+    const fight = beginEncounter(moved, arriving ? 'them' : record.delta.startedBy);
     if (record.combatActions) {
       // REPLAY. The decisions are known, and every roll comes from state, so
       // this reproduces the original encounter exactly.
@@ -589,6 +596,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
       moved = outcome.state;
       killed = outcome.killed.length;
       spared = outcome.spared;
+      fled = outcome.fled;
     } else {
       // LIVE. The fight is opened and left running; the caller drives it, and
       // records the decisions onto this turn when it ends.
@@ -628,6 +636,9 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   // a score or a personality axis has already moved. Doing it inside the fold
   // rather than in the live loop is what keeps a replayed session unlocking the
   // same traits in the same order.
+  // A grudge fed this turn sets out, once everything that could feed it has.
+  world = setOut(state.world, world, fled);
+
   const drifted: PlayState = { ...moved, world, sheet: { ...moved.sheet, ...player.persona } };
   // This world's own traits, not the global catalogue — a replayed log has to
   // earn the same ones at the same moments.

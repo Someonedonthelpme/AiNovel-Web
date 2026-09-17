@@ -34,6 +34,7 @@ import { stratumAt } from '../world/strata.ts';
 import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from '../character/species.ts';
 import { axisOf, hostileToward, nudge, PLAYER } from '../social/edge.ts';
 import type { Person, Region } from '../world/types.ts';
+import { arrivedHere, journeysOf } from './journey.ts';
 import { preyOf } from '../character/prey.ts';
 import { groupsAt, packAt } from '../character/habitat.ts';
 import { populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
@@ -176,6 +177,21 @@ function crowdFoes(
   // EMPTY population is a different answer — this place has been cleared out —
   // and the two must not collapse, or thinning a place to nothing would quietly
   // summon back the statblock foes the population replaced.
+
+  /*
+   * SOMEBODY WITH A GRUDGE, arrived. Alone and in place of the crowd, as a
+   * holder is, so the fight stays on one anchor — elite: notable, not a boss.
+   * `beginEncounter` has already written the sheet they fight with. Before the
+   * crowd check, because a traveller is not one of this place's crowd.
+   */
+  const comer = comingFor(state);
+  if (comer?.sheet) {
+    const who = memberOf(state.world, comer);
+    const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, comer.id);
+    const [cell] = freeCellsNear(grid, origin, taken, 1);
+    return [{ ...asFoe(comer.sheet, inventory, who, 'elite', 0, cell ?? origin, comer), name: comer.name, person: comer.id }];
+  }
+
   if (!cohorts) return null;
 
   const names = region?.creatures ?? [];
@@ -194,18 +210,6 @@ function crowdFoes(
     return [{ ...asFoe(holder.sheet, inventory, who, 'boss', 0, cell ?? origin, holder), name: holder.name, person: holder.id }];
   }
 
-  /*
-   * SOMEBODY WITH A GRUDGE, come for you. Alone and in place of the crowd, as a
-   * holder is, so the fight stays on one anchor — elite: notable, not a boss.
-   * `beginEncounter` has already written the sheet they fight with.
-   */
-  const comer = comingFor(state, floor);
-  if (comer?.sheet) {
-    const who = memberOf(state.world, comer);
-    const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, comer.id);
-    const [cell] = freeCellsNear(grid, origin, taken, 1);
-    return [{ ...asFoe(comer.sheet, inventory, who, 'elite', 0, cell ?? origin, comer), name: comer.name, person: comer.id }];
-  }
 
   /*
    * NO MORE BODIES THAN LIVE HERE. This is the cap that makes the population
@@ -298,39 +302,32 @@ function nameFor(
 }
 
 /**
- * Who comes for you this fight, if anybody (DESIGN 6b stage 5).
+ * Who fights you because of a grudge, if anybody (DESIGN 6b stages 5 and 7.1b).
  *
- * A living person with a grudge they are not too afraid to act on
- * (`hostileToward`), who is on this floor or whom `crossFloors` does not hold —
- * the law's first enforcer. One at a time, the most resentful first and then by
- * id. A landmark's living holder goes first; the grudge waits.
- *
- * Their floor is their home region's, because nothing moves people yet. A home
- * no longer on the map counts as ELSEWHERE, so a missing record never carries a
- * grudge past the law. `ponytail: no pursuit — they are simply in your next
- * fight; 6c replaces this with movement.`
+ * Stage 5 dropped any hostile person into your next fight. Since 7.1b a grudge
+ * TRAVELS (`journey.ts`), and only somebody who has ARRIVED where you stand, on a
+ * grudge that is still hostile, fights. The law is read on the road, not here.
+ * One at a time: the most resentful bearer first, then by id. A landmark's
+ * living holder goes first, and an arrived grudge waits for them.
  */
-function comingFor(state: PlayState, floor: number): Person | null {
+function comingFor(state: PlayState): Person | null {
   const { world } = state;
-  const kinds = world.species ?? [];
-  if (kinds.length === 0) return null;
+  if ((world.species ?? []).length === 0) return null;
 
   const region = activeRegion(world);
   const holder = region?.boss ? world.people[region.boss] : undefined;
   if (holder?.alive && holder.sheet) return null;
 
-  const mayReach = (p: Person): boolean => {
-    if (world.regions[p.homeRegion]?.floor === floor) return true;
-    const group = groupOf(kinds, memberOf(world, p).subspecies);
-    return !forbids(world, { kind: 'resident', ...(group ? { group } : {}) }, 'crossFloors');
-  };
-  const resentment = (p: Person) => axisOf(world.edges, p.id, PLAYER, 'resentment');
-
-  const [first] = Object.values(world.people)
-    .filter((p) => p.alive && hostileToward(world.edges, p.id) && mayReach(p))
-    .sort((a, b) => resentment(b) - resentment(a) || a.id.localeCompare(b.id));
-  return first ?? null;
+  const resentment = (id: string) => axisOf(world.edges, id, PLAYER, 'resentment');
+  const [first] = arrivedHere(world)
+    .filter((j) => world.people[j.who]?.alive && world.people[j.for]?.alive && hostileToward(world.edges, j.for))
+    .sort((a, b) => resentment(b.for) - resentment(a.for) || a.who.localeCompare(b.who));
+  return first ? world.people[first.who] : null;
 }
+
+/** Whether somebody who has travelled here opens a fight this turn (7.1b). */
+export const arrivalOpens = (state: PlayState): boolean =>
+  !fightOpen(state) && (activeRegion(state.world)?.danger ?? 0) > 0 && comingFor(state) !== null;
 
 /**
  * A person, as somebody who fights: their kind, a trade drawn from the seed and
@@ -354,8 +351,8 @@ function memberOf(world: PlayState['world'], person: Person): Member {
  * time they fight, built at that fight's danger and kept, because a person
  * persists. Deterministic in stored state, so a replay writes the same one.
  */
-function armComer(state: PlayState, floor: number, danger: number): PlayState {
-  const comer = comingFor(state, floor);
+function armComer(state: PlayState, danger: number): PlayState {
+  const comer = comingFor(state);
   if (!comer || comer.sheet) return state;
 
   const { sheet } = crowdFighter(state.world.seed, state.world.species ?? [], memberOf(state.world, comer), danger, comer.id);
@@ -388,7 +385,7 @@ export function beginEncounter(before: PlayState, startedBy?: 'player' | 'them')
   if (before.combat && !before.combat.over) return before;
 
   const region = activeRegion(before.world);
-  const state = armComer(before, region?.floor ?? 0, region?.danger ?? 0);
+  const state = armComer(before, region?.danger ?? 0);
   const danger = region?.danger ?? 0;
   const grid = arenaFor(state.world.seed + state.world.turn, danger);
   const me = playerCombatant(state);
@@ -740,6 +737,7 @@ export type CombatOutcome = {
   killed: string[];
   /** Foes who yielded and were let go — the people among them by id, for the deed. */
   spared: { name: string; person?: string }[];
+  fled: string[];
   /** What the fight yielded, so the UI can say so. */
   loot: Drop[];
   coin: number;
@@ -755,7 +753,7 @@ export type CombatOutcome = {
  */
 export function concludeCombat(state: PlayState): CombatOutcome {
   const combat = state.combat;
-  if (!combat) return { state, victor: null, killed: [], spared: [], loot: [], coin: 0, xp: 0, levelled: null };
+  if (!combat) return { state, victor: null, killed: [], spared: [], fled: [], loot: [], coin: 0, xp: 0, levelled: null };
 
   const pc = combat.combatants['pc'];
   /*
@@ -837,6 +835,20 @@ export function concludeCombat(state: PlayState): CombatOutcome {
       }
     : state.world.regions;
 
+  // Whoever fled, by the person they now are — they recover before setting out.
+  const fled = broke
+    .filter((b) => b.as === 'fled')
+    .flatMap((b) => {
+      const person = became[b.who.id] ?? b.who.person;
+      return person ? [person] : [];
+    });
+
+  // A journey that ended in this fight is over, whatever the outcome.
+  const fought = new Set(
+    [...Object.values(combat.combatants), ...broke.map((b) => b.who)].flatMap((c) => (c.person ? [c.person] : [])),
+  );
+  const journeys = journeysOf(state.world).filter((j) => !fought.has(j.who));
+
   // Whoever was spared, by the person they now are — so the deed lands on them.
   const spared = broke
     .filter((b) => b.fate === 'spared')
@@ -900,6 +912,7 @@ export function concludeCombat(state: PlayState): CombatOutcome {
         ...(populations ? { populations } : {}),
         ...(edges !== state.world.edges ? { edges } : {}),
         ...(regions !== state.world.regions ? { regions } : {}),
+        ...(journeys.length !== journeysOf(state.world).length ? { journeys } : {}),
       },
       sheet,
       pc: {
@@ -920,6 +933,7 @@ export function concludeCombat(state: PlayState): CombatOutcome {
     victor: combat.victor,
     killed,
     spared,
+    fled,
     loot,
     coin: coin - state.pc.coin,
     xp,

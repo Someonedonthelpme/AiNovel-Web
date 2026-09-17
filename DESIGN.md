@@ -646,7 +646,25 @@ after any that touches a fight):
      | villager / artisan | slander you, call in a debt |
      | beggar / outcast | slander you; be the eyes that report where you are |
 
-   **Open, for 7.1d:** which roles, trades and statuses map to which station.
+   **Decided with the user, 2026-09-17, fifth pass (with 7.1b–e's assertions):**
+   - **A grudge sets out on the turn it is FED:** resentment rose this turn and is
+     at or over the threshold, and none of the bearer's parties is on the road.
+     After a fight, only a new grievance sends again.
+   - **A survivor recovers first:** someone who fled sets out 10 clock ticks later,
+     or they would strike again the turn after fleeing.
+   - **Crossing a floor costs one link**, seeded on the two regions. Inside a
+     compressed region a traveller goes straight from entrance to exit. In a
+     region where fighting is refused they go no further than its entrance: the
+     gate.
+   - **Station mapping:** noble = may `command` someone and is `superior` or holds a
+     landmark · merchant = a creditor · guard = watcher or brute trade ·
+     adventurer = hunter or raider trade, or a survivor · beggar = `inferior` with
+     no roles · villager = everyone else. Free-text `tags` are never read.
+   - **Choosing an act:** come themselves if the station allows it and nerve is at
+     least 1 (safety at 3 or below counts as low nerve); else send someone they
+     command; else call in a debt; else come if the station allows it; else wait.
+   - **Fade:** −1 every 10 ticks, every 20 if they owe the player 2 or more; nothing
+     fades on a turn the grudge is fed; a traveller turns back below the threshold.
    **7.1a SHIPPED 2026-09-17** — link costs (`world/travel.ts` `linkCost`) and the
    world clock (`World.clock`, read through `clockOf`). A move wears you by the
    time its link took. Documentation waits for the whole of 7.1.
