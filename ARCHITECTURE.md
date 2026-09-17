@@ -187,10 +187,14 @@ lives) · `progress.ts` · `pathgen.ts` / `pathwords.ts` / `skilltree.ts` /
 `allocate.ts` (the passive web; contiguity is the mechanic) · `traits.ts` /
 `traitgen.ts` / `traitbook.ts` / `emergent.ts` · `signet.ts` / `signetgen.ts` /
 `signetbook.ts` (with a reachability proof) · `graft.ts` (the one branch-growing
-mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts`.
+mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts` ·
+`journey.ts` (a grudge on the road, and its fade) · `sighting.ts` (who is out, and
+word of where the player is) · `station.ts` (what a person is, for what their
+grudge can do).
 
 ### `src/world/`
 `types.ts` · `floorgen.ts` (the only world-changing model call) · `travel.ts` ·
+`calendar.ts` (ticks, the date, night, and the world's words for them) ·
 `strata.ts` (which structure speaks for a floor, [strata.ts:13](src/world/strata.ts:13)) ·
 `lod.ts` (**places compress, people do not — and a static stratum's places do
 not either**, [lod.ts:60](src/world/lod.ts:60), [:83](src/world/lod.ts:83)) · `validate.ts` · `budget.ts` ·
@@ -317,7 +321,7 @@ at depth 0 perfectly legally. A region with no
 `exits` derives up and down from depth ([travel.ts:176](src/world/travel.ts:176))
 — every world saved before this.
 
-Eight more are OPTIONAL, and absent means *nobody has done that yet* rather than
+Eleven more are OPTIONAL, and absent means *nobody has done that yet* rather than
 *off*. Each is stored rather than derived for the same reason: a word or a
 relation that came from somewhere other than the seed is lost the next time
 anything derives from the seed alone.
@@ -339,7 +343,24 @@ anything derives from the seed alone.
   ([genesis.ts:678](src/session/genesis.ts:678)); a climb that opens a wing adds
   another ([climb.ts:149](src/play/climb.ts:149)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
-  belongs to neither end of it.
+  belongs to neither end of it. A grudge toward the player also remembers the
+  tick it last rose (`fedAt`, [edge.ts:78](src/social/edge.ts:78)), which is
+  what it fades from.
+- `clock` — world time in TEN-MINUTE ticks, separate from `turn`
+  ([types.ts:296](src/world/types.ts:296)); absent reads the turn count
+  ([travel.ts:82](src/world/travel.ts:82)). `turn` stays the count of play turns
+  because it seeds every fight. A play turn covers the time its action took: a
+  link's `travelTime` ([travel.ts:54](src/world/travel.ts:54)), a stair's
+  `stairCost` ([travel.ts:65](src/world/travel.ts:65)), an hour per rest turn
+  ([rest.ts:117](src/play/rest.ts:117)), and at least one tick otherwise.
+- `journeys` — grudges on the road ([types.ts:297](src/world/types.ts:297),
+  [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
+  got to, and when they may set out. Stored, because where a traveller is must
+  replay; advanced only by the fold.
+- `calendar` — the world's WORDS for its reckoning, days, months and seasons
+  ([types.ts:299](src/world/types.ts:299)). The shape (7-day weeks, 30-day months,
+  12 months, 4 seasons) and the start date are the engine's, dealt from the seed
+  and never stored ([calendar.ts:52](src/world/calendar.ts:52)).
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
@@ -736,7 +757,62 @@ where you stand fights (`arrivedHere`, [journey.ts:56](src/play/journey.ts:56)).
 The law is read on the road: a traveller takes a stair only where `crossFloors`
 does not forbid them as a resident of their group
 ([journey.ts:156](src/play/journey.ts:156)), so under `STANDARD` a grudge still
-stays on its own floor. The full account of journeys is written when 7.1 ends.
+stays on its own floor.
+
+**A grudge on the road** (6b stage 7.1). It SETS OUT on the turn it is fed
+([journey.ts:67](src/play/journey.ts:67)): resentment toward the player rose this
+turn and is at the threshold, the bearer has some word of where the player is,
+and none of their parties is already on the road. WHO goes depends on the bearer
+([station.ts:101](src/play/station.ts:101)): the bearer if their nerve is 1 or
+more, else somebody they command, else somebody who owes them, else the bearer
+anyway. What a bearer may send is their STATION
+([station.ts:86](src/play/station.ts:86)), derived and never stored from roles,
+trade and status ([station.ts:60](src/play/station.ts:60)). Someone who fled
+recovers for a day first ([journey.ts:36](src/play/journey.ts:36)). Each turn a
+traveller walks for the time the turn covered, toward the newest word it or its
+bearer holds ([journey.ts:96](src/play/journey.ts:96)): the cheapest route through
+a region, no further than the entrance of one where fighting is refused, and one
+stair at a time where `crossFloors` allows ([journey.ts:142](src/play/journey.ts:142)).
+ARRIVING opens the fight, decided from state so a replay opens the same one
+([delta.ts:605](src/play/delta.ts:605)). Only an arrived traveller fights, and
+only while the bearer's grudge is worth a chase
+([combat.ts:321](src/play/combat.ts:321)): 2 or more
+([edge.ts:106](src/social/edge.ts:106)), one below what it takes to set out, so a
+grudge that fades a point on the road still arrives.
+
+**Word of the player.** A `sighting` is a belief, one per person seen
+([belief.ts:44](src/character/belief.ts:44)); for sightings the NEWER account wins,
+not the surer ([sighting.ts:36](src/play/sighting.ts:36)). Each turn word passes one
+hop along people's edges ([sighting.ts:85](src/play/sighting.ts:85)), then
+whoever is where the player stands sees them firsthand
+([sighting.ts:76](src/play/sighting.ts:76), in the fold at
+[delta.ts:660](src/play/delta.ts:660)). WHO IS OUT is one function
+([sighting.ts:54](src/play/sighting.ts:54)): the place's people, less any away on
+the road, plus arrived travellers, and at night only guards and night kinds
+([sighting.ts:66](src/play/sighting.ts:66)). The Director's list of people here and
+the Writer's view read it too.
+
+**Grudges fade** ([journey.ts:228](src/play/journey.ts:228)): a point per the
+bearer's `fadeDays` unfed, 1 to 5 by temper
+([journey.ts:212](src/play/journey.ts:212)), doubled if they owe the player; the
+timer restarts at each point lost, and a traveller whose grudge falls below 2
+turns back.
+
+**Time** (7.1e). A tick is ten minutes ([calendar.ts:11](src/world/calendar.ts:11)).
+The clock reads as a date from the world's start
+([calendar.ts:58](src/world/calendar.ts:58)); night is 20:00–06:00
+([calendar.ts:168](src/world/calendar.ts:168)); the Director and the Writer are
+given the hour, the dark, the season and the date in the world's words
+([calendar.ts:177](src/world/calendar.ts:177)), which genesis asks for last, so the
+game does without them ([calendar.ts:124](src/world/calendar.ts:124)). Needs drain
+by the hour marks a turn crossed ([delta.ts:386](src/play/delta.ts:386)), faster in
+winter outside a settlement ([delta.ts:389](src/play/delta.ts:389)); winter
+([calendar.ts:27](src/world/calendar.ts:27)) also slows a wild link. About one
+group in six keeps night hours and one in six keeps to some seasons
+([habitat.ts:110](src/character/habitat.ts:110)); a group out of season is left
+out of a place's crowd ([combat.ts:177](src/play/combat.ts:177)), so a floor whose
+one group is away fields nobody, and a hunter by trade fights at night with the
+advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
 ([types.ts:182](src/combat/types.ts:182)), set where it is built
@@ -880,8 +956,9 @@ never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
 grudge in place of the crowd, stage 6, which takes a foe off the board at its
-break line, and stage 7, which makes some of those foes into people — and its old
-fights replay differently. No rules
+break line, stage 7, which makes some of those foes into people, 7.1b, which opens
+a fight when a traveller arrives, and 7.1e, which changes a crowd by season and gives
+hunters the night — and its old fights replay differently. No rules
 version is stamped anywhere. The test passes because it runs under one version of
 the rules.
 
@@ -1324,6 +1401,13 @@ Every balance number, and where it lives.
 | trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
 | grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:101](src/social/edge.ts:101) |
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:956](src/play/combat.ts:956) |
+| clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:11](src/world/calendar.ts:11) |
+| a place link / a stair | 1–3 ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:45](src/world/travel.ts:45), [:65](src/world/travel.ts:65), [:54](src/world/travel.ts:54) |
+| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:386](src/play/delta.ts:386) |
+| night | 20:00–06:00 | [calendar.ts:168](src/world/calendar.ts:168) |
+| grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:212](src/play/journey.ts:212), [edge.ts:106](src/social/edge.ts:106) |
+| recovery after fleeing | one day | [journey.ts:36](src/play/journey.ts:36) |
+| night kinds / seasonal groups | about 1 group in 6 each | [habitat.ts:110](src/character/habitat.ts:110) |
 | break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:382](src/play/combat.ts:382), [combat/combat.ts:71](src/combat/combat.ts:71) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |
 | short / long rest turns | 1 / 8 | [rest.ts:26](src/play/rest.ts:26) |
