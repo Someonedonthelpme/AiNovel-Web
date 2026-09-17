@@ -154,7 +154,8 @@ test('persona.pressureDecay reaches how fast a grudge fades', () => {
   // decay never does, so isolated moments would accumulate forever.
   const slighted = applyDrift(emptyPersona(defaultVoice()), [{ kind: 'address', tone: 'crude' }]).persona;
   const quiet = (rules: Ruleset) =>
-    Array.from({ length: 4 }, () => ({ kind: 'travel', cost: 1 } as const))
+    // Respecified by 7.1e-iv: `travel` became `time`; an empty stretch is still a quiet turn.
+    Array.from({ length: 4 }, () => ({ kind: 'time', food: 0, rest: 0 } as const))
       .reduce((who, c) => applyDrift(who, [c], rules).persona, slighted);
 
   assert.equal(quiet(tuned({ persona: { pressureDecay: 0 } })).pressure.feeling, slighted.pressure.feeling);

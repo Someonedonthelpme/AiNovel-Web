@@ -1263,3 +1263,15 @@ test('a hunter by trade fights with an edge at night', () => {
   assert.equal(armed(atHour(hunter, 23))?.nightEyed, true);
   assert.equal(armed(atHour(hunter, 12))?.nightEyed, undefined);
 });
+
+/*
+ * 6b stage 7.1e-iv: NEEDS DRAIN BY THE HOURS. Food drops a point every 4 hours,
+ * rest every 2 waking hours, counted on whole hours of the clock — not by turns.
+ */
+test('needs drain by hours passed, not by turns', () => {
+  const awake = atClock(playState(), 0);
+  const six = passTime(awake, 36);                           // six hours of talking
+  assert.equal(six.sheet.needs.food, NEED_MAX - 1, 'a point of food every four hours');
+  assert.equal(six.sheet.needs.rest, NEED_MAX - 3, 'a point of rest every two waking hours');
+  assert.deepEqual(passTime(awake, 1).sheet.needs, awake.sheet.needs, 'ten minutes costs nothing');
+});

@@ -43,10 +43,11 @@ test('needs stay inside their bounds however bad the day', () => {
   assert.equal(r.persona.needs.purpose, 0);
 });
 
-test('rest recovers what danger and travel cost', () => {
-  const worn = applyDrift(persona(), [{ kind: 'danger', level: 12 }, { kind: 'travel', cost: 3 }]);
+// Respecified by 7.1e-iv: `travel` became `time`, the hour marks a turn crossed.
+test('rest recovers what danger and time cost', () => {
+  const worn = applyDrift(persona(), [{ kind: 'danger', level: 12 }, { kind: 'time', food: 1, rest: 3 }]);
   assert.ok(worn.persona.needs.safety < NEED_MAX, 'danger costs safety');
-  assert.ok(worn.persona.needs.rest < NEED_MAX, 'travel costs rest');
+  assert.ok(worn.persona.needs.rest < NEED_MAX, 'time awake costs rest');
 
   const rested = applyDrift(worn.persona, [{ kind: 'rest', quality: 3 }]);
   assert.ok(rested.persona.needs.safety > worn.persona.needs.safety);
@@ -99,7 +100,8 @@ test('pressure bleeds off, so isolated moments never accumulate', () => {
   let current = persona();
   // One slight, then a long stretch of nothing.
   current = applyDrift(current, [{ kind: 'address', tone: 'crude' }]).persona;
-  const after = repeat(current, { kind: 'travel', cost: 1 }, 6);
+  // Respecified by 7.1e-iv: `travel` became `time`, the hour marks a turn crossed.
+  const after = repeat(current, { kind: 'time', food: 0, rest: 0 }, 6);
   assert.equal(after.persona.pressure.feeling, 0, 'the grudge faded');
   assert.deepEqual(after.changes.filter((c) => c.axis === 'feeling'), []);
 });

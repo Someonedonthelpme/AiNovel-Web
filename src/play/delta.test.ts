@@ -275,7 +275,9 @@ test('a climber of a kind that does not eat crosses a floor without getting hung
   const made = { id: 'made', name: 'the made', needs: { food: 0 } };
   const world = { ...base.world, species: [FOLK, made] };
 
-  const ordinary = applyTurn({ ...base, world }, record({ timeSpent: 3 })).state;
+  // Respecified by 7.1e-iv: food drops by the HOUR now, so the march is six hours long.
+  const march = (s: typeof base) => foldPlay(s, Array.from({ length: 12 }, () => record({ timeSpent: 3 })));
+  const ordinary = march({ ...base, world });
   assert.ok(ordinary.sheet.needs.food < NEED_MAX, 'an ordinary climber marches on their stomach');
 
   const construct = {
@@ -283,7 +285,7 @@ test('a climber of a kind that does not eat crosses a floor without getting hung
     world,
     sheet: { ...base.sheet, species: 'made' },
   };
-  const after = applyTurn(construct, record({ timeSpent: 3 })).state;
+  const after = march(construct);
 
   assert.equal(after.sheet.needs.food, NEED_MAX, 'and this one has no stomach to march on');
   assert.equal(after.sheet.needs.rest, ordinary.sheet.needs.rest, 'while the march tires it the same');
@@ -381,22 +383,15 @@ test('a world stored without a clock reads it from its turn count', () => {
   assert.equal(clockOf(old), old.turn);
 });
 
-test('a long crossing wears you down more than a short one', () => {
-  const base = playState();
-  const links = ['gate', 'market', 'well'];
-  let found: { seed: number; quick: string; slow: string } | null = null;
-  for (let seed = 0; seed < 200 && !found; seed++) {
-    const costs = links.map((l) => linkCost({ ...base.world, seed }, 'town', l));
-    const lo = Math.min(...costs);
-    const hi = Math.max(...costs);
-    if (hi > lo) found = { seed, quick: links[costs.indexOf(lo)], slow: links[costs.indexOf(hi)] };
-  }
-  assert.ok(found, 'no seed gives the town two links of different cost — the test says nothing');
-
-  const s = { ...base, world: { ...base.world, seed: found.seed } };
-  const quick = applyTurn(s, record({ moveTo: found.quick })).state.sheet.needs.rest;
-  const slow = applyTurn(s, record({ moveTo: found.slow })).state.sheet.needs.rest;
-  assert.ok(slow < quick, `slow ${slow}, quick ${quick}`);
+// Was: "a long crossing wears you down more than a short one", one 10–30 minute
+// walk against another. Respecified by 7.1e-iv: needs drain on whole hours, so
+// whether a single walk wears you depends on the hour it crosses. The claim is
+// kept at the scale it now holds: more hours on the road, more worn.
+test('six hours on the road wear you more than one', () => {
+  const base = { ...playState(), world: { ...playState().world, clock: 0 } };
+  const onTheRoad = (hours: number) =>
+    foldPlay(base, Array.from({ length: hours * 2 }, () => record({ timeSpent: 3 }))).sheet.needs.rest;
+  assert.ok(onTheRoad(6) < onTheRoad(1), `six hours ${onTheRoad(6)}, one hour ${onTheRoad(1)}`);
 });
 
 /*

@@ -21,6 +21,7 @@ import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { advanceJourneys, setOut } from './journey.ts';
+import { TICKS_PER_HOUR } from '../world/calendar.ts';
 import { passSightings, witnessSighting } from './sighting.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
@@ -380,7 +381,14 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
  * exactly the same drift — if this lived only in `playTurn`, a resumed session
  * would quietly lose every personality change that had ever happened.
  */
-function causesFor(state: PlayState, record: TurnRecord, elapsed = record.delta.timeSpent ?? 0): { npc: DriftCause[]; pc: DriftCause[] } {
+/** How often time passing takes a point of a need (7.1e-iv). */
+const FOOD_EVERY = 4 * TICKS_PER_HOUR;
+const REST_EVERY = 2 * TICKS_PER_HOUR;
+
+/** How many multiples of `every` the clock crossed between two ticks. */
+const marks = (from: number, to: number, every: number) => Math.floor(to / every) - Math.floor(from / every);
+
+function causesFor(state: PlayState, record: TurnRecord, from: number, to: number): { npc: DriftCause[]; pc: DriftCause[] } {
   const npc: DriftCause[] = [];
   const pc: DriftCause[] = [];
 
@@ -398,9 +406,13 @@ function causesFor(state: PlayState, record: TurnRecord, elapsed = record.delta.
     npc.push({ kind: 'address', tone: readPlayerRegister(record.input).tone });
   }
 
-  // A move wears you by the time its link took (7.1a), not by the Director's
-  // guess. A turn that went nowhere and cost nothing wears nobody.
-  if (record.delta.moveTo || record.delta.timeSpent) pc.push({ kind: 'travel', cost: elapsed });
+  // Needs drain by the HOURS the turn covered, not by the turn (7.1e-iv).
+  // Sleeping does not tire you; it still makes you hungry.
+  pc.push({
+    kind: 'time',
+    food: marks(from, to, FOOD_EVERY),
+    rest: record.delta.rest ? 0 : marks(from, to, REST_EVERY),
+  });
 
   // Resting was a `DriftCause` that nothing ever emitted, so the one thing that
   // restores a need could never reach the person it restores.
@@ -609,7 +621,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
 
   if (moved.ended) return { state: moved, shifts: [], earned: [] };
 
-  const causes = causesFor(moved, record, clockOf(moved.world) - clockOf(state.world));
+  const causes = causesFor(moved, record, clockOf(state.world), clockOf(moved.world));
   const rules = rulesOf(moved.world);
   /*
    * WHO is being worn down, and by whose rules.

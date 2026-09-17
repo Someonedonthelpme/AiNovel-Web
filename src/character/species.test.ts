@@ -11,8 +11,11 @@ import { playState } from '../play/fixtures.ts';
 
 const someone = () => emptyPersona(defaultVoice());
 
-/** A hard march: the cause that takes food and rest off anybody who has them. */
-const MARCH = [{ kind: 'travel' as const, cost: 3 }];
+/**
+ * A hard march: the cause that takes food and rest off anybody who has them.
+ * Respecified by 7.1e-iv: `travel` became `time`, the hour marks a turn crossed. Six hours on the road cross one food mark and three rest marks.
+ */
+const MARCH = [{ kind: 'time' as const, food: 1, rest: 3 }];
 
 /*
  * RESPECIFIED 2026-09-12, 6b stage 3e. Was: "every world has the ordinary kind,

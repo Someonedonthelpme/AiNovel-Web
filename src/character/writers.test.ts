@@ -40,7 +40,7 @@ const EVERY_CAUSE: DriftCause[] = [
   { kind: 'trust', change: -1 },
   { kind: 'address', tone: 'crude' },
   { kind: 'address', tone: 'formal' },
-  { kind: 'travel', cost: 4 },
+  { kind: 'time', food: 1, rest: 2 },  // Respecified by 7.1e-iv: `travel` became `time`, the hour marks a turn crossed.
   { kind: 'danger', level: 12 },
   { kind: 'rest', quality: 3 },
 ];

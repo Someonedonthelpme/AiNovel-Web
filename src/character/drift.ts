@@ -27,8 +27,11 @@ export type DriftCause =
   | { kind: 'trust'; change: number }
   /** How the player addressed them. */
   | { kind: 'address'; tone: Tone }
-  /** Time and distance. */
-  | { kind: 'travel'; cost: number }
+  /**
+   * Time passing (7.1e-iv): the hour marks a turn crossed — a food mark every 4
+   * hours, a rest mark every 2 waking hours. Was `travel`, charged per turn.
+   */
+  | { kind: 'time'; food: number; rest: number }
   /** Standing somewhere dangerous. */
   | { kind: 'danger'; level: number }
   /** Recovering. */
@@ -80,11 +83,11 @@ function effectOf(cause: DriftCause): Deltas {
       if (cause.tone === 'deferential' || cause.tone === 'formal') return { needs: { company: 1 }, pressure: {} };
       return EMPTY;
 
-    case 'travel':
-      // A hard march frays the grip somebody keeps on themselves.
+    case 'time':
+      // A long stretch awake frays the grip somebody keeps on themselves.
       return {
-        needs: { rest: -Math.max(1, Math.round(cause.cost)), food: -1 },
-        pressure: { discipline: cause.cost >= 3 ? -1 : 0 },
+        needs: { food: -cause.food, rest: -cause.rest },
+        pressure: { discipline: cause.rest >= 2 ? -1 : 0 },
       };
 
     case 'danger':

@@ -119,7 +119,7 @@ config ─┐
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
   this module decides which are legal and applies only those."*
-  ([delta.ts:36](src/play/delta.ts:36)). Refusing one field never discards the
+  ([delta.ts:37](src/play/delta.ts:37)). Refusing one field never discards the
   rest of the turn.
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
@@ -330,7 +330,7 @@ anything derives from the seed alone.
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:263](src/world/types.ts:263)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:239](src/play/delta.ts:239)).
+  mid-run writer ([delta.ts:240](src/play/delta.ts:240)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:623](src/session/genesis.ts:623)). Stored for the same reason
   `subjects` is.
@@ -462,7 +462,7 @@ Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:275](src/character/species.ts:275)), weighted 4:1 toward the world's
 DOMINANT kind — its own ordinary people, PEOPLE where a world has any, since a
 town of beasts is a bestiary ([species.ts:258](src/character/species.ts:258)). And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:206](src/play/delta.ts:206)) rather than drawn,
+place it leaves from ([delta.ts:207](src/play/delta.ts:207)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
 
@@ -762,8 +762,8 @@ only options are `kill` and `spare` ([:478](src/play/combat.ts:478)), and both a
 ([game.ts:672](src/server/game.ts:672)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:770](src/play/combat.ts:770)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:497](src/play/delta.ts:497)), and whoever
-was spared is counted present to feel it ([delta.ts:519](src/play/delta.ts:519)).
+toward the person if it was one ([delta.ts:509](src/play/delta.ts:509)), and whoever
+was spared is counted present to feel it ([delta.ts:531](src/play/delta.ts:531)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
 ([play/combat.ts:888](src/play/combat.ts:888)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
@@ -826,7 +826,7 @@ concludes, the original turn's draft record plus `combatActions` is appended as
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:650](src/play/delta.ts:650)), because the live turn ran drift, deeds
+([delta.ts:662](src/play/delta.ts:662)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -872,7 +872,7 @@ broken twice: once by omitting `sheet`/`ended` from snapshots (fixed by
 migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes,
-and a fold re-resolves them with today's code ([delta.ts:592](src/play/delta.ts:592)).
+and a fold re-resolves them with today's code ([delta.ts:604](src/play/delta.ts:604)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
 snapshotted back to back ([game.ts:679](src/server/game.ts:679)), so normal play
@@ -1121,7 +1121,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:624](src/play/delta.ts:624)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:636](src/play/delta.ts:636)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:273](src/session/genesis.ts:273),
@@ -1298,7 +1298,7 @@ Every balance number, and where it lives.
 | pool base / per level | 8 / 2 | [sheet.ts:319](src/session/sheet.ts:319) |
 | skill cost floor / ceiling | 1 / 12 | [pools.ts:54](src/skills/pools.ts:54) |
 | turn length in ticks / min action | 6 / 2 | [tempo.ts:25](src/combat/tempo.ts:25) |
-| drift threshold / decay | 6 / 1 | [drift.ts:44](src/character/drift.ts:44) |
+| drift threshold / decay | 6 / 1 | [drift.ts:47](src/character/drift.ts:47) |
 | **suitability swing** | ±25% on cost, magnitude and ticks | [suit.ts](src/skills/suit.ts), [ruleset.ts](src/rules/ruleset.ts) |
 | skill budget per floor | `4 + floor × 0.8` | [book.ts](src/skills/book.ts) |
 | effects drawn per skill | up to 3, until 75% of the budget is spent | [compose.ts](src/skills/compose.ts) |
@@ -1388,11 +1388,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:105](src/play/state.ts:105)),
-and being jumped is no deed ([delta.ts:489](src/play/delta.ts:489)). A fight
+and being jumped is no deed ([delta.ts:501](src/play/delta.ts:501)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:493](src/play/delta.ts:493)). `spared` — *"has no writer until 6b stage
+([delta.ts:505](src/play/delta.ts:505)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:497](src/play/delta.ts:497)).
+([delta.ts:509](src/play/delta.ts:509)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -1415,7 +1415,7 @@ arrives with quests (DESIGN step 7).
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
 ([genesis.ts:678](src/session/genesis.ts:678)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:260](src/play/delta.ts:260)).
+`Region.exits` is a way out found in play ([delta.ts:261](src/play/delta.ts:261)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
