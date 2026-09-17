@@ -2,6 +2,7 @@ import { compressExcept } from './lod.ts';
 import type { Gazetteer, Link, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { mulberry32 } from '../engine/roll.ts';
+import { TICKS_PER_HOUR } from './calendar.ts';
 import { forbids, rulesOf } from '../rules/ruleset.ts';
 import type { Subject } from '../rules/ruleset.ts';
 import type { Law } from '../rules/ruleset.ts';
@@ -42,10 +43,23 @@ export function currentRegion(world: World): Region | Gazetteer | null {
  * draws maps.`
  */
 export function linkCost(world: Pick<World, 'seed'>, a: PlaceId, b: PlaceId): number {
+  return 1 + Math.floor(pairDraw(world.seed, 0x71a, a, b) * 3);
+}
+
+/**
+ * How long a STAIR between two floors takes: one to three hours (7.1e-i).
+ * Seeded on the world and the two regions, the same both ways.
+ */
+export function stairCost(world: Pick<World, 'seed'>, a: RegionId, b: RegionId): number {
+  return TICKS_PER_HOUR + Math.floor(pairDraw(world.seed, 0x5a1, a, b) * (2 * TICKS_PER_HOUR + 1));
+}
+
+/** A draw in [0, 1) for an unordered pair, so both directions agree. */
+function pairDraw(seed: number, salt: number, a: string, b: string): number {
   const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
-  let hash = (world.seed ^ 0x71a) >>> 0;
+  let hash = (seed ^ salt) >>> 0;
   for (const ch of pair) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
-  return 1 + Math.floor(mulberry32(hash)() * 3);
+  return mulberry32(hash)();
 }
 
 /**

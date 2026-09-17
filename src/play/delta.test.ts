@@ -3,7 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
 import { FOLK } from '../character/species.ts';
-import { activeRegion, clockOf, linkCost } from '../world/travel.ts';
+import { activeRegion, clockOf, linkCost, stairCost } from '../world/travel.ts';
+import { MINUTES_PER_TICK, TICKS_PER_DAY } from '../world/calendar.ts';
+import { takeRest } from './rest.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState } from './fixtures.ts';
 import { forbids, STANDARD } from '../rules/ruleset.ts';
@@ -395,4 +397,27 @@ test('a long crossing wears you down more than a short one', () => {
   const quick = applyTurn(s, record({ moveTo: found.quick })).state.sheet.needs.rest;
   const slow = applyTurn(s, record({ moveTo: found.slow })).state.sheet.needs.rest;
   assert.ok(slow < quick, `slow ${slow}, quick ${quick}`);
+});
+
+/*
+ * 6b stage 7.1e-i: a tick is TEN MINUTES. Rest takes real hours; a stair
+ * between floors takes hours.
+ */
+
+test('a tick is ten minutes; a day is 144 ticks', () => {
+  assert.equal(MINUTES_PER_TICK, 10);
+  assert.equal(TICKS_PER_DAY, 144);
+});
+
+test('a stair between floors takes one to three hours', () => {
+  const c = stairCost(playState().world, 'floor-0', 'floor-1');
+  assert.ok(c >= 6 && c <= 18, `${c}`);
+  assert.equal(c, stairCost(playState().world, 'floor-1', 'floor-0'), 'the same both ways');
+});
+
+test('a short rest covers an hour on the clock, a long rest eight', () => {
+  const s = playState();                                   // in town on floor 0, with rations
+  assert.equal(clockOf(takeRest(s, 'short').state.world) - clockOf(s.world), 6);
+  assert.equal(clockOf(takeRest(s, 'long').state.world) - clockOf(s.world), 48);
+  assert.equal(clockOf(applyDelta(s, { rest: 'long' }).world) - clockOf(s.world), 48, 'and as a turn');
 });

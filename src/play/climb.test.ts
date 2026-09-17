@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
 import { applyClimb, climb, exitStatus, godown } from './climb.ts';
-import { clockOf, linkCost } from '../world/travel.ts';
+import { clockOf, stairCost } from '../world/travel.ts';
 import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
 import { groundFloor, world } from '../world/fixtures.ts';
@@ -334,5 +334,6 @@ test('climbing covers time on the clock', async () => {
   const before = { ...stair, world: { ...stair.world, clock: 100 } };
   const r = await climb(provider(), before);
   assert.equal(r.error, null);
-  assert.equal(clockOf(r.state.world), 100 + linkCost(before.world, 'floor-0', 'floor-1'));
+  // Respecified by 7.1e-i: a stair takes hours (`stairCost`), not a place link's minutes.
+  assert.equal(clockOf(r.state.world), 100 + stairCost(before.world, 'floor-0', 'floor-1'));
 });

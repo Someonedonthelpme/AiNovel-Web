@@ -308,7 +308,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 
   // THE CLOCK (7.1a). This turn covers the time its action took: a move its link,
   // anything else what the Director said it cost, and never nothing.
-  const elapsed = Math.max(1, delta.timeSpent ?? 0, movedFrom ? linkCost(world, movedFrom, world.currentPlace) : 0);
+  const walked = movedFrom ? linkCost(world, movedFrom, world.currentPlace) : 0;
+  const elapsed = Math.max(1, delta.timeSpent ?? 0, walked);
   world = { ...world, clock: clockOf(state.world) + elapsed };
 
   let next: PlayState = { ...state, world };
@@ -360,7 +361,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   }
 
   if (delta.rest) {
-    const rested = takeRest(next, delta.rest);
+    // The rest starts when the turn's walking ends, and its hours ARE the turn's time.
+    const rested = takeRest({ ...next, world: { ...next.world, clock: clockOf(state.world) + walked } }, delta.rest);
     if (!rested.error) {
       next = rested.state;
       const counter = delta.rest === 'long' ? COUNTERS.longRests : COUNTERS.shortRests;

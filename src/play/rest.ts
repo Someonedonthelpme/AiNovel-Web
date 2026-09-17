@@ -9,7 +9,8 @@ import { derive, finalAbilities } from '../session/sheet.ts';
 import { abilityMod } from '../combat/types.ts';
 import { isSkillBook } from '../skills/book.ts';
 import { conditionMet } from './traits.ts';
-import { activeRegion, currentPlace } from '../world/travel.ts';
+import { activeRegion, clockOf, currentPlace } from '../world/travel.ts';
+import { TICKS_PER_HOUR } from '../world/calendar.ts';
 import type { PlayState } from './state.ts';
 
 /**
@@ -112,7 +113,8 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
           mana: Math.min(maxMana, state.pc.mana + Math.max(1, Math.floor(maxMana / 4))),
         },
         sheet: { ...state.sheet, needs: easedShort(state.sheet.needs) },
-        world: { ...state.world, turn: state.world.turn + shortTurns },
+        // A rest turn is an hour of the world's time per turn it takes (7.1e-i).
+        world: { ...state.world, turn: state.world.turn + shortTurns, clock: clockOf(state.world) + shortTurns * TICKS_PER_HOUR },
       },
       healed: Math.min(maxHp, before + healed) - before,
       error: null,
@@ -129,7 +131,7 @@ export function takeRest(state: PlayState, kind: RestKind): RestResult {
       // are not things sleeping fixes.
       pc: { ...state.pc, hp: maxHp, maxHp, conditions: [], stamina: maxStamina, mana: maxMana },
       sheet: { ...state.sheet, needs: { ...state.sheet.needs, rest: NEED_MAX, safety: NEED_MAX } },
-      world: { ...state.world, turn: state.world.turn + longTurns },
+      world: { ...state.world, turn: state.world.turn + longTurns, clock: clockOf(state.world) + longTurns * TICKS_PER_HOUR },
     },
     healed: maxHp - before,
     error: null,

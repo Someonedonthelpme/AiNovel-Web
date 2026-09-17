@@ -803,7 +803,8 @@ test('a journey takes a stair only where the law lets them cross', () => {
   );
   const smithsGroup = groupOf(kinds, speciesIdFor(11, 'smith', kinds));
   assert.ok(smithsGroup, 'the smith is a kind of thing, or the group law says nothing');
-  const smithFights = (s: PlayState) => foesOf(passTime(s, 30)).some((f) => f.person === 'smith');
+  // 60, not 30: since 7.1e-i a stair takes hours, and this crosses two.
+  const smithFights = (s: PlayState) => foesOf(passTime(s, 60)).some((f) => f.person === 'smith');
 
   assert.equal(smithFights(far), false, 'STANDARD keeps residents on their own floor');
   assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', null))), true, 'strike the law and they cross');
@@ -1059,7 +1060,8 @@ test('where fighting is refused they wait at the gate, and strike once you are s
 
   // Since 7.1c they follow only on word of you; here they hear at once.
   const out = seenBy({ ...waited, world: { ...waited.world, currentRegion: 'floor-2' } }, 'smith', 'town');
-  assert.equal(foesOf(passTime(out, 30))[0]?.person, 'smith');
+  // 60, not 30: since 7.1e-i each stair takes hours, and they cross two.
+  assert.equal(foesOf(passTime(out, 60))[0]?.person, 'smith');
 });
 
 /*

@@ -1,7 +1,7 @@
 import { groupOf, speciesIdFor } from '../character/species.ts';
 import { forbids } from '../rules/ruleset.ts';
 import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
-import { clockOf, linkCost } from '../world/travel.ts';
+import { clockOf, linkCost, stairCost } from '../world/travel.ts';
 import { isFull, regionIdFor } from '../world/types.ts';
 import type { PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
 import { newestSighting } from './sighting.ts';
@@ -130,7 +130,7 @@ function walk(world: World, journey: Journey, target: Spot, budget: number): Jou
  *
  * Inside the target's region they walk its places by the cheapest route — but
  * where fighting is refused they come no further than its entrance, the gate.
- * Between regions they take a stair one floor at a time, and only where
+ * Between regions they take a stair one floor at a time (hours, not minutes), and only where
  * `crossFloors` lets them. A region that is not loaded is crossed in one link.
  *
  * `ponytail: towers only — a sideways region (the outer world) is not walked yet;
@@ -157,7 +157,7 @@ function nextHop(world: World, j: Journey, target: Spot): { to: Spot; cost: numb
   const nextRegion = world.regions[nextId];
   return {
     to: { region: nextId, place: nextRegion && isFull(nextRegion) ? nextRegion.entrance : null },
-    cost: linkCost(world, j.region, nextId),
+    cost: stairCost(world, j.region, nextId),
   };
 }
 

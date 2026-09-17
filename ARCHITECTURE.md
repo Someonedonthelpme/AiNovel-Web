@@ -114,7 +114,7 @@ config ─┐
   encounter ([combat.ts:13](src/combat/combat.ts:13)).
 - **The world layer refuses to reach upward.** `travel.ts` returns a
   `needsRegion` *request* instead of calling a generator, which keeps it pure
-  and testable offline ([travel.ts:17](src/world/travel.ts:17)).
+  and testable offline ([travel.ts:18](src/world/travel.ts:18)).
   [climb.ts](src/play/climb.ts) is the only place in play that knows floors can
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
@@ -231,7 +231,7 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 
 | constraint | axis | checked by |
 |---|---|---|
-| `descendBelowGround` | movement | `descend` ([travel.ts:193](src/world/travel.ts:193)) and the panel's way down ([climb.ts:262](src/play/climb.ts:262)) |
+| `descendBelowGround` | movement | `descend` ([travel.ts:207](src/world/travel.ts:207)) and the panel's way down ([climb.ts:262](src/play/climb.ts:262)) |
 | `crossFloors` | movement | the Director brief ([director.ts:363](src/llm/director.ts:363)), and whether a journey may take a stair ([journey.ts:153](src/play/journey.ts:153)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:226](src/play/climb.ts:226), [combat.ts:887](src/play/combat.ts:887)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:895](src/play/combat.ts:895)) |
@@ -250,7 +250,7 @@ Signet is. `playerSubject` builds one from the sheet
 ([signetbook.ts:202](src/play/signetbook.ts:202)); one Signet per world, the
 first to survive the reachability proof, exempts the first law that binds the
 player ([signetbook.ts:190](src/play/signetbook.ts:190)). `descend` defaults its
-subject to a plain `'player'` ([travel.ts:193](src/world/travel.ts:193)), so a
+subject to a plain `'player'` ([travel.ts:207](src/world/travel.ts:207)), so a
 caller that forgets to say who is asking gets the strictest reading.
 
 **A law can change mid-run.** `amend` returns a new ruleset with one law
@@ -264,7 +264,7 @@ as one that never changed.
 **Permission and geography are separate questions.** The ground law says who may
 dig; `world.depthBelowGround` says how far there is to dig
 ([ruleset.ts:153](src/rules/ruleset.ts:153), checked at
-[travel.ts:208](src/world/travel.ts:208)). Without it, a world that permits
+[travel.ts:222](src/world/travel.ts:222)). Without it, a world that permits
 digging had no bottom and every floor down was a model call.
 
 **A law is learned by hitting it.** `forbids` returns the `Law` rather than a
@@ -314,7 +314,7 @@ build `into` ([floorgen.ts:329](src/world/floorgen.ts:329)); its guard against
 overwriting the town keys on that id rather than on depth 0
 ([floorgen.ts:341](src/world/floorgen.ts:341)), because an outer world may sit
 at depth 0 perfectly legally. A region with no
-`exits` derives up and down from depth ([travel.ts:150](src/world/travel.ts:150))
+`exits` derives up and down from depth ([travel.ts:164](src/world/travel.ts:164))
 — every world saved before this.
 
 Eight more are OPTIONAL, and absent means *nobody has done that yet* rather than
@@ -430,7 +430,7 @@ come from?"
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
-| `linksFrom` ([travel.ts:150](src/world/travel.ts:150)) | a region | its ways out: its own `exits`, or up/down derived from depth |
+| `linksFrom` ([travel.ts:164](src/world/travel.ts:164)) | a region | its ways out: its own `exits`, or up/down derived from depth |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:293](src/server/game.ts:293)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
@@ -762,8 +762,8 @@ only options are `kill` and `spare` ([:476](src/play/combat.ts:476)), and both a
 ([game.ts:672](src/server/game.ts:672)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:768](src/play/combat.ts:768)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:495](src/play/delta.ts:495)), and whoever
-was spared is counted present to feel it ([delta.ts:517](src/play/delta.ts:517)).
+toward the person if it was one ([delta.ts:497](src/play/delta.ts:497)), and whoever
+was spared is counted present to feel it ([delta.ts:519](src/play/delta.ts:519)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
 ([play/combat.ts:886](src/play/combat.ts:886)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
@@ -826,7 +826,7 @@ concludes, the original turn's draft record plus `combatActions` is appended as
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:648](src/play/delta.ts:648)), because the live turn ran drift, deeds
+([delta.ts:650](src/play/delta.ts:650)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -852,8 +852,8 @@ generated region and its people, because `foldPlay` is synchronous and holds no
 `Provider`. `applyClimb` is pure and drives **both** the live path and replay,
 so the two cannot drift apart ([climb.ts:41](src/play/climb.ts:41)). A crossing
 that is not a stair names its destination and goes through `traverse`
-([travel.ts:161](src/world/travel.ts:161)), which REFUSES a stair
-([:170](src/world/travel.ts:170)) — otherwise a derived down-link would be a way
+([travel.ts:175](src/world/travel.ts:175)), which REFUSES a stair
+([:184](src/world/travel.ts:184)) — otherwise a derived down-link would be a way
 around the ground law and the world's bottom, both of which live in `descend`.
 
 **Panel actions** — equipping a helmet is bookkeeping, not a story beat, so
@@ -872,7 +872,7 @@ broken twice: once by omitting `sheet`/`ended` from snapshots (fixed by
 migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes,
-and a fold re-resolves them with today's code ([delta.ts:590](src/play/delta.ts:590)).
+and a fold re-resolves them with today's code ([delta.ts:592](src/play/delta.ts:592)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
 snapshotted back to back ([game.ts:679](src/server/game.ts:679)), so normal play
@@ -1121,7 +1121,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:622](src/play/delta.ts:622)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:624](src/play/delta.ts:624)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:272](src/session/genesis.ts:272),
@@ -1309,7 +1309,7 @@ Every balance number, and where it lives.
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:948](src/play/combat.ts:948) |
 | break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:374](src/play/combat.ts:374), [combat/combat.ts:71](src/combat/combat.ts:71) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |
-| short / long rest turns | 1 / 8 | [rest.ts:25](src/play/rest.ts:25) |
+| short / long rest turns | 1 / 8 | [rest.ts:26](src/play/rest.ts:26) |
 | base speed / floor | 6 (+AGI mod) / 3 | [sheet.ts](src/session/sheet.ts) |
 | carry base / per STR / overload step | 20 / 2 / 8 | [sheet.ts](src/session/sheet.ts) |
 | damage soak ceiling / share of blow | 2 / one third | [resolve.ts](src/combat/resolve.ts) |
@@ -1388,11 +1388,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:105](src/play/state.ts:105)),
-and being jumped is no deed ([delta.ts:487](src/play/delta.ts:487)). A fight
+and being jumped is no deed ([delta.ts:489](src/play/delta.ts:489)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:491](src/play/delta.ts:491)). `spared` — *"has no writer until 6b stage
+([delta.ts:493](src/play/delta.ts:493)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:495](src/play/delta.ts:495)).
+([delta.ts:497](src/play/delta.ts:497)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -1404,7 +1404,7 @@ evidence for the settlement rather than against it.
 *No `Stratum.topology` knob.* The plan had a stratum declare whether it is a
 stack or a graph. It does not need to: a region's own `exits` already says, and
 a region without them is a stack by derivation
-([travel.ts:150](src/world/travel.ts:150)). A knob would be a second source for
+([travel.ts:164](src/world/travel.ts:164)). A knob would be a second source for
 one fact.
 
 *No `story` stratum kind.* It would behave exactly like `static` until quests
