@@ -23,7 +23,7 @@ import { beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
-import { activeRegion, exitsFrom, moveWithinRegion } from '../world/travel.ts';
+import { activeRegion, clockOf, exitsFrom, linkCost, moveWithinRegion } from '../world/travel.ts';
 import type { Fact, Link, PlaceId, RegionId, World } from '../world/types.ts';
 
 /**
@@ -219,12 +219,14 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 
   let world: World = state.world;
   let turnAdvanced = false;
+  let movedFrom: string | null = null;
 
   let discovered = false;
   if (delta.moveTo) {
     const before = activeRegion(world)?.places.find((p) => p.id === delta.moveTo)?.discovered ?? true;
     const moved = moveWithinRegion(world, delta.moveTo);
     if (moved.kind === 'moved') {
+      movedFrom = world.currentPlace;
       world = moved.world;
       turnAdvanced = true;
       discovered = !before;
@@ -302,6 +304,11 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 
   if (!turnAdvanced) world = { ...world, turn: world.turn + 1 };
 
+  // THE CLOCK (7.1a). This turn covers the time its action took: a move its link,
+  // anything else what the Director said it cost, and never nothing.
+  const elapsed = Math.max(1, delta.timeSpent ?? 0, movedFrom ? linkCost(world, movedFrom, world.currentPlace) : 0);
+  world = { ...world, clock: clockOf(state.world) + elapsed };
+
   let next: PlayState = { ...state, world };
 
   // Somewhere you had never been. Counted here rather than in travel, because
@@ -369,7 +376,7 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
  * exactly the same drift — if this lived only in `playTurn`, a resumed session
  * would quietly lose every personality change that had ever happened.
  */
-function causesFor(state: PlayState, record: TurnRecord): { npc: DriftCause[]; pc: DriftCause[] } {
+function causesFor(state: PlayState, record: TurnRecord, elapsed = record.delta.timeSpent ?? 0): { npc: DriftCause[]; pc: DriftCause[] } {
   const npc: DriftCause[] = [];
   const pc: DriftCause[] = [];
 
@@ -387,7 +394,9 @@ function causesFor(state: PlayState, record: TurnRecord): { npc: DriftCause[]; p
     npc.push({ kind: 'address', tone: readPlayerRegister(record.input).tone });
   }
 
-  if (record.delta.timeSpent) pc.push({ kind: 'travel', cost: record.delta.timeSpent });
+  // A move wears you by the time its link took (7.1a), not by the Director's
+  // guess. A turn that went nowhere and cost nothing wears nobody.
+  if (record.delta.moveTo || record.delta.timeSpent) pc.push({ kind: 'travel', cost: elapsed });
 
   // Resting was a `DriftCause` that nothing ever emitted, so the one thing that
   // restores a need could never reach the person it restores.
@@ -589,7 +598,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
 
   if (moved.ended) return { state: moved, shifts: [], earned: [] };
 
-  const causes = causesFor(moved, record);
+  const causes = causesFor(moved, record, clockOf(moved.world) - clockOf(state.world));
   const rules = rulesOf(moved.world);
   /*
    * WHO is being worn down, and by whose rules.

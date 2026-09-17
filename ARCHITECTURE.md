@@ -114,7 +114,7 @@ config ─┐
   encounter ([combat.ts:13](src/combat/combat.ts:13)).
 - **The world layer refuses to reach upward.** `travel.ts` returns a
   `needsRegion` *request* instead of calling a generator, which keeps it pure
-  and testable offline ([travel.ts:16](src/world/travel.ts:16)).
+  and testable offline ([travel.ts:17](src/world/travel.ts:17)).
   [climb.ts](src/play/climb.ts) is the only place in play that knows floors can
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
@@ -231,7 +231,7 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 
 | constraint | axis | checked by |
 |---|---|---|
-| `descendBelowGround` | movement | `descend` ([travel.ts:168](src/world/travel.ts:168)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
+| `descendBelowGround` | movement | `descend` ([travel.ts:193](src/world/travel.ts:193)) and the panel's way down ([climb.ts:257](src/play/climb.ts:257)) |
 | `crossFloors` | movement | the Director brief ([director.ts:363](src/llm/director.ts:363)), and who may come for you from another floor ([combat.ts:325](src/play/combat.ts:325)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:221](src/play/climb.ts:221), [combat.ts:872](src/play/combat.ts:872)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:880](src/play/combat.ts:880)) |
@@ -250,7 +250,7 @@ Signet is. `playerSubject` builds one from the sheet
 ([signetbook.ts:202](src/play/signetbook.ts:202)); one Signet per world, the
 first to survive the reachability proof, exempts the first law that binds the
 player ([signetbook.ts:190](src/play/signetbook.ts:190)). `descend` defaults its
-subject to a plain `'player'` ([travel.ts:168](src/world/travel.ts:168)), so a
+subject to a plain `'player'` ([travel.ts:193](src/world/travel.ts:193)), so a
 caller that forgets to say who is asking gets the strictest reading.
 
 **A law can change mid-run.** `amend` returns a new ruleset with one law
@@ -264,7 +264,7 @@ as one that never changed.
 **Permission and geography are separate questions.** The ground law says who may
 dig; `world.depthBelowGround` says how far there is to dig
 ([ruleset.ts:153](src/rules/ruleset.ts:153), checked at
-[travel.ts:183](src/world/travel.ts:183)). Without it, a world that permits
+[travel.ts:208](src/world/travel.ts:208)). Without it, a world that permits
 digging had no bottom and every floor down was a model call.
 
 **A law is learned by hitting it.** `forbids` returns the `Law` rather than a
@@ -304,7 +304,7 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 **`World`** ([world/types.ts:236](src/world/types.ts:236)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:326](src/world/types.ts:326)).
+`regionIdFor(floor) = 'floor-' + floor` ([:333](src/world/types.ts:333)).
 **"One floor is one region is one integer" was true until step 6, and is now
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
@@ -314,7 +314,7 @@ build `into` ([floorgen.ts:329](src/world/floorgen.ts:329)); its guard against
 overwriting the town keys on that id rather than on depth 0
 ([floorgen.ts:341](src/world/floorgen.ts:341)), because an outer world may sit
 at depth 0 perfectly legally. A region with no
-`exits` derives up and down from depth ([travel.ts:125](src/world/travel.ts:125))
+`exits` derives up and down from depth ([travel.ts:150](src/world/travel.ts:150))
 — every world saved before this.
 
 Eight more are OPTIONAL, and absent means *nobody has done that yet* rather than
@@ -330,7 +330,7 @@ anything derives from the seed alone.
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:263](src/world/types.ts:263)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:235](src/play/delta.ts:235)).
+  mid-run writer ([delta.ts:237](src/play/delta.ts:237)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
   `subjects` is.
@@ -343,7 +343,7 @@ anything derives from the seed alone.
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
-- `populations` — who lives per PLACE ([types.ts:316](src/world/types.ts:316)):
+- `populations` — who lives per PLACE ([types.ts:323](src/world/types.ts:323)):
   cohorts of (subspecies, profession, size). **Absent until something has been
   killed** — a place answers from the seed until then
   ([population.ts:99](src/character/population.ts:99)), so an old world needs no
@@ -430,7 +430,7 @@ come from?"
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
-| `linksFrom` ([travel.ts:125](src/world/travel.ts:125)) | a region | its ways out: its own `exits`, or up/down derived from depth |
+| `linksFrom` ([travel.ts:150](src/world/travel.ts:150)) | a region | its ways out: its own `exits`, or up/down derived from depth |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:293](src/server/game.ts:293)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
@@ -758,8 +758,8 @@ only options are `kill` and `spare` ([:476](src/play/combat.ts:476)), and both a
 ([game.ts:672](src/server/game.ts:672)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:767](src/play/combat.ts:767)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:484](src/play/delta.ts:484)), and whoever
-was spared is counted present to feel it ([delta.ts:506](src/play/delta.ts:506)).
+toward the person if it was one ([delta.ts:493](src/play/delta.ts:493)), and whoever
+was spared is counted present to feel it ([delta.ts:515](src/play/delta.ts:515)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
 ([play/combat.ts:871](src/play/combat.ts:871)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
@@ -822,7 +822,7 @@ concludes, the original turn's draft record plus `combatActions` is appended as
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:625](src/play/delta.ts:625)), because the live turn ran drift, deeds
+([delta.ts:634](src/play/delta.ts:634)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -848,8 +848,8 @@ generated region and its people, because `foldPlay` is synchronous and holds no
 `Provider`. `applyClimb` is pure and drives **both** the live path and replay,
 so the two cannot drift apart ([climb.ts:40](src/play/climb.ts:40)). A crossing
 that is not a stair names its destination and goes through `traverse`
-([travel.ts:136](src/world/travel.ts:136)), which REFUSES a stair
-([:145](src/world/travel.ts:145)) — otherwise a derived down-link would be a way
+([travel.ts:161](src/world/travel.ts:161)), which REFUSES a stair
+([:170](src/world/travel.ts:170)) — otherwise a derived down-link would be a way
 around the ground law and the world's bottom, both of which live in `descend`.
 
 **Panel actions** — equipping a helmet is bookkeeping, not a story beat, so
@@ -868,7 +868,7 @@ broken twice: once by omitting `sheet`/`ended` from snapshots (fixed by
 migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes,
-and a fold re-resolves them with today's code ([delta.ts:573](src/play/delta.ts:573)).
+and a fold re-resolves them with today's code ([delta.ts:582](src/play/delta.ts:582)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
 snapshotted back to back ([game.ts:679](src/server/game.ts:679)), so normal play
@@ -1116,7 +1116,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:604](src/play/delta.ts:604)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:613](src/play/delta.ts:613)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:272](src/session/genesis.ts:272),
@@ -1383,11 +1383,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:105](src/play/state.ts:105)),
-and being jumped is no deed ([delta.ts:476](src/play/delta.ts:476)). A fight
+and being jumped is no deed ([delta.ts:485](src/play/delta.ts:485)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:480](src/play/delta.ts:480)). `spared` — *"has no writer until 6b stage
+([delta.ts:489](src/play/delta.ts:489)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:484](src/play/delta.ts:484)).
+([delta.ts:493](src/play/delta.ts:493)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -1399,7 +1399,7 @@ evidence for the settlement rather than against it.
 *No `Stratum.topology` knob.* The plan had a stratum declare whether it is a
 stack or a graph. It does not need to: a region's own `exits` already says, and
 a region without them is a stack by derivation
-([travel.ts:125](src/world/travel.ts:125)). A knob would be a second source for
+([travel.ts:150](src/world/travel.ts:150)). A knob would be a second source for
 one fact.
 
 *No `story` stratum kind.* It would behave exactly like `static` until quests
@@ -1410,7 +1410,7 @@ arrives with quests (DESIGN step 7).
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
 ([genesis.ts:673](src/session/genesis.ts:673)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:256](src/play/delta.ts:256)).
+`Region.exits` is a way out found in play ([delta.ts:258](src/play/delta.ts:258)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.

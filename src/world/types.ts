@@ -288,6 +288,13 @@ export type World = {
    */
   edges?: Edges;
   /**
+   * World time, in ticks, separate from `turn`: a play turn COVERS the time its
+   * action takes, so a long crossing moves the clock further than a word does
+   * (DESIGN 6b stage 7.1a). `turn` stays the play-turn count, because it seeds
+   * every fight. Absent means a world stored before the clock; `clockOf` reads it.
+   */
+  clock?: number;
+  /**
    * How each region regards the player.
    *
    * On the World rather than on a region because a region is not always a

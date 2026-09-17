@@ -1,6 +1,7 @@
 import { compressExcept } from './lod.ts';
 import type { Gazetteer, Link, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
+import { mulberry32 } from '../engine/roll.ts';
 import { forbids, rulesOf } from '../rules/ruleset.ts';
 import type { Subject } from '../rules/ruleset.ts';
 import type { Law } from '../rules/ruleset.ts';
@@ -30,6 +31,30 @@ export function currentRegion(world: World): Region | Gazetteer | null {
 }
 
 /** The full record for the region the player is standing in. */
+/**
+ * How much TIME it takes to cross between two places (DESIGN 6b stage 7.1a).
+ *
+ * Seeded on the world and the pair alone, and the same both ways, so the model
+ * never decides a distance: it counts and keeps adjacency unreliably, the reason
+ * 6c keeps maps out of its hands. Every character pays it, the player included.
+ *
+ * `ponytail: a flat 1..3 draw. Weight it by what the two places are when 6c
+ * draws maps.`
+ */
+export function linkCost(world: Pick<World, 'seed'>, a: PlaceId, b: PlaceId): number {
+  const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
+  let hash = (world.seed ^ 0x71a) >>> 0;
+  for (const ch of pair) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  return 1 + Math.floor(mulberry32(hash)() * 3);
+}
+
+/**
+ * The world clock: time, separate from the count of play turns. A world stored
+ * before it had one reads its turn count, which is what the clock would have
+ * been had every turn taken one tick.
+ */
+export const clockOf = (world: { turn: number; clock?: number }): number => world.clock ?? world.turn;
+
 export function activeRegion(world: World): Region | null {
   const record = currentRegion(world);
   return record && isFull(record) ? record : null;

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
 import { FOLK } from '../character/species.ts';
-import { activeRegion } from '../world/travel.ts';
+import { activeRegion, clockOf, linkCost } from '../world/travel.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState } from './fixtures.ts';
 import { forbids, STANDARD } from '../rules/ruleset.ts';
@@ -347,4 +347,52 @@ test('an ambush costs no standing; drawing first still does', () => {
 
   const drawn = applyTurn(base, record({ startCombat: true })).state;
   assert.ok((drawn.world.reputation?.[here] ?? 0) < 0, 'drawing first still costs');
+});
+
+/*
+ * 6b stage 7.1a: a link costs TIME, and a world clock runs separately from the
+ * play-turn count. Each play turn covers the time its action takes.
+ */
+
+test('a link costs the same both ways, 1 to 3, set by the seed', () => {
+  const w = playState().world;
+  const cost = linkCost(w, 'town', 'market');
+  assert.equal(cost, linkCost(w, 'market', 'town'));
+  assert.ok(cost >= 1 && cost <= 3, `cost ${cost}`);
+});
+
+test('a move covers its link on the clock; the turn count still moves by one', () => {
+  const s = playState();
+  const after = applyDelta(s, { moveTo: 'market' });
+  assert.equal(after.world.turn, s.world.turn + 1, 'fights keep their seeds');
+  assert.equal(clockOf(after.world) - clockOf(s.world), linkCost(s.world, 'town', 'market'));
+});
+
+test('a turn that goes nowhere still covers time', () => {
+  const s = playState();
+  assert.equal(clockOf(applyDelta(s, {}).world), clockOf(s.world) + 1);
+  assert.equal(clockOf(applyDelta(s, { timeSpent: 3 }).world), clockOf(s.world) + 3);
+});
+
+test('a world stored without a clock reads it from its turn count', () => {
+  const { clock: _, ...old } = playState().world;
+  assert.equal(clockOf(old), old.turn);
+});
+
+test('a long crossing wears you down more than a short one', () => {
+  const base = playState();
+  const links = ['gate', 'market', 'well'];
+  let found: { seed: number; quick: string; slow: string } | null = null;
+  for (let seed = 0; seed < 200 && !found; seed++) {
+    const costs = links.map((l) => linkCost({ ...base.world, seed }, 'town', l));
+    const lo = Math.min(...costs);
+    const hi = Math.max(...costs);
+    if (hi > lo) found = { seed, quick: links[costs.indexOf(lo)], slow: links[costs.indexOf(hi)] };
+  }
+  assert.ok(found, 'no seed gives the town two links of different cost — the test says nothing');
+
+  const s = { ...base, world: { ...base.world, seed: found.seed } };
+  const quick = applyTurn(s, record({ moveTo: found.quick })).state.sheet.needs.rest;
+  const slow = applyTurn(s, record({ moveTo: found.slow })).state.sheet.needs.rest;
+  assert.ok(slow < quick, `slow ${slow}, quick ${quick}`);
 });

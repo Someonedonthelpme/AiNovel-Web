@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; next is stage 7.1 (grudges travel, and send their people); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stage 7.1a (link costs, world clock) shipped 2026-09-17; next is stage 7.1b (journeys); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
@@ -632,10 +632,24 @@ after any that touches a fight):
        rather than coming.
    - **Fade (default, not confirmed):** resentment nothing feeds drops by 1 every
      10 clock ticks, and obligation toward the player slows it.
-   **Open, for the user:**
-   - **The station list**, and which acts each one opens.
-   - **Where a person's station comes from**: set at generation for everyone, or
-     derived from roles, trade and status.
+   **Decided with the user, 2026-09-17, fourth pass:**
+   - **Station is DERIVED, never stored:** from a person's roles, their trade and
+     their status. Nothing new is generated, so a stored world needs no migration.
+   - **The starting list, and what each station opens:**
+
+     | station | acts it opens |
+     |---|---|
+     | ruler / noble | send their people, call in a debt; later ban you, put a bounty on you (6c) |
+     | merchant | call in a debt; later hire someone (6c economy) |
+     | guard / soldier | come themselves, bring their comrades |
+     | adventurer | come themselves |
+     | villager / artisan | slander you, call in a debt |
+     | beggar / outcast | slander you; be the eyes that report where you are |
+
+   **Open, for 7.1d:** which roles, trades and statuses map to which station.
+   **7.1a SHIPPED 2026-09-17** — link costs (`world/travel.ts` `linkCost`) and the
+   world clock (`World.clock`, read through `clockOf`). A move wears you by the
+   time its link took. Documentation waits for the whole of 7.1.
    **Proposed split, since this is now five mechanisms:** 7.1a link costs and a
    world clock · 7.1b journeys (the bearer travels to where you are) · 7.1c
    sightings (where they HEARD you are replaces where you are) · 7.1d send their
