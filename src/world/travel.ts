@@ -2,7 +2,7 @@ import { compressExcept } from './lod.ts';
 import type { Gazetteer, Link, PlaceId, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import { TICKS_PER_HOUR } from './calendar.ts';
+import { isWinter, TICKS_PER_HOUR } from './calendar.ts';
 import { forbids, rulesOf } from '../rules/ruleset.ts';
 import type { Subject } from '../rules/ruleset.ts';
 import type { Law } from '../rules/ruleset.ts';
@@ -44,6 +44,18 @@ export function currentRegion(world: World): Region | Gazetteer | null {
  */
 export function linkCost(world: Pick<World, 'seed'>, a: PlaceId, b: PlaceId): number {
   return 1 + Math.floor(pairDraw(world.seed, 0x71a, a, b) * 3);
+}
+
+/**
+ * How long crossing a link takes NOW (7.1e-v): its cost, and half as long again
+ * in winter when either end is wild. What `linkCost` is to the map, this is to
+ * the season. `region` is the one the link is in; the player's by default.
+ */
+export function travelTime(world: World, a: PlaceId, b: PlaceId, region: Region | null = activeRegion(world)): number {
+  const base = linkCost(world, a, b);
+  if (!isWinter(world)) return base;
+  const wild = region?.places.some((p) => (p.id === a || p.id === b) && p.kind === 'wild') ?? false;
+  return wild ? Math.ceil(base * 1.5) : base;
 }
 
 /**

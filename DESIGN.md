@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; next is stage 7.1e (time and the calendar), then 7.1f (grudges fade, on real days); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) shipped 2026-09-17; next is 7.1f (grudges fade, on real days); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
@@ -726,6 +726,19 @@ after any that touches a fight):
    **Numbers, decided with the user:** in winter a link through a wild place
    takes +50% time; in winter food and rest drain +50% faster outside a settlement;
    about 1 group in 6 is a night kind and 1 in 6 keeps to some seasons.
+   **7.1e SHIPPED 2026-09-17**, all five parts: `world/calendar.ts` (ticks, the date,
+   night, the words), `stairCost` and `travelTime` (`world/travel.ts`), rest on
+   the clock (`play/rest.ts`), needs by the hour (the `time` drift cause, which
+   replaced `travel`), `presentHere` (`play/sighting.ts`: who is out, also read by
+   the Director and the Writer), and `habitOf` (`character/habitat.ts`: night kinds
+   and seasonal groups). Documentation waits for the whole of 7.1.
+   **Found while building it — for the user:** a floor's crowd is ONE group (a
+   pack), so when that group keeps to some seasons the WHOLE FLOOR is empty for one
+   or two seasons. That is about one floor in ten. The harness showed it as about
+   one trial in ten opening no fight. It now counts wins over the fights that
+   opened, and the chart is re-pinned (ARCHITECTURE §12b). Whether an empty floor
+   is what a seasonal world should do is open: a second group could fill in, or a
+   floor could draw its pack only from groups that are out.
    **Proposed split:** 7.1e-i ticks in minutes, rest on the clock, stairs in hours
    · 7.1e-ii the calendar: start date, shape and names · 7.1e-iii day and night:
    who is out, what the Director is told, the hunter's edge · 7.1e-iv needs by

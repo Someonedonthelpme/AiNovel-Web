@@ -21,12 +21,12 @@ import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { advanceJourneys, setOut } from './journey.ts';
-import { TICKS_PER_HOUR } from '../world/calendar.ts';
+import { isWinter, TICKS_PER_HOUR } from '../world/calendar.ts';
 import { passSightings, witnessSighting } from './sighting.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
-import { activeRegion, clockOf, exitsFrom, linkCost, moveWithinRegion } from '../world/travel.ts';
+import { activeRegion, clockOf, exitsFrom, moveWithinRegion, travelTime } from '../world/travel.ts';
 import type { Fact, Link, PlaceId, RegionId, World } from '../world/types.ts';
 
 /**
@@ -309,7 +309,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 
   // THE CLOCK (7.1a). This turn covers the time its action took: a move its link,
   // anything else what the Director said it cost, and never nothing.
-  const walked = movedFrom ? linkCost(world, movedFrom, world.currentPlace) : 0;
+  // The season is read before this turn's time is added: you set out in it.
+  const walked = movedFrom ? travelTime({ ...world, clock: clockOf(state.world) }, movedFrom, world.currentPlace) : 0;
   const elapsed = Math.max(1, delta.timeSpent ?? 0, walked);
   world = { ...world, clock: clockOf(state.world) + elapsed };
 
@@ -384,6 +385,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
 /** How often time passing takes a point of a need (7.1e-iv). */
 const FOOD_EVERY = 4 * TICKS_PER_HOUR;
 const REST_EVERY = 2 * TICKS_PER_HOUR;
+/** In winter, outside a settlement, both come half as fast again (7.1e-v). */
+const COLD = 1.5;
 
 /** How many multiples of `every` the clock crossed between two ticks. */
 const marks = (from: number, to: number, every: number) => Math.floor(to / every) - Math.floor(from / every);
@@ -408,10 +411,12 @@ function causesFor(state: PlayState, record: TurnRecord, from: number, to: numbe
 
   // Needs drain by the HOURS the turn covered, not by the turn (7.1e-iv).
   // Sleeping does not tire you; it still makes you hungry.
+  const place = activeRegion(state.world)?.places.find((p) => p.id === state.world.currentPlace);
+  const cold = isWinter(state.world) && place?.kind !== 'settlement' ? COLD : 1;
   pc.push({
     kind: 'time',
-    food: marks(from, to, FOOD_EVERY),
-    rest: record.delta.rest ? 0 : marks(from, to, REST_EVERY),
+    food: marks(from, to, FOOD_EVERY / cold),
+    rest: record.delta.rest ? 0 : marks(from, to, REST_EVERY / cold),
   });
 
   // Resting was a `DriftCause` that nothing ever emitted, so the one thing that

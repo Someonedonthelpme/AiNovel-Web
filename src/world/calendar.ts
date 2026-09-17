@@ -23,6 +23,9 @@ export const DAYS_PER_MONTH = 30;
 export const MONTHS_PER_YEAR = 12;
 export const DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR;
 export const MONTHS_PER_SEASON = 3;
+/** The cold season, the last of the four: it slows wild travel and drains the unsheltered. */
+export const WINTER = 3;
+export const isWinter = (world: { seed: number; turn: number; clock?: number }): boolean => dateOf(world).season === WINTER;
 /** Every world's clock starts at this hour of its first day. */
 export const START_HOUR = 8;
 

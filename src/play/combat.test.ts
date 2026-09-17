@@ -23,7 +23,7 @@ import { stationOf } from './station.ts';
 import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { journeysOf, RECOVERY, setOut } from './journey.ts';
-import { clockOf, linkCost } from '../world/travel.ts';
+import { clockOf, linkCost, travelTime } from '../world/travel.ts';
 import { calendarWords, dateOf, isNight } from '../world/calendar.ts';
 import { runDirector } from '../llm/director.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
@@ -1274,4 +1274,68 @@ test('needs drain by hours passed, not by turns', () => {
   assert.equal(six.sheet.needs.food, NEED_MAX - 1, 'a point of food every four hours');
   assert.equal(six.sheet.needs.rest, NEED_MAX - 3, 'a point of rest every two waking hours');
   assert.deepEqual(passTime(awake, 1).sheet.needs, awake.sheet.needs, 'ten minutes costs nothing');
+});
+
+/*
+ * 6b stage 7.1e-v: SEASONS. In winter a wild link takes half as long again, the
+ * cold outside a settlement drains food and rest half as fast again, and a group
+ * that keeps to some seasons is not out in the others.
+ */
+
+/** The same state, on the first day of the year on which it is `season`. */
+function inSeason(state: PlayState, season: number): PlayState {
+  for (let day = 0; day < 360; day++) {
+    const s = atClock(state, day * 144);
+    if (dateOf(s.world).season === season) return s;
+  }
+  throw new Error(`no day of the year is season ${season}`);
+}
+const WINTER = 3;
+const SUMMER = 1;
+
+/** The ground floor, with its well made wild. */
+function wildWell(): PlayState {
+  const base = playState();
+  const ground = base.world.regions['floor-0'] as Region;
+  const places = ground.places.map((p) => (p.id === 'well' ? { ...p, kind: 'wild' as const } : p));
+  return { ...base, world: { ...base.world, regions: { 'floor-0': { ...ground, places } } } };
+}
+
+test('in winter a wild link takes half as long again, a tame one does not', () => {
+  const winter = inSeason(wildWell(), WINTER);
+  const summer = inSeason(wildWell(), SUMMER);
+  assert.equal(travelTime(winter.world, 'town', 'well'), Math.ceil(1.5 * linkCost(winter.world, 'town', 'well')));
+  assert.equal(travelTime(summer.world, 'town', 'well'), linkCost(summer.world, 'town', 'well'));
+  assert.equal(travelTime(winter.world, 'town', 'market'), linkCost(winter.world, 'town', 'market'), 'no end of it is wild');
+});
+
+test('in winter, outside a settlement, food and rest drain half as fast again', () => {
+  const at = (season: number, place: string) => {
+    const s = inSeason(wildWell(), season);
+    return passTime({ ...s, world: { ...s.world, currentPlace: place } }, 72).sheet.needs;
+  };
+  assert.ok(at(WINTER, 'well').food < at(SUMMER, 'well').food, 'the cold makes you hungry');
+  assert.ok(at(WINTER, 'well').rest < at(SUMMER, 'well').rest, 'and tired');
+  assert.deepEqual(at(WINTER, 'town'), at(SUMMER, 'town'), 'not under a roof');
+});
+
+test('about one group in six is a night kind, and one in six keeps to some seasons', () => {
+  const habits = Array.from({ length: 60 }, (_, seed) =>
+    speciesFor(seed).filter((k) => k.level === 'group').map((g) => habitOf(seed, g.id))).flat();
+  const share = (f: (h: { nocturnal: boolean; seasons: number[] }) => boolean) => habits.filter(f).length / habits.length;
+  assert.ok(Math.abs(share((h) => h.nocturnal) - 1 / 6) < 0.05, `night kinds ${share((h) => h.nocturnal)}`);
+  assert.ok(Math.abs(share((h) => h.seasons.length < 4) - 1 / 6) < 0.05, `seasonal ${share((h) => h.seasons.length < 4)}`);
+});
+
+test('a group out of season fields nobody', () => {
+  const base = populated();
+  const floor = (base.world.regions['floor-2'] as Region).floor;
+  const kinds = speciesFor(11);
+  const seasonal = (populationAt(base.world, 'floor-2', 'town', floor) ?? [])
+    .map((c) => groupOf(kinds, c.subspecies)!)
+    .find((g) => habitOf(11, g).seasons.length < 4);
+  assert.ok(seasonal, 'no group in this crowd keeps to some seasons — the test says nothing');
+  const off = [0, 1, 2, 3].find((s) => !habitOf(11, seasonal).seasons.includes(s))!;
+  const foes = foesOf(beginEncounter(inSeason(base, off)));
+  assert.ok(foes.every((f) => f.group !== seasonal), 'nobody of a group that is away this season');
 });

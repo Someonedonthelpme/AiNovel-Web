@@ -35,9 +35,9 @@ import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from
 import { axisOf, hostileToward, nudge, PLAYER } from '../social/edge.ts';
 import type { Person, Region } from '../world/types.ts';
 import { arrivedHere, journeysOf } from './journey.ts';
-import { isNight } from '../world/calendar.ts';
+import { dateOf, isNight } from '../world/calendar.ts';
 import { preyOf } from '../character/prey.ts';
-import { groupsAt, packAt } from '../character/habitat.ts';
+import { groupsAt, habitOf, packAt } from '../character/habitat.ts';
 import { populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
 import type { Profession } from '../character/population.ts';
 import type { Grown } from '../character/species.ts';
@@ -173,7 +173,13 @@ function crowdFoes(
 ): Combatant[] | null {
   const kinds = state.world.species ?? [];
   const region = activeRegion(state.world);
-  const cohorts = populationAt(state.world, state.world.currentRegion, state.world.currentPlace, floor);
+  // Only the groups that are out this season (7.1e-v); the rest are away, not gone.
+  const season = dateOf(state.world).season;
+  const cohorts = populationAt(state.world, state.world.currentRegion, state.world.currentPlace, floor)
+    ?.filter((c) => {
+      const group = groupOf(kinds, c.subspecies);
+      return !group || habitOf(state.world.seed, group).seasons.includes(season);
+    }) ?? null;
   // `null` is a world that holds no kinds, and falls back to statblocks. An
   // EMPTY population is a different answer — this place has been cleared out —
   // and the two must not collapse, or thinning a place to nothing would quietly

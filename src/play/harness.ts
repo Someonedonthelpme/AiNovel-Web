@@ -193,7 +193,12 @@ export const onFloor = (
   return applyDelta(state, { startCombat: true });
 };
 
-export type Measured = { rate: number; trials: number; hpLeft: number; actions: CombatAction[] };
+/**
+ * `rate` is over the fights that OPENED: since 7.1e-v a floor whose group is away
+ * this season fields nobody, and a trial with no fight is not a lost fight.
+ * `fought` says how many of the `trials` had one.
+ */
+export type Measured = { rate: number; trials: number; fought: number; hpLeft: number; actions: CombatAction[] };
 
 /** Win rate over `trials` seeded fights, and every decision the policy took. */
 export function measure(opts: {
@@ -219,9 +224,12 @@ export function measure(opts: {
   const actions: CombatAction[] = [];
   let wins = 0;
   let hp = 0;
+  let fought = 0;
 
   for (let seed = 0; seed < trials; seed++) {
     let state = beginEncounter(onFloor(opts.danger, seed, sheetOf, inventory, opts.kinds));
+    if (!state.combat) continue;
+    fought++;
     for (let i = 0; i < 300 && state.combat && !state.combat.over; i++) {
       if (!awaitingPlayer(state)) break;
       const action = chooseAction(state);
@@ -233,7 +241,7 @@ export function measure(opts: {
     hp += Math.max(0, state.combat?.combatants['pc']?.hp ?? 0);
   }
 
-  return { rate: wins / trials, trials, hpLeft: hp / trials, actions };
+  return { rate: fought ? wins / fought : 0, trials, fought, hpLeft: fought ? hp / fought : 0, actions };
 }
 
 const ARENA: Grid = { width: 12, height: 12, walls: new Set<string>() };

@@ -1,7 +1,7 @@
 import { groupOf, speciesIdFor } from '../character/species.ts';
 import { forbids } from '../rules/ruleset.ts';
 import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
-import { clockOf, linkCost, stairCost } from '../world/travel.ts';
+import { clockOf, stairCost, travelTime } from '../world/travel.ts';
 import { isFull, regionIdFor } from '../world/types.ts';
 import type { PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
 import { newestSighting } from './sighting.ts';
@@ -144,7 +144,7 @@ function nextHop(world: World, j: Journey, target: Spot): { to: Spot; cost: numb
     const goal = region.danger === 0 ? region.entrance : target.place;
     if (!goal || j.place === goal) return null;
     const step = firstStep(world, region, j.place, goal);
-    return step ? { to: { region: region.id, place: step }, cost: linkCost(world, j.place, step) } : null;
+    return step ? { to: { region: region.id, place: step }, cost: travelTime(world, j.place, step, region) } : null;
   }
 
   const here = floorOf(world, j.region);
@@ -192,7 +192,7 @@ function firstStep(world: World, region: Region, from: PlaceId, goal: PlaceId): 
     if (at === goal) return via.get(at) ?? null;
     done.add(at);
     for (const next of region.places.find((p) => p.id === at)?.connections ?? []) {
-      const c = cost.get(at)! + linkCost(world, at, next);
+      const c = cost.get(at)! + travelTime(world, at, next, region);
       if (!cost.has(next) || c < cost.get(next)!) {
         cost.set(next, c);
         via.set(next, at === from ? next : via.get(at)!);
