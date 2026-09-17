@@ -20,7 +20,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 4 | Relationships and rumour | **shipped** | `social/edge.ts`, `character/belief.ts` |
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
-| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; next is stage 7.1e (grudges fade); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
+| 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; next is stage 7.1e (time and the calendar), then 7.1f (grudges fade, on real days); re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
 | 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
@@ -683,8 +683,67 @@ after any that touches a fight):
    **Proposed split, since this is now five mechanisms:** 7.1a link costs and a
    world clock · 7.1b journeys (the bearer travels to where you are) · 7.1c
    sightings (where they HEARD you are replaces where you are) · 7.1d send their
-   people and call in a debt · 7.1e grudges fade. Each is one test batch; each
-   leaves the game working.
+   people and call in a debt · ~~7.1e grudges fade~~ (moved to 7.1f, below). Each
+   is one test batch; each leaves the game working.
+   **7.1e PAUSED, then REPLACED 2026-09-17.** Building the fade found that it
+   cannot work on the clock as it stood. A grudge at the threshold (3) lost a point
+   at the next multiple of 10 ticks, which EVERY 10-tick recovery crosses, so a
+   survivor never came back, and no chase longer than about 10 ticks ever ended in
+   a fight. The fade was also unfair: how long you were chased depended on where
+   on the clock the grudge began. The work in progress is in
+   `git stash` ("7.1e fade WIP"). The user's answer: give the world a clock, a
+   time of day and a calendar, and make fading happen over real days.
+
+7.1e. **Time and the calendar** (asked for by the user, 2026-09-17).
+   **Decided with the user, 2026-09-17:**
+   - **One tick is 10 minutes.** A day is 144 ticks. A walk across town is 10–30
+     minutes, a word 10 minutes, a stair between floors 1–3 HOURS (6–18 ticks), a
+     short rest 1 hour, a long rest 8 hours.
+   - **Rest takes real time.** It advances the clock, which today it does not:
+     `play/rest.ts:115` and `:132` move `turn` only, so sleep takes no time once
+     a world has a clock.
+   - **A fixed calendar shape, in the world's own words.** 24-hour days, 7-day
+     weeks, 30-day months, 12 months, 4 seasons of 3 months each: a 360-day year.
+     The engine owns the numbers. The model NAMES the calendar, the days, the
+     months and the seasons (one naming call, like roles; fallback words until
+     then).
+   - **Each world starts on its own date**, e.g. "day 32 of year 328, Adar
+     reckoning". The date is dealt from the seed; the model names the reckoning.
+   - **Night is 20:00–06:00.** At night only GUARDS (station) and NIGHT KINDS are
+     out at a place: they are who can see you or be met, so night is where you move
+     unseen and a pursuer can lose you. The Director and the Writer are told the
+     hour, whether it is dark and the season. A hunter fights at night with an
+     edge.
+   - **Needs drain by hours passed**, not by turns, so a long journey really wears
+     you.
+   - **Seasons change three things:** winter makes a link through a wild place
+     slower; cold seasons drain food and rest faster outside a settlement; and a
+     group can be out only in some seasons, so a floor's crowd changes through the
+     year.
+   - **Night kinds and seasonal groups are GROUP mechanics** (a group already
+     carries body, habitat, kinship, law and prey): seeded per group, like
+     habitat.
+   **Open, for the user, before assertions:** how much slower winter makes a wild
+   link; how much faster cold drains; what share of groups are night kinds or
+   seasonal.
+   **Proposed split:** 7.1e-i ticks in minutes, rest on the clock, stairs in hours
+   · 7.1e-ii the calendar: start date, shape and names · 7.1e-iii day and night:
+   who is out, what the Director is told, the hunter's edge · 7.1e-iv needs by
+   time · 7.1e-v seasons: travel, cold, seasonal groups.
+
+7.1f. **Grudges fade**, over real days (was 7.1e).
+   **Decided with the user, 2026-09-17:**
+   - **Each grudge remembers when it was last fed**, and loses a point per N days
+     unfed. That replaces fading at shared multiples of the clock, so every grudge
+     gets its full time.
+   - **N is the person's temper**, 1 to 5 days: the coldest and most disciplined
+     hold longest (low warmth, high discipline).
+   - **A chase continues while resentment is 2 or more**, and turns back below 2.
+     Setting out still needs 3. That gap is what lets a threshold grudge finish a
+     chase.
+   - **A fled survivor recovers for one day** before setting out.
+   - The earlier defaults still hold: owing the player (obligation 2+) slows the
+     fade, and nothing fades on a turn the grudge is fed.
 8. **Parley** — a Director turn inside a fight, its verdict recorded in the
    action so the fight stays one replayable event.
 9. ~~**Subspecies** — deferred until a world needs them.~~ Folded into stage 3
