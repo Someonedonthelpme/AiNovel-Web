@@ -97,3 +97,24 @@ export function packAt(seed: number, nodes: readonly Species[], floor: number): 
   const groups = groupsAt(seed, nodes, floor);
   return groups[Math.floor(mulberry32((seed ^ 0xf100 ^ (floor * 31)) >>> 0)() * groups.length)]?.id;
 }
+
+/**
+ * A group's HOURS and SEASONS (DESIGN 6b stage 7.1e): about one group in six
+ * keeps night hours, and about one in six is out only in two or three
+ * consecutive seasons. Seeded on the world and the group, like the habitat band.
+ */
+export type Habit = { nocturnal: boolean; seasons: number[] };
+
+export const HABIT_SHARE = 1 / 6;
+
+export function habitOf(seed: number, groupId: string): Habit {
+  let hash = (seed ^ 0x4ab1) >>> 0;
+  for (const ch of groupId) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
+  const rng = mulberry32(hash);
+  const nocturnal = rng() < HABIT_SHARE;
+  if (!(rng() < HABIT_SHARE)) return { nocturnal, seasons: [0, 1, 2, 3] };
+  const length = 2 + Math.floor(rng() * 2);
+  const from = Math.floor(rng() * 4);
+  const seasons = Array.from({ length }, (_, i) => (from + i) % 4).sort((a, b) => a - b);
+  return { nocturnal, seasons };
+}

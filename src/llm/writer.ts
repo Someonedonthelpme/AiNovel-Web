@@ -102,6 +102,7 @@ function systemPrompt(view: WriterView): string {
 function userPrompt(view: WriterView): string {
   const lines = [
     `Place: ${view.place.name}. ${view.place.description}`,
+    view.time ? `Time: ${view.time}` : '',
     view.peoplePresent.length
       ? `Present: ${view.peoplePresent.map((p) => {
           const notes = [...p.disposition, ...p.condition];

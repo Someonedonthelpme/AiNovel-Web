@@ -297,3 +297,9 @@ test('a foe at its break line yields if somebody is on it, and flees if not', ()
   const far = settle(startCombat(d20Sequence(10), [hero(), orc({ hp: 4, breaksAt: 5, pos: { x: 8, y: 0 } })], open()));
   assert.equal(far.broken?.orc?.as, 'fled');
 });
+
+// 6b stage 7.1e-iii: seeing in the dark is advantage, like any other edge.
+test('a night-eyed attacker has the advantage', () => {
+  assert.equal(attackModifiers(hero({ nightEyed: true }), orc(), 1).advantage, 'advantage');
+  assert.equal(attackModifiers(hero(), orc(), 1).advantage, 'none');
+});

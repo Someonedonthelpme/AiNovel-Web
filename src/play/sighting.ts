@@ -2,6 +2,10 @@ import { claimKey, firsthand, retell } from '../character/belief.ts';
 import type { Belief, Claim } from '../character/belief.ts';
 import { PLAYER, reachedBy, regardedBy } from '../social/edge.ts';
 import { activeRegion, clockOf } from '../world/travel.ts';
+import { isNight } from '../world/calendar.ts';
+import { groupOf, speciesIdFor } from '../character/species.ts';
+import { habitOf } from '../character/habitat.ts';
+import { stationOf } from './station.ts';
 import type { World } from '../world/types.ts';
 
 /**
@@ -42,23 +46,36 @@ export function hearOf(beliefs: readonly Belief[], belief: Belief): Belief[] {
 }
 
 /**
- * Who is physically where the player stands: the place's people, less any of
- * them away on the road, plus whoever has travelled here.
+ * Who is out where the player stands: the place's people, less any of them away
+ * on the road, plus whoever has travelled here — and at NIGHT only guards and
+ * night kinds (7.1e). They are who can see the player, and who can be met; the
+ * Director and the Writer read this too. In the place's own order, arrivals last.
  */
-function presentHere(world: World): string[] {
+export function presentHere(world: World): string[] {
   const place = activeRegion(world)?.places.find((p) => p.id === world.currentPlace);
   const journeys = world.journeys ?? [];
   const isHere = (j: { region: string; place: string | null }) =>
     j.region === world.currentRegion && j.place === world.currentPlace;
   const away = new Set(journeys.filter((j) => !isHere(j)).map((j) => j.who));
   const arrived = journeys.filter(isHere).map((j) => j.who);
-  return [...new Set([...(place?.people ?? []).filter((id) => !away.has(id)), ...arrived])].sort();
+  const here = [...new Set([...(place?.people ?? []).filter((id) => !away.has(id)), ...arrived])];
+  return isNight(world) ? here.filter((id) => outAtNight(world, id)) : here;
+}
+
+/** Whether somebody is about after dark: a guard on watch, or one of a night kind. */
+export function outAtNight(world: World, id: string): boolean {
+  if (stationOf(world, id) === 'guard') return true;
+  const kinds = world.species ?? [];
+  const person = world.people[id];
+  const species = person?.species ?? person?.sheet?.species ?? speciesIdFor(world.seed, id, kinds);
+  const group = groupOf(kinds, species);
+  return group ? habitOf(world.seed, group).nocturnal : false;
 }
 
 /** Everyone where the player stands sees them, firsthand, at this tick. */
 export function witnessSighting(world: World): World {
   const claim = sightingClaim(PLAYER, world.currentRegion, world.currentPlace, clockOf(world));
-  return tellEach(world, presentHere(world).map((id) => [id, firsthand(claim)]));
+  return tellEach(world, [...presentHere(world)].sort().map((id) => [id, firsthand(claim)]));
 }
 
 /**

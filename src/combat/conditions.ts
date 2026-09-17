@@ -120,12 +120,14 @@ export function attackModifiers(attacker: Combatant, target: Combatant, distance
    * `treeBonuses.attack` has been dead since it was written.
    */
   const hunting = Boolean(attacker.hunts) && attacker.hunts === target.group;
+  // And whether the dark is on its side (7.1e).
+  const nightSight = Boolean(attacker.nightEyed);
 
   const proneHelps = hasCondition(target, 'prone') && melee;
   const proneHinders = hasCondition(target, 'prone') && !melee;
 
   return {
-    advantage: combineAdvantage(targetExposed || proneHelps || hunting, attackerImpaired || proneHinders),
+    advantage: combineAdvantage(targetExposed || proneHelps || hunting || nightSight, attackerImpaired || proneHinders),
     // A hit on a helpless creature within reach is automatically a critical.
     autoCrit: melee && (hasCondition(target, 'unconscious') || target.dying),
   };

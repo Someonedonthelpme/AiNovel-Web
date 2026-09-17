@@ -181,6 +181,11 @@ export type Combatant = {
    */
   breaksAt?: number;
   /**
+   * Sees in the dark: fights at night with the advantage (7.1e). Set by the play
+   * layer, which knows the hour; a hunter by trade has it after dark.
+   */
+  nightEyed?: boolean;
+  /**
    * Party members drop to dying at 0 HP and roll death saves; foes just die.
    * `dead` is terminal in both cases.
    */

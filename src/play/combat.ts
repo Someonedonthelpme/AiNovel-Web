@@ -35,6 +35,7 @@ import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from
 import { axisOf, hostileToward, nudge, PLAYER } from '../social/edge.ts';
 import type { Person, Region } from '../world/types.ts';
 import { arrivedHere, journeysOf } from './journey.ts';
+import { isNight } from '../world/calendar.ts';
 import { preyOf } from '../character/prey.ts';
 import { groupsAt, packAt } from '../character/habitat.ts';
 import { populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
@@ -287,6 +288,7 @@ function crowdFoes(
       ...(group ? { group } : {}),
       ...(hunts ? { hunts } : {}),
       ...(breaksAt > 0 ? { breaksAt } : {}),
+      ...(who.profession === 'hunter' && isNight(state.world) ? { nightEyed: true } : {}),
     };
   }
 }

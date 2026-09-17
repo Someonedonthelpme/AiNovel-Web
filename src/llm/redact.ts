@@ -2,6 +2,8 @@ import type { Tier } from '../engine/roll.ts';
 import { dispositionOf } from '../character/persona.ts';
 import { describeMental, describePersonality } from '../character/persona.ts';
 import type { PlayState } from '../play/state.ts';
+import { presentHere } from '../play/sighting.ts';
+import { timeLine } from '../world/calendar.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { World } from '../world/types.ts';
 import { displayNames, humanise } from '../world/naming.ts';
@@ -66,6 +68,8 @@ export type WriterView = {
    * they are what an onlooker could see.
    */
   pc: { name: string; selfPronoun: string; bearing: string[]; condition: string[] };
+  /** The hour, whether it is dark, the season and the date, in the world's words (7.1e). */
+  time?: string;
   /** Verbatim, because pronoun continuity lives in the surface text. */
   recentTurns: string[];
   /**
@@ -113,7 +117,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
   const nameOf = (id: string) =>
     (id === PLAYER ? state.sheet.name : state.world.people[id]?.name ?? id);
 
-  const peoplePresent: PresentPerson[] = (place?.people ?? [])
+  const peoplePresent: PresentPerson[] = presentHere(state.world)
     .map((id) => state.world.people[id])
     .filter((p): p is NonNullable<typeof p> => Boolean(p) && p.alive)
     .map((p) => ({
@@ -134,6 +138,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       affordances: (place?.affordances ?? []).map(say),
     },
     peoplePresent,
+    time: timeLine(state.world),
     pc: {
       name: state.sheet.name,
       selfPronoun: state.sheet.voice.selfPronoun,

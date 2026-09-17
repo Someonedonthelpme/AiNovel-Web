@@ -157,3 +157,24 @@ function validCalendar(answer: Partial<CalendarWords> | null | undefined): Calen
   const seasons = clean(answer?.seasons, 4);
   return reckoning && days && months && seasons ? { reckoning, days, months, seasons } : null;
 }
+
+/** Night is from 20:00 until 06:00. */
+export const NIGHT_FROM = 20;
+export const NIGHT_UNTIL = 6;
+
+export function isNight(world: { seed: number; turn: number; clock?: number }): boolean {
+  const { hour } = dateOf(world);
+  return hour >= NIGHT_FROM || hour < NIGHT_UNTIL;
+}
+
+/**
+ * The time, as the Director and the Writer are told it: the hour, whether it is
+ * dark, the season, and the date, in the world's own words.
+ */
+export function timeLine(world: { seed: number; turn: number; clock?: number; language: 'th' | 'en'; calendar?: CalendarWords }): string {
+  const d = dateOf(world);
+  const w = calendarWords(world);
+  const clock = `${String(d.hour).padStart(2, '0')}:${String(d.minute).padStart(2, '0')}`;
+  return `${clock}, ${isNight(world) ? 'dark' : 'daylight'}, ${w.seasons[d.season]}; `
+    + `${w.days[d.weekday]} ${d.day} ${w.months[d.month - 1]}, year ${d.year} of ${w.reckoning}`;
+}

@@ -9,6 +9,8 @@ import { dispositionOf } from '../character/persona.ts';
 import { ABILITIES } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
 import { CLASSES } from '../play/state.ts';
+import { presentHere } from '../play/sighting.ts';
+import { timeLine } from '../world/calendar.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { Provider } from './provider.ts';
 import type { WriterBrief } from './redact.ts';
@@ -304,7 +306,8 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     return `  - ${stack.item.id} "${stack.item.name}" x${stack.count} (${stack.item.kind}${worn})`;
   });
 
-  const present = (place?.people ?? [])
+  // Who is OUT here: not whoever is away on the road, and at night only the few (7.1e).
+  const present = presentHere(state.world)
     .map((id) => state.world.people[id])
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
@@ -391,6 +394,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0}`
       + `${here ? `, in ${here.name}` : ''})`,
     `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
+    `Time: ${timeLine(state.world)}`,
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',

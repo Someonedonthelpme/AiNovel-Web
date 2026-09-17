@@ -9,7 +9,7 @@ import { scaleFoe } from '../combat/statblock.ts';
 import { composition, kindForFloor } from '../combat/encounter.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
-import { bandOf, livesAt, packAt } from '../character/habitat.ts';
+import { bandOf, habitOf, livesAt, packAt } from '../character/habitat.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { groupOf, leavesUnder } from '../character/species.ts';
 import { preyOf } from '../character/prey.ts';
@@ -24,6 +24,8 @@ import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { journeysOf, RECOVERY, setOut } from './journey.ts';
 import { clockOf, linkCost } from '../world/travel.ts';
+import { calendarWords, dateOf, isNight } from '../world/calendar.ts';
+import { runDirector } from '../llm/director.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -1200,4 +1202,64 @@ test('nerve decides between coming and sending', () => {
 
 test('someone afraid for their safety sends rather than comes', () => {
   assert.equal(journeyOf(grudgeOf('lord', { nerve: 3, safety: 1 }), 'guard')?.for, 'lord');
+});
+
+/*
+ * 6b stage 7.1e-iii: DAY AND NIGHT. Night is 20:00–06:00. At night only guards
+ * and night kinds are out: they are who can see you, or be met. The Director is
+ * told the hour, the dark and the season; a hunter fights at night with an edge.
+ */
+
+const atClock = (state: PlayState, clock: number): PlayState => ({ ...state, world: { ...state.world, clock } });
+
+/** The state at this hour of the world's first day (the clock starts at 08:00). */
+const atHour = (state: PlayState, hour: number, minute = 0): PlayState =>
+  atClock(state, (((hour * 60 + minute) / 10 - 8 * 6) % 144 + 144) % 144);
+
+/** A leaf whose group keeps night hours, in world 11. */
+function nightKind(): string {
+  const kinds = speciesFor(11);
+  const leaf = kinds.find((k) => k.level === 'subspecies' && habitOf(11, groupOf(kinds, k.id)!).nocturnal);
+  assert.ok(leaf, 'world 11 has no night kind — the test says nothing');
+  return leaf.id;
+}
+
+test('night is 20:00 to 06:00', () => {
+  const w = populated();
+  assert.equal(isNight(atHour(w, 19, 50).world), false);
+  assert.equal(isNight(atHour(w, 20, 0).world), true);
+  assert.equal(isNight(atHour(w, 5, 50).world), true);
+  assert.equal(isNight(atHour(w, 6, 0).world), false);
+});
+
+test('at night only guards and night kinds are out to see you', () => {
+  const base = stations();
+  const market = (base.world.regions['floor-2'] as Region);
+  const places = market.places.map((p) => (p.id === 'market' ? { ...p, people: ['smith', 'guard', 'owl'] } : p));
+  const owl = { ...base.world.people.smith, id: 'owl', name: 'owl', species: nightKind() };
+  const s = atHour({
+    ...base,
+    world: { ...base.world, currentPlace: 'market', people: { ...base.world.people, owl }, regions: { 'floor-2': { ...market, places } } },
+  }, 22);
+  const after = takeTurn(s, {});
+  assert.ok(sawYouAt(after, 'guard', 'market'), 'a guard is on watch');
+  assert.ok(sawYouAt(after, 'owl', 'market'), 'a night kind is about');
+  assert.equal(sawYouAt(after, 'smith', 'market'), false, 'the smith is indoors');
+});
+
+test('the Director is told the hour, whether it is dark, and the season', async () => {
+  const s = atHour(populated(), 22, 10);
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, s, 'look around', 'exploration', []).catch(() => {});
+  assert.match(p.allSentText(), /22:10/);
+  assert.match(p.allSentText(), /dark/);
+  assert.ok(p.allSentText().includes(calendarWords(s.world).seasons[dateOf(s.world).season]));
+});
+
+test('a hunter by trade fights with an edge at night', () => {
+  const base = stations();
+  const hunter = { ...base, world: { ...base.world, people: { ...base.world.people, smith: { ...base.world.people.smith, sheet: base.world.people.survivor.sheet } } } };
+  const armed = (s: PlayState) => foesOf(beginEncounter(grudge(s, 'smith', 'floor-2')))[0];
+  assert.equal(armed(atHour(hunter, 23))?.nightEyed, true);
+  assert.equal(armed(atHour(hunter, 12))?.nightEyed, undefined);
 });
