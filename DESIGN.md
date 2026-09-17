@@ -723,9 +723,9 @@ after any that touches a fight):
    - **Night kinds and seasonal groups are GROUP mechanics** (a group already
      carries body, habitat, kinship, law and prey): seeded per group, like
      habitat.
-   **Open, for the user, before assertions:** how much slower winter makes a wild
-   link; how much faster cold drains; what share of groups are night kinds or
-   seasonal.
+   **Numbers, decided with the user:** in winter a link through a wild place
+   takes +50% time; in winter food and rest drain +50% faster outside a settlement;
+   about 1 group in 6 is a night kind and 1 in 6 keeps to some seasons.
    **Proposed split:** 7.1e-i ticks in minutes, rest on the clock, stairs in hours
    · 7.1e-ii the calendar: start date, shape and names · 7.1e-iii day and night:
    who is out, what the Director is told, the hunter's edge · 7.1e-iv needs by
