@@ -593,20 +593,41 @@ after any that touches a fight):
      `comingFor` becomes the departure, and arriving is what opens the fight.
    - **The bearer may send somebody they `command`** instead of coming
      themselves.
+   **Decided with the user, 2026-09-17, second pass:**
+   - **Travel costs time per LINK, for every character — the player included.**
+     A road is quick and a forest slow. The cost comes from the engine (seeded from
+     the two places), never from the model, for the reason 6c §2 gives. A link
+     with no cost reads as 1, so stored worlds keep their meaning.
+   - **They head for where they last HEARD you were.** Anyone at a place where
+     you are SEES you, firsthand. A sighting spreads along people's edges like a
+     deed, a hop per turn, and the bearer acts on the newest one that reaches
+     them. A place where nobody is connected to them hides you. Rumour is the
+     tracker, and you can shake a pursuer off.
+   - **In a town (danger 0) they wait at the gate** and strike when you step
+     out. The grudge does not override the law.
+   - **Stairs only where `crossFloors` allows**, as for grudges already. Under
+     `STANDARD`, a grudge from another floor never reaches you.
+   - **Once per grudge.** A party sets out on the turn resentment reaches the
+     threshold, and never a second one while the first is on the road.
+   - **The acts in 7.1:** come themselves, **send their people** (someone they
+     `command`), **call in a debt** (someone who owes them), and **grudges fade**
+     (resentment nothing feeds drops over time, so a survivor does not hunt you
+     forever).
    **Open, for the user, before assertions:**
-   - **What a step costs.** One place per play turn is the lazy unit. 6c says
-     distance is travel time, so a big forest would cost more later.
-   - **Whom they head for.** Where you ARE (perfect pursuit, retargeted each
-     turn), or where they last HEARD you were (the rumour system as the tracker,
-     which is the more dynamic option).
-   - **Crossing floors.** A stair is a link. `crossFloors` already decides who
-     may take one.
-   - **Arriving where fighting is refused.** Danger 0 (town) refuses combat. Do
-     they wait outside, or does a grudge override the refusal?
-   - **When they set out.** On the turn the grudge crosses the threshold, and
-     never again while one of theirs is already on the road?
-   - **Where it is stored.** A journey is state that must replay: a
-     `world.journeys` list that the fold advances, next to `populations`.
+   - **What a costly link does to the PLAYER.** One play turn that moves the world
+     clock by the cost (so a forest crossing is one prompt, and travellers advance
+     3), or several play turns in transit. The first keeps the turn loop as it is.
+     But `world.turn` is also a play-turn counter today (`play/delta.ts:303`,
+     and it seeds every fight), so the clock would need to be a separate number.
+   - **How fast a grudge fades**, and whether fear or obligation slow it.
+   - **Which of send / debt / come a bearer picks** when several are possible.
+     The proposed rule is the strongest act they can carry out, with nerve
+     deciding between two that are both possible.
+   **Proposed split, since this is now five mechanisms:** 7.1a link costs and a
+   world clock · 7.1b journeys (the bearer travels to where you are) · 7.1c
+   sightings (where they HEARD you are replaces where you are) · 7.1d send their
+   people and call in a debt · 7.1e grudges fade. Each is one test batch; each
+   leaves the game working.
 8. **Parley** — a Director turn inside a fight, its verdict recorded in the
    action so the fight stays one replayable event.
 9. ~~**Subspecies** — deferred until a world needs them.~~ Folded into stage 3
