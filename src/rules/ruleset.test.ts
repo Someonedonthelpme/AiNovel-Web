@@ -417,6 +417,7 @@ const PROVEN = [
   'knowledge.ambientHops', 'knowledge.ambientFade',
   'rest.shortTurns', 'rest.longTurns',
   'world.dangerBase', 'world.dangerPerFloor', 'world.depthBelowGround',
+  'world.emptyOutOfSeason',  // crowdFoes: an out-of-season floor stands empty only where this allows it
 ];
 
 /* -------------------------------------------------------------------------- */

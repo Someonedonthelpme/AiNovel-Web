@@ -9,7 +9,7 @@ import { scaleFoe } from '../combat/statblock.ts';
 import { composition, kindForFloor } from '../combat/encounter.ts';
 import { ABILITIES } from '../combat/types.ts';
 import { speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
-import { bandOf, habitOf, livesAt, packAt } from '../character/habitat.ts';
+import { bandOf, groupsAt, habitOf, livesAt, packAt } from '../character/habitat.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { groupOf, leavesUnder } from '../character/species.ts';
 import { preyOf } from '../character/prey.ts';
@@ -1419,4 +1419,46 @@ test('an arrived traveller fights on a grudge of 2', () => {
 
 test('a survivor recovers for a day', () => {
   assert.equal(RECOVERY, TICKS_PER_DAY);
+});
+
+/*
+ * 6b stage 7.1e, follow-up (2026-09-18): a floor whose only group is away this
+ * season is filled by another group that lives at its depth — and stands empty
+ * only where the law allows it.
+ */
+
+/** A world and a floor whose pack keeps to some seasons, in one of its off seasons, with company at its depth. */
+function floorWhoseGroupIsAway() {
+  for (let seed = 0; seed < 60; seed++) {
+    const kinds = speciesFor(seed);
+    for (let floor = 1; floor <= 20; floor++) {
+      if (floor % 10 === 0) continue;                         // a landmark fights its holder, not its crowd
+      const away = packAt(seed, kinds, floor);
+      if (!away) continue;
+      const habit = habitOf(seed, away);
+      if (habit.seasons.length === 4) continue;
+      const off = [0, 1, 2, 3].find((s) => !habit.seasons.includes(s))!;
+      const company = groupsAt(seed, kinds, floor)
+        .filter((g) => g.id !== away && habitOf(seed, g.id).seasons.includes(off));
+      if (company.length === 0) continue;
+      const base = populated();
+      const region = { ...(base.world.regions['floor-2'] as Region), floor };
+      const state = inSeason({ ...base, world: { ...base.world, seed, species: kinds, regions: { 'floor-2': region } } }, off);
+      return { state, away, floor, seed, kinds };
+    }
+  }
+  throw new Error('no world has a seasonal pack with company at its depth — the tests say nothing');
+}
+
+test("a floor whose only group is away this season is filled by another that lives at its depth", () => {
+  const { state, away, floor, seed, kinds } = floorWhoseGroupIsAway();
+  const foes = foesOf(beginEncounter(state));
+  assert.ok(foes.length > 0, 'somebody is out');
+  assert.ok(foes.every((f) => f.group !== away && livesAt(seed, kinds, f.group!, floor)), JSON.stringify(foes.map((f) => f.group)));
+});
+
+test('where the law allows it, such a floor stands empty', () => {
+  const { state } = floorWhoseGroupIsAway();
+  const lawful = withRules(state, { ...STANDARD, world: { ...STANDARD.world, emptyOutOfSeason: true } });
+  assert.equal(beginEncounter(lawful).combat, null);
 });

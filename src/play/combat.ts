@@ -37,8 +37,8 @@ import type { Person, Region } from '../world/types.ts';
 import { arrivedHere, journeysOf } from './journey.ts';
 import { dateOf, isNight } from '../world/calendar.ts';
 import { preyOf } from '../character/prey.ts';
-import { groupsAt, habitOf, packAt } from '../character/habitat.ts';
-import { populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
+import { groupsAt, habitOf, livesAt, packAt } from '../character/habitat.ts';
+import { derivePopulation, populationAt, PROFESSIONS, sizeIn, thinPopulation } from '../character/population.ts';
 import type { Profession } from '../character/population.ts';
 import type { Grown } from '../character/species.ts';
 
@@ -175,11 +175,26 @@ function crowdFoes(
   const region = activeRegion(state.world);
   // Only the groups that are out this season (7.1e-v); the rest are away, not gone.
   const season = dateOf(state.world).season;
-  const cohorts = populationAt(state.world, state.world.currentRegion, state.world.currentPlace, floor)
-    ?.filter((c) => {
-      const group = groupOf(kinds, c.subspecies);
-      return !group || habitOf(state.world.seed, group).seasons.includes(season);
-    }) ?? null;
+  const out = (group: string | undefined) => !group || habitOf(state.world.seed, group).seasons.includes(season);
+  const everyone = populationAt(state.world, state.world.currentRegion, state.world.currentPlace, floor);
+  let cohorts = everyone?.filter((c) => out(groupOf(kinds, c.subspecies))) ?? null;
+
+  /*
+   * A FLOOR WHOSE CROWD IS AWAY (2026-09-18). A floor's crowd is one group, so a
+   * group that keeps to some seasons would leave its whole floor empty. Another
+   * group that lives at this depth and is out fills in — unless the world's law
+   * lets a floor stand empty out of season. Only an absence the SEASON made:
+   * a crowd thinned to nothing stays gone.
+   *
+   * `ponytail: the stand-ins are derived fresh each fight, and a kill among them
+   * thins nothing, because the place's stored crowd is the absent group's. Store
+   * a second cohort when a stand-in crowd needs to remember its dead.`
+   */
+  if (everyone?.length && cohorts?.length === 0 && !rulesOf(state.world).world.emptyOutOfSeason) {
+    const standIn = groupsAt(state.world.seed, kinds, floor)
+      .find((g) => livesAt(state.world.seed, kinds, g.id, floor) && out(g.id));
+    if (standIn) cohorts = derivePopulation(state.world.seed, kinds, standIn.id, state.world.currentPlace, floor);
+  }
   // `null` is a world that holds no kinds, and falls back to statblocks. An
   // EMPTY population is a different answer — this place has been cleared out —
   // and the two must not collapse, or thinning a place to nothing would quietly

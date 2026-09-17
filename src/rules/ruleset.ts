@@ -151,6 +151,13 @@ export type WorldRules = {
    * whose ground is solid, and the law then never even gets asked.
    */
   depthBelowGround: number;
+  /**
+   * Whether a floor may stand EMPTY when its only group is out of season
+   * (2026-09-18). Off: another group that lives at that depth fills in. A world
+   * dial until strata carry their own laws. Read as off when a stored world's
+   * rules predate it.
+   */
+  emptyOutOfSeason: boolean;
 };
 
 export type KnowledgeRules = {
@@ -333,7 +340,7 @@ export const STANDARD: Ruleset = {
     maxRefine: 10, refineRisk: 0.25, refineLoss: 1, repairLoss: 8,
   },
   rest: { shortTurns: 1, longTurns: 8 },
-  world: { dangerBase: 0, dangerPerFloor: 1, depthBelowGround: 3 },
+  world: { dangerBase: 0, dangerPerFloor: 1, depthBelowGround: 3, emptyOutOfSeason: false },
   laws: [
     // What `descend` used to assert on its own: the ground is the bottom.
     { axis: 'movement', constraint: 'descendBelowGround', binds: 'all' },
