@@ -810,8 +810,11 @@ winter outside a settlement ([delta.ts:389](src/play/delta.ts:389)); winter
 ([calendar.ts:27](src/world/calendar.ts:27)) also slows a wild link. About one
 group in six keeps night hours and one in six keeps to some seasons
 ([habitat.ts:110](src/character/habitat.ts:110)); a group out of season is left
-out of a place's crowd ([combat.ts:177](src/play/combat.ts:177)), so a floor whose
-one group is away fields nobody, and a hunter by trade fights at night with the
+out of a place's crowd ([combat.ts:177](src/play/combat.ts:177)). *"A floor whose one
+group is away fields nobody"* held for a day: since 2026-09-18 another group that lives
+at that depth and is out fills in, and a floor stands empty out of season only where
+`world.emptyOutOfSeason` allows it ([combat.ts:193](src/play/combat.ts:193)) — a crowd
+thinned to nothing still stays gone. A hunter by trade fights at night with the
 advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
