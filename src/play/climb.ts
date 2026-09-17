@@ -3,7 +3,7 @@ import type { Provider } from '../llm/provider.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import type { FloorResult } from '../world/floorgen.ts';
 import { ascend, clockOf, descend, installRegion, stairCost, traverse } from '../world/travel.ts';
-import { advanceJourneys } from './journey.ts';
+import { advanceJourneys, fadeGrudges } from './journey.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { adopt, firsthand } from '../character/belief.ts';
 import { forbids, ruleClaim } from '../rules/ruleset.ts';
@@ -196,7 +196,7 @@ async function cross(
 function arrive(state: PlayState, crossed: World): { state: PlayState; xp: number; levelled: LevelUp | null } {
   // A crossing is a stair (7.1b, hours since 7.1e): it covers its time, and whoever is on the road covers it with you.
   const clock = clockOf(state.world) + stairCost(crossed, state.world.currentRegion, crossed.currentRegion);
-  const world = advanceJourneys({ ...crossed, clock }, clockOf(state.world), clock);
+  const world = fadeGrudges(state.world, advanceJourneys({ ...crossed, clock }, clockOf(state.world), clock));
 
   let counters = bumpCounter(state.sheet.counters, COUNTERS.floorsClimbed);
 

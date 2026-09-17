@@ -1,6 +1,9 @@
 import { groupOf, speciesIdFor } from '../character/species.ts';
 import { forbids } from '../rules/ruleset.ts';
-import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
+import { axisOf, CHASE_THRESHOLD, hostileToward, PLAYER } from '../social/edge.ts';
+import { dispositionOf } from '../character/persona.ts';
+import type { Needs, Temperament } from '../character/persona.ts';
+import { TICKS_PER_DAY } from '../world/calendar.ts';
 import { clockOf, stairCost, travelTime } from '../world/travel.ts';
 import { isFull, regionIdFor } from '../world/types.ts';
 import type { PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
@@ -29,8 +32,8 @@ export type Journey = {
   departs: number;
 };
 
-/** How long somebody who fled needs before they can set out again. */
-export const RECOVERY = 10;
+/** How long somebody who fled needs before they can set out again: a day (7.1f). */
+export const RECOVERY = TICKS_PER_DAY;
 
 export const journeysOf = (world: Pick<World, 'journeys'>): Journey[] => world.journeys ?? [];
 
@@ -199,4 +202,61 @@ function firstStep(world: World, region: Region, from: PlaceId, goal: PlaceId): 
       }
     }
   }
+}
+
+/**
+ * How many days a grudge of this person's holds before it loses a point: 1 to 5.
+ * The coldest and most disciplined hold longest, the warmest and most impulsive
+ * least; an ordinary temper, three days.
+ */
+export function fadeDays(who: { temperament: Temperament; needs: Needs }): number {
+  const { warmth, discipline } = dispositionOf(who);
+  return Math.max(1, Math.min(5, 3 + Math.round((discipline - warmth) / 2)));
+}
+
+/**
+ * GRUDGES FADE, over real days (7.1f).
+ *
+ * Every grudge toward the player remembers when it was last fed (`Edge.fedAt`).
+ * One that rose this turn is fed now, and loses nothing. One that did not loses
+ * a point for each full span of its bearer's `fadeDays` since it was fed —
+ * doubled if they owe the player — and its timer restarts at each point lost. A
+ * grudge stored before this starts its timer on the first turn it is seen.
+ *
+ * A traveller whose bearer no longer holds a grudge worth a chase turns back.
+ */
+export function fadeGrudges(before: World, after: World): World {
+  const now = clockOf(after);
+  const edges = { ...(after.edges ?? {}) };
+  let changed = false;
+
+  for (const [key, edge] of Object.entries(after.edges ?? {})) {
+    if (edge.to !== PLAYER) continue;
+    let held = edge.axes.resentment ?? 0;
+    if (held <= 0) continue;
+
+    if (held > axisOf(before.edges, edge.from, PLAYER, 'resentment')) {
+      edges[key] = { ...edge, fedAt: now };
+      changed = true;
+      continue;
+    }
+
+    const person = after.people[edge.from];
+    const owes = axisOf(after.edges, edge.from, PLAYER, 'obligation') >= 2 ? 2 : 1;
+    const span = (person ? fadeDays(person) : 3) * owes * TICKS_PER_DAY;
+    let fedAt = edge.fedAt ?? now;
+    while (held > 0 && now - fedAt >= span) {
+      held -= 1;
+      fedAt += span;
+    }
+    if (fedAt !== edge.fedAt || held !== edge.axes.resentment) {
+      edges[key] = { ...edge, axes: { ...edge.axes, resentment: held }, fedAt };
+      changed = true;
+    }
+  }
+
+  const journeys = journeysOf(after).filter((j) => hostileToward(edges, j.for, CHASE_THRESHOLD));
+  const turnedBack = journeys.length !== journeysOf(after).length;
+  if (!changed && !turnedBack) return after;
+  return { ...after, ...(changed ? { edges } : {}), ...(turnedBack ? { journeys } : {}) };
 }

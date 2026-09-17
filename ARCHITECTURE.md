@@ -232,7 +232,7 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:219](src/world/travel.ts:219)) and the panel's way down ([climb.ts:262](src/play/climb.ts:262)) |
-| `crossFloors` | movement | the Director brief ([director.ts:366](src/llm/director.ts:366)), and whether a journey may take a stair ([journey.ts:153](src/play/journey.ts:153)) — see §12 |
+| `crossFloors` | movement | the Director brief ([director.ts:366](src/llm/director.ts:366)), and whether a journey may take a stair ([journey.ts:156](src/play/journey.ts:156)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:226](src/play/climb.ts:226), [combat.ts:895](src/play/combat.ts:895)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:903](src/play/combat.ts:903)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:216](src/play/climb.ts:216)) |
@@ -718,7 +718,7 @@ generated before this, or one the model named nobody for, keeps the crowd boss.
 
 **A person with a grudge comes for you** (6b stage 5). Hostility is DERIVED from
 the edges, never stored: resentment at `GRUDGE_THRESHOLD` (3) or more, and fear
-below the resentment ([edge.ts:104](src/social/edge.ts:104)). Resentment rather
+below the resentment ([edge.ts:115](src/social/edge.ts:115)). Resentment rather
 than regard, because contempt is not a grudge; and not `Person.stance`, which is
 an order to a companion, not hostility. Whoever qualifies fights alone and in
 place of the crowd, on the elite anchor plus their kind
@@ -732,10 +732,10 @@ a holder is.
 *"Whoever qualifies is in your next fight … nothing pursues anybody yet"* was true
 until 6b stage 7.1b. A grudge now TRAVELS (`play/journey.ts`): it sets out on the
 turn it is fed, walks on the world clock, and only a traveller who has ARRIVED
-where you stand fights (`arrivedHere`, [journey.ts:53](src/play/journey.ts:53)).
+where you stand fights (`arrivedHere`, [journey.ts:56](src/play/journey.ts:56)).
 The law is read on the road: a traveller takes a stair only where `crossFloors`
 does not forbid them as a resident of their group
-([journey.ts:153](src/play/journey.ts:153)), so under `STANDARD` a grudge still
+([journey.ts:156](src/play/journey.ts:156)), so under `STANDARD` a grudge still
 stays on its own floor. The full account of journeys is written when 7.1 ends.
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
@@ -826,7 +826,7 @@ concludes, the original turn's draft record plus `combatActions` is appended as
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:667](src/play/delta.ts:667)), because the live turn ran drift, deeds
+([delta.ts:669](src/play/delta.ts:669)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -964,7 +964,7 @@ with a grudge gets one at their first fight ([play/combat.ts:365](src/play/comba
 **Cleared: `Person.homeRegion`** — *listed here as dead* until 6b stage 5, which
 read it as where a person IS, to decide whether a grudge was on your floor. Since
 7.1b it is where a traveller sets out from when no loaded place lists them
-([journey.ts:46](src/play/journey.ts:46)). Still written only at generation;
+([journey.ts:49](src/play/journey.ts:49)). Still written only at generation;
 see `crossFloors` under *Enforced by construction*.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
@@ -1152,7 +1152,7 @@ NPC, so nobody ever tries."* True until 6b stage 5, when it gained its first
 enforcer: a person with a grudge on another floor came for you only when the law
 did not forbid them. Since 7.1b NPCs MOVE (journeys), and that movement asks the
 law: a traveller takes a stair only where it allows
-([journey.ts:153](src/play/journey.ts:153)). For everything else it is still true
+([journey.ts:156](src/play/journey.ts:156)). For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
 and the Director brief ([director.ts:366](src/llm/director.ts:366)) is the only
 check on what gets narrated.
@@ -1322,7 +1322,7 @@ Every balance number, and where it lives.
 | temperament range | −10..+10 | [persona.ts:84](src/character/persona.ts:84) |
 | need range | 0..10 | [persona.ts:125](src/character/persona.ts:125) |
 | trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
-| grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:95](src/social/edge.ts:95) |
+| grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:101](src/social/edge.ts:101) |
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:956](src/play/combat.ts:956) |
 | break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:382](src/play/combat.ts:382), [combat/combat.ts:71](src/combat/combat.ts:71) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |

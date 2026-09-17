@@ -70,6 +70,12 @@ export type Edge = {
    * single label would have to pick which of those the relationship "is".
    */
   roles?: string[];
+  /**
+   * The clock tick A's resentment toward B last ROSE (6b stage 7.1f). A grudge
+   * fades from here, a point per the bearer's days, so every grudge gets its full
+   * time rather than fading at shared marks of the clock.
+   */
+  fedAt?: number;
 };
 
 /** Keyed `from>to`, so the two directions are two entries and cannot be confused. */
@@ -93,6 +99,11 @@ export const trustToward = (edges: Edges | undefined, who: string): number =>
 
 /** How much of a grudge it takes before somebody acts on it. */
 export const GRUDGE_THRESHOLD = 3;
+/**
+ * How much it takes to KEEP acting on one (7.1f). Lower than setting out, so a
+ * grudge that fades a point on the road still finishes the chase.
+ */
+export const CHASE_THRESHOLD = 2;
 
 /**
  * Whether `who` would fight the player: a grudge they are not too afraid to act on.
@@ -101,9 +112,9 @@ export const GRUDGE_THRESHOLD = 3;
  * somebody more afraid of you than angry keeps away. DERIVED, never stored: a
  * flag would be wrong the moment an edge moved.
  */
-export function hostileToward(edges: Edges | undefined, who: string): boolean {
+export function hostileToward(edges: Edges | undefined, who: string, threshold = GRUDGE_THRESHOLD): boolean {
   const resentment = axisOf(edges, who, PLAYER, 'resentment');
-  return resentment >= GRUDGE_THRESHOLD && axisOf(edges, who, PLAYER, 'fear') < resentment;
+  return resentment >= threshold && axisOf(edges, who, PLAYER, 'fear') < resentment;
 }
 
 /**

@@ -20,7 +20,7 @@ import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
-import { advanceJourneys, setOut } from './journey.ts';
+import { advanceJourneys, fadeGrudges, setOut } from './journey.ts';
 import { isWinter, TICKS_PER_HOUR } from '../world/calendar.ts';
 import { passSightings, witnessSighting } from './sighting.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
@@ -658,6 +658,8 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   // same traits in the same order.
   // Word of the player passes a hop, then whoever is here sees them (7.1c).
   world = witnessSighting(passSightings(world));
+  // Grudges nothing fed fade, over days; whoever they sent turns back (7.1f).
+  world = fadeGrudges(state.world, world);
   // A grudge fed this turn sets out, once everything that could feed it has.
   world = setOut(state.world, world, fled);
 

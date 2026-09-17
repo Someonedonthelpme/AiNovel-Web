@@ -22,9 +22,9 @@ import { formRole } from '../social/roles.ts';
 import { stationOf } from './station.ts';
 import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
-import { journeysOf, RECOVERY, setOut } from './journey.ts';
+import { fadeDays, journeysOf, RECOVERY, setOut } from './journey.ts';
 import { clockOf, linkCost, travelTime } from '../world/travel.ts';
-import { calendarWords, dateOf, isNight } from '../world/calendar.ts';
+import { calendarWords, dateOf, isNight, TICKS_PER_DAY } from '../world/calendar.ts';
 import { runDirector } from '../llm/director.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
@@ -1338,4 +1338,85 @@ test('a group out of season fields nobody', () => {
   const off = [0, 1, 2, 3].find((s) => !habitOf(11, seasonal).seasons.includes(s))!;
   const foes = foesOf(beginEncounter(inSeason(base, off)));
   assert.ok(foes.every((f) => f.group !== seasonal), 'nobody of a group that is away this season');
+});
+
+/*
+ * 6b stage 7.1f: GRUDGES FADE, over real days. Each grudge remembers when it was
+ * last fed and loses a point per N days unfed, N by the bearer's temper (1–5),
+ * doubled if they owe the player. A chase goes on at 2; setting out needs 3.
+ */
+
+const resentmentOf = (state: PlayState, who: string) => axisOf(state.world.edges, who, PLAYER, 'resentment');
+const fedAtOf = (state: PlayState, who: string) => state.world.edges?.[`${who}>${PLAYER}`]?.fedAt;
+const humiliate = (who: string): WorldDelta => ({ deed: { kind: 'humiliated', toward: who } });
+
+/** `who` holds a grudge fed at tick `at`, and the clock reads `at`. */
+function fed(state: PlayState, who: string, at: number): PlayState {
+  const g = atClock(grudge(state, who, 'floor-2', { arrived: false }), at);
+  const key = `${who}>${PLAYER}`;
+  return { ...g, world: { ...g.world, edges: { ...g.world.edges, [key]: { ...g.world.edges![key], fedAt: at } } } };
+}
+
+function withResentment(state: PlayState, who: string, level: number): PlayState {
+  const key = `${who}>${PLAYER}`;
+  const edge = state.world.edges![key];
+  return { ...state, world: { ...state.world, edges: { ...state.world.edges, [key]: { ...edge, axes: { ...edge.axes, resentment: level } } } } };
+}
+
+/** A persona with this warmth and discipline, as `dispositionOf` reads them. */
+const temper = ({ warmth = 0, discipline = 0 }: { warmth?: number; discipline?: number }) => {
+  const p = playState().world.people.smith;
+  return { ...p, temperament: { ...p.temperament, feeling: warmth * 3, discipline: discipline * 3 } };
+};
+
+test('a grudge remembers when it was fed', () => {
+  // Fed once at 50, so only being fed AGAIN can move the timer to now.
+  const s = takeTurn(atClock(fed(populated(), 'smith', 50), 100), humiliate('smith'));
+  assert.equal(fedAtOf(s, 'smith'), clockOf(s.world));
+});
+
+test("a grudge loses a point after its bearer's days, counted from when it was fed", () => {
+  const s = fed(populated(), 'smith', 100);                  // a neutral temper: three days
+  assert.equal(resentmentOf(passTime(s, 3 * TICKS_PER_DAY - 1), 'smith'), 3);
+  assert.equal(resentmentOf(passTime(s, 3 * TICKS_PER_DAY), 'smith'), 2);
+});
+
+test('the coldest, most disciplined hold a grudge five days; the warmest, most impulsive one', () => {
+  assert.equal(fadeDays(temper({ warmth: -3, discipline: 3 })), 5);
+  assert.equal(fadeDays(temper({ warmth: 3, discipline: -3 })), 1);
+  assert.equal(fadeDays(temper({})), 3);
+});
+
+test('owing you doubles how long it holds', () => {
+  const s = fed(populated(), 'smith', 0);
+  const owing = { ...s, world: { ...s.world, edges: nudge(s.world.edges, 'smith', PLAYER, 'obligation', 2) } };
+  assert.equal(resentmentOf(passTime(owing, 3 * TICKS_PER_DAY), 'smith'), 3);
+  assert.equal(resentmentOf(passTime(owing, 6 * TICKS_PER_DAY), 'smith'), 2);
+});
+
+test('a grudge fed this turn does not fade this turn', () => {
+  const s = atClock(fed(populated(), 'smith', 0), 3 * TICKS_PER_DAY - 1);
+  const again = takeTurn(s, { ...humiliate('smith'), timeSpent: 3 });
+  assert.equal(resentmentOf(again, 'smith'), 4, 'crossing its third day while being fed takes nothing');
+  assert.equal(fedAtOf(again, 'smith'), clockOf(again.world));
+});
+
+test('a chase goes on at 2 and turns back below it; setting out still needs 3', () => {
+  const base = populated();
+  const far = { ...base, world: { ...base.world, currentPlace: 'well' } };
+  const onTheRoad = travelling(far, 'smith', 'floor-2', 'market');
+  assert.ok(journeyOf(takeTurn(withResentment(onTheRoad, 'smith', 2), {}), 'smith'), 'at 2 they keep coming');
+  assert.equal(journeyOf(takeTurn(withResentment(onTheRoad, 'smith', 1), {}), 'smith'), undefined, 'at 1 they turn back');
+
+  const two = withResentment(seenBy(grudge(base, 'smith', 'floor-2', { arrived: false }), 'smith', 'town'), 'smith', 2);
+  assert.deepEqual(journeysOf(setOut(base.world, two.world, [])), [], 'a grudge of 2 does not set out');
+});
+
+test('an arrived traveller fights on a grudge of 2', () => {
+  const s = withResentment(grudge(populated(), 'smith', 'floor-2'), 'smith', 2);
+  assert.equal(foesOf(beginEncounter(s))[0]?.person, 'smith');
+});
+
+test('a survivor recovers for a day', () => {
+  assert.equal(RECOVERY, TICKS_PER_DAY);
 });

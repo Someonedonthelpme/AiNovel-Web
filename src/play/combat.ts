@@ -32,7 +32,7 @@ import type { PlayState } from './state.ts';
 import { playerSubject } from './signetbook.ts';
 import { stratumAt } from '../world/strata.ts';
 import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from '../character/species.ts';
-import { axisOf, hostileToward, nudge, PLAYER } from '../social/edge.ts';
+import { axisOf, CHASE_THRESHOLD, hostileToward, nudge, PLAYER } from '../social/edge.ts';
 import type { Person, Region } from '../world/types.ts';
 import { arrivedHere, journeysOf } from './journey.ts';
 import { dateOf, isNight } from '../world/calendar.ts';
@@ -328,7 +328,7 @@ function comingFor(state: PlayState): Person | null {
 
   const resentment = (id: string) => axisOf(world.edges, id, PLAYER, 'resentment');
   const [first] = arrivedHere(world)
-    .filter((j) => world.people[j.who]?.alive && world.people[j.for]?.alive && hostileToward(world.edges, j.for))
+    .filter((j) => world.people[j.who]?.alive && world.people[j.for]?.alive && hostileToward(world.edges, j.for, CHASE_THRESHOLD))
     .sort((a, b) => resentment(b.for) - resentment(a.for) || a.who.localeCompare(b.who));
   return first ? world.people[first.who] : null;
 }
