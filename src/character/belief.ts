@@ -39,7 +39,9 @@ export type Claim =
   /** Somebody did something. */
   | { kind: 'deed'; who: string; what: string }
   /** Two people stand in some relation. The one most worth lying about. */
-  | { kind: 'bond'; a: string; b: string; role: string };
+  | { kind: 'bond'; a: string; b: string; role: string }
+  /** Somebody was seen somewhere, at a tick of the world clock. One per person seen: only the newest matters. */
+  | { kind: 'sighting'; who: string; region: string; place: string; at: number };
 
 /** Stable and order-independent, so a bond reads the same from either end. */
 export function claimKey(claim: Claim): string {
@@ -47,6 +49,7 @@ export function claimKey(claim: Claim): string {
     case 'lore': return `lore:${claim.id}`;
     case 'rule': return `rule:${claim.rule}`;
     case 'deed': return `deed:${claim.who}:${claim.what}`;
+    case 'sighting': return `sighting:${claim.who}`;
     case 'bond': {
       const [x, y] = [claim.a, claim.b].sort();
       return `bond:${x}:${y}:${claim.role}`;

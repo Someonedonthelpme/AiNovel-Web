@@ -18,10 +18,11 @@ import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './d
 import { xpToNext } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import { counterOf } from '../character/persona.ts';
-import { believes } from '../character/belief.ts';
+import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { journeysOf, RECOVERY, setOut } from './journey.ts';
-import { linkCost } from '../world/travel.ts';
+import { clockOf, linkCost } from '../world/travel.ts';
+import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import { playState } from './fixtures.ts';
@@ -761,9 +762,12 @@ function passTime(state: PlayState, ticks: number): PlayState {
 
 const journeyOf = (state: PlayState, who: string) => journeysOf(state.world).find((j) => j.who === who);
 
-/** Somebody with a grudge, on the road from `place` in `region`. */
+/**
+ * Somebody with a grudge, on the road from `place` in `region` — knowing where the
+ * player stands now, since 7.1c a traveller with no word of you goes nowhere.
+ */
 function travelling(state: PlayState, who: string, region: string, place: string | null): PlayState {
-  const s = grudge(state, who, region, { arrived: false });
+  const s = seenBy(grudge(state, who, region, { arrived: false }), who, state.world.currentPlace);
   return { ...s, world: { ...s.world, journeys: [{ who, for: who, region, place, progress: 0, departs: 0 }] } };
 }
 
@@ -993,7 +997,9 @@ test('a survivor with a grudge comes back: a crowd foe grown into a notable', ()
   assert.ok(who, 'there has to be a survivor for this to say anything');
   assert.deepEqual(out.fled, [who]);
 
-  const after = { ...out.state, world: setOut(fled.world, out.state.world, out.fled) };
+  // They saw you where they broke (in play, the turn's sightings give them that).
+  const seen = seenBy(out.state, who, out.state.world.currentPlace);
+  const after = { ...seen, world: setOut(fled.world, seen.world, out.fled) };
   assert.ok(journeyOf(after, who), 'the grudge sets out');
   assert.equal(foesOf(passTime(after, RECOVERY - 1)).length, 0, 'but not before they have recovered');
   const foes = foesOf(passTime(after, RECOVERY + 3));
@@ -1049,6 +1055,61 @@ test('where fighting is refused they wait at the gate, and strike once you are s
   assert.equal(waited.combat, null, 'no fight in town');
   assert.equal(journeyOf(waited, 'smith')?.place, 'gate', 'and they go no further than the gate');
 
-  const out = { ...waited, world: { ...waited.world, currentRegion: 'floor-2' } };
+  // Since 7.1c they follow only on word of you; here they hear at once.
+  const out = seenBy({ ...waited, world: { ...waited.world, currentRegion: 'floor-2' } }, 'smith', 'town');
   assert.equal(foesOf(passTime(out, 30))[0]?.person, 'smith');
+});
+
+/*
+ * 6b stage 7.1c: SIGHTINGS. Whoever is where you are sees you. Word passes a hop
+ * a turn along people's edges, and a journey heads for the newest word of you —
+ * not for where you really are.
+ */
+
+const sawYouAt = (state: PlayState, who: string, place: string): boolean =>
+  newestSighting(state.world.people[who]?.beliefs ?? [], PLAYER)?.place === place;
+
+/** `who` holds a firsthand sighting of the player at `place` in the current region, `later` ticks from now. */
+function seenBy(state: PlayState, who: string, place: string, later = 0): PlayState {
+  const claim = sightingClaim(PLAYER, state.world.currentRegion, place, clockOf(state.world) + later);
+  const person = state.world.people[who];
+  return {
+    ...state,
+    world: { ...state.world, people: { ...state.world.people, [who]: { ...person, beliefs: hearOf(person.beliefs ?? [], firsthand(claim)) } } },
+  };
+}
+
+test('whoever is where you are sees you, firsthand', () => {
+  const s = takeTurn(playState(), { moveTo: 'market' });
+  assert.ok(sawYouAt(s, 'smith', 'market'), 'the smith lives at the market');
+});
+
+test("a sighting passes one hop per turn along people's edges", () => {
+  const base = playState();
+  const quiet = { ...base, world: { ...base.world, currentPlace: 'gate', edges: nudge(base.world.edges, 'warden', 'smith', 'familiarity', 1) } };
+  const s = seenBy(quiet, 'smith', 'market');
+  assert.equal(sawYouAt(s, 'warden', 'market'), false);
+  assert.equal(sawYouAt(takeTurn(s, {}), 'warden', 'market'), true);
+});
+
+test('a journey heads for the newest sighting, not for where you are', () => {
+  const base = populated();
+  const atTheGate = { ...base, world: { ...base.world, currentPlace: 'gate' } };
+  const s = seenBy(travelling(atTheGate, 'smith', 'floor-2', 'market'), 'smith', 'well', 1);
+  assert.equal(journeyOf(passTime(s, 9), 'smith')?.place, 'well');
+});
+
+test('where nobody connected to them sees you, you are lost to them', () => {
+  const base = populated();
+  const atTheGate = { ...base, world: { ...base.world, currentPlace: 'gate' } };
+  const s = passTime(seenBy(travelling(atTheGate, 'smith', 'floor-2', 'market'), 'smith', 'well', 1), 20);
+  assert.equal(s.combat, null);
+  assert.equal(journeyOf(s, 'smith')?.place, 'well', 'still at the last place they heard of you');
+});
+
+test('with no word of you at all, a grudge does not set out', () => {
+  const before = populated();
+  const after = grudge(before, 'smith', 'floor-2', { arrived: false });
+  assert.deepEqual(journeysOf(setOut(before.world, after.world, [])), []);
+  assert.equal(journeysOf(setOut(before.world, seenBy(after, 'smith', 'town').world, [])).length, 1, 'and does once they know');
 });

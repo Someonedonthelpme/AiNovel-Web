@@ -170,14 +170,17 @@ test('speaking roughly in public is an act, and the room sees it', () => {
 test('a courteous turn is not a deed, so nobody has anything to say about it', () => {
   const after = applyTurn(playState(), turn({ input: 'สวัสดีครับ' })).state;
   assert.equal(axisOf(after.world.edges, 'warden', PLAYER, 'regard'), 0);
-  assert.equal(after.world.people['warden'].beliefs, undefined);
+  // Was: `beliefs` undefined. Respecified by 7.1c: whoever is where you are now SEES you,
+  // which is a belief but not a deed. The claim was always that no DEED is held.
+  assert.deepEqual((after.world.people['warden'].beliefs ?? []).filter((b) => b.claim.kind === 'deed'), []);
 });
 
 test('WHAT THEY BELIEVE is what a witness ends up holding, not merely what is true', () => {
   // The belief core stops being a tested island here: a deed is a claim, and a
   // person holds it with a confidence that came from how they heard it.
   const after = applyTurn(playState(), turn({ input: 'มึงเอาอะไรวะ' })).state;
-  const held = after.world.people['smith'].beliefs ?? [];
+  // Respecified by 7.1c: a witness also sees you now, so only the DEED beliefs are counted.
+  const held = (after.world.people['smith'].beliefs ?? []).filter((b) => b.claim.kind === 'deed');
   assert.equal(held.length, 1);
   assert.equal(held[0].confidence, 1, 'it was done to them; they are sure');
 });

@@ -21,6 +21,7 @@ import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { advanceJourneys, setOut } from './journey.ts';
+import { passSightings, witnessSighting } from './sighting.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
@@ -636,6 +637,8 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   // a score or a personality axis has already moved. Doing it inside the fold
   // rather than in the live loop is what keeps a replayed session unlocking the
   // same traits in the same order.
+  // Word of the player passes a hop, then whoever is here sees them (7.1c).
+  world = witnessSighting(passSightings(world));
   // A grudge fed this turn sets out, once everything that could feed it has.
   world = setOut(state.world, world, fled);
 

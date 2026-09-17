@@ -4,6 +4,7 @@ import { axisOf, hostileToward, PLAYER } from '../social/edge.ts';
 import { clockOf, linkCost } from '../world/travel.ts';
 import { isFull, regionIdFor } from '../world/types.ts';
 import type { PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
+import { newestSighting } from './sighting.ts';
 
 /**
  * Somebody on the road because of a grudge (DESIGN 6b stage 7.1).
@@ -64,6 +65,8 @@ export function setOut(before: World, after: World, recovering: readonly PersonI
   const resentment = (w: World, id: PersonId) => axisOf(w.edges, id, PLAYER, 'resentment');
   const departing = Object.values(after.people)
     .filter((p) => p.alive && !busy.has(p.id) && hostileToward(after.edges, p.id))
+    // With no word of the player at all there is nowhere to set out for (7.1c).
+    .filter((p) => newestSighting(p.beliefs ?? [], PLAYER) !== null)
     .filter((p) => resentment(after, p.id) > resentment(before, p.id))
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((p): Journey => ({
@@ -77,17 +80,29 @@ export function setOut(before: World, after: World, recovering: readonly PersonI
 }
 
 /**
- * Walk every traveller toward the player for the time between two clock ticks.
- *
- * They head for where the player IS; 7.1c replaces that with where they last
- * heard the player was. A link is paid for in full before it is crossed, and
- * time left over is carried as progress on the next one.
+ * Walk every traveller for the time between two clock ticks, toward where they
+ * last HEARD the player was (7.1c) — the newest word the traveller or the bearer
+ * holds. With no word at all they stay put. A link is paid for in full before it
+ * is crossed, and time left over is carried as progress on the next one.
  */
 export function advanceJourneys(world: World, from: number, to: number): World {
   const journeys = journeysOf(world);
   if (journeys.length === 0 || to <= from) return world;
-  const target: Spot = { region: world.currentRegion, place: world.currentPlace };
-  return { ...world, journeys: journeys.map((j) => walk(world, j, target, to - Math.max(from, j.departs))) };
+  return {
+    ...world,
+    journeys: journeys.map((j) => {
+      const target = heardOf(world, j);
+      return target ? walk(world, j, target, to - Math.max(from, j.departs)) : j;
+    }),
+  };
+}
+
+/** The newest word of the player that the traveller or the bearer holds. */
+function heardOf(world: World, j: Journey): Spot | null {
+  const mine = newestSighting(world.people[j.who]?.beliefs ?? [], PLAYER);
+  const theirs = newestSighting(world.people[j.for]?.beliefs ?? [], PLAYER);
+  const newest = !mine ? theirs : !theirs ? mine : theirs.at > mine.at ? theirs : mine;
+  return newest ? { region: newest.region, place: newest.place } : null;
 }
 
 function walk(world: World, journey: Journey, target: Spot, budget: number): Journey {

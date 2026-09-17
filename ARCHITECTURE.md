@@ -119,7 +119,7 @@ config ─┐
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
   this module decides which are legal and applies only those."*
-  ([delta.ts:35](src/play/delta.ts:35)). Refusing one field never discards the
+  ([delta.ts:36](src/play/delta.ts:36)). Refusing one field never discards the
   rest of the turn.
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
@@ -232,7 +232,7 @@ on each of the four axes** ([ruleset.ts:203](src/rules/ruleset.ts:203)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:193](src/world/travel.ts:193)) and the panel's way down ([climb.ts:262](src/play/climb.ts:262)) |
-| `crossFloors` | movement | the Director brief ([director.ts:363](src/llm/director.ts:363)), and whether a journey may take a stair ([journey.ts:133](src/play/journey.ts:133)) — see §12 |
+| `crossFloors` | movement | the Director brief ([director.ts:363](src/llm/director.ts:363)), and whether a journey may take a stair ([journey.ts:148](src/play/journey.ts:148)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:226](src/play/climb.ts:226), [combat.ts:884](src/play/combat.ts:884)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:892](src/play/combat.ts:892)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:216](src/play/climb.ts:216)) |
@@ -330,7 +330,7 @@ anything derives from the seed alone.
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:263](src/world/types.ts:263)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:238](src/play/delta.ts:238)).
+  mid-run writer ([delta.ts:239](src/play/delta.ts:239)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:622](src/session/genesis.ts:622)). Stored for the same reason
   `subjects` is.
@@ -462,7 +462,7 @@ Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:275](src/character/species.ts:275)), weighted 4:1 toward the world's
 DOMINANT kind — its own ordinary people, PEOPLE where a world has any, since a
 town of beasts is a bestiary ([species.ts:258](src/character/species.ts:258)). And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:205](src/play/delta.ts:205)) rather than drawn,
+place it leaves from ([delta.ts:206](src/play/delta.ts:206)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
 
@@ -732,10 +732,10 @@ a holder is.
 *"Whoever qualifies is in your next fight … nothing pursues anybody yet"* was true
 until 6b stage 7.1b. A grudge now TRAVELS (`play/journey.ts`): it sets out on the
 turn it is fed, walks on the world clock, and only a traveller who has ARRIVED
-where you stand fights (`arrivedHere`, [journey.ts:51](src/play/journey.ts:51)).
+where you stand fights (`arrivedHere`, [journey.ts:52](src/play/journey.ts:52)).
 The law is read on the road: a traveller takes a stair only where `crossFloors`
 does not forbid them as a resident of their group
-([journey.ts:133](src/play/journey.ts:133)), so under `STANDARD` a grudge still
+([journey.ts:148](src/play/journey.ts:148)), so under `STANDARD` a grudge still
 stays on its own floor. The full account of journeys is written when 7.1 ends.
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
@@ -762,8 +762,8 @@ only options are `kill` and `spare` ([:473](src/play/combat.ts:473)), and both a
 ([game.ts:672](src/server/game.ts:672)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:765](src/play/combat.ts:765)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:494](src/play/delta.ts:494)), and whoever
-was spared is counted present to feel it ([delta.ts:516](src/play/delta.ts:516)).
+toward the person if it was one ([delta.ts:495](src/play/delta.ts:495)), and whoever
+was spared is counted present to feel it ([delta.ts:517](src/play/delta.ts:517)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
 ([play/combat.ts:883](src/play/combat.ts:883)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
@@ -826,7 +826,7 @@ concludes, the original turn's draft record plus `combatActions` is appended as
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:645](src/play/delta.ts:645)), because the live turn ran drift, deeds
+([delta.ts:648](src/play/delta.ts:648)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -872,7 +872,7 @@ broken twice: once by omitting `sheet`/`ended` from snapshots (fixed by
 migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes,
-and a fold re-resolves them with today's code ([delta.ts:589](src/play/delta.ts:589)).
+and a fold re-resolves them with today's code ([delta.ts:590](src/play/delta.ts:590)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
 snapshotted back to back ([game.ts:679](src/server/game.ts:679)), so normal play
@@ -964,7 +964,7 @@ with a grudge gets one at their first fight ([play/combat.ts:354](src/play/comba
 **Cleared: `Person.homeRegion`** — *listed here as dead* until 6b stage 5, which
 read it as where a person IS, to decide whether a grudge was on your floor. Since
 7.1b it is where a traveller sets out from when no loaded place lists them
-([journey.ts:44](src/play/journey.ts:44)). Still written only at generation;
+([journey.ts:45](src/play/journey.ts:45)). Still written only at generation;
 see `crossFloors` under *Enforced by construction*.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
@@ -1121,7 +1121,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:621](src/play/delta.ts:621)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:622](src/play/delta.ts:622)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:272](src/session/genesis.ts:272),
@@ -1152,7 +1152,7 @@ NPC, so nobody ever tries."* True until 6b stage 5, when it gained its first
 enforcer: a person with a grudge on another floor came for you only when the law
 did not forbid them. Since 7.1b NPCs MOVE (journeys), and that movement asks the
 law: a traveller takes a stair only where it allows
-([journey.ts:133](src/play/journey.ts:133)). For everything else it is still true
+([journey.ts:148](src/play/journey.ts:148)). For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
 and the Director brief ([director.ts:363](src/llm/director.ts:363)) is the only
 check on what gets narrated.
@@ -1388,11 +1388,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:105](src/play/state.ts:105)),
-and being jumped is no deed ([delta.ts:486](src/play/delta.ts:486)). A fight
+and being jumped is no deed ([delta.ts:487](src/play/delta.ts:487)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:490](src/play/delta.ts:490)). `spared` — *"has no writer until 6b stage
+([delta.ts:491](src/play/delta.ts:491)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:494](src/play/delta.ts:494)).
+([delta.ts:495](src/play/delta.ts:495)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -1415,7 +1415,7 @@ arrives with quests (DESIGN step 7).
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
 ([genesis.ts:673](src/session/genesis.ts:673)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:259](src/play/delta.ts:259)).
+`Region.exits` is a way out found in play ([delta.ts:260](src/play/delta.ts:260)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
