@@ -17,7 +17,9 @@ import type { CombatAction, CombatOption } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
 import { xpToNext } from './progress.ts';
 import { COUNTERS } from './traits.ts';
-import { counterOf } from '../character/persona.ts';
+import { counterOf, NEED_MAX } from '../character/persona.ts';
+import { formRole } from '../social/roles.ts';
+import { stationOf } from './station.ts';
 import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { journeysOf, RECOVERY, setOut } from './journey.ts';
@@ -34,7 +36,7 @@ import { generatedFloor, groundFloor, world } from '../world/fixtures.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
-import type { Region } from '../world/types.ts';
+import type { Person, Region } from '../world/types.ts';
 
 /** A dangerous floor, since nothing hunts at ground level. */
 function onFloorTwo(): PlayState {
@@ -1112,4 +1114,88 @@ test('with no word of you at all, a grudge does not set out', () => {
   const after = grudge(before, 'smith', 'floor-2', { arrived: false });
   assert.deepEqual(journeysOf(setOut(before.world, after.world, [])), []);
   assert.equal(journeysOf(setOut(before.world, seenBy(after, 'smith', 'town').world, [])).length, 1, 'and does once they know');
+});
+
+/*
+ * 6b stage 7.1d: SEND THEIR PEOPLE, CALL IN A DEBT. What a grudge can do depends
+ * on who holds it — their station, their nerve, how safe they feel.
+ */
+
+/** A lord who commands a guard, a lender a debtor owes, a survivor, a nobody and an outcast. */
+function stations(): PlayState {
+  const base = populated();
+  const roles = [
+    { id: 'rule', kind: 'power' as const, names: ['lord', 'guard'] as [string, string] },
+    { id: 'loan', kind: 'exchange' as const, names: ['lender', 'debtor'] as [string, string] },
+  ];
+  const trade = (id: string) => ({ ...base.sheet, background: { ...base.sheet.background, id } });
+  const somebody = (id: string, over: Partial<Person> = {}): Person => ({ ...base.world.people.smith, id, name: id, ...over });
+  const people = {
+    ...base.world.people,
+    lord: somebody('lord', { status: 'superior' }),
+    guard: somebody('guard', { sheet: trade('watcher') }),
+    lender: somebody('lender'),
+    debtor: somebody('debtor'),
+    survivor: somebody('survivor', { sheet: trade('hunter') }),
+    nobody: somebody('nobody'),
+    outcast: somebody('outcast', { status: 'inferior' }),
+  };
+  let edges = formRole(base.world.edges, roles, 'lord', 'guard', 'rule/a');
+  edges = formRole(edges, roles, 'lender', 'debtor', 'loan/a');
+  return { ...base, world: { ...base.world, roles, people, edges } };
+}
+
+/** `who` turns hostile this turn, knowing where the player is, with this nerve and sense of safety. */
+function grudgeOf(who: string, { nerve = 0, safety = NEED_MAX, from = stations() } = {}): PlayState {
+  const hostile = seenBy(grudge(from, who, 'floor-2', { arrived: false }), who, 'town');
+  const person = hostile.world.people[who];
+  const shaken = {
+    ...person,
+    temperament: { ...person.temperament, nerve: nerve * 3 },
+    needs: { ...person.needs, safety },
+  };
+  const after = { ...hostile.world, people: { ...hostile.world.people, [who]: shaken } };
+  return { ...hostile, world: setOut(from.world, after, []) };
+}
+
+test('station is derived from roles, trade and status', () => {
+  const w = stations().world;
+  assert.equal(stationOf(w, 'lord'), 'noble', 'commands someone, and superior');
+  assert.equal(stationOf(w, 'lender'), 'merchant', 'owed coin');
+  assert.equal(stationOf(w, 'guard'), 'guard', 'a watcher by trade');
+  assert.equal(stationOf(w, 'survivor'), 'adventurer', 'a hunter by trade');
+  assert.equal(stationOf(w, 'nobody'), 'villager');
+  assert.equal(stationOf(w, 'outcast'), 'beggar', 'inferior, and bound to nobody');
+});
+
+test('a noble with somebody to command sends them, and stays home', () => {
+  const s = grudgeOf('lord');
+  assert.equal(journeyOf(s, 'guard')?.for, 'lord');
+  assert.equal(journeyOf(s, 'lord'), undefined);
+});
+
+test("the one sent fights on the bearer's grudge", () => {
+  const s = grudgeOf('lord');
+  const here = { region: s.world.currentRegion, place: s.world.currentPlace };
+  const arrived = { ...s, world: { ...s.world, journeys: journeysOf(s.world).map((j) => ({ ...j, ...here })) } };
+  assert.equal(foesOf(beginEncounter(arrived))[0]?.person, 'guard');
+});
+
+test('whoever owes them can be called in', () => {
+  assert.equal(journeyOf(grudgeOf('lender'), 'debtor')?.for, 'lender');
+});
+
+test('an adventurer only ever comes themselves', () => {
+  const base = stations();
+  const withServant = { ...base, world: { ...base.world, edges: formRole(base.world.edges, base.world.roles!, 'survivor', 'nobody', 'rule/a') } };
+  assert.equal(journeyOf(grudgeOf('survivor', { from: withServant }), 'survivor')?.for, 'survivor');
+});
+
+test('nerve decides between coming and sending', () => {
+  assert.equal(journeyOf(grudgeOf('lord', { nerve: 3 }), 'lord')?.for, 'lord');
+  assert.equal(journeyOf(grudgeOf('lord', { nerve: -3 }), 'guard')?.for, 'lord');
+});
+
+test('someone afraid for their safety sends rather than comes', () => {
+  assert.equal(journeyOf(grudgeOf('lord', { nerve: 3, safety: 1 }), 'guard')?.for, 'lord');
 });

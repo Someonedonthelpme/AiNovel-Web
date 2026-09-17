@@ -330,18 +330,21 @@ export const arrivalOpens = (state: PlayState): boolean =>
   !fightOpen(state) && (activeRegion(state.world)?.danger ?? 0) > 0 && comingFor(state) !== null;
 
 /**
- * A person, as somebody who fights: their kind, a trade drawn from the seed and
- * their id, at the top of a crowd's standing.
+ * A person, as somebody who fights: their kind, their trade, at the top of a
+ * crowd's standing. The trade is the one their sheet was built with when it was
+ * (a survivor, a guard); otherwise it is drawn from the seed and their id.
  *
- * `ponytail: the trade is seeded, not chosen — a smith can come at you as a
- * raider. Give people a trade when one reads wrong in play.`
+ * `ponytail: a seeded trade can still make a smith come at you as a raider. Give
+ * people a trade when one reads wrong in play.`
  */
 function memberOf(world: PlayState['world'], person: Person): Member {
   let hash = (world.seed ^ 0x5eed) >>> 0;
   for (const ch of person.id) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
   return {
     subspecies: person.sheet?.species ?? person.species ?? speciesIdFor(world.seed, person.id, world.species ?? []),
-    profession: PROFESSIONS[Math.floor(mulberry32(hash)() * PROFESSIONS.length)],
+    profession: (PROFESSIONS as readonly string[]).includes(person.sheet?.background.id ?? '')
+      ? (person.sheet!.background.id as Profession)
+      : PROFESSIONS[Math.floor(mulberry32(hash)() * PROFESSIONS.length)],
     rank: 'veteran',
   };
 }

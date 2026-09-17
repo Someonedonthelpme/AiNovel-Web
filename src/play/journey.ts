@@ -5,6 +5,7 @@ import { clockOf, linkCost } from '../world/travel.ts';
 import { isFull, regionIdFor } from '../world/types.ts';
 import type { PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
 import { newestSighting } from './sighting.ts';
+import { whoGoes } from './station.ts';
 
 /**
  * Somebody on the road because of a grudge (DESIGN 6b stage 7.1).
@@ -17,7 +18,7 @@ import { newestSighting } from './sighting.ts';
 export type Journey = {
   /** Who is travelling. */
   who: PersonId;
-  /** Whose grudge sent them. Themselves, until 7.1d lets a bearer send others. */
+  /** Whose grudge sent them: themselves, or somebody who answers to them (7.1d). */
   for: PersonId;
   region: RegionId;
   /** Where in it. Null while crossing a region that is not loaded in full. */
@@ -69,13 +70,17 @@ export function setOut(before: World, after: World, recovering: readonly PersonI
     .filter((p) => newestSighting(p.beliefs ?? [], PLAYER) !== null)
     .filter((p) => resentment(after, p.id) > resentment(before, p.id))
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((p): Journey => ({
-      who: p.id,
-      for: p.id,
-      ...whereIs(after, p.id),
-      progress: 0,
-      departs: clockOf(after) + (recovering.includes(p.id) ? RECOVERY : 0),
-    }));
+    .map((p): Journey => {
+      // Who goes is the bearer's station, nerve and fear (7.1d).
+      const who = whoGoes(after, p.id);
+      return {
+        who,
+        for: p.id,
+        ...whereIs(after, who),
+        progress: 0,
+        departs: clockOf(after) + (recovering.includes(who) ? RECOVERY : 0),
+      };
+    });
   return departing.length ? { ...after, journeys: [...journeysOf(after), ...departing] } : after;
 }
 
