@@ -1783,6 +1783,29 @@ kind (static / dynamic / story) · danger curve decoupled from depth · theme,
 culture and people pool · topology (stack or graph) · loot (items, skill books,
 gear sets) · nesting.
 
+**Under discussion, 2026-09-18 — strata with their own LAWS of time and
+consequence** (the user, inspired by manhwa towers). One tower mixes kinds:
+- **floors 1–10: a time loop.** Separate floors, each a fixed scenario that repeats
+  until it is cleared.
+- **floors 11–20: one continuous place.** An action on floor 12 changes something
+  on floor 18.
+- **floors 21–30: one country in different times.** Each floor has its own time,
+  place and story.
+- "and so on".
+
+Today a stratum's `kind` is only `static | dynamic` (`world/types.ts:72`), and it
+decides whether a floor is regenerated. Proposed: do not add named kinds.
+Decompose them into a few ORTHOGONAL stratum laws, in a closed vocabulary, and
+make each named kind a preset of them:
+- **persistence:** frozen, kept, or regenerated (today's two kinds)
+- **reset:** never, on death, on leaving, or until cleared (the loop)
+- **continuity:** isolated floors, or one shared state across the stratum
+- **time:** the world's clock, or each floor its own era (a date offset on the
+  calendar)
+- **memory across a reset:** who keeps what (`keepMemories` exists as a law)
+- **clear condition:** what ends a loop (the landmark holder dead; quests later)
+Open questions are with the user; nothing here is decided.
+
 ### Quests — a full dynamic quest system
 
 Sources, all wanted: the stratum's own arc; NPCs pursuing their own purposes;
