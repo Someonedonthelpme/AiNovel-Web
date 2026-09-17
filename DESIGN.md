@@ -613,16 +613,29 @@ after any that touches a fight):
      `command`), **call in a debt** (someone who owes them), and **grudges fade**
      (resentment nothing feeds drops over time, so a survivor does not hunt you
      forever).
-   **Open, for the user, before assertions:**
-   - **What a costly link does to the PLAYER.** One play turn that moves the world
-     clock by the cost (so a forest crossing is one prompt, and travellers advance
-     3), or several play turns in transit. The first keeps the turn loop as it is.
-     But `world.turn` is also a play-turn counter today (`play/delta.ts:303`,
-     and it seeds every fight), so the clock would need to be a separate number.
-   - **How fast a grudge fades**, and whether fear or obligation slow it.
-   - **Which of send / debt / come a bearer picks** when several are possible.
-     The proposed rule is the strongest act they can carry out, with nerve
-     deciding between two that are both possible.
+   **Decided with the user, 2026-09-17, third pass:**
+   - **A world clock that runs continuously, separate from the turn count.** Play
+     stays turn-based; each play turn COVERS the time its action takes. A move
+     covers its link's cost, and anything else at least one tick. Everything that
+     travels or fades runs on the clock. `world.turn` stays the play-turn
+     counter, so fights keep their seeds (`play/delta.ts:303`).
+   - **A person picks a grudge act by their STATION, their personality and their
+     emotion.**
+     - **Station** is new. Today `Person.status` is only `superior | peer |
+       inferior` relative to the player (`character/persona.ts:15`). "Noble,
+       beggar, adventurer, villager" is a closed list of stations, whose words the
+       model supplies the way it supplies role words. A station decides which acts
+       are open at all: a noble can send people, and a beggar cannot.
+     - **Personality** is `dispositionOf`: nerve and warmth weight coming
+       yourself against sending somebody, or going after the player's people.
+     - **Emotion** is the fast state, `needs`: an unsafe person sends somebody
+       rather than coming.
+   - **Fade (default, not confirmed):** resentment nothing feeds drops by 1 every
+     10 clock ticks, and obligation toward the player slows it.
+   **Open, for the user:**
+   - **The station list**, and which acts each one opens.
+   - **Where a person's station comes from**: set at generation for everyone, or
+     derived from roles, trade and status.
    **Proposed split, since this is now five mechanisms:** 7.1a link costs and a
    world clock · 7.1b journeys (the bearer travels to where you are) · 7.1c
    sightings (where they HEARD you are replaces where you are) · 7.1d send their
