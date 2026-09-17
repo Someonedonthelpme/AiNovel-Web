@@ -1804,7 +1804,48 @@ make each named kind a preset of them:
   calendar)
 - **memory across a reset:** who keeps what (`keepMemories` exists as a law)
 - **clear condition:** what ends a loop (the landmark holder dead; quests later)
-Open questions are with the user; nothing here is decided.
+
+**Decided with the user, 2026-09-18:**
+- **Laws plus presets**, not named kinds. A stratum carries a closed set of laws;
+  "loop", "continuous" and "era" are presets of them.
+- **What a loop resets:** the floor's places, its crowd, and its people (their
+  feelings toward the player included). The player keeps memories, items and XP.
+- **Era floors are tied** by a shared culture and geography, by family lines
+  across eras, and by ECHOES: a deed on an earlier era's floor becomes lore on a
+  later one.
+- **Build order:** "reset until cleared" first, cleared when the landmark holder
+  dies; then "era", which uses the calendar. In THE ORDER, after 6b stage 8
+  (parley) and alongside 6c.
+- **A floor may stand empty out of season only where the law allows it.**
+  Otherwise another group that lives at that depth fills in. Until stratum laws
+  exist, this is a world dial.
+
+**More laws, proposed 2026-09-18** (the user asked for more, from other
+inspirations or new; none decided):
+- **time rate:** a stratum's clock runs faster or slower than the world's. A year
+  inside can be a day outside, and a grudge fades on the stratum's time.
+- **overflow:** a floor left uncleared too long spills its crowd onto the floors
+  below, or into the outer world. It reads the calendar, the journeys and the
+  populations that already exist.
+- **passage:** how you may come and go — open, one-way, sealed until cleared, or
+  a toll to enter (coin, an item, or days of your life).
+- **trial:** the floor is a test with a closed objective — survive N days, reach
+  a place, keep someone alive, find something hidden, or choose. It is also a
+  clear condition, before quests exist.
+- **on death:** what dying does here — the run ends, you return to the floor's
+  start with your memories (a regression), or you are captured.
+- **rivals:** other climbers share the floor and race you for the clear. They
+  are people with sheets, and a grudge between rivals is a journey already.
+- **patron:** something outside watches, and rewards or punishes kinds of deed.
+  It is a standing, like reputation, with no body.
+- **a rule of the floor:** one closed prohibition enforced by the engine (no
+  killing, no lying to the floor's people, no fleeing), in the same vocabulary
+  as `forbids`, with the stratum as its scope. A broken rule costs something
+  named in advance.
+- **mirror:** two versions of one floor, and a choice decides which one you are
+  in; the other keeps what you did in it.
+- **countdown:** the floor collapses after N days on the calendar, whatever you
+  have cleared.
 
 ### Quests — a full dynamic quest system
 
