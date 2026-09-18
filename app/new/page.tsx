@@ -55,6 +55,8 @@ export default function NewCharacter() {
   // Whether the tower is authored once and frozen, or rebuilt as you return to
   // it. A frozen world never spends a model call on a floor twice.
   const [structure, setStructure] = useState<'dynamic' | 'static'>('dynamic');
+  // Floors 1–10 born as a loop band (DESIGN 6c) — separate from living/fixed.
+  const [loop, setLoop] = useState(false);
   const [answers, setAnswers] = useState<Answers>({});
   const [step, setStep] = useState(0);
 
@@ -153,7 +155,7 @@ export default function NewCharacter() {
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, answers, draft, seed, rules, structure, species }),
+        body: JSON.stringify({ language, answers, draft, seed, rules, structure, species, loop }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'generation failed');
@@ -268,6 +270,16 @@ export default function NewCharacter() {
             </button>
           ))}
         </div>
+        <div className="chips" style={{ marginTop: '0.6rem' }}>
+          <button className={loop ? 'chip on' : 'chip'} onClick={() => setLoop(!loop)}>
+            floors 1–10 loop
+          </button>
+        </div>
+        {loop && (
+          <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
+            Leave one of the first ten floors before its holder falls, and it is as you first found it: the same people, who do not remember you. You keep what you carry and what you learned.
+          </p>
+        )}
         <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
           {structure === 'static'
             ? 'A fixed tower is written once. Come back to a floor and it is the same floor, down to the doorways.'

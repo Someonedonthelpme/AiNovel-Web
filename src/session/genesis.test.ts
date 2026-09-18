@@ -14,6 +14,7 @@ import { HARSH, STANDARD } from '../rules/ruleset.ts';
 import { dominantOf, groupOf, leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
 import { axisOf, PLAYER } from '../social/edge.ts';
 import { withKin } from '../character/kinship.ts';
+import { isLoop, isStatic } from '../world/strata.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
   let iv = startInterview(language);
@@ -422,4 +423,34 @@ test('the town a climber wakes in already knows what they are', async () => {
     Object.values(r.world.people).reduce((sum, p) => sum + axisOf(r.world.edges, p.id, PLAYER, 'trust'), 0);
 
   assert.ok(trust(asKin) > trust(asOther), `as kin ${trust(asKin)}, as a stranger ${trust(asOther)}`);
+});
+
+/* 6c loop L2a: a world may be BORN with a loop band — the first writer `Stratum.laws` has. */
+
+const withBand = (p = wholeGenesis(), structure: 'dynamic' | 'static' = 'dynamic') =>
+  runGenesis(p, completed(), 42, 'standard', structure, undefined, true);
+
+test('a world may be born with a loop band: floors 1–10 loop, and nothing else does', async () => {
+  const looped = await withBand();
+  assert.deepEqual([0, 1, 10, 11].map((f) => isLoop(looped.world, f)), [false, true, true, false]);
+  assert.equal(looped.world.strata?.loop?.parent, 'tower');
+});
+
+test('a world born without one holds no law at all', async () => {
+  const plain = await runGenesis(wholeGenesis(), completed(), 42);
+  assert.equal(Object.values(plain.world.strata ?? {}).some((s) => s.laws), false);
+});
+
+test("the band keeps the tower's kind, so a frozen world's loop floors stay frozen", async () => {
+  const frozen = await withBand(wholeGenesis(), 'static');
+  assert.equal(isStatic(frozen.world, 5), true);
+});
+
+test("the band costs no model call, and is named in the engine's words", async () => {
+  const plainCalls = wholeGenesis();
+  await runGenesis(plainCalls, completed(), 42);
+  const bandCalls = wholeGenesis();
+  const looped = await withBand(bandCalls);
+  assert.equal(bandCalls.calls.length, plainCalls.calls.length);
+  assert.equal(looped.world.strata?.loop?.name, 'the loop');
 });

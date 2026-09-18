@@ -579,6 +579,16 @@ export type GenesisResult = {
 /** What the structure every world starts with is called, before anyone renames it. */
 const TOWER_NAME = { en: 'the tower', th: 'หอคอย' } as const;
 
+/**
+ * A LOOP band (DESIGN 6c, loop L2a): floors 1–10, each put back as it was built
+ * whenever it is left uncleared. The engine's words for it, like the tower's, and
+ * the tower's kind, because the innermost stratum speaks for a floor — a band that
+ * said `dynamic` would quietly unfreeze ten floors of a frozen tower.
+ */
+const LOOP_NAME = { en: 'the loop', th: 'วงวน' } as const;
+const loopBandIn = (language: 'en' | 'th', kind: Stratum['kind']): Stratum =>
+  ({ id: 'loop', name: LOOP_NAME[language], kind, parent: 'tower', from: 1, to: 10, laws: { reset: 'untilCleared' } });
+
 export async function runGenesis(
   provider: Provider,
   interview: Interview,
@@ -594,6 +604,8 @@ export async function runGenesis(
   structure: Stratum['kind'] = 'dynamic',
   /** How the climber's kind is chosen. Absent: the ordinary kind. */
   species?: SpeciesChoice,
+  /** Whether floors 1–10 are born a LOOP band (DESIGN 6c, loop L2a). */
+  loopBand = false,
 ): Promise<GenesisResult> {
   /*
    * Named FIRST, because the character call lists them and asks which two this
@@ -675,7 +687,10 @@ export async function runGenesis(
      * the tower rather than a hub beside it — the same claim `regionIdFor(0)`
      * has always made. Sub-strata (a dungeon inside it) nest under this id.
      */
-    strata: { tower: { id: 'tower', name: TOWER_NAME[interview.language], kind: structure, from: 0 } },
+    strata: {
+      tower: { id: 'tower', name: TOWER_NAME[interview.language], kind: structure, from: 0 },
+      ...(loopBand ? { loop: loopBandIn(interview.language, structure) } : {}),
+    },
     regions: { 'floor-0': ground.region },
     people: ground.people,
     edges: ground.edges,

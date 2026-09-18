@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { climbTarget, speciesChoiceOf } from './game.ts';
+import { climbTarget, loopBandOf, speciesChoiceOf } from './game.ts';
 
 test('a climb request names a way out, the stair, or is refused', () => {
   // The route used to turn a body it could not parse into `{}`, which climbs
@@ -17,4 +17,11 @@ test('a species choice from the client is one of three shapes, or refused', () =
   assert.deepEqual(speciesChoiceOf({ decide: 'world' }), { decide: 'world' });
   assert.throws(() => speciesChoiceOf({ describe: '' }), /species/);
   assert.throws(() => speciesChoiceOf({ pick: 7 }), /species/);
+});
+
+test('a loop request that is not true or false is refused at the edge', () => {
+  assert.equal(loopBandOf(undefined), false);
+  assert.equal(loopBandOf(true), true);
+  assert.equal(loopBandOf(false), false);
+  assert.throws(() => loopBandOf('yes'), /loop/);
 });

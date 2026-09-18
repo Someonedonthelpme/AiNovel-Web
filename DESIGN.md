@@ -1838,9 +1838,20 @@ make each named kind a preset of them:
   `World.loops` for loop floors only; reset also covers the floor's reputation,
   its places' ambient, and journeys of its people; survivors made there vanish
   with the run; a floor with no holder is cleared from the start; loop floors are
-  never compressed. **Not built:** L2, how a world is BORN with a loop stratum (a
-  preset at genesis, or a wing the floor model names) — until then only tests
-  reach one; `passage` (you can climb past an uncleared loop floor); what other
+  never compressed. **Requirement changed by the user, 2026-09-18 (at L2):** a loop
+  floor is to be cleared by a QUEST, not by its holder dying. Old: "cleared when the
+  landmark holder dies" (built in L1, `play/climb.ts` `resetLoop`). New: the clear
+  condition is a quest. Quests are not built (*Quests* below, after 6c in THE ORDER),
+  so **holder death stays the clear condition until they exist** (decided with the
+  user, 2026-09-18): killing someone is the commonest quest shape, so it becomes the
+  first quest type rather than being thrown away.
+- **L2a SHIPPED 2026-09-18:** a world may be born with a LOOP BAND, floors 1–10, a
+  toggle on the creation page separate from living/fixed; the band takes the
+  tower's kind; no model call. **Open, found at L2a:** only every tenth floor has a
+  holder (`kindForFloor`), so in the band only floor 10 ever resets — floors 1–9
+  have no holder and count as cleared. Needs a holder on every loop floor, and a
+  decision on how strong a loop holder fights (a living holder takes over the
+  floor's fights). **Not built:** loop wings; `passage` (you can climb past an uncleared loop floor); what other
   people believe about an undone run.
 - **A floor may stand empty out of season only where the law allows it.**
   Otherwise another group that lives at that depth fills in. Until stratum laws

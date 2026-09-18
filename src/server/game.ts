@@ -461,6 +461,8 @@ export async function newGame(
   structure?: string,
   /** How the climber's kind is chosen, as the client sent it. Checked by `speciesChoiceOf`. */
   species?: unknown,
+  /** Whether floors 1–10 loop, as the client sent it. Checked by `loopBandOf`. */
+  loop?: unknown,
 ): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
@@ -487,6 +489,7 @@ export async function newGame(
     provider(), interview, seed ?? Date.now() % 2147483647, rules as PresetName | undefined ?? 'standard',
     structure === 'static' ? 'static' : 'dynamic',
     speciesChoiceOf(species),
+    loopBandOf(loop),
   );
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);
   await saveSnapshot(id, initialPlayState(genesis.world, genesis.sheet));
@@ -598,6 +601,17 @@ export function speciesChoiceOf(raw: unknown): SpeciesChoice | undefined {
  * meant. A body that does not parse is REFUSED: turning it into `{}` climbed the
  * stair, so a broken request moved the player instead of failing.
  */
+/**
+ * Whether the client asked for a loop band — checked here, at the edge. Absent is
+ * no band; anything but a boolean is refused rather than read as one, which would
+ * hand the player a world whose law they did not ask for.
+ */
+export function loopBandOf(raw: unknown): boolean {
+  if (raw === undefined || raw === null) return false;
+  if (typeof raw === 'boolean') return raw;
+  throw new Error(`loop: expected true or false, got ${JSON.stringify(raw).slice(0, 40)}`);
+}
+
 export function climbTarget(text: string): { to?: string; error?: string } {
   let body: unknown = {};
   try {
