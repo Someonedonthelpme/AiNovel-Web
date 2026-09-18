@@ -90,6 +90,13 @@ test('each floor of an era stratum is its own year: past, ascending toward the p
   assert.deepEqual([eraOf(w, 20), eraOf(w, 31)], [0, 0], 'outside the stratum, the world clock');
 });
 
+test('an era stratum with no top floor is refused, not read as the world clock', () => {
+  const open = { ...eraStrata().eras, to: undefined };
+  const w = eraWorld({ strata: { ...eraStrata(), eras: open } });
+  assert.throws(() => eraOf(w, 22), /era stratum "eras" has no top floor/);
+  assert.equal(eraOf(w, 5), 0, 'a floor outside it still reads the world clock');
+});
+
 test('eras are dealt from the seed, never stored', () => {
   const w = eraWorld();
   assert.deepEqual(offsets(w), offsets(structuredClone(w)));

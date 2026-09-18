@@ -81,9 +81,11 @@ export const ERA_GAP = { min: 10, max: 100 } as const;
  */
 export function eraOf(world: Pick<World, 'strata' | 'seed'>, floor: number): number {
   const at = stratumAt(world, floor);
-  // ponytail: an open-ended era stratum (no `to`) has no top to count down from,
-  // so it keeps the world clock; nothing creates era strata yet.
-  if (at?.laws?.time !== 'era' || at.to === undefined) return 0;
+  if (at?.laws?.time !== 'era') return 0;
+  // Eras count down from the top floor, so an open-ended stratum has none to
+  // count from. Refused loudly: quietly keeping the world clock would read as a
+  // working era band that simply never changes the year.
+  if (at.to === undefined) throw new Error(`era stratum "${at.id}" has no top floor (\`to\`), so its eras cannot be counted`);
   let years = 0;
   for (let f = floor; f <= at.to; f += 1) {
     const rng = mulberry32((world.seed ^ hashText(`${at.id}|era|${f}`)) >>> 0);
