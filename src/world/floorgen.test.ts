@@ -287,3 +287,39 @@ test('only a landmark floor holds a boss, and the engine decides who it is', asy
     'the model names it; the engine decides what it is',
   );
 });
+
+/*
+ * 6c loop L2b (approved 2026-09-18): every floor of a loop band is HELD, because a
+ * floor with no holder has nothing to clear and never loops. The tenth floor keeps
+ * its landmark holder; the rest get one the same way.
+ */
+const inBand = () => ({
+  ...withKinds(),
+  strata: {
+    tower: { id: 'tower', name: 'the tower', kind: 'dynamic' as const, from: 0 },
+    loop: { id: 'loop', name: 'the loop', kind: 'dynamic' as const, parent: 'tower', from: 1, to: 10, laws: { reset: 'untilCleared' as const } },
+  },
+});
+
+test('every floor of a loop band is held, not only the tenth', async () => {
+  const three = await generateFloor(provider(withBoss('Ysolt')), inBand(), 3, pc);
+  assert.equal(three.people[three.region.boss ?? '']?.name, 'Ysolt');
+});
+
+test('outside the band, only a landmark floor is held — as before', async () => {
+  const thirteen = await generateFloor(provider(withBoss()), inBand(), 13, pc);
+  assert.equal(thirteen.region.boss, undefined);
+});
+
+test('the model is asked to name who holds a loop floor', async () => {
+  const p = provider(withBoss());
+  await generateFloor(p, inBand(), 3, pc);
+  assert.match(JSON.stringify(p.lastRequest('structured')), /somebody holds it/);
+});
+
+test('a loop floor the model named nobody for is still held, by a holder named for their kind', async () => {
+  const r = await generateFloor(provider(withBoss('')), inBand(), 3, pc);
+  const holder = r.people[r.region.boss ?? ''];
+  assert.ok(holder, 'or the floor would silently never loop');
+  assert.equal(holder.name, kinds.find((k) => k.id === holder.species)?.name);
+});

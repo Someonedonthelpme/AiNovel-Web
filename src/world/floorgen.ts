@@ -41,7 +41,7 @@ import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, RegionId, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
-import { dangerAt, stratumAt } from './strata.ts';
+import { dangerAt, isLoop, stratumAt } from './strata.ts';
 import type { Stratum } from './types.ts';
 import { speciesIdFor } from '../character/species.ts';
 import { bossMember, crowdFighter } from '../character/crowd.ts';
@@ -212,7 +212,7 @@ function styleRule(language: 'th' | 'en'): string {
   ].join(' ');
 }
 
-function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: number; max: number }, danger: number): string {
+function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: number; max: number }, danger: number, held: boolean): string {
   return [
     `You are building floor ${floor} of an endless tower, in ${LANGUAGE_NAME[language]}.`,
     styleRule(language),
@@ -232,7 +232,7 @@ function systemPrompt(floor: number, language: 'th' | 'en', settlements: { min: 
       : `At most ${settlements.max} place(s) may have kind "settlement".`,
     'Every id in a place\'s people list must be an id in the people array.',
     '"creatures" names what lives and hunts here. Names only, no statistics.',
-    kindForFloor(floor) === 'boss'
+    held
       ? 'This is a LANDMARK floor: somebody holds it. bossName is what they are called and bossOneLine who they are, in one line. What they ARE, and how dangerous, is decided outside you.'
       : 'bossName and bossOneLine are EMPTY on this floor.',
     // Asked for `candour` and `loyalty` long after both were deleted, and never
@@ -356,7 +356,7 @@ export async function generateFloor(
     schema: floorSchema(floor),
     temperature: 0.9,
     messages: [
-      { role: 'system', content: systemPrompt(floor, world.language, settlementBudget(floor), danger) },
+      { role: 'system', content: systemPrompt(floor, world.language, settlementBudget(floor), danger, isHeld(world, floor)) },
       {
         role: 'user',
         content: userPrompt(floor, world, sheet, gazetteer, stratum, {
@@ -577,6 +577,13 @@ function lootKnownFor(named: readonly string[]): LootProfile | undefined {
   return { weights: Object.fromEntries(LOOT_CATEGORIES.map((c) => [c, known.includes(c) ? 3 : 0.5])) };
 }
 
+/**
+ * Whether a floor is HELD: every tenth floor is a landmark, and every floor of a
+ * loop is held too (DESIGN 6c, loop L2b) — a loop floor is cleared by its holder's
+ * death, so one with nobody holding it would never loop.
+ */
+const isHeld = (world: World, floor: number): boolean => kindForFloor(floor) === 'boss' || isLoop(world, floor);
+
 /** What a model writes when it means "this floor opens nothing". */
 const EMPTY_WING = new Set(['', 'none', 'null', 'n/a', '-', 'ไม่มี']);
 
@@ -590,16 +597,27 @@ const EMPTY_WING = new Set(['', 'none', 'null', 'n/a', '-', 'ไม่มี']);
  * finds the same one, and a dead boss stays dead.
  */
 function holderOf(world: World, floor: number, regionId: RegionId, generated: GeneratedFloor, danger: number): Person | null {
-  if (kindForFloor(floor) !== 'boss') return null;
+  if (!isHeld(world, floor)) return null;
   const kinds = world.species ?? [];
   if (kinds.length === 0) return null;
 
   const id = `boss-${regionId}`;
   if (world.people[id]) return world.people[id];
 
-  const name = generated.bossName?.trim();
   const who = bossMember(world.seed, kinds, floor);
-  if (!name || !who) return null;
+  if (!who) return null;
+  /*
+   * A LOOP floor with nobody named is still held, by the lineage's own word: a
+   * loop floor without a holder has nothing to clear and would silently never
+   * loop. A landmark keeps the old rule — nobody named, nobody made.
+   *
+   * `ponytail: the floor's own creature word for the lineage would read better,
+   * but that mapping (`foeSpecies`) lives in play, which world may not import.
+   * Move it down into character if the lineage's word reads wrong in play.`
+   */
+  const name = generated.bossName?.trim()
+    || (isLoop(world, floor) ? kinds.find((k) => k.id === who.subspecies)?.name : undefined);
+  if (!name) return null;
 
   const { sheet } = crowdFighter(world.seed, kinds, who, danger, id);
   return {

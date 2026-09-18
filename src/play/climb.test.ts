@@ -5,7 +5,8 @@ import { applyClimb, climb, exitStatus, godown } from './climb.ts';
 import { clockOf, stairCost } from '../world/travel.ts';
 import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
-import { groundFloor, person, world } from '../world/fixtures.ts';
+import { generatedFloor, groundFloor, person, world } from '../world/fixtures.ts';
+import { generateFloor } from '../world/floorgen.ts';
 import { compressExcept } from '../world/lod.ts';
 import { RESETS } from '../world/types.ts';
 import type { Reset } from '../world/types.ts';
@@ -479,4 +480,33 @@ test('the reset replays from the log', () => {
   assert.equal(live.world.currentRegion, 'floor-0', 'the walk has to end back down');
   assert.deepEqual(foldPlay(start, records), live);
   assert.equal(axisOf(live.world.edges ?? {}, 'keeper', PLAYER, 'trust'), 0, 'and the reset is in it');
+});
+
+test('with its holder, a band floor loops: left uncleared, it is put back', async () => {
+  // Floor 1 of the band, built by the floor generator — no hand-made holder.
+  const { start } = loopTower();
+  const inBand = {
+    ...start.world,
+    strata: {
+      tower: { id: 'tower', name: 'the tower', kind: 'dynamic' as const, from: 0 },
+      loop: { id: 'loop', name: 'the loop', kind: 'dynamic' as const, parent: 'tower', from: 1, to: 10, laws: { reset: 'untilCleared' as const } },
+    },
+  };
+  const r = await generateFloor(new FakeProvider({ structured: [generatedFloor({ bossName: 'Ysolt', bossOneLine: 'keeps this floor' })] }), inBand, 1, start.sheet);
+  assert.ok(r.region.boss, 'the generator has to have made a holder for this to say anything');
+  const up = { kind: 'climb' as const, direction: 'up' as const, built: { region: r.region, people: r.people, edges: r.edges } };
+
+  const built = applyClimb({ ...start, world: inBand }, up).state;
+  const here = built.world.regions[r.region.id] as Region;
+  const lived: PlayState = {
+    ...built,
+    world: {
+      ...built.world,
+      currentPlace: here.entrance,
+      regions: { ...built.world.regions, [here.id]: { ...here, places: here.places.map((p) => ({ ...p, discovered: true })) } },
+    },
+  };
+  const back = applyClimb(lived, down).state;
+  assert.equal(back.world.currentRegion, 'floor-0');
+  assert.deepEqual(back.world.regions[r.region.id], built.world.regions[r.region.id]);
 });

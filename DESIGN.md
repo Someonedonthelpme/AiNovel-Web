@@ -1851,7 +1851,15 @@ make each named kind a preset of them:
   holder (`kindForFloor`), so in the band only floor 10 ever resets — floors 1–9
   have no holder and count as cleared. Needs a holder on every loop floor, and a
   decision on how strong a loop holder fights (a living holder takes over the
-  floor's fights). **Not built:** loop wings; `passage` (you can climb past an uncleared loop floor); what other
+  floor's fights).
+- **L2b SHIPPED 2026-09-18:** every loop floor is held (`floorgen.ts` `isHeld`); a
+  loop holder fights alone at the floor's ELITE anchor (decided with the user),
+  a landmark's at the boss's; a loop floor the model named nobody for is held by
+  a holder named with the lineage's own word. **Measured** (world 7, 100 trials,
+  `climberAt`, crowd → lone elite holder): melee 100→97..100 at d1–d6; caster
+  unchanged; tank −1..−5; **ranged −4..−14 at d1–d4** (88→84, 91→80, 83→76,
+  81→67) — a lone melee body closing on a ranged climber. d10 (boss anchor) moves
+  1–4. Not retuned: the user's call. **Not built:** loop wings; `passage` (you can climb past an uncleared loop floor); what other
   people believe about an undone run.
 - **A floor may stand empty out of season only where the law allows it.**
   Otherwise another group that lives at that depth fills in. Until stratum laws

@@ -1628,3 +1628,39 @@ test('a negative modifier reads as one', () => {
   const roll: SocialRoll = { ability: 'cha', vs: null, dice: [4, 3], modifier: -1, total: 6, tier: 'miss' };
   assert.equal(notableEvents(takeCombatAction(s, { ...parley(foe, 'refuses'), roll }).events)[0], `you talk to ${foe}: cha 4+3-1 = 6 MISS`);
 });
+
+/* 6c loop L2b: a loop holder is notable, not a boss — the elite anchor a grudge-bearer fights at. */
+
+/** A floor of a loop band, generated with its holder, and standing on it. */
+async function onBandFloor(floor: number) {
+  const base = onFloorTwo();
+  const kinds = speciesFor(11);
+  const w = {
+    ...base.world, seed: 11, species: kinds,
+    strata: {
+      tower: { id: 'tower', name: 'the tower', kind: 'dynamic' as const, from: 0 },
+      loop: { id: 'loop', name: 'the loop', kind: 'dynamic' as const, parent: 'tower', from: 1, to: 10, laws: { reset: 'untilCleared' as const } },
+    },
+  };
+  const r = await generateFloor(
+    new FakeProvider({ structured: [generatedFloor({ bossName: 'Ysolt', bossOneLine: 'keeps this floor' })] }),
+    w, floor, base.sheet,
+  );
+  const state: PlayState = {
+    ...base,
+    world: { ...w, regions: { [r.region.id]: r.region }, currentRegion: r.region.id, currentPlace: r.region.entrance, people: { ...w.people, ...r.people } },
+  };
+  return { state, region: r.region };
+}
+
+test("a loop holder fights alone at the floor's elite anchor; a landmark holder at the boss's", async () => {
+  const three = await onBandFloor(3);
+  const held = foesOf(beginEncounter(three.state));
+  assert.equal(held.length, 1, 'a holder fights alone');
+  assert.equal(held[0].person, 'boss-floor-3');
+  assert.equal(held[0].maxHp, scaleFoe(three.region.danger, 'elite').hp);
+
+  const ten = await onBandFloor(10);
+  const [landmark] = foesOf(beginEncounter(ten.state));
+  assert.equal(landmark.maxHp, scaleFoe(ten.region.danger, 'boss').hp);
+});

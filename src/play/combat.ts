@@ -232,7 +232,10 @@ function crowdFoes(
     const who = { ...bossMember(state.world.seed, kinds, floor)!, subspecies: holder.sheet.species! };
     const { inventory } = crowdFighter(state.world.seed, kinds, who, danger, holder.id);
     const [cell] = freeCellsNear(grid, origin, taken, 1);
-    return [{ ...asFoe(holder.sheet, inventory, who, 'boss', 0, cell ?? origin, holder), name: holder.name, person: holder.id }];
+    // A landmark's holder is a boss; a LOOP floor's is notable, not a boss — the
+    // elite anchor an arrived grudge fights at (DESIGN 6c, loop L2b).
+    const role = kindForFloor(floor) === 'boss' ? 'boss' : 'elite';
+    return [{ ...asFoe(holder.sheet, inventory, who, role, 0, cell ?? origin, holder), name: holder.name, person: holder.id }];
   }
 
 
