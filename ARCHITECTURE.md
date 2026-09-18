@@ -331,17 +331,19 @@ anything derives from the seed alone.
   ([subjects.ts:111](src/world/subjects.ts:111)).
 - `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. Genesis
   stores the WHOLE preset rather than its name
-  ([genesis.ts:624](src/session/genesis.ts:624)), so retuning a preset cannot
+  ([genesis.ts:636](src/session/genesis.ts:636)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:276](src/world/types.ts:276)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:240](src/play/delta.ts:240)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
-  ([genesis.ts:623](src/session/genesis.ts:623)). Stored for the same reason
+  ([genesis.ts:635](src/session/genesis.ts:635)). Stored for the same reason
   `subjects` is.
 - `strata` — the structures this world holds ([types.ts:291](src/world/types.ts:291)).
-  Genesis writes one, the tower, covering floor 0 up
-  ([genesis.ts:678](src/session/genesis.ts:678)); a climb that opens a wing adds
+  Genesis writes the tower, covering floor 0 up
+  ([genesis.ts:691](src/session/genesis.ts:691)), and a loop band under it for floors
+  1–10 when the creation page asks ([:692](src/session/genesis.ts:692)), in the tower's
+  kind ([:589](src/session/genesis.ts:589)); a climb that opens a wing adds
   another ([climb.ts:153](src/play/climb.ts:153)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it. A grudge toward the player also remembers the
@@ -848,7 +850,7 @@ finished while one is waiting ([play/combat.ts:500](src/play/combat.ts:500)), th
 only options are `kill` and `spare` ([:508](src/play/combat.ts:508)), and both are
 `CombatAction`s, so they ride in `combatActions` and replay like any decision
 ([:669](src/play/combat.ts:669)). The server holds the fight open on the same test
-([game.ts:690](src/server/game.ts:690)) and shows it as not over, so the choice
+([game.ts:704](src/server/game.ts:704)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:832](src/play/combat.ts:832)); spared writes the `spared` deed,
 toward the person if it was one ([delta.ts:514](src/play/delta.ts:514)), and whoever
@@ -912,7 +914,7 @@ Every roll derives from state —
 unaffordable skill is *not offered* rather than offered and refused. When it
 concludes, the original turn's draft record plus `combatActions` is appended as
 **one event**, and a snapshot is taken unconditionally. Its closing lines come back
-beside the finished view ([game.ts:713](src/server/game.ts:713)): the view carries a
+beside the finished view ([game.ts:727](src/server/game.ts:727)): the view carries a
 log only while a fight is open ([game.ts:267](src/server/game.ts:267)), which dropped
 them for every fight until `d579b42`.
 
@@ -938,7 +940,7 @@ standing, of a kind with a company need, and not yet spoken to this fight
 ([play/combat.ts:568](src/play/combat.ts:568)), because a parley logs an event and the
 log's length seeds every roll, so a first-option picker like the harness must never
 reach one. The server hears it where a provider exists
-([game.ts:671](src/server/game.ts:671)): `hearParley` DISCARDS whatever roll and
+([game.ts:685](src/server/game.ts:685)): `hearParley` DISCARDS whatever roll and
 verdict the client sent, asks the model, rolls in the engine and writes the tier's
 answer into the action ([turn.ts:187](src/play/turn.ts:187)); a foe that cannot hear
 costs no call ([:190](src/play/turn.ts:190)). The fold only carries the verdict out
@@ -971,7 +973,8 @@ around the ground law and the world's bottom, both of which live in `descend`.
 [:182](src/play/climb.ts:182)) — places, crowd, people and their edges, reputation,
 ambient, and the journeys of its people; whoever the run made there goes with it.
 The player keeps facts, pack, coin and XP, none of which lives on a floor. Cleared is
-DERIVED: the holder dead, and a floor with no holder has nothing to clear
+DERIVED: the holder dead — the clear condition until quests exist, by decision
+(2026-09-18) — and a floor with no holder has nothing to clear
 ([:187](src/play/climb.ts:187)). What other people believe about an undone run is left
 standing, by decision.
 
@@ -995,7 +998,7 @@ a parley's verdict is the one outcome it stores, because a fold holds no provide
 ([play/combat.ts:485](src/play/combat.ts:485)) — and a fold re-resolves them with today's code ([delta.ts:609](src/play/delta.ts:609)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
-snapshotted back to back ([game.ts:697](src/server/game.ts:697)), so normal play
+snapshotted back to back ([game.ts:711](src/server/game.ts:711)), so normal play
 never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
@@ -1071,10 +1074,12 @@ giving it force **cannot** hold the curve (see *What a foe is*), so it waits on 
 decision at 3n-iii rather than on an implementation. Written and read for the
 climber today, and not a field pretending to be a mechanic.
 
-**`Stratum.laws` has readers and no writer.** The loop is read on every crossing
-([climb.ts:182](src/play/climb.ts:182)) and by compression ([lod.ts:86](src/world/lod.ts:86)),
-but no world is born with a law and no floor names one — only tests reach a loop
-floor until 6c L2 gives it a writer.
+**Cleared: `Stratum.laws` had readers and no writer.** — *"no world is born with a
+law"* was true until `bfa0f66`: genesis writes a loop band when asked
+([genesis.ts:692](src/session/genesis.ts:692)). It is half-live: a band floor with no
+holder counts as cleared ([climb.ts:187](src/play/climb.ts:187)), and holders are dealt
+only to every tenth floor ([encounter.ts:25](src/combat/encounter.ts:25)), so only
+floor 10 of the band ever loops.
 
 **Cleared: a parley's roll had no reader.** — *"the fold applies the verdict alone,
 and the fight log shows the answer but not the dice, unlike a turn's roll"* was true
@@ -1125,7 +1130,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:957](src/server/game.ts:957)); and
+([game.ts:971](src/server/game.ts:971)); and
 [signet.test.ts:253](src/play/signet.test.ts:253) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
@@ -1269,7 +1274,7 @@ nothing outside tests"* was true until `3506255`. A wing's danger is
 seeded ([floorgen.ts:557](src/world/floorgen.ts:557)) and its loot comes from
 what the model named out of `LOOT_CATEGORIES`
 ([floorgen.ts:574](src/world/floorgen.ts:574)). The genesis tower still has
-neither ([genesis.ts:678](src/session/genesis.ts:678)), which means the
+neither ([genesis.ts:691](src/session/genesis.ts:691)), which means the
 ruleset's curve and the ordinary table — identity, not a gap.
 
 ### A knock-on
@@ -1578,7 +1583,7 @@ arrives with quests (DESIGN step 7).
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
-([genesis.ts:678](src/session/genesis.ts:678)); the only writer of
+([genesis.ts:691](src/session/genesis.ts:691)); the only writer of
 `Region.exits` is a way out found in play ([delta.ts:261](src/play/delta.ts:261)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
@@ -1621,7 +1626,7 @@ classes now lean on stats and nothing is locked out.
 every thrown error into `status: 500`, `POST /api/sessions` among them
 ([route.ts:24](app/api/sessions/route.ts:24)). So a species choice that
 `speciesChoiceOf` refuses, with a message naming what was wrong
-([game.ts:590](src/server/game.ts:590)), reaches the client as a server fault. The
+([game.ts:593](src/server/game.ts:593)), reaches the client as a server fault. The
 only 400s are written by hand: a missing seed, a missing combat action, and a
 refused climb target.
 
