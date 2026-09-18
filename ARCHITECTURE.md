@@ -110,7 +110,7 @@ config ─┐
 
 - **The engine layer is pure and model-free.** *"The model NEVER decides a
   combat outcome. It narrates a structured round log the engine produced."*
-  ([combat/types.ts:5](src/combat/types.ts:5)). Every combat action returns
+  ([combat/types.ts:6](src/combat/types.ts:6)). Every combat action returns
   `{state, error}` so an illegal proposal is rejected rather than corrupting the
   encounter ([combat.ts:13](src/combat/combat.ts:13)).
 - **The world layer refuses to reach upward.** `travel.ts` returns a
@@ -646,7 +646,7 @@ encounter fields **no more bodies than live there**
 ([play/combat.ts:244](src/play/combat.ts:244)), and a place cleared out **opens no
 fight at all** ([play/combat.ts:433](src/play/combat.ts:433)). Each body carries
 the cohort it came from — `Combatant.kind` and `trade`
-([combat/types.ts:167](src/combat/types.ts:167)) — so what dies is taken out of
+([combat/types.ts:168](src/combat/types.ts:168)) — so what dies is taken out of
 the population it came from ([play/combat.ts:845](src/play/combat.ts:845)),
 whoever won.
 
@@ -821,7 +821,7 @@ thinned to nothing still stays gone. A hunter by trade fights at night with the
 advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
-([types.ts:182](src/combat/types.ts:182)), set where it is built
+([types.ts:183](src/combat/types.ts:183)), set where it is built
 ([play/combat.ts:293](src/play/combat.ts:293)): `floor(maxHp × (3 − nerve) / 12)`
 ([play/combat.ts:400](src/play/combat.ts:400)) — a quarter at nerve 0, half at −3,
 none at +3 — and none at all for a kind with no safety need, which is undead,
@@ -832,7 +832,7 @@ line and never break. At or under the line a foe leaves the board in `settle`,
 which runs inside the victory check ([combat/combat.ts:65](src/combat/combat.ts:65)):
 it YIELDS if a standing party member is within a square, and FLEES otherwise
 ([:71](src/combat/combat.ts:71)). Off the board rather than flagged
-([types.ts:319](src/combat/types.ts:319)), so every check that asks `dead` still
+([types.ts:320](src/combat/types.ts:320)), so every check that asks `dead` still
 means "out of the fight". A blow that carries a foe from above its line to nothing
 kills it; breaking needs a blow that leaves it standing.
 
@@ -841,7 +841,7 @@ finished while one is waiting ([play/combat.ts:500](src/play/combat.ts:500)), th
 only options are `kill` and `spare` ([:508](src/play/combat.ts:508)), and both are
 `CombatAction`s, so they ride in `combatActions` and replay like any decision
 ([:669](src/play/combat.ts:669)). The server holds the fight open on the same test
-([game.ts:680](src/server/game.ts:680)) and shows it as not over, so the choice
+([game.ts:690](src/server/game.ts:690)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:832](src/play/combat.ts:832)); spared writes the `spared` deed,
 toward the person if it was one ([delta.ts:514](src/play/delta.ts:514)), and whoever
@@ -904,7 +904,10 @@ Every roll derives from state —
 **decisions** reproduces the identical fight. Options are a legal-move list; an
 unaffordable skill is *not offered* rather than offered and refused. When it
 concludes, the original turn's draft record plus `combatActions` is appended as
-**one event**, and a snapshot is taken unconditionally.
+**one event**, and a snapshot is taken unconditionally. Its closing lines come back
+beside the finished view ([game.ts:713](src/server/game.ts:713)): the view carries a
+log only while a fight is open ([game.ts:267](src/server/game.ts:267)), which dropped
+them for every fight until `d579b42`.
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
@@ -928,7 +931,7 @@ standing, of a kind with a company need, and not yet spoken to this fight
 ([play/combat.ts:568](src/play/combat.ts:568)), because a parley logs an event and the
 log's length seeds every roll, so a first-option picker like the harness must never
 reach one. The server hears it where a provider exists
-([game.ts:661](src/server/game.ts:661)): `hearParley` DISCARDS whatever roll and
+([game.ts:671](src/server/game.ts:671)): `hearParley` DISCARDS whatever roll and
 verdict the client sent, asks the model, rolls in the engine and writes the tier's
 answer into the action ([turn.ts:187](src/play/turn.ts:187)); a foe that cannot hear
 costs no call ([:190](src/play/turn.ts:190)). The fold only carries the verdict out
@@ -936,7 +939,7 @@ costs no call ([:190](src/play/turn.ts:190)). The fold only carries the verdict 
 6's `yielded` and `fled` ([:100](src/combat/combat.ts:100)), so a fate, a survivor and
 a deed need nothing new, and `refuses` changes nothing. A foe still standing is above
 its break line, so one talked away is never "badly beaten" and gains no grudge. The
-fight log shows engine words ([play/combat.ts:1067](src/play/combat.ts:1067)), never
+fight log shows engine words ([play/combat.ts:1071](src/play/combat.ts:1071)), never
 the model's.
 
 ---
@@ -977,7 +980,7 @@ a parley's verdict is the one outcome it stores, because a fold holds no provide
 ([play/combat.ts:485](src/play/combat.ts:485)) — and a fold re-resolves them with today's code ([delta.ts:609](src/play/delta.ts:609)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
-snapshotted back to back ([game.ts:687](src/server/game.ts:687)), so normal play
+snapshotted back to back ([game.ts:697](src/server/game.ts:697)), so normal play
 never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
@@ -998,7 +1001,7 @@ resolves.
 
 **4. Closed unions, never free text.** `ActiveEffect`, `ItemEffect`,
 `WorldDelta`, `TraitCondition`, `Gate`, `CONSTRAINTS`, `BINDINGS` and
-`PARLEY_EFFECTS` ([combat/types.ts:288](src/combat/types.ts:288)) are all closed. A model names things; it never invents a mechanic — nor a law, nor
+`PARLEY_EFFECTS` ([combat/types.ts:289](src/combat/types.ts:289)) are all closed. A model names things; it never invents a mechanic — nor a law, nor
 where a road goes: `revealWay` names the place a way leaves FROM and the engine
 mints the far side ([state.ts:93](src/play/state.ts:93)).
 
@@ -1052,11 +1055,12 @@ giving it force **cannot** hold the curve (see *What a foe is*), so it waits on 
 decision at 3n-iii rather than on an implementation. Written and read for the
 climber today, and not a field pretending to be a mechanic.
 
-A parley's **roll** is recorded in its action ([play/combat.ts:485](src/play/combat.ts:485))
-and nothing reads it: the fold applies the verdict alone, and the fight log shows the
-answer but not the dice, unlike a turn's roll ([Game.tsx:367](app/play/[id]/Game.tsx:367)).
-Kept because dice are recorded, never re-rolled (§11.2); a reader lands when the
-fight log shows a parley's dice.
+**Cleared: a parley's roll had no reader.** — *"the fold applies the verdict alone,
+and the fight log shows the answer but not the dice, unlike a turn's roll"* was true
+until `d579b42`. The roll is still recorded in the action
+([play/combat.ts:485](src/play/combat.ts:485)); the log event now carries it
+([combat/combat.ts:92](src/combat/combat.ts:92)) and the fight log prints it as the
+transcript prints a turn's ([play/combat.ts:1070](src/play/combat.ts:1070)).
 
 **Cleared: a crowd's stored size.** — *"killing does not yet thin a floor"* was
 true until 3n-ii. A population is stored per place, the draw is weighted by what
@@ -1087,7 +1091,7 @@ which nothing imports) · `Person.recruited` / `stance` ·
 `facts.region` (written, never SELECTed) · `Item.value` (there are no shops) ·
 `ItemEffect.restore.supply` (the number is ignored) ·
 `CharacterSheet.hitDie` (read by no formula since HP moved to VIT) ·
-`Combatant.size` ([types.ts:140](src/combat/types.ts:140)) — written `large` for a
+`Combatant.size` ([types.ts:141](src/combat/types.ts:141)) — written `large` for a
 statblock boss and `medium` for everyone else
 ([statblock.ts:156](src/combat/statblock.ts:156),
 [sheet.ts:473](src/session/sheet.ts:473)) and read by nothing, so a landmark holder
@@ -1100,7 +1104,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:947](src/server/game.ts:947)); and
+([game.ts:957](src/server/game.ts:957)); and
 [signet.test.ts:253](src/play/signet.test.ts:253) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
