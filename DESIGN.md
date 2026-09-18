@@ -835,6 +835,8 @@ ruler of nations.
 - A holder (a person, or the player) on a **province, a floor or a stratum**.
   Which levels can be owned at all is the world's LAW, in a closed vocabulary on
   a new `territory` axis (who may hold land, who may build).
+  **Open (retired from HANDOFF 2026-09-18):** which ownership levels does each
+  preset allow by default? — user, at 6c.
 - **A world may be BORN with a group law** here, as part of its preset — today
   none is, and only the Director's `amendGroup` ever writes one (ARCHITECTURE §9,
   law row). "The hollow may not hold land" is exactly a `territory` law bound to a
@@ -986,6 +988,9 @@ small to be a tree).
   tiers and stronger nodes — against a cost of quests and scarcity alone.
 - **The origin's free skill may apply to the class tree too**, whose `Origin`
   node grants nothing today (`play/skilltree.ts:470`).
+- **Open (retired from HANDOFF 2026-09-18):** what carries over when a mutation or
+  a species change rebuilds the kin tree? What can a gear skill require? Does
+  `Origin` get a free skill? — user, at 7b.
 
 ### Gear skills (same brainstorm)
 - **Not bought**, and usable only while EQUIPPED.
@@ -1763,6 +1768,8 @@ and mixable, not a rule.
   sub-stratum. The tower plan is a TREE, not a list.
 - **Strata own loot** — items, skill books, gear sets. A world's economy is
   regional and a gear set lives somewhere specific.
+  **Open (retired from HANDOFF 2026-09-18):** items have no "set" concept, so this
+  is only half-expressible today.
 - **The outer world is a structure with graph topology**, not `floor-0`. (User
   had no preference; taken from their own example of coming down to the ground
   and expanding sideways.)
