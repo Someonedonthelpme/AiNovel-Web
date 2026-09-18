@@ -642,7 +642,17 @@ export async function climbFloor(id: string, to?: string): Promise<ClimbOutcomeV
 /* Fighting                                                                    */
 /* -------------------------------------------------------------------------- */
 
-export type CombatStepView = { view: GameView; error: string | null; finished: boolean };
+export type CombatStepView = {
+  view: GameView;
+  error: string | null;
+  finished: boolean;
+  /**
+   * A finished fight's last lines. The view carries a log only while a fight is
+   * open, so without this the lines that say how it ended — who fled, the dice a
+   * word was rolled on — were built here and never shown.
+   */
+  closing?: string[];
+};
 
 /**
  * One decision in a fight.
@@ -700,7 +710,7 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   ];
   void seq;
 
-  return { view: viewOf(id, settled.state, await transcriptOf(id), tail), error: null, finished: true };
+  return { view: viewOf(id, settled.state, await transcriptOf(id)), error: null, finished: true, closing: tail };
 }
 
 /** Whether a fight is waiting on the player, e.g. after a page reload. */

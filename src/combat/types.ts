@@ -1,3 +1,4 @@
+import type { SocialRoll } from '../engine/roll.ts';
 /**
  * Tactical combat data model — D&D-like, resolved entirely in code.
  *
@@ -279,7 +280,7 @@ export type CombatEvent =
   | { kind: 'combatEnd'; victor: Side | 'draw' }
   | { kind: 'broke'; actor: string; as: BrokeAs }
   /** The player spoke to a foe, and this is what it did about it (6b stage 8). */
-  | { kind: 'parley'; actor: string; target: string; verdict: ParleyEffect };
+  | { kind: 'parley'; actor: string; target: string; verdict: ParleyEffect; roll: SocialRoll | null };
 
 /**
  * What a foe does when spoken to mid-fight. Closed, like every vocabulary the

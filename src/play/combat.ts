@@ -771,7 +771,7 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
     else if (!foe || !hearsWords({ ...state, combat: next }, foe)) error = `${foe?.name ?? action.target} will not listen`;
     else {
       // A word is a turn, like a swing.
-      next = hear(next, action.target, action.verdict).state;
+      next = hear(next, action.target, action.verdict, action.roll).state;
       next = endTurn(rng, next).state;
     }
   } else {
@@ -1062,9 +1062,13 @@ export function notableEvents(events: CombatEvent[]): string[] {
       else if (event.hit && event.targetHpAfter <= event.targetHpBefore / 4) {
         notable.push(`${event.target} is barely standing`);
       }
-    } else if (event.kind === 'parley' && event.verdict === 'refuses') {
-      // Engine words: what the model wrote for the Writer never reaches this log.
-      notable.push(`${event.target} will not hear it`);
+    } else if (event.kind === 'parley') {
+      // The dice, as a turn's reach the transcript. Engine words throughout: what
+      // the model wrote never reaches this log. What the word DID is the `broke`
+      // line that follows, or this refusal.
+      const r = event.roll;
+      if (r) notable.push(`you talk to ${event.target}: ${r.ability} ${r.dice[0]}+${r.dice[1]}${r.modifier >= 0 ? '+' : ''}${r.modifier} = ${r.total} ${r.tier.toUpperCase()}`);
+      if (event.verdict === 'refuses') notable.push(`${event.target} will not hear it`);
     } else if (event.kind === 'broke') {
       notable.push(event.as === 'yielded' ? `${event.actor} yields` : `${event.actor} flees`);
     } else if (event.kind === 'deathSave' && event.died) {

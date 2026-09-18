@@ -167,6 +167,8 @@ export default function Game({ initial }: { initial: GameView }) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // How the last fight ended, shown until the next thing you do.
+  const [closing, setClosing] = useState<string[]>([]);
   const [lastShifts, setLastShifts] = useState<string[]>([]);
   // One panel now, opened at whichever tab you clicked from.
   const [panel, setPanel] = useState<null | SheetTab>(null);
@@ -181,6 +183,7 @@ export default function Game({ initial }: { initial: GameView }) {
     if (!said || busy) return;
     setBusy(true);
     setNotice(null);
+    setClosing([]);
     setInput('');
 
     // Movement and looking are narration; anything else is talking to someone.
@@ -217,6 +220,7 @@ export default function Game({ initial }: { initial: GameView }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? 'that did not work');
       if (data.error) setNotice(data.error);
+      setClosing(data.finished ? data.closing ?? [] : []);
       setView(data.view);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
@@ -257,6 +261,7 @@ export default function Game({ initial }: { initial: GameView }) {
     if (busy) return;
     setBusy(true);
     setNotice(null);
+    setClosing([]);
     try {
       const response = await fetch(`/api/sessions/${view.id}/climb`, {
         method: 'POST',
@@ -379,6 +384,15 @@ export default function Game({ initial }: { initial: GameView }) {
               {busy && <p className="muted"><span className="spinner">▚</span> thinking…</p>}
               <div ref={bottom} />
             </div>
+
+            {!view.combat && closing.length > 0 && (
+              <div style={{ margin: '0.9rem 0' }}>
+                <p className="label" style={{ marginBottom: '0.5rem' }}>How the fight ended</p>
+                {closing.map((line, i) => (
+                  <p className="shift" key={i} style={{ margin: '0.2rem 0' }}>{line}</p>
+                ))}
+              </div>
+            )}
 
             {view.combat && (
               <div style={{ margin: '0.9rem 0' }}>

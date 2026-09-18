@@ -35,6 +35,7 @@ import { armour, weapon } from '../items/catalogue.ts';
 import { addItem, emptyInventory, equip, equippedAttack } from '../items/types.ts';
 import { armourClassFor, finalAbilities } from '../session/sheet.ts';
 import { mulberry32 } from '../engine/roll.ts';
+import type { SocialRoll } from '../engine/roll.ts';
 import { generatedFloor, groundFloor, world } from '../world/fixtures.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import { FakeProvider } from '../llm/provider.ts';
@@ -1611,4 +1612,19 @@ test('a word nobody can hear costs no model call', async () => {
   const p = new FakeProvider();
   await hearParley(p, mulberry32(1), deaf, parley(foe.id, 'refuses'));
   assert.equal(p.calls.length, 0);
+});
+
+/* The dice a word was rolled on reach the fight log, as a turn's reach the transcript. */
+
+test('the fight log shows the dice a word was rolled on', () => {
+  const s = oneFoe(); const foe = foesOf(s)[0].id;
+  const roll: SocialRoll = { ability: 'cha', vs: null, dice: [4, 3], modifier: 1, total: 8, tier: 'partial' };
+  const step = takeCombatAction(s, { ...parley(foe, 'withdraws'), roll });
+  assert.deepEqual(notableEvents(step.events).slice(0, 2), [`you talk to ${foe}: cha 4+3+1 = 8 PARTIAL`, `${foe} flees`]);
+});
+
+test('a negative modifier reads as one', () => {
+  const s = oneFoe(); const foe = foesOf(s)[0].id;
+  const roll: SocialRoll = { ability: 'cha', vs: null, dice: [4, 3], modifier: -1, total: 6, tier: 'miss' };
+  assert.equal(notableEvents(takeCombatAction(s, { ...parley(foe, 'refuses'), roll }).events)[0], `you talk to ${foe}: cha 4+3-1 = 6 MISS`);
 });

@@ -1,4 +1,4 @@
-import type { Rng } from '../engine/roll.ts';
+import type { Rng, SocialRoll } from '../engine/roll.ts';
 import { d20 } from './dice.ts';
 import { effectiveSpeed, isIncapacitated, tickConditions } from './conditions.ts';
 import { cellKey, distance, hasLineOfSight, occupancyFor, reachableStops } from './grid.ts';
@@ -89,13 +89,13 @@ export const heard = (state: CombatState, id: string): boolean =>
  * machinery; refusing changes nothing. The verdict is decided elsewhere: this
  * only carries it out.
  */
-export function hear(state: CombatState, targetId: string, verdict: ParleyEffect): ActionResult {
+export function hear(state: CombatState, targetId: string, verdict: ParleyEffect, roll: SocialRoll | null = null): ActionResult {
   const actor = currentActor(state);
   const who = state.combatants[targetId];
   if (!actor || !who || who.dead || who.side === actor.side) return fail(state, `${targetId} is not someone to talk to`);
   if (heard(state, targetId)) return fail(state, `${who.name} has already heard you`);
 
-  const said = log(state, { kind: 'parley', actor: actor.id, target: targetId, verdict });
+  const said = log(state, { kind: 'parley', actor: actor.id, target: targetId, verdict, roll });
   if (verdict === 'refuses') return ok(said);
   const as = verdict === 'yields' ? 'yielded' : 'fled';
   const { [targetId]: _gone, ...combatants } = said.combatants;
