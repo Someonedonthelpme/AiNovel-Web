@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { climbTarget, loopBandOf, speciesChoiceOf } from './game.ts';
+import { climbTarget, eraBandOf, loopBandOf, speciesChoiceOf } from './game.ts';
 
 test('a climb request names a way out, the stair, or is refused', () => {
   // The route used to turn a body it could not parse into `{}`, which climbs
@@ -24,4 +24,10 @@ test('a loop request that is not true or false is refused at the edge', () => {
   assert.equal(loopBandOf(true), true);
   assert.equal(loopBandOf(false), false);
   assert.throws(() => loopBandOf('yes'), /loop/);
+});
+
+test('an era request that is not true or false is refused at the edge', () => {
+  assert.equal(eraBandOf(undefined), false);
+  assert.equal(eraBandOf(true), true);
+  assert.throws(() => eraBandOf('yes'), /era/);
 });

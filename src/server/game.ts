@@ -463,6 +463,8 @@ export async function newGame(
   species?: unknown,
   /** Whether floors 1–10 loop, as the client sent it. Checked by `loopBandOf`. */
   loop?: unknown,
+  /** Whether floors 21–30 are eras, as the client sent it. Checked by `eraBandOf`. */
+  era?: unknown,
 ): Promise<string> {
   await bootstrap();
   let interview = startInterview(language);
@@ -490,6 +492,7 @@ export async function newGame(
     structure === 'static' ? 'static' : 'dynamic',
     speciesChoiceOf(species),
     loopBandOf(loop),
+    eraBandOf(era),
   );
   const id = await createSession(genesis.world, genesis.sheet, genesis.premise);
   await saveSnapshot(id, initialPlayState(genesis.world, genesis.sheet));
@@ -606,11 +609,14 @@ export function speciesChoiceOf(raw: unknown): SpeciesChoice | undefined {
  * no band; anything but a boolean is refused rather than read as one, which would
  * hand the player a world whose law they did not ask for.
  */
-export function loopBandOf(raw: unknown): boolean {
+function bandOf(name: string, raw: unknown): boolean {
   if (raw === undefined || raw === null) return false;
   if (typeof raw === 'boolean') return raw;
-  throw new Error(`loop: expected true or false, got ${JSON.stringify(raw).slice(0, 40)}`);
+  throw new Error(`${name}: expected true or false, got ${JSON.stringify(raw).slice(0, 40)}`);
 }
+export const loopBandOf = (raw: unknown): boolean => bandOf('loop', raw);
+/** Whether the client asked for an era band (floors 21–30), checked the same way. */
+export const eraBandOf = (raw: unknown): boolean => bandOf('era', raw);
 
 export function climbTarget(text: string): { to?: string; error?: string } {
   let body: unknown = {};

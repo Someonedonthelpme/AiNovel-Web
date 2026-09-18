@@ -14,7 +14,7 @@ import { HARSH, STANDARD } from '../rules/ruleset.ts';
 import { dominantOf, groupOf, leavesOf, speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
 import { axisOf, PLAYER } from '../social/edge.ts';
 import { withKin } from '../character/kinship.ts';
-import { isLoop, isStatic } from '../world/strata.ts';
+import { eraOf, isLoop, isStatic } from '../world/strata.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
   let iv = startInterview(language);
@@ -453,4 +453,25 @@ test("the band costs no model call, and is named in the engine's words", async (
   const looped = await withBand(bandCalls);
   assert.equal(bandCalls.calls.length, plainCalls.calls.length);
   assert.equal(looped.world.strata?.loop?.name, 'the loop');
+});
+
+/* 6c era E2: a world may be BORN with an era band, floors 21–30, beside the loop band. */
+
+const withEra = (structure: 'dynamic' | 'static' = 'dynamic', loop = false) =>
+  runGenesis(wholeGenesis(), completed(), 42, 'standard', structure, undefined, loop, true);
+
+test('a world may be born with an era band: floors 21–30 keep their own years, nothing else does', async () => {
+  const w = (await withEra()).world;
+  assert.deepEqual([20, 21, 30, 31].map((f) => eraOf(w, f) !== 0), [false, true, true, false]);
+  assert.equal(w.strata?.era?.parent, 'tower');
+});
+
+test('both bands at once: floors 1–10 loop, 21–30 are eras, and neither law leaks into the other', async () => {
+  const w = (await withEra('dynamic', true)).world;
+  assert.deepEqual([1, 10, 21].map((f) => isLoop(w, f)), [true, true, false]);
+  assert.deepEqual([1, 10, 21].map((f) => eraOf(w, f) !== 0), [false, false, true]);
+});
+
+test("the era band keeps the tower's kind", async () => {
+  assert.equal((await withEra('static')).world.strata?.era?.kind, 'static');
 });

@@ -589,6 +589,15 @@ const LOOP_NAME = { en: 'the loop', th: 'วงวน' } as const;
 const loopBandIn = (language: 'en' | 'th', kind: Stratum['kind']): Stratum =>
   ({ id: 'loop', name: LOOP_NAME[language], kind, parent: 'tower', from: 1, to: 10, laws: { reset: 'untilCleared' } });
 
+/**
+ * An ERA band (DESIGN 6c, era E2): floors 21–30, each its own year (`eraOf`).
+ * The tower's kind for the same reason as the loop band's, and always a top
+ * floor, because eras count down from it.
+ */
+const ERA_NAME = { en: 'the eras', th: 'ยุคสมัย' } as const;
+const eraBandIn = (language: 'en' | 'th', kind: Stratum['kind']): Stratum =>
+  ({ id: 'era', name: ERA_NAME[language], kind, parent: 'tower', from: 21, to: 30, laws: { time: 'era' } });
+
 export async function runGenesis(
   provider: Provider,
   interview: Interview,
@@ -606,6 +615,8 @@ export async function runGenesis(
   species?: SpeciesChoice,
   /** Whether floors 1–10 are born a LOOP band (DESIGN 6c, loop L2a). */
   loopBand = false,
+  /** Whether floors 21–30 are born an ERA band (DESIGN 6c, era E2). */
+  eraBand = false,
 ): Promise<GenesisResult> {
   /*
    * Named FIRST, because the character call lists them and asks which two this
@@ -690,6 +701,7 @@ export async function runGenesis(
     strata: {
       tower: { id: 'tower', name: TOWER_NAME[interview.language], kind: structure, from: 0 },
       ...(loopBand ? { loop: loopBandIn(interview.language, structure) } : {}),
+      ...(eraBand ? { era: eraBandIn(interview.language, structure) } : {}),
     },
     regions: { 'floor-0': ground.region },
     people: ground.people,
