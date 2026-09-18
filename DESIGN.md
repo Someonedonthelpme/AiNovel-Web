@@ -1832,6 +1832,16 @@ make each named kind a preset of them:
 - **Build order:** "reset until cleared" first, cleared when the landmark holder
   dies; then "era", which uses the calendar. In THE ORDER, after 6b stage 8
   (parley) and alongside 6c.
+- **L1 SHIPPED 2026-09-18** (`797f128`): `Stratum.laws.reset`, `RESETS = never |
+  untilCleared`. **Decided with the user, 2026-09-18:** a loop floor resets on
+  LEAVING, by any crossing; the original is the crossing's own `built`, kept on
+  `World.loops` for loop floors only; reset also covers the floor's reputation,
+  its places' ambient, and journeys of its people; survivors made there vanish
+  with the run; a floor with no holder is cleared from the start; loop floors are
+  never compressed. **Not built:** L2, how a world is BORN with a loop stratum (a
+  preset at genesis, or a wing the floor model names) — until then only tests
+  reach one; `passage` (you can climb past an uncleared loop floor); what other
+  people believe about an undone run.
 - **A floor may stand empty out of season only where the law allows it.**
   Otherwise another group that lives at that depth fills in. Until stratum laws
   exist, this is a world dial.
