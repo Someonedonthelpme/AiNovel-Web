@@ -1,4 +1,5 @@
 import { dangerFor } from './budget.ts';
+import { hashText, mulberry32 } from '../engine/roll.ts';
 import { rulesOf } from '../rules/ruleset.ts';
 import type { Stratum, World } from './types.ts';
 
@@ -10,7 +11,7 @@ import type { Stratum, World } from './types.ts';
  * not declaration order — a world's strata are a tree and this is the walk down
  * it. Null when a world declares none, or none covers this floor.
  */
-export function stratumAt(world: World, floor: number): Stratum | null {
+export function stratumAt(world: Pick<World, 'strata'>, floor: number): Stratum | null {
   const strata = world.strata;
   if (!strata) return null;
 
@@ -66,3 +67,27 @@ export const isLoop = (world: World, floor: number): boolean =>
 /** Whether this floor's stratum is frozen: authored once, never rebuilt. */
 export const isStatic = (world: World, floor: number): boolean =>
   stratumAt(world, floor)?.kind === 'static';
+
+/** How many years apart two neighbouring era floors are, dealt per floor. */
+export const ERA_GAP = { min: 10, max: 100 } as const;
+
+/**
+ * How many years this floor's era is from the world's own year (DESIGN 6c).
+ *
+ * Eras run from the past toward the present going UP the stratum, so a deed on
+ * a lower floor is older than what a higher floor remembers of it; the top
+ * floor is still one gap in the past. Whole years only, so the hour, the season
+ * and the night stay the world's. Dealt from the seed, never stored.
+ */
+export function eraOf(world: Pick<World, 'strata' | 'seed'>, floor: number): number {
+  const at = stratumAt(world, floor);
+  // ponytail: an open-ended era stratum (no `to`) has no top to count down from,
+  // so it keeps the world clock; nothing creates era strata yet.
+  if (at?.laws?.time !== 'era' || at.to === undefined) return 0;
+  let years = 0;
+  for (let f = floor; f <= at.to; f += 1) {
+    const rng = mulberry32((world.seed ^ hashText(`${at.id}|era|${f}`)) >>> 0);
+    years += ERA_GAP.min + Math.floor(rng() * (ERA_GAP.max - ERA_GAP.min + 1));
+  }
+  return -years;
+}

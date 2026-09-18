@@ -138,7 +138,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
       affordances: (place?.affordances ?? []).map(say),
     },
     peoplePresent,
-    time: timeLine(state.world),
+    time: timeLine(state.world, region?.floor),
     pc: {
       name: state.sheet.name,
       selfPronoun: state.sheet.voice.selfPronoun,

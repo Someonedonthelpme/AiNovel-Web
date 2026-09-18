@@ -395,7 +395,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0}`
       + `${here ? `, in ${here.name}` : ''})`,
     `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
-    `Time: ${timeLine(state.world)}`,
+    `Time: ${timeLine(state.world, region?.floor)}`,
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',

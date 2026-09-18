@@ -1,5 +1,7 @@
 import { mulberry32 } from '../engine/roll.ts';
 import type { Provider } from '../llm/provider.ts';
+import { eraOf } from './strata.ts';
+import type { World } from './types.ts';
 
 /**
  * Time, in the world's own measure (DESIGN 6b stage 7.1e).
@@ -54,8 +56,13 @@ export function startOf(seed: number): WorldStart {
   return { year: 1 + Math.floor(rng() * 999), day: 1 + Math.floor(rng() * DAYS_PER_YEAR) };
 }
 
-/** What the clock reads as a date. `clock` is ticks since the world's start. */
-export function dateOf(world: { seed: number; turn: number; clock?: number }, start: WorldStart = startOf(world.seed)): WorldDate {
+type Clocked = { seed: number; turn: number; clock?: number; strata?: World['strata'] };
+
+/**
+ * What the clock reads as a date. `clock` is ticks since the world's start.
+ * On a `floor` of an era stratum only the YEAR moves (`eraOf`).
+ */
+export function dateOf(world: Clocked, start: WorldStart = startOf(world.seed), floor?: number): WorldDate {
   const clock = world.clock ?? world.turn;
   const origin = (start.year * DAYS_PER_YEAR + (start.day - 1)) * TICKS_PER_DAY + START_HOUR * TICKS_PER_HOUR;
   const now = origin + clock;
@@ -64,7 +71,7 @@ export function dateOf(world: { seed: number; turn: number; clock?: number }, st
   const month = Math.floor(ofYear / DAYS_PER_MONTH) + 1;
   const minutes = (now % TICKS_PER_DAY) * MINUTES_PER_TICK;
   return {
-    year: Math.floor(days / DAYS_PER_YEAR),
+    year: Math.floor(days / DAYS_PER_YEAR) + (floor === undefined ? 0 : eraOf(world, floor)),
     month,
     day: (ofYear % DAYS_PER_MONTH) + 1,
     weekday: days % DAYS_PER_WEEK,
@@ -174,10 +181,12 @@ export function isNight(world: { seed: number; turn: number; clock?: number }): 
  * The time, as the Director and the Writer are told it: the hour, whether it is
  * dark, the season, and the date, in the world's own words.
  */
-export function timeLine(world: { seed: number; turn: number; clock?: number; language: 'th' | 'en'; calendar?: CalendarWords }): string {
-  const d = dateOf(world);
+export function timeLine(world: Clocked & { language: 'th' | 'en'; calendar?: CalendarWords }, floor?: number): string {
+  const d = dateOf(world, undefined, floor);
   const w = calendarWords(world);
   const clock = `${String(d.hour).padStart(2, '0')}:${String(d.minute).padStart(2, '0')}`;
   return `${clock}, ${isNight(world) ? 'dark' : 'daylight'}, ${w.seasons[d.season]}; `
-    + `${w.days[d.weekday]} ${d.day} ${w.months[d.month - 1]}, year ${d.year} of ${w.reckoning}`;
+    + `${w.days[d.weekday]} ${d.day} ${w.months[d.month - 1]}, `
+    // An era can reach behind year 1; year 0 is the year before it.
+    + (d.year >= 1 ? `year ${d.year} of ${w.reckoning}` : `${1 - d.year} years before ${w.reckoning}`);
 }

@@ -58,6 +58,13 @@ export const RESETS = ['never', 'untilCleared'] as const;
 export type Reset = (typeof RESETS)[number];
 
 /**
+ * A stratum LAW: whose clock its floors keep (DESIGN 6c, *Stratum knobs*).
+ * `era` gives each floor its own year, dealt from the seed (`eraOf`).
+ */
+export const TIMES = ['world', 'era'] as const;
+export type Time = (typeof TIMES)[number];
+
+/**
  * A level above a floor: a tower, a dungeon inside it, an outer world.
  *
  * STRATA NEST — "four dungeons inside a twenty-floor tower" makes a dungeon a
@@ -80,9 +87,10 @@ export type Stratum = {
   kind: 'static' | 'dynamic';
   /**
    * Its LAWS of time and consequence (DESIGN 6c). Absent is every law at its
-   * default — `reset: 'never'` — which is every world stored before laws existed.
+   * default — `reset: 'never'`, `time: 'world'` — which is every world stored
+   * before laws existed.
    */
-  laws?: { reset?: Reset };
+  laws?: { reset?: Reset; time?: Time };
   /** The stratum this one sits inside. Absent for a root. */
   parent?: StratumId;
   /** The floors it covers, inclusive. `to` absent runs to the top. */
