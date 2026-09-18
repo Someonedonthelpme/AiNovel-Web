@@ -50,6 +50,14 @@ export type Place = {
 export type StratumId = string;
 
 /**
+ * A stratum LAW: when its floors go back to how they were built (DESIGN 6c,
+ * *Stratum knobs*). Closed, like every law. `untilCleared` is the loop — a floor
+ * left uncleared is put back; its holder dead is what clears it.
+ */
+export const RESETS = ['never', 'untilCleared'] as const;
+export type Reset = (typeof RESETS)[number];
+
+/**
  * A level above a floor: a tower, a dungeon inside it, an outer world.
  *
  * STRATA NEST — "four dungeons inside a twenty-floor tower" makes a dungeon a
@@ -70,6 +78,11 @@ export type Stratum = {
    * when you return.
    */
   kind: 'static' | 'dynamic';
+  /**
+   * Its LAWS of time and consequence (DESIGN 6c). Absent is every law at its
+   * default — `reset: 'never'` — which is every world stored before laws existed.
+   */
+  laws?: { reset?: Reset };
   /** The stratum this one sits inside. Absent for a root. */
   parent?: StratumId;
   /** The floors it covers, inclusive. `to` absent runs to the top. */
@@ -324,6 +337,12 @@ export type World = {
    * only the thinning. See `character/population.ts`.
    */
   populations?: Populations;
+  /**
+   * A LOOP floor as it was built (DESIGN 6c): what leaving it uncleared puts back.
+   * Taken from the crossing that built it (`ClimbRecord.built`), so it is in the
+   * log already and a replay keeps the same copy. Only loop floors are kept.
+   */
+  loops?: Record<RegionId, { region: Region; people: Record<PersonId, Person>; edges: Edges }>;
   facts: Fact[];
   currentRegion: RegionId;
   currentPlace: PlaceId;

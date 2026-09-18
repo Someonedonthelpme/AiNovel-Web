@@ -5,7 +5,16 @@ import { applyClimb, climb, exitStatus, godown } from './climb.ts';
 import { clockOf, stairCost } from '../world/travel.ts';
 import { foldPlay } from './delta.ts';
 import { playState } from './fixtures.ts';
-import { groundFloor, world } from '../world/fixtures.ts';
+import { groundFloor, person, world } from '../world/fixtures.ts';
+import { compressExcept } from '../world/lod.ts';
+import { RESETS } from '../world/types.ts';
+import type { Reset } from '../world/types.ts';
+import { axisOf, nudge, PLAYER } from '../social/edge.ts';
+import { populationAt } from '../character/population.ts';
+import { speciesFor } from '../character/species.ts';
+import { journeysOf } from './journey.ts';
+import { applyTurn } from './delta.ts';
+import type { PlayState, TurnRecord } from './state.ts';
 import { isFull } from '../world/types.ts';
 import type { PlaceKind, Region } from '../world/types.ts';
 import { adopt, believes, firsthand } from '../character/belief.ts';
@@ -336,4 +345,138 @@ test('climbing covers time on the clock', async () => {
   assert.equal(r.error, null);
   // Respecified by 7.1e-i: a stair takes hours (`stairCost`), not a place link's minutes.
   assert.equal(clockOf(r.state.world), 100 + stairCost(before.world, 'floor-0', 'floor-1'));
+});
+
+/* -------------------------------------------------------------------------- */
+/* 6c, the first stratum law: a LOOP resets a floor until it is cleared         */
+/* -------------------------------------------------------------------------- */
+
+/** A tower whose floors 1–5 carry this reset law, standing at the ground stair. */
+function loopTower({ holder = true, law = 'untilCleared' as Reset | null } = {}) {
+  const base = atTheStair();
+  const start: PlayState = {
+    ...base,
+    world: {
+      ...base.world,
+      seed: 11,
+      species: speciesFor(11),
+      strata: { tower: { id: 'tower', name: 'The Tower', kind: 'dynamic', from: 1, to: 5, ...(law ? { laws: { reset: law } } : {}) } },
+    },
+  };
+  const floor = builtFloor();
+  const region: Region = {
+    ...floor,
+    places: floor.places.map((p) => (p.id === 'grove' ? { ...p, people: ['keeper'] } : p)),
+    ...(holder ? { boss: 'keeper' } : {}),
+  };
+  const up = {
+    kind: 'climb' as const,
+    direction: 'up' as const,
+    built: { region, people: { keeper: person('keeper', { name: 'Keeper Ysolt', homeRegion: 'floor-1' }) }, edges: {} },
+  };
+  return { start, up };
+}
+
+const down = { kind: 'climb' as const, direction: 'down' as const, built: null };
+
+/** Climb onto the floor, change what is there, walk back to the stair and leave. */
+function liveThenLeave(
+  tower: ReturnType<typeof loopTower>,
+  { kill = false, survivor = false, keeperSetsOut = false, keeperDies = false } = {},
+) {
+  const built = applyClimb(tower.start, tower.up).state;
+  const w = built.world;
+  const here = w.regions['floor-1'] as Region;
+  const survivorId = 'survivor:floor-1:4:foe1';
+  const lived: PlayState = {
+    ...built,
+    sheet: { ...built.sheet, xp: (built.sheet.xp ?? 0) + 5 },
+    pc: { ...built.pc, coin: built.pc.coin + 7 },
+    world: {
+      ...w,
+      currentPlace: 'landing',
+      facts: [...w.facts, { id: 'f-keeper', text: 'the keeper lies about the stair', region: 'floor-1', people: ['keeper'], establishedAtTurn: w.turn }],
+      regions: { ...w.regions, 'floor-1': { ...here, places: here.places.map((p) => ({ ...p, discovered: true })) } },
+      people: {
+        ...w.people,
+        keeper: { ...w.people.keeper, oneLine: 'has seen you before', ...(keeperDies ? { alive: false } : {}) },
+        ...(survivor ? { [survivorId]: person(survivorId, { homeRegion: 'floor-1' }) } : {}),
+      },
+      edges: nudge(w.edges ?? {}, 'keeper', PLAYER, 'resentment', 3),
+      reputation: { ...w.reputation, 'floor-1': 2 },
+      ...(kill ? { populations: { ...w.populations, grove: [] } } : {}),
+      ...(keeperSetsOut ? { journeys: [{ who: 'keeper', for: 'keeper', region: 'floor-1', place: 'grove', progress: 0, departs: 0 }] } : {}),
+    },
+  };
+  const left = applyClimb(lived, down);
+  assert.equal(left.error, null, 'the way down has to be open for this to say anything');
+  return { built, lived, back: left.state, survivorId };
+}
+
+test('the reset vocabulary is closed, and a stratum without the law never resets', () => {
+  assert.deepEqual([...RESETS], ['never', 'untilCleared']);
+  const { back } = liveThenLeave(loopTower({ law: null }));   // null, not undefined: undefined takes the default
+  assert.equal(axisOf(back.world.edges ?? {}, 'keeper', PLAYER, 'resentment'), 3, 'what you did stays');
+});
+
+test('leaving an uncleared loop floor puts its places and people back as they were built', () => {
+  const { built, back } = liveThenLeave(loopTower());
+  assert.deepEqual(back.world.regions['floor-1'], built.world.regions['floor-1']);
+  assert.deepEqual(back.world.people.keeper, built.world.people.keeper);
+});
+
+test('and their feelings toward you', () => {
+  const { back } = liveThenLeave(loopTower());
+  assert.equal(axisOf(back.world.edges ?? {}, 'keeper', PLAYER, 'resentment'), 0);
+  assert.equal(back.world.reputation?.['floor-1'] ?? 0, 0);
+});
+
+test('and its crowd', () => {
+  const { built, lived, back } = liveThenLeave(loopTower(), { kill: true });
+  assert.notDeepEqual(populationAt(lived.world, 'floor-1', 'grove', 1), populationAt(built.world, 'floor-1', 'grove', 1), 'the killing has to show');
+  assert.deepEqual(populationAt(back.world, 'floor-1', 'grove', 1), populationAt(built.world, 'floor-1', 'grove', 1));
+});
+
+test('the player keeps memories, items and XP', () => {
+  const { lived, back } = liveThenLeave(loopTower());
+  assert.deepEqual(back.world.facts, lived.world.facts);
+  assert.deepEqual(back.pc.inventory, lived.pc.inventory);
+  assert.equal(back.pc.coin, lived.pc.coin);
+  assert.equal(back.sheet.xp, lived.sheet.xp);
+});
+
+test('whoever the loop made there goes with it, and nobody from there is on the road', () => {
+  const { back, survivorId } = liveThenLeave(loopTower(), { survivor: true, keeperSetsOut: true });
+  assert.equal(back.world.people[survivorId], undefined);
+  assert.equal(journeysOf(back.world).some((j) => j.who === 'keeper'), false);
+});
+
+test('a floor whose holder is dead is cleared, and stays as you left it', () => {
+  const { back } = liveThenLeave(loopTower(), { keeperDies: true });
+  assert.equal(back.world.people.keeper.alive, false);
+  assert.equal(axisOf(back.world.edges ?? {}, 'keeper', PLAYER, 'resentment'), 3);
+});
+
+test('a loop floor with no holder has nothing to clear, so it never resets', () => {
+  const { built, back } = liveThenLeave(loopTower({ holder: false }));
+  assert.notDeepEqual(back.world.regions['floor-1'], built.world.regions['floor-1']);
+});
+
+test('a loop floor is never compressed — the reset needs it exactly', () => {
+  const w = compressExcept(liveThenLeave(loopTower()).back.world, [], 9);
+  assert.equal(isFull(w.regions['floor-1']), true);
+});
+
+test('the reset replays from the log', () => {
+  const { start, up } = loopTower();
+  const turn = (delta: TurnRecord['delta']): TurnRecord => ({
+    kind: 'turn', input: '', mode: 'exploration', classification: 'NEUTRAL', addressed: null,
+    roll: null, delta, rejected: [], prose: '',
+  });
+  const records = [up, turn({ moveTo: 'grove', trust: { keeper: -2 } }), turn({ moveTo: 'landing' }), down];
+  let live = start;
+  for (const r of records) live = r.kind === 'climb' ? applyClimb(live, r).state : applyTurn(live, r).state;
+  assert.equal(live.world.currentRegion, 'floor-0', 'the walk has to end back down');
+  assert.deepEqual(foldPlay(start, records), live);
+  assert.equal(axisOf(live.world.edges ?? {}, 'keeper', PLAYER, 'trust'), 0, 'and the reset is in it');
 });

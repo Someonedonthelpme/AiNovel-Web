@@ -3,6 +3,8 @@ import type { Provider } from '../llm/provider.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import type { FloorResult } from '../world/floorgen.ts';
 import { ascend, clockOf, descend, installRegion, stairCost, traverse } from '../world/travel.ts';
+import { isLoop } from '../world/strata.ts';
+import { aggregateKey } from '../character/population.ts';
 import { advanceJourneys, fadeGrudges } from './journey.ts';
 import { bumpCounter } from '../character/persona.ts';
 import { adopt, firsthand } from '../character/belief.ts';
@@ -129,8 +131,10 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   const attempt = moveFor(state, record);
 
   if (attempt.kind === 'error') return failed(taught(state, attempt.law), attempt.reason, record);
+  // Leaving is what puts a loop floor back (DESIGN 6c) — whichever way you go.
+  const left = state.world.currentRegion;
   if (attempt.kind === 'moved') {
-    return { ...arrive(state, attempt.world), generated: null, error: null, record };
+    return { ...arrive(state, resetLoop(attempt.world, left)), generated: null, error: null, record };
   }
 
   // Replaying a log whose crossing recorded no floor, onto a world that has
@@ -141,18 +145,70 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   // MERGED, never replaced: a crossing brings new faces and their first
   // impressions, and must not touch what the floors below already earned.
   const withPeople: World = {
-    ...state.world,
+    ...resetLoop(state.world, left),
     people: { ...state.world.people, ...people },
     edges: { ...state.world.edges, ...edges },
     // A floor that begins a wing adds it to what the world holds. Merged, never
     // replaced: the tower this hangs inside is already in there.
     ...(stratum ? { strata: { ...state.world.strata, [stratum.id]: stratum } } : {}),
   };
+  const arrived = arrive(state, installRegion(withPeople, region, region.entrance));
+  return { ...arrived, state: keepOriginal(arrived.state, region.id, record.built), generated: null, error: null, record };
+}
+
+/**
+ * A loop floor, kept as it stands the moment you first arrive — the landing
+ * already found — with the people and first impressions it was built with.
+ */
+function keepOriginal(state: PlayState, id: RegionId, built: NonNullable<ClimbRecord['built']>): PlayState {
+  const region = state.world.regions[id];
+  if (!region || region.detail !== 'full' || !isLoop(state.world, region.floor) || state.world.loops?.[id]) return state;
+  const loops = { ...state.world.loops, [id]: { region, people: built.people, edges: built.edges ?? {} } };
+  return { ...state, world: { ...state.world, loops } };
+}
+
+/**
+ * LEAVING A LOOP FLOOR UNCLEARED PUTS IT BACK (DESIGN 6c): its places, its crowd,
+ * and its people with what they felt about you. The player keeps what they carry,
+ * what they learned and what they earned — none of that lives on the floor.
+ *
+ * Cleared is DERIVED, never stored: the holder dead. A floor with no holder has
+ * nothing to clear, so it counts as cleared from the start and never resets.
+ *
+ * `ponytail: what OTHER people believe about the floor's people (a deed spread
+ * off the floor) is left as it is — a loop undoes the floor, not the gossip.
+ * Reset it too if an echo of an undone run reads wrong in play.`
+ */
+function resetLoop(world: World, id: RegionId): World {
+  const original = world.loops?.[id];
+  const now = world.regions[id];
+  if (!original || !now || !isLoop(world, now.floor)) return world;
+  const holder = original.region.boss;
+  if (!holder || world.people[holder]?.alive === false) return world;
+
+  // Theirs: whoever it was built with, and whoever the run made there since.
+  const theirs = new Set([
+    ...Object.keys(original.people),
+    ...Object.values(world.people).filter((p) => p.homeRegion === id).map((p) => p.id),
+  ]);
+  const people = Object.fromEntries(Object.entries(world.people).filter(([pid]) => !theirs.has(pid)));
+  const edges = Object.fromEntries(
+    Object.entries(world.edges ?? {}).filter(([, e]) => !theirs.has(e.from) && !theirs.has(e.to)),
+  );
+  const places = new Set([...(now.detail === 'full' ? now.places : []), ...original.region.places].map((p) => p.id));
+  const without = <T,>(map: Record<string, T> | undefined, keys: Set<string>) =>
+    map ? Object.fromEntries(Object.entries(map).filter(([k]) => !keys.has(k))) : map;
+  const { [id]: _standing, ...reputation } = world.reputation ?? {};
+
   return {
-    ...arrive(state, installRegion(withPeople, region, region.entrance)),
-    generated: null,
-    error: null,
-    record,
+    ...world,
+    regions: { ...world.regions, [id]: original.region },
+    people: { ...people, ...original.people },
+    edges: { ...edges, ...original.edges },
+    ...(world.populations ? { populations: without(world.populations, new Set([...places, aggregateKey(id)])) } : {}),
+    ...(world.ambient ? { ambient: without(world.ambient, places) } : {}),
+    ...(world.reputation ? { reputation } : {}),
+    ...(world.journeys ? { journeys: world.journeys.filter((j) => !theirs.has(j.who) && !theirs.has(j.for)) } : {}),
   };
 }
 

@@ -1,7 +1,7 @@
 import { trustToward } from '../social/edge.ts';
 import type { Gazetteer, PersonId, Region, RegionId, World } from './types.ts';
 import { isFull } from './types.ts';
-import { isStatic } from './strata.ts';
+import { isLoop, isStatic } from './strata.ts';
 import { aggregate } from '../character/population.ts';
 
 /**
@@ -81,6 +81,9 @@ export function compressExcept(world: World, keep: RegionId[], turn: number): Wo
     // the case this exists for. Page them out of the snapshot and rebuild from
     // the generation events in the log if a static world ever runs long.
     if (isStatic(world, record.floor)) continue;
+    // Nor a LOOP floor: its reset puts back the floor exactly as it was built,
+    // which a rebuilt retelling of it could not match.
+    if (isLoop(world, record.floor)) continue;
     // The standing you earned here travels with the summary. It lives on the
     // World so it survives rehydration too; this copy is what the returning
     // brief reads, and it is `Gazetteer.reputation`'s first writer ever.

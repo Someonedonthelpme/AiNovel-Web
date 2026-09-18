@@ -59,6 +59,10 @@ export function dangerAt(world: World, floor: number): number {
   return dangerFor(floor, rulesOf(world));
 }
 
+/** Whether this floor LOOPS: put back as it was built whenever it is left uncleared (DESIGN 6c). */
+export const isLoop = (world: World, floor: number): boolean =>
+  stratumAt(world, floor)?.laws?.reset === 'untilCleared';
+
 /** Whether this floor's stratum is frozen: authored once, never rebuilt. */
 export const isStatic = (world: World, floor: number): boolean =>
   stratumAt(world, floor)?.kind === 'static';
