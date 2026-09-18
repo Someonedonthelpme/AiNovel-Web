@@ -273,6 +273,8 @@ after any that touches a fight):
    re-folds from the pre-turn state so live and replay agree by construction
    (stage 0.3). Decided with the user: one `killed` per fight, not per body, and
    it counts in an ambush too (unlike `drewOn`) — revisit at stage 6.
+   **Still open (retired from HANDOFF 2026-09-18):** stage 6 left it as is, and 6b
+   is now complete — one `killed` per fight, or per body? — user.
 2. **Shipped.** **Whoever struck first acts first** — `startedBy: 'them'` gives foes the
    first action. Decided with the user: ambushers also spawn ADJACENT, because
    going first across the open arena only closed the gap and measured as a
