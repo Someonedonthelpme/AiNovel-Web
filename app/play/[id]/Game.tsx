@@ -132,7 +132,7 @@ function CombatBoard({
               style={step && !busy ? { cursor: 'pointer' } : undefined}
               onClick={step && !busy ? () => onMove(step) : undefined}
             >
-              {step && <title>move to {key}</title>}
+              {step && <title>{`move to ${key}`}</title>}
             </rect>
           );
         }),
