@@ -418,7 +418,18 @@ export default function Game({ initial }: { initial: GameView }) {
                       view.combat.options
                         .filter((o) => o.action.kind !== 'move')
                         .map((o, i) => (
-                          <button className="chip" key={i} onClick={() => act(o.action)} disabled={busy}>
+                          // A word carries what is typed in the box below (6b stage 8).
+                          <button
+                            className="chip"
+                            key={i}
+                            onClick={() => {
+                              if (o.action.kind === 'parley') {
+                                void act({ ...o.action, say: input });
+                                setInput('');
+                              } else void act(o.action);
+                            }}
+                            disabled={busy}
+                          >
                             {o.label}
                           </button>
                         ))
@@ -433,10 +444,15 @@ export default function Game({ initial }: { initial: GameView }) {
             <div className="composer">
               <input
                 value={input}
-                placeholder={view.language === 'th' ? 'จะทำอะไร…' : 'What do you do?'}
+                placeholder={
+                  view.combat
+                    ? (view.language === 'th' ? 'จะพูดอะไร แล้วเลือกคนที่จะคุยด้วย…' : 'What you say — then pick who to talk to')
+                    : (view.language === 'th' ? 'จะทำอะไร…' : 'What do you do?')
+                }
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && send(input)}
-                disabled={busy || Boolean(view.combat) || Boolean(view.ended)}
+                onKeyDown={(e) => e.key === 'Enter' && !view.combat && send(input)}
+                // Mid-fight the box is what you SAY, sent by a "talk to" chip.
+                disabled={busy || Boolean(view.ended) || Boolean(view.combat && (view.combat.over || !view.combat.yourTurn))}
               />
               <button onClick={() => send(input)} disabled={busy || !input.trim() || Boolean(view.combat) || Boolean(view.ended)}>
                 Do it

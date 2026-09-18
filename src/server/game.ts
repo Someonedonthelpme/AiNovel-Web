@@ -29,7 +29,7 @@ import { settleFight } from '../play/delta.ts';
 import type { CombatAction } from '../play/combat.ts';
 import { initialPlayState } from '../play/state.ts';
 import type { Mode, PlayState, TurnRecord } from '../play/state.ts';
-import { playTurn, suggestedActions } from '../play/turn.ts';
+import { hearParley, playTurn, suggestedActions } from '../play/turn.ts';
 import { runGenesis } from '../session/genesis.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { SpeciesChoice } from '../character/species.ts';
@@ -655,6 +655,14 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   await bootstrap();
   const fight = fights.get(id);
   if (!fight) return null;
+
+  // A word is heard HERE, where a provider exists: the model answers, the engine
+  // rolls, and the verdict is written into the action the log will keep.
+  if (action.kind === 'parley') {
+    const said = typeof action.say === 'string' ? action.say.slice(0, 300) : '';
+    const rng = mulberry32(fight.state.world.seed + fight.state.world.turn * 7919 + (fight.state.combat?.log.length ?? 0));
+    action = await hearParley(provider(), rng, fight.state, { ...action, say: said });
+  }
 
   const step = takeCombatAction(fight.state, action);
   if (step.error) {

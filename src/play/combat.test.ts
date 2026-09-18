@@ -26,6 +26,7 @@ import { fadeDays, journeysOf, RECOVERY, setOut } from './journey.ts';
 import { clockOf, linkCost, travelTime } from '../world/travel.ts';
 import { calendarWords, dateOf, isNight, TICKS_PER_DAY } from '../world/calendar.ts';
 import { runDirector, runParley } from '../llm/director.ts';
+import { hearParley } from './turn.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -1468,7 +1469,7 @@ test('where the law allows it, such a floor stands empty', () => {
  * carries — so the fold never asks the model, and a replay hears the same answer.
  */
 
-const parley = (target: string, verdict: ParleyEffect): CombatAction =>
+const parley = (target: string, verdict: ParleyEffect): Extract<CombatAction, { kind: 'parley' }> =>
   ({ kind: 'parley', target, say: '', roll: null, verdict });
 
 const talks = (s: PlayState) => combatOptions(s).filter((o) => o.action.kind === 'parley');
@@ -1579,4 +1580,35 @@ test('an effect outside the vocabulary is a refusal', async () => {
   const out = await runParley(new FakeProvider({ structured: [said] }), s, foesOf(s)[0], 'put it down');
   assert.equal(out.onHit, 'refuses');
   assert.equal(out.onPartial, 'withdraws', 'and one it knows passes through');
+});
+
+/*
+ * 6b stage 8b: the live path. The server asks, the engine rolls, and the answer
+ * is written into the action — whatever the client put there is thrown away.
+ */
+
+const answers = (hit: ParleyEffect, partial: ParleyEffect, miss: ParleyEffect) =>
+  new FakeProvider({ structured: [{ ability: 'cha', onHit: { effect: hit }, onPartial: { effect: partial }, onMiss: { effect: miss } }] });
+
+test('a verdict sent by the client is never the one heard', async () => {
+  const s = oneFoe();
+  const heard = await hearParley(answers('refuses', 'refuses', 'refuses'), mulberry32(1), s, parley(foesOf(s)[0].id, 'yields'));
+  assert.equal(heard.verdict, 'refuses');
+});
+
+test('the answer heard is the one the dice picked', async () => {
+  const s = oneFoe();
+  const heard = await hearParley(answers('yields', 'withdraws', 'refuses'), mulberry32(1), s, parley(foesOf(s)[0].id, 'refuses'));
+  assert.ok(heard.roll, 'a heard word is rolled');
+  assert.equal(heard.verdict, { hit: 'yields', partial: 'withdraws', miss: 'refuses' }[heard.roll.tier]);
+});
+
+test('a word nobody can hear costs no model call', async () => {
+  const s = oneFoe();
+  const foe = foesOf(s)[0];
+  const undying = (s.world.species ?? []).find((k) => k.level === 'subspecies' && needScale(k, 'company') === 0)!;
+  const deaf = { ...s, combat: { ...s.combat!, combatants: { ...s.combat!.combatants, [foe.id]: { ...foe, kind: undying.id } } } };
+  const p = new FakeProvider();
+  await hearParley(p, mulberry32(1), deaf, parley(foe.id, 'refuses'));
+  assert.equal(p.calls.length, 0);
 });

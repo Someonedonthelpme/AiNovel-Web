@@ -583,7 +583,7 @@ export function combatOptions(state: PlayState): CombatOption[] {
  * offered (DESIGN 6b, TYPES). The option's verdict is a placeholder: the live
  * path asks the model and writes the real one in before the action is taken.
  */
-function hearsWords(state: PlayState, foe: Combatant): boolean {
+export function hearsWords(state: PlayState, foe: Combatant): boolean {
   const combat = state.combat;
   if (!combat || foe.side !== 'foe' || foe.dead || heard(combat, foe.id)) return false;
   return needScale((state.world.species ?? []).find((k) => k.id === foe.kind), 'company') > 0;

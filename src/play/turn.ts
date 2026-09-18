@@ -4,7 +4,7 @@ import { edgeFor } from '../skills/active.ts';
 import { activeSkills } from '../session/sheet.ts';
 import type { Rng } from '../engine/roll.ts';
 import { roll } from '../engine/roll.ts';
-import { mergeDeltas, runDirector, toWorldDelta } from '../llm/director.ts';
+import { mergeDeltas, runDirector, runParley, toWorldDelta } from '../llm/director.ts';
 import type { DirectorOutput } from '../llm/director.ts';
 import type { Provider } from '../llm/provider.ts';
 import { assertNoLeak, toWriterView } from '../llm/redact.ts';
@@ -17,6 +17,8 @@ import { applyTurn, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
 import type { Mode, PlayState, TurnRecord, WorldDelta } from './state.ts';
+import { hearsWords } from './combat.ts';
+import type { CombatAction } from './combat.ts';
 
 /**
  * One turn, end to end.
@@ -170,4 +172,29 @@ export async function playTurn(
   const record: TurnRecord = { ...draft, prose: written.prose };
 
   return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts };
+}
+
+type Parley = Extract<CombatAction, { kind: 'parley' }>;
+
+/**
+ * A word in a fight, heard live (6b stage 8b): the same order as a turn — the
+ * model commits to every answer, the ENGINE rolls, and the tier picks one.
+ *
+ * Whatever roll and verdict the action arrived with are discarded: it came from
+ * the client, and a verdict it could set would be a win without a roll. What is
+ * returned is what the log stores, so replay never asks again.
+ */
+export async function hearParley(provider: Provider, rng: Rng, state: PlayState, action: Parley): Promise<Parley> {
+  const foe = state.combat?.combatants[action.target];
+  // Nobody to hear it: no call. `takeCombatAction` refuses the action itself.
+  if (!foe || !hearsWords(state, foe)) return { ...action, roll: null, verdict: 'refuses' };
+
+  const said = await runParley(provider, state, foe, action.say);
+  const abilities = finalAbilities(state.sheet, state.pc.inventory);
+  const rolled = roll(rng, {
+    ability: said.ability,
+    modifier: abilityMod(abilities[said.ability] ?? 10) + edgeFor(activeSkills(state.sheet), said.ability),
+  });
+  const verdict = { hit: said.onHit, partial: said.onPartial, miss: said.onMiss }[rolled.tier];
+  return { ...action, roll: rolled, verdict };
 }
