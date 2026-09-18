@@ -6,7 +6,8 @@ import { beliefsAbout, DIRECTOR_DEEDS, isDirectorDeed } from '../social/deed.ts'
 import { inherited } from '../social/ambient.ts';
 import type { DirectorDeed } from '../social/deed.ts';
 import { dispositionOf } from '../character/persona.ts';
-import { ABILITIES } from '../combat/types.ts';
+import { ABILITIES, PARLEY_EFFECTS } from '../combat/types.ts';
+import type { Ability, Combatant, ParleyEffect } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
 import { CLASSES } from '../play/state.ts';
 import { presentHere } from '../play/sighting.ts';
@@ -522,4 +523,71 @@ export async function runDirector(
       },
     ],
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Parley — a Director turn inside a fight (6b stage 8)                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Director's tier commitment, shrunk to the one thing a word in a fight can
+ * do. Deliberately NOT the full turn schema: mid-fight, a `moveTo` would pass
+ * `validateDelta` and walk the player out of an encounter the server still holds
+ * open. Three answers, all committed before the engine rolls.
+ */
+const parleyBranch = obj({ effect: { type: 'string', enum: [...PARLEY_EFFECTS] } }, ['effect']);
+
+export const PARLEY_SCHEMA = obj(
+  {
+    ability: { type: 'string', enum: [...ABILITIES] },
+    onHit: parleyBranch,
+    onPartial: parleyBranch,
+    onMiss: parleyBranch,
+  },
+  ['ability', 'onHit', 'onPartial', 'onMiss'],
+);
+
+const PARLEY_SYSTEM = [
+  'You are the Director. Mid-fight, the player speaks to one foe.',
+  'Choose the ability their words lean on, then commit to what the foe does on each tier of the roll:',
+  '"yields" (gives up, at the mercy of the player), "withdraws" (leaves the fight), or "refuses" (fights on).',
+  'You do not know which tier will fire. Weigh who the foe is, how the fight is going, and what was said.',
+].join('\n');
+
+export type ParleyOutput = { ability: Ability; onHit: ParleyEffect; onPartial: ParleyEffect; onMiss: ParleyEffect };
+
+/**
+ * An answer outside the vocabulary is a refusal: the fight goes on. Degraded
+ * rather than thrown, like an unknown deed is dropped — a throw here would strand
+ * an encounter the server is holding open.
+ */
+const effectOf = (raw: unknown): ParleyEffect =>
+  (PARLEY_EFFECTS as readonly unknown[]).includes(raw) ? (raw as ParleyEffect) : 'refuses';
+
+export async function runParley(provider: Provider, state: PlayState, foe: Combatant, say: string): Promise<ParleyOutput> {
+  type Branch = { effect?: unknown } | undefined;
+  const raw = await provider.structured<{ ability?: unknown; onHit?: Branch; onPartial?: Branch; onMiss?: Branch }>({
+    schemaName: 'parley',
+    schema: PARLEY_SCHEMA,
+    temperature: 0.7,
+    messages: [
+      { role: 'system', content: PARLEY_SYSTEM },
+      {
+        role: 'user',
+        content: [
+          directorContext(state, []),
+          '',
+          `In the fight: ${foe.name}, ${foe.hp} of ${foe.maxHp} hit points left.`,
+          `Player: ${say.trim() || '(says nothing in words — the gesture has to carry it)'}`,
+        ].join('\n'),
+      },
+    ],
+  });
+  return {
+    // An unknown ability leans on charisma, the ability words ordinarily lean on.
+    ability: (ABILITIES as readonly unknown[]).includes(raw.ability) ? (raw.ability as Ability) : 'cha',
+    onHit: effectOf(raw.onHit?.effect),
+    onPartial: effectOf(raw.onPartial?.effect),
+    onMiss: effectOf(raw.onMiss?.effect),
+  };
 }

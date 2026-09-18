@@ -1,5 +1,6 @@
 import { autoTurn } from '../combat/ai.ts';
-import { attack, attackOptions, currentActor, endTurn, movementOptions, moveTo, settle, startCombat } from '../combat/combat.ts';
+import { attack, attackOptions, currentActor, endTurn, heard, hear, movementOptions, moveTo, settle, startCombat } from '../combat/combat.ts';
+import { PARLEY_EFFECTS } from '../combat/types.ts';
 import { buildEncounter, composition, freeCellsNear, kindForFloor } from '../combat/encounter.ts';
 import { scaleFoe, withTemplate } from '../combat/statblock.ts';
 import type { FoeRole } from '../combat/statblock.ts';
@@ -8,7 +9,9 @@ import type { Member, Rank } from '../character/crowd.ts';
 import type { Inventory } from '../items/types.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { cellKey, distance, hasLineOfSight } from '../combat/grid.ts';
-import type { CombatEvent, CombatState, Combatant, Grid, Vec } from '../combat/types.ts';
+import type { CombatEvent, CombatState, Combatant, Grid, ParleyEffect, Vec } from '../combat/types.ts';
+import type { SocialRoll } from '../engine/roll.ts';
+export type { ParleyEffect } from '../combat/types.ts';
 import { bumpCounter, dispositionOf, metNeeds, neutralTemperament } from '../character/persona.ts';
 import { repairVoice } from '../session/repair.ts';
 import type { Persona } from '../character/persona.ts';
@@ -473,7 +476,13 @@ export type CombatAction =
   | { kind: 'end' }
   /** A yielded foe's fate, once the fight is won. */
   | { kind: 'spare'; target: string }
-  | { kind: 'kill'; target: string };
+  | { kind: 'kill'; target: string }
+  /**
+   * A word to a foe (6b stage 8). The VERDICT travels in the action: it came out
+   * of a model call the live path made, and a fold holds no provider, so a
+   * replay applies what was heard rather than asking again.
+   */
+  | { kind: 'parley'; target: string; say: string; roll: SocialRoll | null; verdict: ParleyEffect };
 
 export type CombatOption = { action: CombatAction; label: string };
 
@@ -554,7 +563,30 @@ export function combatOptions(state: PlayState): CombatOption[] {
   }
 
   options.push({ action: { kind: 'end' }, label: 'end turn' });
+
+  /*
+   * Anyone still standing who could listen (6b stage 8) — AFTER `end`, so a
+   * picker taking the first option (the harness, the tests) never talks by
+   * accident: a parley logs an event, and the log's length seeds every roll.
+   */
+  for (const foe of Object.values(combat.combatants)) {
+    if (hearsWords(state, foe)) {
+      options.push({ action: { kind: 'parley', target: foe.id, say: '', roll: null, verdict: 'refuses' }, label: `talk to ${foe.name}` });
+    }
+  }
   return options;
+}
+
+/**
+ * Whether a foe can be talked to: standing, not yet spoken to this fight, and of
+ * a kind with a company need — a thing that wants nobody has nothing to be
+ * offered (DESIGN 6b, TYPES). The option's verdict is a placeholder: the live
+ * path asks the model and writes the real one in before the action is taken.
+ */
+function hearsWords(state: PlayState, foe: Combatant): boolean {
+  const combat = state.combat;
+  if (!combat || foe.side !== 'foe' || foe.dead || heard(combat, foe.id)) return false;
+  return needScale((state.world.species ?? []).find((k) => k.id === foe.kind), 'company') > 0;
 }
 
 /** Everything a skill of this reach could be used on. */
@@ -732,6 +764,15 @@ export function takeCombatAction(state: PlayState, action: CombatAction): Combat
         if (!canAct(paid)) next = endTurn(rng, next).state;
         }
       }
+    }
+  } else if (action.kind === 'parley') {
+    const foe = next.combatants[action.target];
+    if (!(PARLEY_EFFECTS as readonly string[]).includes(action.verdict)) error = `no such answer: ${action.verdict}`;
+    else if (!foe || !hearsWords({ ...state, combat: next }, foe)) error = `${foe?.name ?? action.target} will not listen`;
+    else {
+      // A word is a turn, like a swing.
+      next = hear(next, action.target, action.verdict).state;
+      next = endTurn(rng, next).state;
     }
   } else {
     next = endTurn(rng, next).state;
@@ -1021,6 +1062,9 @@ export function notableEvents(events: CombatEvent[]): string[] {
       else if (event.hit && event.targetHpAfter <= event.targetHpBefore / 4) {
         notable.push(`${event.target} is barely standing`);
       }
+    } else if (event.kind === 'parley' && event.verdict === 'refuses') {
+      // Engine words: what the model wrote for the Writer never reaches this log.
+      notable.push(`${event.target} will not hear it`);
     } else if (event.kind === 'broke') {
       notable.push(event.as === 'yielded' ? `${event.actor} yields` : `${event.actor} flees`);
     } else if (event.kind === 'deathSave' && event.died) {

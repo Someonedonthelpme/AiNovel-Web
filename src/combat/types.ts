@@ -277,7 +277,16 @@ export type CombatEvent =
   | { kind: 'roundStart'; round: number }
   | { kind: 'turnStart'; actor: string }
   | { kind: 'combatEnd'; victor: Side | 'draw' }
-  | { kind: 'broke'; actor: string; as: BrokeAs };
+  | { kind: 'broke'; actor: string; as: BrokeAs }
+  /** The player spoke to a foe, and this is what it did about it (6b stage 8). */
+  | { kind: 'parley'; actor: string; target: string; verdict: ParleyEffect };
+
+/**
+ * What a foe does when spoken to mid-fight. Closed, like every vocabulary the
+ * engine resolves: the model picks one, it never invents one.
+ */
+export const PARLEY_EFFECTS = ['yields', 'withdraws', 'refuses'] as const;
+export type ParleyEffect = (typeof PARLEY_EFFECTS)[number];
 
 /** How a foe that broke left the fight: somebody was on it, or nobody was. */
 export type BrokeAs = 'yielded' | 'fled';

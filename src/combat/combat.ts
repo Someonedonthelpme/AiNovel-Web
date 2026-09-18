@@ -3,7 +3,7 @@ import { d20 } from './dice.ts';
 import { effectiveSpeed, isIncapacitated, tickConditions } from './conditions.ts';
 import { cellKey, distance, hasLineOfSight, occupancyFor, reachableStops } from './grid.ts';
 import { resolveAttack, rollDeathSave } from './resolve.ts';
-import type { CombatEvent, CombatState, Combatant, Grid, Side, Vec } from './types.ts';
+import type { CombatEvent, CombatState, Combatant, Grid, ParleyEffect, Side, Vec } from './types.ts';
 import { abilityMod } from './types.ts';
 import { actionTicks, canAct, refillTicks, spendTicks } from './tempo.ts';
 
@@ -77,6 +77,32 @@ export function settle(state: CombatState): CombatState {
     );
   }
   return next;
+}
+
+/** Whether this foe has already been spoken to this fight — it hears you once (6b stage 8). */
+export const heard = (state: CombatState, id: string): boolean =>
+  state.log.some((e) => e.kind === 'parley' && e.target === id);
+
+/**
+ * A foe answers a word (6b stage 8). Yielding and leaving are stage 6's two ways
+ * off the board, so everything after — a fate, a survivor, a deed — is the same
+ * machinery; refusing changes nothing. The verdict is decided elsewhere: this
+ * only carries it out.
+ */
+export function hear(state: CombatState, targetId: string, verdict: ParleyEffect): ActionResult {
+  const actor = currentActor(state);
+  const who = state.combatants[targetId];
+  if (!actor || !who || who.dead || who.side === actor.side) return fail(state, `${targetId} is not someone to talk to`);
+  if (heard(state, targetId)) return fail(state, `${who.name} has already heard you`);
+
+  const said = log(state, { kind: 'parley', actor: actor.id, target: targetId, verdict });
+  if (verdict === 'refuses') return ok(said);
+  const as = verdict === 'yields' ? 'yielded' : 'fled';
+  const { [targetId]: _gone, ...combatants } = said.combatants;
+  return ok(log(
+    { ...said, combatants, broken: { ...said.broken, [targetId]: { who, as } } },
+    { kind: 'broke', actor: targetId, as },
+  ));
 }
 
 function settleIfOver(state: CombatState): CombatState {

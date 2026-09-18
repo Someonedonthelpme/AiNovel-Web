@@ -11,11 +11,11 @@ import { ABILITIES } from '../combat/types.ts';
 import { speciesFor, speciesIdFor, TYPES } from '../character/species.ts';
 import { bandOf, groupsAt, habitOf, livesAt, packAt } from '../character/habitat.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
-import { groupOf, leavesUnder } from '../character/species.ts';
+import { groupOf, leavesUnder, needScale } from '../character/species.ts';
 import { preyOf } from '../character/prey.ts';
-import type { CombatAction, CombatOption } from './combat.ts';
+import type { CombatAction, CombatOption, ParleyEffect } from './combat.ts';
 import { applyDelta, applyTurn, foldPlay, settleFight, validateDelta } from './delta.ts';
-import { xpToNext } from './progress.ts';
+import { xpForFight, xpToNext } from './progress.ts';
 import { COUNTERS } from './traits.ts';
 import { counterOf, NEED_MAX } from '../character/persona.ts';
 import { formRole } from '../social/roles.ts';
@@ -25,7 +25,7 @@ import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { fadeDays, journeysOf, RECOVERY, setOut } from './journey.ts';
 import { clockOf, linkCost, travelTime } from '../world/travel.ts';
 import { calendarWords, dateOf, isNight, TICKS_PER_DAY } from '../world/calendar.ts';
-import { runDirector } from '../llm/director.ts';
+import { runDirector, runParley } from '../llm/director.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -1461,4 +1461,122 @@ test('where the law allows it, such a floor stands empty', () => {
   const { state } = floorWhoseGroupIsAway();
   const lawful = withRules(state, { ...STANDARD, world: { ...STANDARD.world, emptyOutOfSeason: true } });
   assert.equal(beginEncounter(lawful).combat, null);
+});
+
+/*
+ * 6b stage 8a: PARLEY. A word in the middle of a fight, whose verdict the action
+ * carries — so the fold never asks the model, and a replay hears the same answer.
+ */
+
+const parley = (target: string, verdict: ParleyEffect): CombatAction =>
+  ({ kind: 'parley', target, say: '', roll: null, verdict });
+
+const talks = (s: PlayState) => combatOptions(s).filter((o) => o.action.kind === 'parley');
+
+/** An open fight with exactly one foe standing, beside the player and well above its break line. */
+function oneFoe(): PlayState {
+  const open = openFight(populated());
+  const combat = open.combat!;
+  const pc = combat.combatants['pc'];
+  const foe = foesOf(open)[0];
+  // Seed 11's floor fields undead, which cannot be talked to; this one is of a kind that can.
+  const listener = (open.world.species ?? []).find((k) => k.level === 'subspecies' && needScale(k, 'company') > 0)!;
+  const board = { pc, [foe.id]: { ...foe, kind: listener.id, hp: 40, maxHp: 40, breaksAt: 5, pos: { x: pc.pos.x + 1, y: pc.pos.y } } };
+  return { ...open, combat: { ...combat, combatants: board } };
+}
+
+test('a kind with no company need cannot be talked to', () => {
+  const s = oneFoe();
+  const foe = foesOf(s)[0];
+  const undying = (s.world.species ?? []).find((k) => k.level === 'subspecies' && needScale(k, 'company') === 0)!;
+  const deaf = { ...s, combat: { ...s.combat!, combatants: { ...s.combat!.combatants, [foe.id]: { ...foe, kind: undying.id } } } };
+  assert.ok(talks(s).length > 0, 'an ordinary foe can be');
+  assert.equal(talks(deaf).length, 0);
+});
+
+test('every foe still standing is one option, and a broken one is none', () => {
+  const s = brokenFight('away', 1, 1);
+  const open = takeCombatAction(oneFoe(), { kind: 'end' }).state;   // for contrast: nobody broken
+  assert.deepEqual(talks(open).map((o) => (o.action as { target: string }).target), foesOf(open).map((f) => f.id));
+  assert.equal(talks(s).length, 0, 'the only foe fled, and the fight is over');
+});
+
+test('a foe hears you once', () => {
+  const s = oneFoe();
+  assert.equal(talks(s).length, 1, 'it could be spoken to before');
+  const said = takeCombatAction(s, parley(foesOf(s)[0].id, 'refuses')).state;
+  assert.equal(said.combat!.over, false);
+  assert.equal(talks(said).length, 0);
+});
+
+test('talked into yielding is off the board, the fight is won, and it is owed a fate', () => {
+  const s = oneFoe();
+  const foe = foesOf(s)[0].id;
+  const after = takeCombatAction(s, parley(foe, 'yields')).state;
+  assert.equal(after.combat!.broken![foe]?.as, 'yielded');
+  assert.equal(after.combat!.combatants[foe], undefined);
+  assert.equal(after.combat!.victor, 'party');
+  assert.deepEqual(combatOptions(after).map((o) => o.action.kind).sort(), ['kill', 'spare']);
+});
+
+test('one talked into leaving goes without a grudge', () => {
+  // The smith comes on a grudge of 3; leaving on words must not add stage 7's beating.
+  const base = winnable();
+  const deeper = { ...(base.world.regions['floor-2'] as Region), danger: 4 };
+  const pre = grudge(
+    { ...base, world: { ...base.world, seed: 11, species: speciesFor(11), regions: { 'floor-2': deeper } } },
+    'smith', 'floor-2',
+  );
+  const open = openFight(pre);
+  const smith = foesOf(open).find((f) => f.person === 'smith')!;
+  assert.ok(smith, 'the smith has to be in the fight');
+  assert.equal(takeCombatAction(open, parley(smith.id, 'withdraws')).state.combat!.broken?.[smith.id]?.as, 'fled');
+  const before = axisOf(pre.world.edges, 'smith', PLAYER, 'resentment');
+  const after = applyTurn(pre, combatTurn([parley(smith.id, 'withdraws')])).state;
+  assert.equal(after.world.people.smith.alive, true);
+  assert.equal(axisOf(after.world.edges, 'smith', PLAYER, 'resentment'), before, 'words are not a beating');
+});
+
+test('a refusal changes the board not at all, and costs the turn like any other action', () => {
+  const s = oneFoe();
+  const refused = takeCombatAction(s, parley(foesOf(s)[0].id, 'refuses')).state;
+  const ended = takeCombatAction(s, { kind: 'end' }).state;
+  assert.deepEqual(Object.keys(refused.combat!.combatants), Object.keys(s.combat!.combatants));
+  assert.equal(refused.combat!.round, ended.combat!.round);
+});
+
+test('a foe talked out of the fight is worth what one that broke is worth', () => {
+  const s = oneFoe();
+  const foe = foesOf(s)[0].id;
+  const won = takeCombatAction(takeCombatAction(s, parley(foe, 'yields')).state, { kind: 'spare', target: foe }).state;
+  const floor = s.world.regions['floor-2'].floor;
+  assert.equal(concludeCombat(won).xp, xpForFight(floor, s.sheet.level, 1));
+});
+
+test('a parley replays from the record without asking the model again', () => {
+  // Seed 5 fields a kind that listens; seed 11's undead would refuse the word outright.
+  const pre = winnable({ world: { ...winnable().world, seed: 5, species: speciesFor(5) } });
+  const draft: TurnRecord = { ...combatTurn([]), combatActions: undefined };
+  const opened = applyTurn(pre, draft).state;
+  const first = foesOf(opened)[0].id;
+  const said = takeCombatAction(opened, parley(first, 'refuses'));
+  assert.equal(said.error, null, 'the parley has to be heard for the replay to say anything');
+  const { actions } = fightItOut(said.state);
+  const live = settleFight({ pre, draft, actions: [parley(first, 'refuses'), ...actions] });
+  assert.deepEqual(live.state, foldPlay(pre, [live.record]));
+});
+
+test('the fight log says what happened, not what the model wrote', () => {
+  const s = oneFoe();
+  const foe = foesOf(s)[0].id;
+  const step = takeCombatAction(s, parley(foe, 'refuses'));
+  assert.deepEqual(notableEvents(step.events).slice(0, 1), [`${foe} will not hear it`]);
+});
+
+test('an effect outside the vocabulary is a refusal', async () => {
+  const s = oneFoe();
+  const said = { ability: 'cha', onHit: { effect: 'joins' }, onPartial: { effect: 'withdraws' }, onMiss: { effect: 'refuses' } };
+  const out = await runParley(new FakeProvider({ structured: [said] }), s, foesOf(s)[0], 'put it down');
+  assert.equal(out.onHit, 'refuses');
+  assert.equal(out.onPartial, 'withdraws', 'and one it knows passes through');
 });
