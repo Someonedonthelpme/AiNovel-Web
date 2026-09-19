@@ -120,7 +120,7 @@ config ─┐
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
   this module decides which are legal and applies only those."*
-  ([delta.ts:37](src/play/delta.ts:37)). Refusing one field never discards the
+  ([delta.ts:38](src/play/delta.ts:38)). Refusing one field never discards the
   rest of the turn.
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
@@ -196,7 +196,7 @@ grudge can do).
 ### `src/world/`
 `types.ts` · `floorgen.ts` (the only world-changing model call) · `travel.ts` ·
 `calendar.ts` (ticks, the date, night, and the world's words for them) ·
-`strata.ts` (which structure speaks for a floor, [strata.ts:13](src/world/strata.ts:13)) ·
+`strata.ts` (which structure speaks for a floor, [strata.ts:14](src/world/strata.ts:14); which one speaks for each LAW, [:71](src/world/strata.ts:71); a floor's era, [:100](src/world/strata.ts:100)) ·
 `lod.ts` (**places compress, people do not — and neither do a static stratum's
 places nor a loop floor's**, [lod.ts:60](src/world/lod.ts:60), [:83](src/world/lod.ts:83), [:86](src/world/lod.ts:86)) · `validate.ts` · `budget.ts` ·
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
@@ -236,11 +236,11 @@ on each of the four axes** ([ruleset.ts:210](src/rules/ruleset.ts:210)), and
 
 | constraint | axis | checked by |
 |---|---|---|
-| `descendBelowGround` | movement | `descend` ([travel.ts:219](src/world/travel.ts:219)) and the panel's way down ([climb.ts:318](src/play/climb.ts:318)) |
-| `crossFloors` | movement | the Director brief ([director.ts:367](src/llm/director.ts:367)), and whether a journey may take a stair ([journey.ts:156](src/play/journey.ts:156)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:282](src/play/climb.ts:282), [combat.ts:954](src/play/combat.ts:954)) |
+| `descendBelowGround` | movement | `descend` ([travel.ts:219](src/world/travel.ts:219)) and the panel's way down ([climb.ts:327](src/play/climb.ts:327)) |
+| `crossFloors` | movement | the Director brief ([director.ts:384](src/llm/director.ts:384)), and whether a journey may take a stair ([journey.ts:156](src/play/journey.ts:156)) — see §12 |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:291](src/play/climb.ts:291), [combat.ts:954](src/play/combat.ts:954)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:962](src/play/combat.ts:962)) |
-| `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:272](src/play/climb.ts:272)) |
+| `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:281](src/play/climb.ts:281)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
 ([progress.ts:94](src/play/progress.ts:94)) because a law some callers check and
@@ -275,7 +275,7 @@ digging had no bottom and every floor down was a model call.
 **A law is learned by hitting it.** `forbids` returns the `Law` rather than a
 boolean, so a refusal can say which rule it was; `descend` carries it back on
 the `TravelResult`, and `applyClimb` writes a firsthand `{ kind: 'rule' }`
-`Claim` onto the sheet ([climb.ts:107](src/play/climb.ts:107)). Knowing a rule is
+`Claim` onto the sheet ([climb.ts:109](src/play/climb.ts:109)). Knowing a rule is
 an ordinary belief, exactly as knowing a piece of lore is, so `adopt`, `retell`
 and the ambient air carry it with nothing new written. That is also why a
 REFUSED crossing is logged: the lesson lives in the fold, and a lesson outside
@@ -306,18 +306,18 @@ Four tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 
 ### The shapes
 
-**`World`** ([world/types.ts:249](src/world/types.ts:249)) — `seed`, `language`,
+**`World`** ([world/types.ts:262](src/world/types.ts:262)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`.
-`regionIdFor(floor) = 'floor-' + floor` ([:355](src/world/types.ts:355)).
+`regionIdFor(floor) = 'floor-' + floor` ([:370](src/world/types.ts:370)).
 **"One floor is one region is one integer" was true until step 6, and is now
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
 Depth stays on `floor`; adjacency moved to `Region.exits`
-([:146](src/world/types.ts:146)), and `generateFloor` takes the region id to
-build `into` ([floorgen.ts:329](src/world/floorgen.ts:329)); its guard against
+([:154](src/world/types.ts:154)), and `generateFloor` takes the region id to
+build `into` ([floorgen.ts:331](src/world/floorgen.ts:331)); its guard against
 overwriting the town keys on that id rather than on depth 0
-([floorgen.ts:341](src/world/floorgen.ts:341)), because an outer world may sit
+([floorgen.ts:343](src/world/floorgen.ts:343)), because an outer world may sit
 at depth 0 perfectly legally. A region with no
 `exits` derives up and down from depth ([travel.ts:176](src/world/travel.ts:176))
 — every world saved before this.
@@ -331,43 +331,51 @@ anything derives from the seed alone.
   ([subjects.ts:111](src/world/subjects.ts:111)).
 - `rules` — the `Ruleset` this world plays by; absent means `STANDARD`. Genesis
   stores the WHOLE preset rather than its name
-  ([genesis.ts:636](src/session/genesis.ts:636)), so retuning a preset cannot
+  ([genesis.ts:647](src/session/genesis.ts:647)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
-  ([world/types.ts:276](src/world/types.ts:276)), which is why a law can change
+  ([world/types.ts:289](src/world/types.ts:289)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:240](src/play/delta.ts:240)).
+  mid-run writer ([delta.ts:241](src/play/delta.ts:241)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
-  ([genesis.ts:635](src/session/genesis.ts:635)). Stored for the same reason
+  ([genesis.ts:646](src/session/genesis.ts:646)). Stored for the same reason
   `subjects` is.
-- `strata` — the structures this world holds ([types.ts:291](src/world/types.ts:291)).
+- `strata` — the structures this world holds ([types.ts:304](src/world/types.ts:304)).
   Genesis writes the tower, covering floor 0 up
-  ([genesis.ts:691](src/session/genesis.ts:691)), and a loop band under it for floors
-  1–10 when the creation page asks ([:692](src/session/genesis.ts:692)), in the tower's
-  kind ([:589](src/session/genesis.ts:589)); a climb that opens a wing adds
-  another ([climb.ts:153](src/play/climb.ts:153)).
+  ([genesis.ts:702](src/session/genesis.ts:702)), and under it, when the creation page
+  asks, a loop band for floors 1–10 ([:703](src/session/genesis.ts:703)) and an era band
+  for floors 21–30 ([:704](src/session/genesis.ts:704)), each in the tower's kind
+  ([:589](src/session/genesis.ts:589), [:598](src/session/genesis.ts:598)); a climb that
+  opens a wing adds another, and the first floor built in an era band gives the band
+  its `theme` ([floorgen.ts:548](src/world/floorgen.ts:548)) — both installed by the
+  crossing ([climb.ts:155](src/play/climb.ts:155)).
 - `edges` — who feels what about whom, sparsely. On the World because an edge
   belongs to neither end of it. A grudge toward the player also remembers the
   tick it last rose (`fedAt`, [edge.ts:78](src/social/edge.ts:78)), which is
   what it fades from.
 - `clock` — world time in TEN-MINUTE ticks, separate from `turn`
-  ([types.ts:309](src/world/types.ts:309)); absent reads the turn count
+  ([types.ts:322](src/world/types.ts:322)); absent reads the turn count
   ([travel.ts:82](src/world/travel.ts:82)). `turn` stays the count of play turns
   because it seeds every fight. A play turn covers the time its action took: a
   link's `travelTime` ([travel.ts:54](src/world/travel.ts:54)), a stair's
   `stairCost` ([travel.ts:65](src/world/travel.ts:65)), an hour per rest turn
   ([rest.ts:117](src/play/rest.ts:117)), and at least one tick otherwise.
-- `journeys` — grudges on the road ([types.ts:310](src/world/types.ts:310),
+- `journeys` — grudges on the road ([types.ts:323](src/world/types.ts:323),
   [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
   got to, and when they may set out. Stored, because where a traveller is must
   replay; advanced only by the fold.
+- `echoes` — weighty deeds done on an era floor ([types.ts:325](src/world/types.ts:325)):
+  the engine keeps the `ECHOING` ones only ([deed.ts:63](src/social/deed.ts:63)), in the
+  fold ([delta.ts:572](src/play/delta.ts:572)), as NAMES rather than ids since they are
+  history; the Director on a higher era floor of the same band hears them with how many
+  years back they were ([director.ts:305](src/llm/director.ts:305)). Absent is none.
 - `calendar` — the world's WORDS for its reckoning, days, months and seasons
-  ([types.ts:312](src/world/types.ts:312)). The shape (7-day weeks, 30-day months,
+  ([types.ts:327](src/world/types.ts:327)). The shape (7-day weeks, 30-day months,
   12 months, 4 seasons) and the start date are the engine's, dealt from the seed
-  and never stored ([calendar.ts:52](src/world/calendar.ts:52)).
+  and never stored ([calendar.ts:54](src/world/calendar.ts:54)).
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
-- `populations` — who lives per PLACE ([types.ts:339](src/world/types.ts:339)):
+- `populations` — who lives per PLACE ([types.ts:354](src/world/types.ts:354)):
   cohorts of (subspecies, profession, size). **Absent until something has been
   killed** — a place answers from the seed until then
   ([population.ts:99](src/character/population.ts:99)), so an old world needs no
@@ -378,29 +386,39 @@ anything derives from the seed alone.
   [lod.ts:91](src/world/lod.ts:91)), because place ids are the model's own words
   and come back different; 6c removes compression and the aggregate with it.
 - `loops` — a loop floor as it stood when you first arrived, with the people and
-  first impressions it was built with ([types.ts:345](src/world/types.ts:345)). Copied
-  from the crossing's own `built` ([climb.ts:163](src/play/climb.ts:163)), so it is
+  first impressions it was built with ([types.ts:360](src/world/types.ts:360)). Copied
+  from the crossing's own `built` ([climb.ts:171](src/play/climb.ts:171)), so it is
   already in the log; only loop floors are kept.
 
-**`Region`** ([types.ts:118](src/world/types.ts:118), full detail) — places,
+**`Region`** ([types.ts:126](src/world/types.ts:126), full detail) — places,
 entrance, exit, danger, creatures, optionally `exits: Link[]`, and on a landmark
-floor `boss` — the person who HOLDS it ([:155](src/world/types.ts:155)), on the
+floor `boss` — the person who HOLDS it ([:163](src/world/types.ts:163)), on the
 region because holding is a fact about the floor, with the person themselves in
 `World.people`, never compressed, so a rebuilt floor finds its holder again. A `Link`
-([:165](src/world/types.ts:165)) carries the far side's DEPTH as well as its id,
+([:173](src/world/types.ts:173)) carries the far side's DEPTH as well as its id,
 because danger and budgets have to answer before that region exists.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
 known people survive ([lod.ts:39](src/world/lod.ts:39)).
 
-**`Stratum`** ([types.ts:68](src/world/types.ts:68)) — a structure above a
+**`Stratum`** ([types.ts:75](src/world/types.ts:75)) — a structure above a
 floor: `kind` `static | dynamic`, an optional `parent`, a floor range, and
-optional `danger`, `theme`, `loot` and `laws` ([types.ts:85](src/world/types.ts:85)) —
-today one law, `reset`, from the closed `RESETS` ([:57](src/world/types.ts:57)). Strata NEST, so the plan is a tree and
-the innermost stratum containing a floor speaks for it
-([strata.ts:13](src/world/strata.ts:13)). `static` is authored once and frozen —
-never compressed, so never rebuilt ([lod.ts:83](src/world/lod.ts:83)). A LOOP
-floor (`reset: 'untilCleared'`, [strata.ts:63](src/world/strata.ts:63)) is not
-compressed either: leaving it uncleared puts back the floor exactly as it was built.
+optional `danger`, `theme`, `loot` and `laws` ([types.ts:93](src/world/types.ts:93)) —
+two laws, `reset` from the closed `RESETS` ([:57](src/world/types.ts:57)) and `time`
+from the closed `TIMES` ([:64](src/world/types.ts:64)). Strata NEST, so the plan is a
+tree and the innermost stratum containing a floor speaks for it
+([strata.ts:14](src/world/strata.ts:14)) — except for a LAW, which comes from the
+innermost stratum that STATES it, walking up the parents as danger does
+([strata.ts:71](src/world/strata.ts:71)). *"Laws are read from the innermost stratum
+alone"* was true until `446950e`: a wing the model opened inside the loop band quietly
+stopped its floors looping. A law the wing states itself still wins. `static` is
+authored once and frozen — never compressed, so never rebuilt
+([lod.ts:83](src/world/lod.ts:83)). A LOOP floor (`reset: 'untilCleared'`,
+[strata.ts:82](src/world/strata.ts:82)) is not compressed either: leaving it uncleared
+puts back the floor exactly as it was built. An ERA floor (`time: 'era'`) is its own
+YEAR, whole years back from the world's — hour, season and night stay the world's —
+counted down from the band's top floor, 10–100 years a floor, dealt from the seed and
+never stored ([strata.ts:100](src/world/strata.ts:100)); an era band with no top floor
+is refused rather than read as the world clock ([:106](src/world/strata.ts:106)).
 
 **`Persona`** ([character/persona.ts:295](src/character/persona.ts:295)) — the
 core every villager and the player share:
@@ -432,9 +450,10 @@ A `TurnRecord` stores the *recorded* roll and the *validated* delta, and a whole
 fight is **one event** carrying only the decisions — and, for a parley, the answer
 that was heard ([play/combat.ts:488](src/play/combat.ts:488)). A `ClimbRecord` names the
 far side in `to` when the crossing is not a stair
-([climb.ts:58](src/play/climb.ts:58)), and carries any wing the new floor opened
-in `built.stratum` ([climb.ts:76](src/play/climb.ts:76)) — a world's shape
-changing is the last thing a replay should have to guess at.
+([climb.ts:58](src/play/climb.ts:58)), and carries any wing the new floor opened in `built.stratum`
+([climb.ts:76](src/play/climb.ts:76)), and the era band it gave its land to in
+`built.band` ([:78](src/play/climb.ts:78)) — a world's shape changing is the last
+thing a replay should have to guess at.
 
 ---
 
@@ -461,7 +480,9 @@ come from?"
 | `conditionMet` / `progressOf` ([traits.ts:198](src/play/traits.ts:198)) | `TraitContext` | whether a trait condition holds, and its progress bar |
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
-| `stratumAt` / `dangerAt` ([strata.ts:13](src/world/strata.ts:13), [:51](src/world/strata.ts:51)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
+| `stratumAt` / `dangerAt` ([strata.ts:14](src/world/strata.ts:14), [:52](src/world/strata.ts:52)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
+| `lawFrom` ([strata.ts:71](src/world/strata.ts:71)) | `World.strata`, floor, a law | the innermost stratum that STATES that law — how a wing inside a band keeps the band's laws |
+| `eraOf` → `dateOf` / `timeLine` ([strata.ts:100](src/world/strata.ts:100), [calendar.ts:74](src/world/calendar.ts:74), [:184](src/world/calendar.ts:184)) | seed, strata, floor | how many years an era floor lies behind the world's, and the date read on that floor — only the year moves |
 | `linksFrom` ([travel.ts:176](src/world/travel.ts:176)) | a region | its ways out: its own `exits`, or up/down derived from depth |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:293](src/server/game.ts:293)) | `PlayState` | the whole `GameView`, rebuilt per request |
@@ -494,13 +515,17 @@ Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:275](src/character/species.ts:275)), weighted 4:1 toward the world's
 DOMINANT kind — its own ordinary people, PEOPLE where a world has any, since a
 town of beasts is a bestiary ([species.ts:258](src/character/species.ts:258)). And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:207](src/play/delta.ts:207)) rather than drawn,
+place it leaves from ([delta.ts:208](src/play/delta.ts:208)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
+An era floor's year and a family line key the same way, on the seed, the band's id and
+the floor ([strata.ts:100](src/world/strata.ts:100),
+[floorgen.ts:527](src/world/floorgen.ts:527)): the year is never stored, and a line
+travels in the crossing's `built.people`, so a replay deals neither again.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
-([types.ts:259](src/world/types.ts:259), [subjects.ts:111](src/world/subjects.ts:111)),
+([types.ts:272](src/world/types.ts:272), [subjects.ts:111](src/world/subjects.ts:111)),
 because a word derived from nothing would be lost on the next derivation. The
 same split as `classSpec` on the sheet. **The ids never change**, so anything that
 matched before naming still matches after it.
@@ -544,11 +569,11 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:502](src/llm/director.ts:502)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:83](src/llm/director.ts:83)) and the PLACE a new way out leaves from (`revealWay`, [:65](src/llm/director.ts:65)) — never where it goes | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:567](src/llm/director.ts:567)) | `PARLEY_SCHEMA` ([:540](src/llm/director.ts:540)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:198](src/play/turn.ts:198)); an answer outside the list is a refusal ([director.ts:564](src/llm/director.ts:564)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Director** ([director.ts:521](src/llm/director.ts:521)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:83](src/llm/director.ts:83)) and the PLACE a new way out leaves from (`revealWay`, [:65](src/llm/director.ts:65)) — never where it goes | indirectly — only the validated delta and the refusal reasons |
+| **Parley** ([director.ts:586](src/llm/director.ts:586)) | `PARLEY_SCHEMA` ([:559](src/llm/director.ts:559)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:198](src/play/turn.ts:198)); an answer outside the list is a refusal ([director.ts:583](src/llm/director.ts:583)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
-| **Floor** ([floorgen.ts:354](src/world/floorgen.ts:354)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:138](src/world/floorgen.ts:138)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:526](src/world/floorgen.ts:526)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:141](src/world/floorgen.ts:141)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:143](src/world/floorgen.ts:143)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:599](src/world/floorgen.ts:599), [:605](src/world/floorgen.ts:605)) | **yes, in full** — inside `ClimbRecord.built` |
+| **Floor** ([floorgen.ts:356](src/world/floorgen.ts:356)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:138](src/world/floorgen.ts:138)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:564](src/world/floorgen.ts:564)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:141](src/world/floorgen.ts:141)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:143](src/world/floorgen.ts:143)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:637](src/world/floorgen.ts:637), [:643](src/world/floorgen.ts:643)) | **yes, in full** — inside `ClimbRecord.built` |
 | **Character** ([genesis.ts:148](src/session/genesis.ts:148)) | `CHARACTER_SCHEMA`, t=0.8 | name, background, voice, proposed scores | once, into `sessions.sheet` |
 | **Ground floor** ([genesis.ts:334](src/session/genesis.ts:334)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
 | **Class naming** ([classnames.ts:96](src/character/classnames.ts:96)) | `CLASS_NAMING_SCHEMA`, t=0.9 | **words only** — no mechanics are in the schema | only via the chosen class |
@@ -582,15 +607,16 @@ app/new/page.tsx
         draft carries classSpec — the WHOLE class object, because a generated
         class exists in no global list and an id would resolve to nothing
         │
-        newGame  (server/game.ts:451)
+        newGame  (server/game.ts:453)
           startInterview + recordAnswer per stage (blanks get canned defaults)
           runGenesis:
             1. generateCharacter  ──► sheet
             2. generateGroundFloor ──► region, people, premise, startPlace
                  (given the sheet, so the town is built around its resident)
           World assembled IN CODE: floor-0, turn 0, deepestFloor 0,
-            the chosen preset IN FULL, the kinds from the seed, and one
-            stratum — the tower, fixed or living (genesis.ts:619–627)
+            the chosen preset IN FULL, the kinds from the seed, and the
+            strata — the tower, fixed or living, with a loop band and an
+            era band under it if asked (genesis.ts:701–705)
           createSession → INSERT sessions + events(seq 0, kind 'start')
           saveSnapshot at seq 0
         │
@@ -621,7 +647,7 @@ rations, because a short rest spends one.
        modifier = abilityMod(finalAbilities[ability]) + edgeFor(skills)
        ENGINE rolls 2d6           ≤6 miss · 7–9 partial · ≥10 hit
        the pre-committed branch is selected and merged — both halves
-       spread, so no verb can be dropped (director.ts:250)
+       spread, so no verb can be dropped (director.ts:258)
  4  validateDelta ─────────────── the trust boundary
        refuses: a move to an unconnected place · trust for someone who does
        not exist · revealing an exit that is already known · combat where
@@ -632,7 +658,7 @@ rations, because a short rest spends one.
        applyDelta → combat (live or replayed; a finished live fight is
        re-folded by settleFight) → drift causes derived FROM
        THE RECORD → traits awarded LAST
-       drift runs by THIS world's rules and each person's kind (delta.ts:578)
+       drift runs by THIS world's rules and each person's kind (delta.ts:655)
  6  toWriterView + assertNoLeak ─── the wall
  7  WRITER ─────────────────────────────────────── model call #2 (+1 retry)
        sees only the redacted view and what already happened
@@ -737,7 +763,7 @@ within SEVEN points at danger 1, 2 and 4
 differ by −4.5 to +4.3 points, measured with paired seeds, and no consistent sign.
 
 **A landmark floor is held by somebody** (6b stage 4) — and so is every LOOP floor
-(6c L2b, [floorgen.ts:585](src/world/floorgen.ts:585)), because a loop floor is
+(6c L2b, [floorgen.ts:623](src/world/floorgen.ts:623)), because a loop floor is
 cleared by its holder's death. Floor generation makes the
 holder before anyone meets them — a person with a sheet, of the kind that lives
 at that depth, decided by the seed and the floor alone so the model's name for
@@ -752,7 +778,7 @@ and is never counted out of a population they were not drawn from
 the crowd's. No mutation yet: that arrives with the kin tree, after quests. A floor
 generated before this, or one the model named nobody for, keeps the crowd boss; a
 loop floor the model named nobody for is still held, by the lineage's own word
-([floorgen.ts:619](src/world/floorgen.ts:619)).
+([floorgen.ts:657](src/world/floorgen.ts:657)).
 
 **A person with a grudge comes for you** (6b stage 5). Hostility is DERIVED from
 the edges, never stored: resentment at `GRUDGE_THRESHOLD` (3) or more, and fear
@@ -791,7 +817,7 @@ bearer holds ([journey.ts:96](src/play/journey.ts:96)): the cheapest route throu
 a region, no further than the entrance of one where fighting is refused, and one
 stair at a time where `crossFloors` allows ([journey.ts:142](src/play/journey.ts:142)).
 ARRIVING opens the fight, decided from state so a replay opens the same one
-([delta.ts:605](src/play/delta.ts:605)). Only an arrived traveller fights, and
+([delta.ts:619](src/play/delta.ts:619)). Only an arrived traveller fights, and
 only while the bearer's grudge is worth a chase
 ([combat.ts:342](src/play/combat.ts:342)): 2 or more
 ([edge.ts:106](src/social/edge.ts:106)), one below what it takes to set out, so a
@@ -803,7 +829,7 @@ not the surer ([sighting.ts:36](src/play/sighting.ts:36)). Each turn word passes
 hop along people's edges ([sighting.ts:85](src/play/sighting.ts:85)), then
 whoever is where the player stands sees them firsthand
 ([sighting.ts:76](src/play/sighting.ts:76), in the fold at
-[delta.ts:660](src/play/delta.ts:660)). WHO IS OUT is one function
+[delta.ts:674](src/play/delta.ts:674)). WHO IS OUT is one function
 ([sighting.ts:54](src/play/sighting.ts:54)): the place's people, less any away on
 the road, plus arrived travellers, and at night only guards and night kinds
 ([sighting.ts:66](src/play/sighting.ts:66)). The Director's list of people here and
@@ -815,16 +841,20 @@ bearer's `fadeDays` unfed, 1 to 5 by temper
 timer restarts at each point lost, and a traveller whose grudge falls below 2
 turns back.
 
-**Time** (7.1e). A tick is ten minutes ([calendar.ts:11](src/world/calendar.ts:11)).
+**Time** (7.1e). A tick is ten minutes ([calendar.ts:13](src/world/calendar.ts:13)).
 The clock reads as a date from the world's start
-([calendar.ts:58](src/world/calendar.ts:58)); night is 20:00–06:00
-([calendar.ts:168](src/world/calendar.ts:168)); the Director and the Writer are
-given the hour, the dark, the season and the date in the world's words
-([calendar.ts:177](src/world/calendar.ts:177)), which genesis asks for last, so the
-game does without them ([calendar.ts:124](src/world/calendar.ts:124)). Needs drain
-by the hour marks a turn crossed ([delta.ts:386](src/play/delta.ts:386)), faster in
-winter outside a settlement ([delta.ts:389](src/play/delta.ts:389)); winter
-([calendar.ts:27](src/world/calendar.ts:27)) also slows a wild link. About one
+([calendar.ts:65](src/world/calendar.ts:65)) — on an era floor only its year moves
+([:74](src/world/calendar.ts:74)); night is 20:00–06:00
+([calendar.ts:175](src/world/calendar.ts:175)); the Director and the Writer are
+given the hour, the dark, the season and the date in the world's words — the floor's
+own year on an era floor, "N years before" the reckoning behind year 1
+([calendar.ts:184](src/world/calendar.ts:184), [:191](src/world/calendar.ts:191); passed
+the floor at [director.ts:416](src/llm/director.ts:416) and
+[redact.ts:141](src/llm/redact.ts:141)) — which genesis asks for last, so the
+game does without them ([calendar.ts:131](src/world/calendar.ts:131)). Needs drain
+by the hour marks a turn crossed ([delta.ts:387](src/play/delta.ts:387)), faster in
+winter outside a settlement ([delta.ts:390](src/play/delta.ts:390)); winter
+([calendar.ts:29](src/world/calendar.ts:29)) also slows a wild link. About one
 group in six keeps night hours and one in six keeps to some seasons
 ([habitat.ts:110](src/character/habitat.ts:110)); a group out of season is left
 out of a place's crowd ([combat.ts:180](src/play/combat.ts:180)). *"A floor whose one
@@ -833,6 +863,15 @@ at that depth and is out fills in, and a floor stands empty out of season only w
 `world.emptyOutOfSeason` allows it ([combat.ts:196](src/play/combat.ts:196)) — a crowd
 thinned to nothing still stays gone. A hunter by trade fights at night with the
 advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
+
+**Eras** (6c). The deeds `ECHOING` names — helped, killed, spared — done on an era floor
+are kept as echoes ([delta.ts:572](src/play/delta.ts:572)) and told on the era floors
+ABOVE it in the same band, the five most recent, with the years between
+([director.ts:305](src/llm/director.ts:305)); never below — the past does not remember
+its future. When an era floor above the band's first is built, one or two of its new
+people are dealt a `line`: an ancestor among the LIVING people of the era floor below
+([floorgen.ts:527](src/world/floorgen.ts:527)); the Director is told whose line
+somebody is ([director.ts:340](src/llm/director.ts:340)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
 ([types.ts:183](src/combat/types.ts:183)), set where it is built
@@ -855,11 +894,11 @@ finished while one is waiting ([play/combat.ts:503](src/play/combat.ts:503)), th
 only options are `kill` and `spare` ([:511](src/play/combat.ts:511)), and both are
 `CombatAction`s, so they ride in `combatActions` and replay like any decision
 ([:672](src/play/combat.ts:672)). The server holds the fight open on the same test
-([game.ts:704](src/server/game.ts:704)) and shows it as not over, so the choice
+([game.ts:710](src/server/game.ts:710)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:835](src/play/combat.ts:835)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:514](src/play/delta.ts:514)), and whoever
-was spared is counted present to feel it ([delta.ts:536](src/play/delta.ts:536)).
+toward the person if it was one ([delta.ts:515](src/play/delta.ts:515)), and whoever
+was spared is counted present to feel it ([delta.ts:537](src/play/delta.ts:537)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
 ([play/combat.ts:953](src/play/combat.ts:953)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
@@ -895,7 +934,7 @@ it DOES carry are not stat math:
 |---|---|---|
 | **body plan** | which of the world's slots this shape has: `beastly` has no hands or feet, `winged` has no back (wings fill it, so no pack), `serpentine` no legs | [bodyplan.ts:24](src/character/bodyplan.ts:24), narrowed for a creature at [body.ts:19](src/play/body.ts:19) |
 | **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
-| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:551](src/session/genesis.ts:551)): a generated floor's arrivals get plain opening edges ([floorgen.ts:508](src/world/floorgen.ts:508)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
+| **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:551](src/session/genesis.ts:551)): a generated floor's arrivals get plain opening edges ([floorgen.ts:512](src/world/floorgen.ts:512)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
 | **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:344](src/rules/ruleset.ts:344)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:245](src/llm/director.ts:245)) | [ruleset.ts:256](src/rules/ruleset.ts:256) |
 | **prey** | about one group in three hunts one other, of another type; a hunter attacks its quarry with ADVANTAGE — 46% to 79% between otherwise identical fighters, which is more than any template can say | [prey.ts:22](src/character/prey.ts:22), read at [conditions.ts:117](src/combat/conditions.ts:117) |
 
@@ -919,13 +958,13 @@ Every roll derives from state —
 unaffordable skill is *not offered* rather than offered and refused. When it
 concludes, the original turn's draft record plus `combatActions` is appended as
 **one event**, and a snapshot is taken unconditionally. Its closing lines come back
-beside the finished view ([game.ts:727](src/server/game.ts:727)): the view carries a
+beside the finished view ([game.ts:733](src/server/game.ts:733)): the view carries a
 log only while a fight is open ([game.ts:267](src/server/game.ts:267)), which dropped
 them for every fight until `d579b42`.
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:669](src/play/delta.ts:669)), because the live turn ran drift, deeds
+([delta.ts:683](src/play/delta.ts:683)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -945,7 +984,7 @@ standing, of a kind with a company need, and not yet spoken to this fight
 ([play/combat.ts:571](src/play/combat.ts:571)), because a parley logs an event and the
 log's length seeds every roll, so a first-option picker like the harness must never
 reach one. The server hears it where a provider exists
-([game.ts:685](src/server/game.ts:685)): `hearParley` DISCARDS whatever roll and
+([game.ts:691](src/server/game.ts:691)): `hearParley` DISCARDS whatever roll and
 verdict the client sent, asks the model, rolls in the engine and writes the tier's
 answer into the action ([turn.ts:187](src/play/turn.ts:187)); a foe that cannot hear
 costs no call ([:190](src/play/turn.ts:190)). The fold only carries the verdict out
@@ -974,13 +1013,13 @@ that is not a stair names its destination and goes through `traverse`
 ([:196](src/world/travel.ts:196)) — otherwise a derived down-link would be a way
 around the ground law and the world's bottom, both of which live in `descend`.
 
-**Leaving a loop floor uncleared puts it back** ([climb.ts:135](src/play/climb.ts:135),
-[:182](src/play/climb.ts:182)) — places, crowd, people and their edges, reputation,
+**Leaving a loop floor uncleared puts it back** ([climb.ts:137](src/play/climb.ts:137),
+[:190](src/play/climb.ts:190)) — places, crowd, people and their edges, reputation,
 ambient, and the journeys of its people; whoever the run made there goes with it.
 The player keeps facts, pack, coin and XP, none of which lives on a floor. Cleared is
 DERIVED: the holder dead — the clear condition until quests exist, by decision
 (2026-09-18) — and a floor with no holder has nothing to clear
-([:187](src/play/climb.ts:187)). What other people believe about an undone run is left
+([:195](src/play/climb.ts:195)). What other people believe about an undone run is left
 standing, by decision.
 
 **Panel actions** — equipping a helmet is bookkeeping, not a story beat, so
@@ -1000,10 +1039,10 @@ migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes —
 a parley's verdict is the one outcome it stores, because a fold holds no provider
-([play/combat.ts:488](src/play/combat.ts:488)) — and a fold re-resolves them with today's code ([delta.ts:609](src/play/delta.ts:609)).
+([play/combat.ts:488](src/play/combat.ts:488)) — and a fold re-resolves them with today's code ([delta.ts:623](src/play/delta.ts:623)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
-snapshotted back to back ([game.ts:711](src/server/game.ts:711)), so normal play
+snapshotted back to back ([game.ts:717](src/server/game.ts:717)), so normal play
 never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
@@ -1024,8 +1063,9 @@ resolves.
 
 **4. Closed unions, never free text.** `ActiveEffect`, `ItemEffect`,
 `WorldDelta`, `TraitCondition`, `Gate`, `CONSTRAINTS`, `BINDINGS`,
-`PARLEY_EFFECTS` ([combat/types.ts:289](src/combat/types.ts:289)) and `RESETS`
-([world/types.ts:57](src/world/types.ts:57)) are all closed. A model names things; it never invents a mechanic — nor a law, nor
+`PARLEY_EFFECTS` ([combat/types.ts:289](src/combat/types.ts:289)), `RESETS`
+([world/types.ts:57](src/world/types.ts:57)), `TIMES` ([:64](src/world/types.ts:64)) and
+`ECHOING` ([social/deed.ts:63](src/social/deed.ts:63)) are all closed. A model names things; it never invents a mechanic — nor a law, nor
 where a road goes: `revealWay` names the place a way leaves FROM and the engine
 mints the far side ([state.ts:93](src/play/state.ts:93)).
 
@@ -1081,10 +1121,11 @@ climber today, and not a field pretending to be a mechanic.
 
 **Cleared: `Stratum.laws` had readers and no writer.** — *"no world is born with a
 law"* was true until `bfa0f66`: genesis writes a loop band when asked
-([genesis.ts:692](src/session/genesis.ts:692)). It was half-live until `d23e612`: a floor with no
-holder counts as cleared ([climb.ts:187](src/play/climb.ts:187)), and holders went only
+([genesis.ts:703](src/session/genesis.ts:703)). It was half-live until `d23e612`: a floor with no
+holder counts as cleared ([climb.ts:195](src/play/climb.ts:195)), and holders went only
 to every tenth floor ([encounter.ts:25](src/combat/encounter.ts:25)); every loop floor
-is now held ([floorgen.ts:600](src/world/floorgen.ts:600)).
+is now held ([floorgen.ts:638](src/world/floorgen.ts:638)). The second law, `time`,
+arrived with its writer in the same stage ([genesis.ts:704](src/session/genesis.ts:704)).
 
 **Cleared: a parley's roll had no reader.** — *"the fold applies the verdict alone,
 and the fight log shows the answer but not the dice, unlike a turn's roll"* was true
@@ -1102,7 +1143,7 @@ is left, the encounter is capped by it, and a cleared place opens no fight
 ### Confirmed dead
 
 **Cleared: `Person.sheet`** — *listed here as dead* until 6b stage 4. A landmark
-floor's holder is given one at generation ([floorgen.ts:599](src/world/floorgen.ts:599))
+floor's holder is given one at generation ([floorgen.ts:637](src/world/floorgen.ts:637))
 and the fight reads it ([play/combat.ts:230](src/play/combat.ts:230)). `recruited`
 and `stance` are still dead. Stage 5 gave it a second writer: whoever comes for you
 with a grudge gets one at their first fight ([play/combat.ts:386](src/play/combat.ts:386)).
@@ -1135,7 +1176,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:971](src/server/game.ts:971)); and
+([game.ts:977](src/server/game.ts:977)); and
 [signet.test.ts:253](src/play/signet.test.ts:253) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
@@ -1267,7 +1308,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:641](src/play/delta.ts:641)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:655](src/play/delta.ts:655)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:273](src/session/genesis.ts:273),
@@ -1276,10 +1317,10 @@ the climber ordinary, which is now a choice rather than a gap.
 
 **Cleared: `Stratum.danger` and `Stratum.loot`.** — *"read … and written by
 nothing outside tests"* was true until `3506255`. A wing's danger is
-seeded ([floorgen.ts:557](src/world/floorgen.ts:557)) and its loot comes from
+seeded ([floorgen.ts:595](src/world/floorgen.ts:595)) and its loot comes from
 what the model named out of `LOOT_CATEGORIES`
-([floorgen.ts:574](src/world/floorgen.ts:574)). The genesis tower still has
-neither ([genesis.ts:691](src/session/genesis.ts:691)), which means the
+([floorgen.ts:612](src/world/floorgen.ts:612)). The genesis tower still has
+neither ([genesis.ts:702](src/session/genesis.ts:702)), which means the
 ruleset's curve and the ordinary table — identity, not a gap.
 
 ### A knock-on
@@ -1300,8 +1341,12 @@ did not forbid them. Since 7.1b NPCs MOVE (journeys), and that movement asks the
 law: a traveller takes a stair only where it allows
 ([journey.ts:156](src/play/journey.ts:156)). For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
-and the Director brief ([director.ts:367](src/llm/director.ts:367)) is the only
+and the Director brief ([director.ts:384](src/llm/director.ts:384)) is the only
 check on what gets narrated.
+
+**`Person.line` is always a real id** ([types.ts:239](src/world/types.ts:239)) — by
+construction: the engine deals it from people who exist, alive, on the floor below
+([floorgen.ts:527](src/world/floorgen.ts:527)); the model never names one.
 
 **Cleared: an object's identity was unique only within one bag.** — *"moving an
 object between owners would rename it and silently re-roll what it is worth"* was
@@ -1323,8 +1368,8 @@ rather than on the nose.
 
 **Per-NPC rule knowledge** has no writer for the same reason. The only
 `ruleClaim` writer is the player's refused crossing
-([climb.ts:113](src/play/climb.ts:113)); the Director is shown the PLAYER's
-beliefs about the law ([director.ts:360](src/llm/director.ts:360)).
+([climb.ts:115](src/play/climb.ts:115)); the Director is shown the PLAYER's
+beliefs about the law ([director.ts:377](src/llm/director.ts:377)).
 
 ---
 
@@ -1474,10 +1519,10 @@ Every balance number, and where it lives.
 | trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
 | grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:101](src/social/edge.ts:101) |
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:1015](src/play/combat.ts:1015) |
-| clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:11](src/world/calendar.ts:11) |
+| clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:13](src/world/calendar.ts:13) |
 | a place link / a stair | 1–3 ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:45](src/world/travel.ts:45), [:65](src/world/travel.ts:65), [:54](src/world/travel.ts:54) |
-| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:386](src/play/delta.ts:386) |
-| night | 20:00–06:00 | [calendar.ts:168](src/world/calendar.ts:168) |
+| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:387](src/play/delta.ts:387) |
+| night | 20:00–06:00 | [calendar.ts:175](src/world/calendar.ts:175) |
 | grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:212](src/play/journey.ts:212), [edge.ts:106](src/social/edge.ts:106) |
 | recovery after fleeing | one day | [journey.ts:36](src/play/journey.ts:36) |
 | night kinds / seasonal groups | about 1 group in 6 each | [habitat.ts:110](src/character/habitat.ts:110) |
@@ -1490,7 +1535,7 @@ Every balance number, and where it lives.
 | condition resistance floor | 1 round | [conditions.ts](src/combat/conditions.ts) |
 | default item weight (equipment/consumable/material/armour) | 3 / 1 / 1 / 8 | [items/types.ts](src/items/types.ts) |
 | snapshot cadence | every 20 events | [sessions.ts:23](src/db/sessions.ts:23) |
-| **danger** | the stratum's own curve, else its parent's, else `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [strata.ts:51](src/world/strata.ts:51), [budget.ts:32](src/world/budget.ts:32) |
+| **danger** | the stratum's own curve, else its parent's, else `round(dangerBase + floor × dangerPerFloor)`; STANDARD `0 / 1` is identity | [strata.ts:52](src/world/strata.ts:52), [budget.ts:32](src/world/budget.ts:32) |
 | depth below ground | 3 | [ruleset.ts:321](src/rules/ruleset.ts:321) |
 | species multipliers | whole numbers only — 0 (the need does not apply), 1, 2 | [species.ts:21](src/character/species.ts:21) |
 | species tree | 3–5 types · 2–4 groups each · 1–3 species each · 1–3 subspecies each (~40 leaves) | [species.ts:158](src/character/species.ts:158) |
@@ -1504,9 +1549,13 @@ Every balance number, and where it lives.
 | a place's population | 1–3 trades per lineage, 2–6 of each; small on purpose, since a place holding sixty would never visibly thin inside one playthrough | [population.ts:36](src/character/population.ts:36), [:45](src/character/population.ts:45) |
 | how worn looted gear is | `PRISTINE` less 15%, less up to 55% more — 31–85, used but never wrecked | [crowd.ts:343](src/character/crowd.ts:343) |
 | the gear solve's reach | 12 draws × 8 depths per slot, one term at a time; the product was 1600 builds a foe | [crowd.ts:235](src/character/crowd.ts:235) |
-| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:526](src/world/floorgen.ts:526) |
-| wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:557](src/world/floorgen.ts:557) |
-| what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:574](src/world/floorgen.ts:574) |
+| wing length | 1–6 floors, whatever the model asks | [floorgen.ts:564](src/world/floorgen.ts:564) |
+| wing danger | the danger where it opens, −2..+3, seeded on the wing's id; slope inherited | [floorgen.ts:595](src/world/floorgen.ts:595) |
+| what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:612](src/world/floorgen.ts:612) |
+| era gap | 10–100 years a floor, dealt per floor; the top floor is one gap back | [strata.ts:90](src/world/strata.ts:90) |
+| era band | floors 21–30 | [genesis.ts:598](src/session/genesis.ts:598) |
+| echoes told | the five most recent, from the era floors below in the same band | [director.ts:311](src/llm/director.ts:311) |
+| descendants per era floor | 1–2, from the living people of the floor below | [floorgen.ts:538](src/world/floorgen.ts:538) |
 | loot profile | a multiplier per category on the standing chance; absent is ×1 | [catalogue.ts:254](src/items/catalogue.ts:254) |
 | places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:14](src/world/budget.ts:14) |
 | people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:20](src/world/budget.ts:20) |
@@ -1562,11 +1611,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:105](src/play/state.ts:105)),
-and being jumped is no deed ([delta.ts:506](src/play/delta.ts:506)). A fight
+and being jumped is no deed ([delta.ts:507](src/play/delta.ts:507)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:510](src/play/delta.ts:510)). `spared` — *"has no writer until 6b stage
+([delta.ts:511](src/play/delta.ts:511)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:514](src/play/delta.ts:514)).
+([delta.ts:515](src/play/delta.ts:515)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -1582,14 +1631,22 @@ a region without them is a stack by derivation
 one fact.
 
 *No `story` stratum kind.* It would behave exactly like `static` until quests
-exist ([types.ts:80](src/world/types.ts:80) has `static | dynamic` only), so it
+exist ([types.ts:87](src/world/types.ts:87) has `static | dynamic` only), so it
 would be a word with no reader — the signature bug, introduced on purpose. It
 arrives with quests (DESIGN step 7).
 
+*Echoes reach the Director, not the Writer.* The Director's context carries them
+([director.ts:417](src/llm/director.ts:417)); the Writer's view gets the era's time line
+([redact.ts:141](src/llm/redact.ts:141)) and no echoes. Add when the prose never mentions one.
+
+*A descendant outlives an ancestor killed after you met them.* Lines are dealt when a
+floor is built ([floorgen.ts:527](src/world/floorgen.ts:527)); a later killing changes
+nothing on the floor above. Open in DESIGN *Stratum knobs*.
+
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
-([genesis.ts:691](src/session/genesis.ts:691)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:261](src/play/delta.ts:261)).
+([genesis.ts:702](src/session/genesis.ts:702)); the only writer of
+`Region.exits` is a way out found in play ([delta.ts:262](src/play/delta.ts:262)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
@@ -1631,7 +1688,7 @@ classes now lean on stats and nothing is locked out.
 every thrown error into `status: 500`, `POST /api/sessions` among them
 ([route.ts:24](app/api/sessions/route.ts:24)). So a species choice that
 `speciesChoiceOf` refuses, with a message naming what was wrong
-([game.ts:593](src/server/game.ts:593)), reaches the client as a server fault. The
+([game.ts:596](src/server/game.ts:596)), reaches the client as a server fault. The
 only 400s are written by hand: a missing seed, a missing combat action, and a
 refused climb target.
 
