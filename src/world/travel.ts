@@ -58,9 +58,11 @@ const TERRAIN: [RegExp, number][] = [
  */
 export function linkMinutes(world: World, a: PlaceId, b: PlaceId, region: Region | null = activeRegion(world)): number {
   const end = (id: PlaceId) => KIND_MINUTES[region?.places.find((p) => p.id === id)?.kind ?? 'landmark'];
-  const factor = TERRAIN.find(([words]) => words.test(region?.biome ?? ''))?.[1] ?? 1;
-  return Math.round((end(a) + end(b) + Math.floor(pairDraw(world.seed, 0x71a, a, b) * 11)) * factor);
+  return Math.round((end(a) + end(b) + Math.floor(pairDraw(world.seed, 0x71a, a, b) * 11)) * terrainFactor(region?.biome ?? ''));
 }
+
+/** How much a biome slows walking: 1, 1.25 or 1.5. */
+export const terrainFactor = (biome: string): number => TERRAIN.find(([words]) => words.test(biome))?.[1] ?? 1;
 
 /**
  * How long crossing a link takes NOW, in clock TICKS (7.1e-v): its minutes, half

@@ -15,6 +15,13 @@
       "when": 1788273677723,
       "tag": "0001_breezy_expediter",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789824313942,
+      "tag": "0002_tense_tinkerer",
+      "breakpoints": true
     }
   ]
 }
