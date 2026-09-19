@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1 and W2 shipped 2026-09-19** (`d9ed7b3`, `07207b3`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W3 shipped 2026-09-19** (`d9ed7b3`, `07207b3`, `205c1bb`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -984,7 +984,7 @@ compression, which §4 needs.
 |---|---|---|---|
 | W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed — **SHIPPED 2026-09-19** (`d9ed7b3`) |
 | W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change — **SHIPPED 2026-09-19** (`07207b3`) |
-| W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding |
+| W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding — **SHIPPED 2026-09-19** (`205c1bb`), the Director on stops deferred to W5 |
 | W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing |
 | W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field |
 | W6 | era bands share a map seed; loop reset clears overlays | W2 | two era floors of a band have the same ground |
@@ -1025,8 +1025,30 @@ session and map, drawn on first ask by `mapFor` and never redrawn. **Not built:*
 nothing calls `mapFor` yet (W3 wires it into moves); side branches; a larger-scale
 wind (a field reads as a serpentine with one-tile walls, not open country — revisit
 when W4 shows one); two doors dealt the same bearing share a tile; interiors and
-dungeon maps. **For W3, open:** does crossing a hub cost the player time that a
-journey does not pay? Claude: no — hubs are under a minute across.
+dungeon maps. **For W3, answered (user, 2026-09-19, in W3's approved batch):** crossing
+a hub costs its seconds like any tile. Claude first said no, to keep journeys and the
+player equal; reversed because journeys already pay `ceil(minutes / 10)` ticks per
+link — up to ten minutes MORE than the player — which dwarfs a sub-minute hub.
+
+**W3 as built (2026-09-19), and what it leaves.** A typed "go to X" is walked by
+`walkAlong` (`play/walker.ts`): from where you stand, through each hub (door to door)
+and field (end to end), arriving on the door of X's hub; portals on the way do not
+stop it. Each tile is charged its seconds; at each tick crossed it stops on the FIRST
+of — a traveller arriving (`encounter`, the fight opens), food or rest falling to 3
+(`hungry`, `weary`, predicted with the fold's own drain), or night beginning while on
+a field or a wild or dungeon hub (`nightfall`). The record is `delta.walkTo` —
+where it stopped, the seconds, the places entered — and the fold applies exactly
+that, never a tile; `delta.walk` is gone. `World.at` is your tile (absent: the centre
+of your place's hub), `World.second` carries seconds inside the ten-minute tick. On a
+field you are still AT the place you left, for everything that reads it. A move the
+Director makes and a climb clear `at` — by REMOVING the key, since a snapshot is JSON
+and drops an undefined one (the snapshot test caught it). The server stores each map
+on the first walk across it (`mapFor`). **Not built:** the Director on stops (no stop
+needs it until W5 puts people in view); stopping on or walking onto a stair (still
+climbed by command, W4); the Director's `moveTo` still exists and is charged in
+ticks; journeys still round up to whole ticks per link; resuming a walk stopped on a
+field toward the place you left is refused by `walkRoute` (a name never means where
+you stand) and goes to the Director.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
@@ -1034,7 +1056,8 @@ journey does not pay? Claude: no — hubs are under a minute across.
    one right answer never reaches the model (`4bd5344`, `2de335f`).
 2. The floor map — view-only, or click a far hub to auto-walk there (still walking,
    charged time, every stop applies)? Claude: later, as a convenience.
-3. Night — walk freely with less vision, or stop at nightfall on wild ground?
+3. Night — walk freely with less vision, or stop at nightfall on wild ground? **Answered for
+   now by W3 (2026-09-19): stop once, as night begins on wild ground, then walk on freely.**
 4. Named NPCs — fixed spots in their buildings now, daily routines with step 8?
 5. May you enter any house? Claude: yes, and entering a home uninvited is a DEED
    witnesses see.
