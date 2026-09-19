@@ -144,7 +144,7 @@ async function earnCoin(id: string, want: number): Promise<number> {
     let view = (await getGame(id))!;
     if (view.character.coin >= want) break;
     // Rest when hurt, as a player would; a rest is the Director's to grant, so log whether it did.
-    for (let tries = 0; tries < 2 && view.character.hp < view.character.maxHp * 0.7; tries += 1) {
+    for (let tries = 0; tries < 2 && view.character.hp < view.character.maxHp * 0.9; tries += 1) {
       const before = view.character.hp;
       const r = await turn(id, 'rest', 'exploration');
       view = (await getGame(id))!;
@@ -213,12 +213,19 @@ async function tryToBuy(id: string): Promise<boolean> {
   const trust = (await getGame(id))!.people.find((p) => p.id === holder.id)?.trust ?? 0;
   log(`  ${holder.name}'s trust: ${trust}`);
 
-  const offer = await turn(id, `I offer ${holder.name} ${price} coin to buy ${settlement.name} and hold it as my own`, 'conversation');
+  const offer = await turn(id, 'buy this settlement', 'exploration');
   for (const why of offer?.rejected ?? []) log(`  refused: ${why}`);
   const after = await stateOf(id);
   const now = activeRegion(after.world)?.places.find((p) => p.id === settlement.id);
   const mine = now ? holderOf(now, after.world.people) === PLAYER : false;
-  if (mine) finding(`BOUGHT ${settlement.name} on floor ${region.floor} for ${price} (coin now ${after.pc.coin})`);
+  if (mine) {
+    finding(`BOUGHT ${settlement.name} on floor ${region.floor} for ${price} (coin now ${after.pc.coin})`);
+    // O1's promise: a settlement you hold is somewhere to sleep, on any floor.
+    const before = (await getGame(id))!.character;
+    const slept = await turn(id, 'sleep', 'exploration');
+    const now = (await getGame(id))!.character;
+    finding(`long rest in the bought settlement: hp ${before.hp} -> ${now.hp}/${now.maxHp}${(slept?.rejected ?? []).length ? ` REFUSED: ${slept!.rejected.join('; ')}` : ''}`);
+  }
   else if (!(offer?.rejected ?? []).some((r) => r.startsWith('acquirePlace'))) {
     finding('the Director never proposed acquirePlace for a plain offer to buy');
   }
