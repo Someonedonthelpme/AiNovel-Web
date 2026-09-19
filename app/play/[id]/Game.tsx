@@ -34,51 +34,74 @@ function LinearBar({ label, value, max }: { label: string; value: number; max: n
 }
 
 /**
- * The local map.
- *
- * Places you have not reached show as unnamed shapes rather than being hidden,
- * so the map communicates "there is more that way" without spoiling what.
+ * The floor map (W4b): discovered places only, and the roads between them.
+ * VIEW-ONLY — walking is the centre grid's, and a click here moves nobody
+ * (DESIGN 6c §2: no movement by clicking a place on a map).
  */
-function LocalMap({ view, onTravel, busy }: { view: GameView; onTravel: (id: string) => void; busy: boolean }) {
+function FloorMap({ view }: { view: GameView }) {
   const byId = new Map(view.map.nodes.map((n) => [n.id, n]));
-
   return (
-    <svg viewBox="-6 -6 112 112" style={{ width: '100%', height: 'auto' }} role="img" aria-label="local map">
+    <svg viewBox="-6 -6 112 112" style={{ width: '100%', height: 'auto' }} role="img" aria-label="floor map">
       {view.map.edges.map((edge) => {
         const a = byId.get(edge.from);
         const b = byId.get(edge.to);
         if (!a || !b) return null;
-        return (
-          <line
-            key={`${edge.from}-${edge.to}`}
-            x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-            stroke="#302a23" strokeWidth={0.8}
-          />
-        );
+        return <line key={`${edge.from}-${edge.to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#302a23" strokeWidth={0.8} />;
       })}
-
-      {view.map.nodes.map((node) => {
-        const fill = node.current ? '#d9a441' : node.known ? '#221e19' : '#181512';
-        const stroke = node.current ? '#d9a441' : node.reachable ? '#7a5f27' : '#302a23';
-        return (
-          <g
-            key={node.id}
-            onClick={() => node.reachable && !busy && onTravel(node.id)}
-            style={{ cursor: node.reachable && !busy ? 'pointer' : 'default' }}
-          >
-            <circle cx={node.x} cy={node.y} r={node.current ? 3.6 : 2.8} fill={fill} stroke={stroke} strokeWidth={0.9} />
-            <text
-              x={node.x} y={node.y - 5}
-              textAnchor="middle"
-              fontSize={3.4}
-              fill={node.current ? '#eae2d6' : node.known ? '#9c8f7d' : '#5c5349'}
-            >
-              {node.name.length > 18 ? `${node.name.slice(0, 17)}…` : node.name}
-            </text>
-          </g>
-        );
-      })}
+      {view.map.nodes.map((node) => (
+        <g key={node.id}>
+          <circle cx={node.x} cy={node.y} r={node.current ? 3.6 : 2.8} fill={node.current ? '#d9a441' : '#221e19'} stroke={node.current ? '#d9a441' : '#7a5f27'} strokeWidth={0.9} />
+          <text x={node.x} y={node.y - 5} textAnchor="middle" fontSize={3.4} fill={node.current ? '#eae2d6' : '#9c8f7d'}>
+            {node.name.length > 18 ? `${node.name.slice(0, 17)}…` : node.name}
+          </text>
+        </g>
+      ))}
     </svg>
+  );
+}
+
+/** The whole map you stand on, shrunk; click to see it larger (W4b). */
+function Minimap({ minimap }: { minimap: NonNullable<GameView['minimap']> }) {
+  const [big, setBig] = useState(false);
+  const w = minimap.rows[0]?.length ?? 1;
+  return (
+    <div
+      className={`minimap${big ? ' big' : ''}`}
+      style={{ gridTemplateColumns: `repeat(${w}, 1fr)` }}
+      onClick={() => setBig(!big)}
+      title={big ? 'Click to shrink' : 'Click to enlarge'}
+      role="img"
+      aria-label="minimap"
+    >
+      {minimap.rows.flatMap((row, y) => row.split('').map((c, x) => (
+        <span key={`${x},${y}`} className={x === minimap.you.x && y === minimap.you.y ? 'you' : c === '#' ? 'wall' : c === ',' ? 'rough' : 'open'} />
+      )))}
+    </div>
+  );
+}
+
+/** The tower as you know it (W4b). */
+function Tower({ tower }: { tower: GameView['tower'] }) {
+  return (
+    <>
+      <p className="muted" style={{ margin: '0 0 0.4rem', fontSize: '0.8rem' }}>Deepest floor: {tower.deepest}</p>
+      {tower.floors.map((f) => (
+        <p key={f.floor} style={{ margin: '0.1rem 0', fontSize: '0.8rem' }}>
+          <b>{f.floor}</b> {f.name}{f.era && <span className="muted"> · year {f.year}</span>}
+        </p>
+      ))}
+      {tower.strata.length > 0 && (
+        <p className="muted" style={{ margin: '0.5rem 0 0', fontSize: '0.75rem' }}>
+          {tower.strata.map((s) => `${s.name} (${s.from}${s.to === null ? '+' : `–${s.to}`})`).join(' · ')}
+        </p>
+      )}
+      {tower.held.length > 0 && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem' }}>You hold: {tower.held.join(', ')}</p>}
+      {tower.grudges.length > 0 && (
+        <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--danger)' }}>
+          On the road: {tower.grudges.map((g) => g.name).join(', ')}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -583,14 +606,12 @@ export default function Game({ initial }: { initial: GameView }) {
         {/* --------------------------------------------- map and people */}
         <div className="col">
           <section className="panel">
-            <p className="label">This floor</p>
-            <LocalMap view={view} onTravel={(id) => {
-              const node = view.map.nodes.find((n) => n.id === id);
-              send(view.language === 'th' ? `ไปที่ ${node?.name}` : `go to ${node?.name}`);
-            }} busy={busy} />
-            <p className="dim" style={{ fontSize: '0.75rem', marginBottom: 0 }}>
-              Click a lit place to walk there. Deepest floor reached: {view.deepestFloor}.
-            </p>
+            <p className="label">This map</p>
+            {view.minimap && <Minimap minimap={view.minimap} />}
+            <p className="label" style={{ marginTop: '0.8rem' }}>This floor</p>
+            <FloorMap view={view} />
+            <p className="label" style={{ marginTop: '0.8rem' }}>The tower</p>
+            <Tower tower={view.tower} />
           </section>
 
           <section className="panel">

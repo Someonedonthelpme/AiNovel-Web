@@ -12,6 +12,8 @@ import { mapFor } from '../db/maps.ts';
 import { drawMap, positionOf } from '../world/map.ts';
 import { gridOf } from './grid.ts';
 import type { GridView } from './grid.ts';
+import { floorMapOf, minimapOf, towerOf } from './views.ts';
+import type { FloorMapView, MinimapView, TowerView } from './views.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import { LOCAL_MODELS } from '../llm/local.ts';
@@ -55,7 +57,6 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Item } from '../items/types.ts';
 import { boardOf, findHolding, isContainer, placementsIn, spaceIn } from '../items/types.ts';
 import type { Holding, Inventory } from '../items/types.ts';
-import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
 /**
@@ -71,17 +72,6 @@ export const provider = () => new LocalProvider(LOCAL_MODELS.writer);
 /* The shape the browser receives                                              */
 /* -------------------------------------------------------------------------- */
 
-export type MapNode = {
-  id: string;
-  name: string;
-  kind: string;
-  /** Undiscovered neighbours are drawn as unknowns rather than hidden. */
-  known: boolean;
-  current: boolean;
-  reachable: boolean;
-  x: number;
-  y: number;
-};
 
 export type PersonView = {
   id: string;
@@ -246,9 +236,13 @@ export type GameView = {
   signets: { id: string; name: string; description: string; held: boolean; available: boolean; augments: string }[];
   region: { floor: number; name: string; biome: string; danger: number };
   place: { id: string; name: string; description: string; affordances: string[] };
-  map: { nodes: MapNode[]; edges: { from: string; to: string }[] };
+  /** The floor map: discovered places only, and view-only (W4b). */
+  map: FloorMapView;
   /** The centre view: a window of the map you stand on, and its doors (W4a). */
   grid: GridView | null;
+  /** The whole map you stand on, shrunk (W4b). */
+  minimap: MinimapView | null;
+  tower: TowerView;
   people: PersonView[];
   suggestions: string[];
   canClimb: boolean;
@@ -305,31 +299,14 @@ async function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[
   const view = baseViewOf(id, state, transcript, combatLog);
   if (!activeRegion(state.world)) return view;
   const at = positionOf(state.world);
-  return { ...view, grid: gridOf(state, await mapFor(id, at.map, () => drawMap(state.world, at.map))) };
+  const map = await mapFor(id, at.map, () => drawMap(state.world, at.map));
+  return { ...view, grid: gridOf(state, map), minimap: minimapOf(state, map) };
 }
 
 function baseViewOf(id: string, state: PlayState, transcript: TranscriptEntry[], combatLog: string[] = []): GameView {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
   const d = derive(state.sheet, state.pc.inventory);
-  const here = new Set(place?.connections ?? []);
-
-  const positions = new Map(region ? layoutRegion(region).map((p) => [p.id, p]) : []);
-  const nodes: MapNode[] = (region?.places ?? []).map((p) => {
-    const pos = positions.get(p.id);
-    const known = p.discovered || p.id === state.world.currentPlace || here.has(p.id);
-    return {
-      id: p.id,
-      // A place you have not been to yet is a shape on the map, not a name.
-      name: known ? p.name : '?',
-      kind: p.kind,
-      known,
-      current: p.id === state.world.currentPlace,
-      reachable: here.has(p.id),
-      x: pos?.x ?? 50,
-      y: pos?.y ?? 50,
-    };
-  });
 
   const exits = exitStatus(state);
 
@@ -388,8 +365,10 @@ function baseViewOf(id: string, state: PlayState, transcript: TranscriptEntry[],
       description: place?.description ?? '',
       affordances: place?.affordances ?? [],
     },
-    map: { nodes, edges: region ? mapEdges(region) : [] },
+    map: floorMapOf(state),
     grid: null,
+    minimap: null,
+    tower: towerOf(state),
     people: (place?.people ?? [])
       .map((pid) => state.world.people[pid])
       .filter((p): p is NonNullable<typeof p> => Boolean(p) && p.alive)

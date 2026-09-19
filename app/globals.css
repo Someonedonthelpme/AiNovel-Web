@@ -679,3 +679,11 @@ a.primary:hover, button.primary:hover { filter: brightness(1.08); }
 .ground .tile.you { background: var(--amber); cursor: default; }
 .ground .tile:not(:disabled):hover { outline: 1px solid var(--amber); }
 .ground .tile:disabled { cursor: default; }
+
+/* W4b — the minimap: the whole map you stand on, shrunk. */
+.minimap { display: grid; gap: 0; cursor: zoom-in; border-radius: 4px; overflow: hidden; max-height: 140px; }
+.minimap.big { cursor: zoom-out; max-height: none; }
+.minimap span { aspect-ratio: 1; background: var(--panel-2); }
+.minimap .wall { background: var(--bg); }
+.minimap .rough { background: #2c2620; }
+.minimap .you { background: var(--amber); }
