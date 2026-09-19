@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1 shipped 2026-09-19** (`d9ed7b3`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1 and W2 shipped 2026-09-19** (`d9ed7b3`, `07207b3`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -983,7 +983,7 @@ compression, which §4 needs.
 | stage | what | depends on | done means |
 |---|---|---|---|
 | W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed — **SHIPPED 2026-09-19** (`d9ed7b3`) |
-| W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change |
+| W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change — **SHIPPED 2026-09-19** (`07207b3`) |
 | W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding |
 | W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing |
 | W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field |
@@ -1001,12 +1001,32 @@ seed adds 0–10, and the biome scales the sum ×1 / ×1.25 / ×1.5 by KEYWORD
 W2 gives tiles a closed terrain. The clock stays in 10-minute ticks: a link is
 charged `ceil(minutes / 10)`, so a 12-minute link reads 20 on the clock; moving the
 clock to minutes or seconds belongs to W3, which charges per tile. `routeOf` is
-blind to the season (winter stays in `travelTime` until tiles carry cost) and its
-shape is a SAWTOOTH — short vertical legs over a one-tile column, ends a third to
-two thirds of the length apart. It is a guaranteed best path, not a pretty one: W2
-should wind it at a larger scale before drawing a field around it. **Old sessions
-are not kept compatible** (user, 2026-09-19: still development): a session replayed
-without its snapshots re-derives its clock with the new link times.
+blind to the season (winter stays in `travelTime` until tiles carry cost). As first
+built its shape was a SAWTOOTH — short vertical legs over a one-tile column — which
+could not be widened into a field without its legs merging; **W2 replaced it**:
+`routeOf` is now the best path across the drawn field. **Old sessions are not kept
+compatible** (user, 2026-09-19: still development): a session replayed without its
+snapshots re-derives its clock with the new link times.
+
+**W2 as built (2026-09-19), and what it leaves for W3.** Tiles: `.` open (1 s to
+enter), `,` rough (2 s), `#` wall; eight-way, like combat. A FIELD is a band five
+tiles wide around a square-wave centreline (legs six columns apart, one wall
+column between neighbours), ending on a straight run. Walking cuts the corners, so
+the band is measured with the walking pathfinder and the straight run takes up the
+difference — past its first tiles each one adds exactly a second — which makes the
+best path exact; rough ground the best path crossed is trodden open, so that path is
+one tile a second. Rough share is 5% / 20% / 35% by biome (W1's keywords). A HUB is
+a union of ellipses about one centre, radius by kind (settlement 24, wild 18,
+landmark and dungeon 14, gate 10): under a minute across. **Portals are not stored**:
+read off the place graph on every read, each at a bearing dealt from the seed, the
+place and its target, so a way `revealWay` adds after the hub was stored still gets
+a door and no other door moves. Maps live in their own `maps` table, one row per
+session and map, drawn on first ask by `mapFor` and never redrawn. **Not built:**
+nothing calls `mapFor` yet (W3 wires it into moves); side branches; a larger-scale
+wind (a field reads as a serpentine with one-tile walls, not open country — revisit
+when W4 shows one); two doors dealt the same bearing share a tile; interiors and
+dungeon maps. **For W3, open:** does crossing a hub cost the player time that a
+journey does not pay? Claude: no — hubs are under a minute across.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
