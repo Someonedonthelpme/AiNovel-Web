@@ -475,3 +475,12 @@ test('both bands at once: floors 1–10 loop, 21–30 are eras, and neither law 
 test("the era band keeps the tower's kind", async () => {
   assert.equal((await withEra('static')).world.strata?.era?.kind, 'static');
 });
+
+test("the era band costs no model call, and is named in the engine's words", async () => {
+  const plainCalls = wholeGenesis();
+  await runGenesis(plainCalls, completed(), 42);
+  const bandCalls = wholeGenesis();
+  const w = (await runGenesis(bandCalls, completed(), 42, 'standard', 'dynamic', undefined, false, true)).world;
+  assert.equal(bandCalls.calls.length, plainCalls.calls.length);
+  assert.equal(w.strata?.era?.name, 'the eras');
+});
