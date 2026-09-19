@@ -7,7 +7,8 @@ import type { Cell, GameMap, MapId } from '../world/map.ts';
 import { isNight, MINUTES_PER_TICK } from '../world/calendar.ts';
 import { activeRegion, clockOf } from '../world/travel.ts';
 import { NEED_MAX } from '../character/persona.ts';
-import type { PlaceId } from '../world/types.ts';
+import type { PlaceId, RegionId } from '../world/types.ts';
+import { regionIdFor } from '../world/types.ts';
 
 const SECONDS_PER_TICK = 60 * MINUTES_PER_TICK;
 /** A need at or under this is the line a walk stops on — the level the game calls "starving". */
@@ -84,6 +85,17 @@ export async function walkAlong(
     place = next;
   }
 
+  return walkLegs(state, legs, { map: hub.id, x: cell.x, y: cell.y });
+}
+
+
+/**
+ * Walk the legs tile by tile, stopping at the first tick that matters; arriving,
+ * stand at `arrival` — which, after a door, is on the next map.
+ */
+function walkLegs(state: PlayState, legs: Leg[], arrival: { map: MapId; x: number; y: number }): WalkTo {
+  const { world } = state;
+  const region = activeRegion(world)!;
   const clock0 = clockOf(world);
   const carried = world.second ?? 0;
   const needs0 = state.sheet.needs ?? { food: NEED_MAX, rest: NEED_MAX };
@@ -108,7 +120,7 @@ export async function walkAlong(
   const through: PlaceId[] = [];
   for (const leg of legs) {
     const path = bestRoute(leg.map, leg.from, leg.to);
-    if (path.length === 0) throw new Error(`walkAlong: no way across "${leg.map.id}"`);
+    if (path.length === 0) throw new Error(`walk: no way across "${leg.map.id}"`);
     for (const c of path.slice(1)) {
       spent += tileSeconds(leg.map, c);
       const crossed = Math.floor((carried + spent) / SECONDS_PER_TICK);
@@ -122,5 +134,56 @@ export async function walkAlong(
       here = leg.enters;
     }
   }
-  return { map: hub.id, x: cell.x, y: cell.y, seconds: spent, through, stop: 'arrived' };
+  return { ...arrival, seconds: spent, through, stop: 'arrived' };
+}
+
+/** What a click on a stair or a way out leads to, once the walk has reached it. */
+export type Then = { climb: 'up' | 'down' } | { travel: RegionId };
+
+/**
+ * Walk to one tile of the map you stand on (W4a): the click. A door is walked
+ * THROUGH — a hub's door onto its field, a field's end into its hub, which enters
+ * that place. A stair or a way out is walked TO, and `then` says what to do
+ * there. The same stops as any walk; the caller has already checked the tile.
+ */
+export async function walkToTile(
+  state: PlayState,
+  target: { map: MapId; x: number; y: number },
+  mapOf: (id: MapId) => GameMap | Promise<GameMap>,
+): Promise<{ walkTo: WalkTo; then: Then | null }> {
+  const { world } = state;
+  const region = activeRegion(world);
+  if (!region) throw new Error('walkToTile: the current region is not loaded in full');
+  const start = positionOf(world);
+  const map = await mapOf(start.map);
+  const cell = { x: target.x, y: target.y };
+  const portal = portalsOf(world, map).find((p) => p.x === cell.x && p.y === cell.y);
+  const doorOf = (m: GameMap, to: MapId): Cell => {
+    const found = portalsOf(world, m).find((p) => 'to' in p && p.to === to);
+    if (!found) throw new Error(`map "${m.id}" has no door to "${to}"`);
+    return { x: found.x, y: found.y };
+  };
+
+  let arrival = { map: map.id, ...cell };
+  let enters: PlaceId | null = null;
+  let then: Then | null = null;
+  const ends = fieldEnds(map.id);
+  if (portal && 'to' in portal && ends) {
+    // A field's end: into that place's hub, on its door back onto this field.
+    const into = ends.find((p) => hubId(region.id, p) === portal.to)!;
+    const from = ends.find((p) => p !== into)!;
+    const hub = await mapOf(portal.to);
+    arrival = { map: hub.id, ...doorOf(hub, fieldId(region.id, into, from)) };
+    if (into !== world.currentPlace) enters = into;
+  } else if (portal && 'to' in portal) {
+    // A hub's door: onto its field, at the end that opens back onto this hub.
+    const field = await mapOf(portal.to);
+    arrival = { map: field.id, ...doorOf(field, hubId(region.id, world.currentPlace)) };
+  } else if (portal && 'region' in portal) {
+    then = portal.region === regionIdFor(region.floor + 1) && region.exit === world.currentPlace ? { climb: 'up' }
+      : portal.region === regionIdFor(region.floor - 1) && region.entrance === world.currentPlace ? { climb: 'down' }
+      : { travel: portal.region };
+  }
+  const walkTo = walkLegs(state, [{ map, from: start, to: cell, enters }], arrival);
+  return { walkTo, then: walkTo.stop === 'arrived' ? then : null };
 }

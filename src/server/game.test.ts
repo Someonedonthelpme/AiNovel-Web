@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { climbTarget, eraBandOf, loopBandOf, speciesChoiceOf } from './game.ts';
+import { climbTarget, eraBandOf, loopBandOf, speciesChoiceOf, walkTarget } from './game.ts';
 
 test('a climb request names a way out, the stair, or is refused', () => {
   // The route used to turn a body it could not parse into `{}`, which climbs
@@ -30,4 +30,13 @@ test('an era request that is not true or false is refused at the edge', () => {
   assert.equal(eraBandOf(undefined), false);
   assert.equal(eraBandOf(true), true);
   assert.throws(() => eraBandOf('yes'), /era/);
+});
+
+// W4a: a click is a map and a tile, checked at the edge. A malformed one is
+// refused, never read as some tile — that would walk the player somewhere unasked.
+test('a walk request is a map id and two whole numbers, or is refused', () => {
+  assert.deepEqual(walkTarget('{"map":"hub:floor-0:town","x":3,"y":4}'), { target: { map: 'hub:floor-0:town', x: 3, y: 4 } });
+  for (const bad of ['', '{"map":', '{"x":3,"y":4}', '{"map":"m","x":"3","y":4}', '{"map":"m","x":1.5,"y":4}', '{"map":"","x":1,"y":1}']) {
+    assert.match(walkTarget(bad).error ?? '', /walk/, bad);
+  }
 });

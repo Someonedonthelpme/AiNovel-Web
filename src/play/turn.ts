@@ -13,9 +13,10 @@ import type { WriterResult } from '../llm/writer.ts';
 import { finalAbilities } from '../session/sheet.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { activeRegion, signposted, walkRoute } from '../world/travel.ts';
-import { drawMap } from '../world/map.ts';
+import { drawMap, fieldEnds, positionOf, tileSeconds } from '../world/map.ts';
 import type { GameMap, MapId } from '../world/map.ts';
-import { walkAlong } from './walker.ts';
+import { walkAlong, walkToTile } from './walker.ts';
+import type { Then } from './walker.ts';
 import { holderOf, priceOf } from '../world/holding.ts';
 import { applyTurn, personRef, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
@@ -201,6 +202,48 @@ export async function playTurn(
  * A walk, as a turn: one record carrying the route, applied like any other, and a
  * plain line of prose. No model is called — arrival narration waits for W3's stops.
  */
+export type TileWalk = { state: PlayState; record: TurnRecord | null; then: Then | null; error: string | null };
+
+/**
+ * A click on the map you stand on (W4a): walk there, no typing and no model.
+ * The tile is checked HERE, at the edge — it must be on your map, inside it and
+ * not a wall — and a bad one is refused with a reason and nothing moves.
+ */
+export async function walkTile(deps: TurnDeps, state: PlayState, target: { map: MapId; x: number; y: number }): Promise<TileWalk> {
+  const refuse = (error: string): TileWalk => ({ state, record: null, then: null, error });
+  if (state.ended) return refuse('the story has ended');
+  if (state.combat) return refuse('not while fighting');
+  const start = positionOf(state.world);
+  if (target.map !== start.map) return refuse(`"${target.map}" is not the map you are on`);
+  const mapOf = deps.mapOf ?? ((id: MapId) => drawMap(state.world, id));
+  const map = await mapOf(start.map);
+  const { x, y } = target;
+  if (!Number.isInteger(x) || !Number.isInteger(y) || y < 0 || y >= map.rows.length || x < 0 || x >= map.rows[0].length) {
+    return refuse(`(${x}, ${y}) is outside the map`);
+  }
+  if (tileSeconds(map, { x, y }) === Infinity) return refuse(`(${x}, ${y}) is a wall`);
+
+  const { walkTo, then } = await walkToTile(state, target, mapOf);
+  const record: TurnRecord = {
+    kind: 'turn', input: '', mode: 'exploration', classification: 'NEUTRAL', addressed: null, roll: null,
+    delta: { walkTo }, rejected: [], prose: '',
+  };
+  const applied = applyTurn(state, record);
+  const places = activeRegion(state.world)?.places ?? [];
+  const entered = places.find((p) => p.id === walkTo.through[walkTo.through.length - 1])?.name;
+  const th = state.world.language === 'th';
+  // Every click says something: an empty line is an empty transcript entry.
+  const onto = fieldEnds(walkTo.map)?.find((p) => p !== state.world.currentPlace);
+  const road = places.find((p) => p.id === onto)?.name;
+  const standing = places.find((p) => p.id === state.world.currentPlace)?.name ?? '';
+  const prose = walkTo.stop !== 'arrived'
+    ? (th ? STOP_LINES[walkTo.stop].th(entered ?? 'ปลายทาง') : STOP_LINES[walkTo.stop].en(entered ?? 'where you were going'))
+    : entered ? (th ? STOP_LINES.arrived.th(entered) : STOP_LINES.arrived.en(entered))
+    : road ? (th ? `คุณออกเดินทางไปทาง${road}` : `You set out toward ${road}.`)
+    : th ? `คุณเดินไปในบริเวณ${standing}` : `You walk across ${standing}.`;
+  return { state: applied.state, record: { ...record, prose }, then, error: null };
+}
+
 /** What an engine-walked turn says, by why it stopped. Closed, like `STOPS`. */
 const STOP_LINES: Record<Stop, { en: (to: string) => string; th: (to: string) => string }> = {
   arrived: { en: (to) => `You walk to ${to}.`, th: (to) => `คุณเดินไปถึง${to}` },

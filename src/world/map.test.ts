@@ -93,3 +93,16 @@ test('a map of something that is not there is refused, naming it', () => {
   assert.throws(() => drawMap(world(), fieldId('floor-0', 'gate', 'stair')), /gate.*stair/);
   assert.throws(() => drawMap(world(), hubId('floor-0', 'moon')), /moon/);
 });
+
+// W4a found two doors dealt the same tile on the stair hub (a field door and the
+// stair up), so a click on the stair walked onto the field. W2 had called it rare.
+test('every door of a hub has a tile of its own', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const w = world({ seed });
+    for (const p of groundFloor().places) {
+      const doors = portalsOf(w, drawMap(w, hubId('floor-0', p.id)));
+      const tiles = new Set(doors.map((d) => `${d.x},${d.y}`));
+      assert.equal(tiles.size, doors.length, `seed ${seed} ${p.id}: ${JSON.stringify(doors)}`);
+    }
+  }
+});

@@ -83,6 +83,57 @@ function LocalMap({ view, onTravel, busy }: { view: GameView; onTravel: (id: str
 }
 
 /**
+ * The ground you stand on (W4a): a window of your map, walked by clicking. Every
+ * door is also a button, because a field runs for hundreds of tiles and its far
+ * end is out of view long before you reach it.
+ */
+function GroundGrid({ grid, busy, onWalk }: {
+  grid: NonNullable<GameView['grid']>;
+  busy: boolean;
+  onWalk: (x: number, y: number) => void;
+}) {
+  const doorAt = new Map(grid.doors.map((d) => [`${d.x},${d.y}`, d]));
+  const name = (d: (typeof grid.doors)[number]) =>
+    d.stair === 'up' ? 'the way up' : d.stair === 'down' ? 'the way down' : d.label ?? 'a road';
+  return (
+    <section className="panel">
+      <div
+        className="ground"
+        style={{ gridTemplateColumns: `repeat(${grid.rows[0]?.length ?? 0}, 1fr)` }}
+        role="grid"
+        aria-label="the ground around you"
+      >
+        {grid.rows.flatMap((row, dy) => row.split('').map((tile, dx) => {
+          const x = grid.x0 + dx;
+          const y = grid.y0 + dy;
+          const you = x === grid.you.x && y === grid.you.y;
+          const door = doorAt.get(`${x},${y}`);
+          const open = tile !== '#';
+          return (
+            <button
+              key={`${x},${y}`}
+              type="button"
+              className={`tile ${you ? 'you' : door ? 'door' : tile === '#' ? 'wall' : tile === ',' ? 'rough' : 'open'}`}
+              disabled={!open || you || busy}
+              title={door ? name(door) : undefined}
+              aria-label={door ? name(door) : you ? 'you' : undefined}
+              onClick={() => onWalk(x, y)}
+            />
+          );
+        }))}
+      </div>
+      <div className="chips" style={{ marginTop: '0.6rem' }}>
+        {grid.doors.map((d) => (
+          <button key={`${d.x},${d.y}`} type="button" className="chip" disabled={busy} onClick={() => onWalk(d.x, d.y)}>
+            {d.stair === 'up' ? '↑ ' : d.stair === 'down' ? '↓ ' : '→ '}{name(d)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
  * The tactical board.
  *
  * Squares matter here in a way they do not anywhere else in the game, so this is
@@ -257,6 +308,29 @@ export default function Game({ initial }: { initial: GameView }) {
     }
   }
 
+  async function walkTo(x: number, y: number) {
+    if (busy || !view.grid) return;
+    setBusy(true);
+    setNotice(null);
+    setClosing([]);
+    try {
+      const response = await fetch(`/api/sessions/${view.id}/walk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ map: view.grid.map, x, y }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'the walk failed');
+      if (data.error) setNotice(data.error);
+      else if (data.arrived) setNotice(`You reach ${data.arrived}.`);
+      setView(data.view);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function ascend(to?: string) {
     if (busy) return;
     setBusy(true);
@@ -359,6 +433,8 @@ export default function Game({ initial }: { initial: GameView }) {
               <p className="muted" style={{ marginBottom: 0 }}>{view.place.description}</p>
             )}
           </section>
+
+          {view.grid && !view.combat && <GroundGrid grid={view.grid} busy={busy} onWalk={walkTo} />}
 
           <section className="panel">
             <div className="transcript">

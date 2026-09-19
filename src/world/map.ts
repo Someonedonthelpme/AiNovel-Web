@@ -310,16 +310,28 @@ export function portalsOf(world: World, m: GameMap): Portal[] {
   }
   const place = region.places.find((p) => p.id === at.place);
   if (!place) throw new Error(`map "${m.id}": no place "${at.place}" in ${region.id}`);
-  const door = (target: string) => edgeAt(m, pairDraw(world.seed, 0x9047, place.id, target) * 2 * Math.PI);
+  // Doors are placed in a fixed order and each takes the first free edge tile
+  // turning from its dealt bearing, so no two share a tile. The order puts what
+  // can be revealed LAST — a link never changes, nor does the way down; the way up
+  // and a road can be found in play — so a revealed door never moves an older one.
+  // ponytail: a way up found after a road was can still displace that road's door.
+  const taken = new Set<string>();
+  const door = (target: string): Cell => {
+    const bearing = pairDraw(world.seed, 0x9047, place.id, target) * 2 * Math.PI;
+    for (let k = 0; k < 64; k++) {
+      const turn = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (2 * Math.PI / 64);
+      const at = edgeAt(m, bearing + turn);
+      if (!taken.has(`${at.x},${at.y}`)) { taken.add(`${at.x},${at.y}`); return at; }
+    }
+    throw new Error(`map "${m.id}": no free edge tile for a door to "${target}"`);
+  };
 
-  const ways = (region.exits ?? []).filter((l) => l.via === place.id).map((l) => l.to);
-  // A region whose named exits include its stairs has them there; a stack derives them.
-  if (!(region.exits ?? []).some((l) => l.direction)) {
-    if (region.exit === place.id) ways.push(regionIdFor(region.floor + 1));
-    if (region.entrance === place.id) ways.push(regionIdFor(region.floor - 1));
-  }
+  const stack = !(region.exits ?? []).some((l) => l.direction);
+  const down = stack && region.entrance === place.id ? [regionIdFor(region.floor - 1)] : [];
+  const up = stack && region.exit === place.id ? [regionIdFor(region.floor + 1)] : [];
+  const roads = (region.exits ?? []).filter((l) => l.via === place.id).map((l) => l.to);
   return [
     ...place.connections.map((c) => ({ ...door(c), to: fieldId(region.id, place.id, c) })),
-    ...[...new Set(ways)].map((to) => ({ ...door(to), region: to })),
+    ...[...new Set([...down, ...up, ...roads])].map((to) => ({ ...door(to), region: to })),
   ];
 }
