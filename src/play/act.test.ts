@@ -7,6 +7,7 @@ import { foldPlay } from './delta.ts';
 import { fightOpen } from './combat.ts';
 import { firstFloor, groundFloor } from '../world/fixtures.ts';
 import type { PlayState } from './state.ts';
+import { speciesFor } from '../character/species.ts';
 
 /*
  * Fight and rest, engine-side (decided with the user, 2026-09-19): the probe
@@ -81,4 +82,29 @@ test('"hunt" on the ground floor is refused with the reason', async () => {
 test('"rest assured" and "attack the warden" are the Director\'s', async () => {
   assert.equal((await playTurn(scripted(), inTown(), 'rest assured, I will help', 'conversation', [])).record.delta.rest, undefined);
   assert.equal((await playTurn(scripted(), inTown(), 'attack the warden', 'conversation', [])).record.delta.startCombat, undefined);
+});
+
+/*
+ * A hunt that finds nothing says so (approved 2026-09-19). Live, a place was
+ * hunted out — kills thin a crowd, and a thinned crowd stays gone — and every
+ * later "hunt" was accepted, opened no fight, and still said "You go looking for
+ * trouble." The world was right; the player was told nothing.
+ */
+const withKinds = (s: PlayState): PlayState => ({ ...s, world: { ...s.world, species: speciesFor(11) } });
+const huntedOut = (): PlayState => {
+  const s = withKinds(onFloor1());
+  // English, so the line is the English one; the Thai line is the same check.
+  return { ...s, world: { ...s.world, language: 'en', populations: { ...s.world.populations, landing: [] } } };
+};
+
+test('a hunt in a place hunted out says so, and no fight is recorded', async () => {
+  const r = await playTurn(noModel(), huntedOut(), 'hunt', 'exploration', []);
+  assert.equal(fightOpen(r.state), false);
+  assert.match(r.record.prose, /nothing here is left to hunt/i);
+  assert.match(r.rejected.join(' '), /nothing left to hunt/);
+  assert.equal(r.record.delta.startCombat, undefined, 'no fight is recorded as started');
+});
+
+test('a place with a crowd still hunts as before', async () => {
+  assert.ok(fightOpen((await playTurn(noModel(), withKinds(onFloor1()), 'hunt', 'exploration', [])).state));
 });

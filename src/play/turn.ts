@@ -17,7 +17,7 @@ import { applyTurn, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
 import type { Mode, PlayState, TurnRecord, WorldDelta } from './state.ts';
-import { hearsWords } from './combat.ts';
+import { beginEncounter, fightOpen, hearsWords } from './combat.ts';
 import type { CombatAction } from './combat.ts';
 
 /**
@@ -229,6 +229,22 @@ function engineAct(input: string): EngineAct | null {
 }
 
 /**
+ * Why a hunt the rules allow would still find nobody, or null when it would.
+ *
+ * A DRY RUN of the encounter, which is a pure function of state: live, a place
+ * hunted out — a thinned crowd stays gone — accepted every later hunt, opened no
+ * fight, and said "You go looking for trouble." A place whose crowd is spent says
+ * so; one whose kinds are simply not out (season, hours) says that instead.
+ */
+function nothingToHunt(state: PlayState): { reason: string; line: { en: string; th: string } } | null {
+  if (fightOpen(beginEncounter(state, 'player'))) return null;
+  const crowd = state.world.populations?.[state.world.currentPlace];
+  return Array.isArray(crowd) && crowd.length === 0
+    ? { reason: 'nothing left to hunt here', line: { en: 'Nothing here is left to hunt; try somewhere else.', th: 'ที่นี่ไม่เหลืออะไรให้ล่าแล้ว ลองไปที่อื่นดู' } }
+    : { reason: 'nothing is out hunting here now', line: { en: 'Nothing is out hunting here right now.', th: 'ตอนนี้ไม่มีอะไรออกมาล่าแถวนี้' } };
+}
+
+/**
  * An engine act, as a turn: the proposal goes through `validateDelta` like the
  * Director's would, so the rules that already decide a rest or a fight decide
  * this one, and a refusal carries their reason. A refused act still spends the
@@ -236,13 +252,20 @@ function engineAct(input: string): EngineAct | null {
  */
 function acted(state: PlayState, input: string, mode: Mode, act: EngineAct): TurnResult {
   const validated = validateDelta(state, act.proposed);
+  const empty = validated.delta.startCombat ? nothingToHunt(state) : null;
+  if (empty) {
+    delete validated.delta.startCombat;
+    delete validated.delta.startedBy;
+    validated.rejected.push(`startCombat: ${empty.reason}`);
+    act = { ...act, line: empty.line };
+  }
   const record: TurnRecord = {
     kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
     delta: validated.delta, rejected: validated.rejected, prose: '',
   };
   const applied = applyTurn(state, record);
   const done = validated.rejected.length === 0;
-  const prose = done ? act.line[state.world.language] : validated.rejected.join('; ');
+  const prose = done || empty ? act.line[state.world.language] : validated.rejected.join('; ');
   return {
     state: applied.state,
     record: { ...record, prose },
