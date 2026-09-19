@@ -74,6 +74,8 @@ export type ClimbRecord = {
      * have to guess at.
      */
     stratum?: Stratum;
+    /** The era band this floor gave its land to, if it was the first built in it. */
+    band?: Stratum;
   } | null;
 };
 
@@ -141,7 +143,7 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
   // none either. Failing loudly beats folding to a state travel already refused.
   if (!record.built) return failed(state, `floor ${attempt.floor} was never built`, record);
 
-  const { region, people, edges, stratum } = record.built;
+  const { region, people, edges, stratum, band } = record.built;
   // MERGED, never replaced: a crossing brings new faces and their first
   // impressions, and must not touch what the floors below already earned.
   const withPeople: World = {
@@ -150,7 +152,13 @@ export function applyClimb(state: PlayState, record: ClimbRecord): ClimbResult {
     edges: { ...state.world.edges, ...edges },
     // A floor that begins a wing adds it to what the world holds. Merged, never
     // replaced: the tower this hangs inside is already in there.
-    ...(stratum ? { strata: { ...state.world.strata, [stratum.id]: stratum } } : {}),
+    ...(stratum || band ? {
+      strata: {
+        ...state.world.strata,
+        ...(band ? { [band.id]: band } : {}),
+        ...(stratum ? { [stratum.id]: stratum } : {}),
+      },
+    } : {}),
   };
   const arrived = arrive(state, installRegion(withPeople, region, region.entrance));
   return { ...arrived, state: keepOriginal(arrived.state, region.id, record.built), generated: null, error: null, record };
@@ -235,6 +243,7 @@ async function cross(
         // A wing the floor opened travels with it: the world's SHAPE changing
         // is the last thing a replay should have to guess at.
         ...(generated.stratum ? { stratum: generated.stratum } : {}),
+        ...(generated.band ? { band: generated.band } : {}),
       }
       : null,
   };

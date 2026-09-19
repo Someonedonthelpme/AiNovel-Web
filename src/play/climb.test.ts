@@ -510,3 +510,17 @@ test('with its holder, a band floor loops: left uncleared, it is put back', asyn
   assert.equal(back.world.currentRegion, 'floor-0');
   assert.deepEqual(back.world.regions[r.region.id], built.world.regions[r.region.id]);
 });
+
+test("climbing into an unthemed era band gives it the first floor's land, and a fold keeps it", async () => {
+  const strata = {
+    tower: { id: 'tower', name: 'the tower', kind: 'dynamic' as const, from: 0 },
+    era: { id: 'era', name: 'the eras', kind: 'dynamic' as const, parent: 'tower', from: 1, to: 10, laws: { time: 'era' as const } },
+  };
+  const base = playState({ currentPlace: 'stair', regions: { 'floor-0': groundFloor() }, strata });
+  const r = await climb(provider(), base);
+  const record = r.record!;
+  const land = record.built!.region;
+  const theme = { biome: land.biome, culture: land.culture, people: land.culture };
+  assert.deepEqual(r.state.world.strata?.era?.theme, theme);
+  assert.deepEqual(foldPlay(base, [record]).world.strata?.era?.theme, theme, 'and a reload still knows it');
+});

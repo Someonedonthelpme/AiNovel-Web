@@ -41,7 +41,7 @@ import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, RegionId, World } from './types.ts';
 import { PLACE_KINDS, regionIdFor } from './types.ts';
 import { validateRegion } from './validate.ts';
-import { dangerAt, isLoop, stratumAt } from './strata.ts';
+import { dangerAt, isLoop, lawFrom, stratumAt } from './strata.ts';
 import type { Stratum } from './types.ts';
 import { speciesIdFor } from '../character/species.ts';
 import { bossMember, crowdFighter } from '../character/crowd.ts';
@@ -194,6 +194,8 @@ export type FloorResult = {
   creatures: string[];
   /** A structure this floor begins, for the crossing to record and install. */
   stratum?: Stratum;
+  /** The era band this floor gives its land to, being the first built in it (DESIGN 6c era E3b). */
+  band?: Stratum;
   repairs: string[];
   warnings: string[];
 };
@@ -502,15 +504,28 @@ export async function generateFloor(
   }
 
   const wing = wingOf(generated, floor, region, stratum, world);
+  const band = bandLandOf(world, floor, region);
   return {
     region,
     people,
     edges: bondsAmong(openingEdges({}, arrivals), rolesOf(world), people, generated.bonds ?? [], repairs),
     creatures: generated.creatures,
     ...(wing ? { stratum: wing } : {}),
+    ...(band ? { band } : {}),
     repairs,
     warnings: check.warnings.map((w) => w.message),
   };
+}
+
+/**
+ * An era band is one land in different times, so the FIRST floor built in it
+ * gives the band its land, as a wing takes its character from the floor that
+ * opened it. Set once: a band that already has a theme keeps it.
+ */
+function bandLandOf(world: World, floor: number, region: Region): Stratum | undefined {
+  const band = lawFrom(world, floor, 'time');
+  if (band?.laws?.time !== 'era' || band.theme) return undefined;
+  return { ...band, theme: { biome: region.biome, culture: region.culture, people: region.culture } };
 }
 
 /**

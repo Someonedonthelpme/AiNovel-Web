@@ -323,3 +323,32 @@ test('a loop floor the model named nobody for is still held, by a holder named f
   assert.ok(holder, 'or the floor would silently never loop');
   assert.equal(holder.name, kinds.find((k) => k.id === holder.species)?.name);
 });
+
+/*
+ * 6c era E3b: an era band is one land in different times, so the FIRST floor
+ * built in it gives the band its land — the wing precedent, no model call.
+ */
+const eraLand = { biome: 'salt marsh', culture: 'reed-cutters', people: 'reed-cutters' };
+const eraBanded = (theme?: typeof eraLand) => ({
+  ...withKinds(),
+  strata: {
+    tower: { id: 'tower', name: 'the tower', kind: 'dynamic' as const, from: 0 },
+    era: {
+      id: 'era', name: 'the eras', kind: 'dynamic' as const, parent: 'tower', from: 21, to: 30,
+      laws: { time: 'era' as const }, ...(theme ? { theme } : {}),
+    },
+  },
+});
+
+test('the first floor built in an era band gives the band its land', async () => {
+  const first = await generateFloor(provider(), eraBanded(), 21, pc);
+  assert.equal(first.band?.id, 'era');
+  assert.deepEqual(first.band?.theme, { biome: first.region.biome, culture: first.region.culture, people: first.region.culture });
+  assert.equal((await generateFloor(provider(), eraBanded(eraLand), 22, pc)).band, undefined, 'set once, never rewritten');
+});
+
+test('a floor that opens a wing and gives the band its land records both', async () => {
+  const first = await generateFloor(provider(generated({ wingName: 'The Drowned Hall', wingFloors: 2 })), eraBanded(), 21, pc);
+  assert.equal(first.stratum?.parent, 'era');
+  assert.equal(first.band?.id, 'era');
+});
