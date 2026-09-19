@@ -22,7 +22,7 @@ import { directorContext } from '../src/llm/director.ts';
 import { isLocalUp } from '../src/llm/local.ts';
 import { actInCombat, climbFloor, getGame, newGame, takeTurn } from '../src/server/game.ts';
 import type { GameView } from '../src/server/game.ts';
-import { PLAYER } from '../src/social/edge.ts';
+import { PLAYER, trustToward } from '../src/social/edge.ts';
 import { holderOf, priceOf, TRUST_TO_SELL } from '../src/world/holding.ts';
 import { activeRegion, signposted } from '../src/world/travel.ts';
 
@@ -206,11 +206,11 @@ async function tryToBuy(id: string): Promise<boolean> {
   log(`  ${settlement.name} is held by ${holder.name}; price ${price}, coin ${coin}`);
 
   for (let n = 0; n < COURTING_TURNS; n += 1) {
-    const trust = (await getGame(id))!.people.find((p) => p.id === holder.id)?.trust ?? 0;
+    const trust = trustToward((await stateOf(id)).world.edges, holder.id);
     if (trust >= TRUST_TO_SELL) break;
     await turn(id, `I help ${holder.name} with whatever they are struggling with`, 'conversation');
   }
-  const trust = (await getGame(id))!.people.find((p) => p.id === holder.id)?.trust ?? 0;
+  const trust = trustToward((await stateOf(id)).world.edges, holder.id);
   log(`  ${holder.name}'s trust: ${trust}`);
 
   // Talking can move you (live: the courting walked the climber out); buy standing in it.
