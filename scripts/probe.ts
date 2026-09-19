@@ -146,7 +146,7 @@ async function earnCoin(id: string, want: number): Promise<number> {
     // Rest when hurt, as a player would; a rest is the Director's to grant, so log whether it did.
     for (let tries = 0; tries < 2 && view.character.hp < view.character.maxHp * 0.7; tries += 1) {
       const before = view.character.hp;
-      const r = await turn(id, 'I find a safe corner and take a short rest to recover', 'exploration');
+      const r = await turn(id, 'rest', 'exploration');
       view = (await getGame(id))!;
       log(`  rest: hp ${before} -> ${view.character.hp}/${view.character.maxHp}${(r?.rejected ?? []).length ? ` (refused: ${r!.rejected.join('; ')})` : ''}`);
     }
@@ -154,7 +154,7 @@ async function earnCoin(id: string, want: number): Promise<number> {
       finding(`stopped fighting at hp ${view.character.hp}/${view.character.maxHp}: resting did not bring it back`);
       break;
     }
-    const r = await turn(id, 'I search for something dangerous and attack it', 'exploration');
+    const r = await turn(id, 'hunt', 'exploration');
     if (r?.view.combat && !r.view.combat.over) {
       const after = await fight(id, r.view);
       log(`  coin now ${after.character.coin}, hp ${after.character.hp}/${after.character.maxHp}`);
