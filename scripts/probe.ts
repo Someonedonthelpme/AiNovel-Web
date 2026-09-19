@@ -5,6 +5,7 @@
  *
  *   node --experimental-strip-types scripts/probe.ts                  to floor 22
  *   node --experimental-strip-types scripts/probe.ts --to 3 --seed 7  a short run
+ *   node --experimental-strip-types scripts/probe.ts --no-buy         climb only: the bands, no fights
  *
  * It calls the same functions the web routes call (`src/server/game.ts`), so a
  * fight, a climb and a purchase go through the fold and the log exactly as a
@@ -23,12 +24,14 @@ import { actInCombat, climbFloor, getGame, newGame, takeTurn } from '../src/serv
 import type { GameView } from '../src/server/game.ts';
 import { PLAYER } from '../src/social/edge.ts';
 import { holderOf, priceOf, TRUST_TO_SELL } from '../src/world/holding.ts';
-import { activeRegion } from '../src/world/travel.ts';
+import { activeRegion, signposted } from '../src/world/travel.ts';
 
 const argv = process.argv.slice(2);
 const arg = (name: string) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
 const TARGET = Number(arg('--to') ?? 22);
 const SEED = Number(arg('--seed') ?? 20260919);
+/** Skip earning coin and buying: climbing needs no fight, so this checks the bands alone. */
+const NO_BUY = argv.includes('--no-buy');
 /** Fights to try for coin on one floor before moving on. */
 const FIGHTS_PER_FLOOR = 6;
 /** Turns spent winning a holder's trust before trying to buy. */
@@ -61,17 +64,46 @@ async function told(id: string): Promise<string[]> {
   return brief.split('\n').filter((l) => /^Time:|held by|years ago|'s line\)/.test(l));
 }
 
-/** Walk to a named place on this floor, the way the map click does. */
+/**
+ * Walk to a place on this floor the way a player would: by typing "go to" the
+ * names they can SEE. The probe may read the whole map to plan, but it only ever
+ * names a place that is signposted from where it has been — typing a hidden name
+ * is cheating, and the redaction wall rightly refuses the turn.
+ */
 async function walkTo(id: string, placeId: string): Promise<boolean> {
-  for (let tries = 0; tries < 3; tries += 1) {
+  for (let tries = 0; tries < 12; tries += 1) {
     const state = await stateOf(id);
     if (state.world.currentPlace === placeId) return true;
-    const place = activeRegion(state.world)?.places.find((p) => p.id === placeId);
-    if (!place) return false;
-    const r = await turn(id, `go to ${place.name}`, 'exploration');
+    const region = activeRegion(state.world);
+    if (!region) return false;
+    const known = signposted(region, state.world.currentPlace);
+    const knowable = (pid: string) => known.has(pid) || Boolean(region.places.find((p) => p.id === pid)?.discovered);
+    // The planned route on the real graph; aim for the furthest place on it we can name.
+    const path = routeOnGraph(region.places, state.world.currentPlace, placeId);
+    const aim = [...path].reverse().find(knowable);
+    if (!aim) return false;
+    const name = region.places.find((p) => p.id === aim)!.name;
+    const r = await turn(id, `go to ${name}`, 'exploration');
     for (const why of r?.rejected ?? []) log(`  refused: ${why}`);
   }
   return (await stateOf(id)).world.currentPlace === placeId;
+}
+
+/** Fewest steps on the place graph, for the probe's own planning. */
+function routeOnGraph(places: { id: string; connections: string[] }[], from: string, to: string): string[] {
+  const prev = new Map<string, string>();
+  const queue = [from];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const at = queue.shift()!;
+    if (at === to) break;
+    for (const next of places.find((p) => p.id === at)?.connections ?? []) {
+      if (!seen.has(next)) { seen.add(next); prev.set(next, at); queue.push(next); }
+    }
+  }
+  const path: string[] = [];
+  for (let at: string | undefined = to; at && at !== from; at = prev.get(at)) path.unshift(at);
+  return prev.has(to) ? path : [];
 }
 
 /** Drive an open fight to its end: attack when one is offered, else close in, else end the turn. */
@@ -109,8 +141,19 @@ async function fight(id: string, view: GameView): Promise<GameView> {
 
 async function earnCoin(id: string, want: number): Promise<number> {
   for (let n = 0; n < FIGHTS_PER_FLOOR; n += 1) {
-    const view = (await getGame(id))!;
+    let view = (await getGame(id))!;
     if (view.character.coin >= want) break;
+    // Rest when hurt, as a player would; a rest is the Director's to grant, so log whether it did.
+    for (let tries = 0; tries < 2 && view.character.hp < view.character.maxHp * 0.7; tries += 1) {
+      const before = view.character.hp;
+      const r = await turn(id, 'I find a safe corner and take a short rest to recover', 'exploration');
+      view = (await getGame(id))!;
+      log(`  rest: hp ${before} -> ${view.character.hp}/${view.character.maxHp}${(r?.rejected ?? []).length ? ` (refused: ${r!.rejected.join('; ')})` : ''}`);
+    }
+    if (view.character.hp < view.character.maxHp * 0.5) {
+      finding(`stopped fighting at hp ${view.character.hp}/${view.character.maxHp}: resting did not bring it back`);
+      break;
+    }
     const r = await turn(id, 'I search for something dangerous and attack it', 'exploration');
     if (r?.view.combat && !r.view.combat.over) {
       const after = await fight(id, r.view);
@@ -186,7 +229,7 @@ async function main() {
     const region = activeRegion(state.world);
     if (!region) throw new Error('no active region');
 
-    if (!bought && region.floor >= 1) bought = await tryToBuy(id);
+    if (!NO_BUY && !bought && region.floor >= 1) bought = await tryToBuy(id);
 
     // On the era band: do a deed on 21 so floor 22 has something to remember.
     if (region.floor === 21) {
