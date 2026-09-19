@@ -207,6 +207,9 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     }
   }
 
+  // Only the engine walks: a model able to propose a route would be choosing movement.
+  if (proposed.walk !== undefined) rejected.push('walk: only the engine walks');
+
   if (proposed.acquirePlace !== undefined) {
     const why = refusalToSell(state, proposed.acquirePlace);
     if (why) rejected.push(`acquirePlace "${proposed.acquirePlace}": ${why}`);
@@ -270,6 +273,18 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   let movedFrom: string | null = null;
 
   let discovered = false;
+  // A walk charges each step it took, where a moveTo charges its one link.
+  let walkedSteps = 0;
+  for (const to of delta.walk ?? []) {
+    const before = activeRegion(world)?.places.find((p) => p.id === to)?.discovered ?? true;
+    const moved = moveWithinRegion(world, to);
+    if (moved.kind !== 'moved') break;
+    walkedSteps += travelTime({ ...moved.world, clock: clockOf(state.world) }, world.currentPlace, to);
+    world = { ...moved.world, turn: world.turn };
+    turnAdvanced = true;
+    discovered ||= !before;
+  }
+  if (turnAdvanced) world = { ...world, turn: state.world.turn + 1 };
   if (delta.moveTo) {
     const before = activeRegion(world)?.places.find((p) => p.id === delta.moveTo)?.discovered ?? true;
     const moved = moveWithinRegion(world, delta.moveTo);
@@ -355,7 +370,7 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   // THE CLOCK (7.1a). This turn covers the time its action took: a move its link,
   // anything else what the Director said it cost, and never nothing.
   // The season is read before this turn's time is added: you set out in it.
-  const walked = movedFrom ? travelTime({ ...world, clock: clockOf(state.world) }, movedFrom, world.currentPlace) : 0;
+  const walked = walkedSteps + (movedFrom ? travelTime({ ...world, clock: clockOf(state.world) }, movedFrom, world.currentPlace) : 0);
   const elapsed = Math.max(1, delta.timeSpent ?? 0, walked);
   world = { ...world, clock: clockOf(state.world) + elapsed };
 

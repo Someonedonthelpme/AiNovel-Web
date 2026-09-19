@@ -4,7 +4,7 @@ import { describeMental, describePersonality } from '../character/persona.ts';
 import type { PlayState } from '../play/state.ts';
 import { presentHere } from '../play/sighting.ts';
 import { timeLine } from '../world/calendar.ts';
-import { activeRegion } from '../world/travel.ts';
+import { activeRegion, signposted as signpostedFrom } from '../world/travel.ts';
 import type { World } from '../world/types.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { registerForPerson } from './register.ts';
@@ -172,8 +172,10 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
  * already shows, or the two contradict each other and the turn dies rather than
  * the spoiler.
  *
- * Everything on another floor stays hidden either way — the Writer has no
- * business knowing what is upstairs.
+ * On another floor, a place is hidden unless you have DISCOVERED it: the floor
+ * you came up from is yours, and upstairs stays hidden because nothing there is
+ * discovered until you arrive. (Until 2026-09-19 everything on another floor was
+ * hidden, which refused every turn that mentioned the stair just climbed.)
  */
 export function hiddenStrings(world: World): string[] {
   const hidden: string[] = [];
@@ -191,11 +193,7 @@ export function hiddenStrings(world: World): string[] {
    * so a brief written for the room you just left failed the check against the
    * room you just entered, and the turn died instead of the spoiler.
    */
-  const signposted = new Set<string>();
-  for (const p of region?.places ?? []) {
-    if (!p.discovered && p.id !== world.currentPlace) continue;
-    for (const c of p.connections) signposted.add(c);
-  }
+  const signposted = signpostedFrom(region, world.currentPlace);
 
   for (const record of Object.values(world.regions)) {
     if (record.detail !== 'full') continue;

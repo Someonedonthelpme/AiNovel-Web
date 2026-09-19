@@ -12,7 +12,7 @@ import { runWriter } from '../llm/writer.ts';
 import type { WriterResult } from '../llm/writer.ts';
 import { finalAbilities } from '../session/sheet.ts';
 import { displayNames, humanise } from '../world/naming.ts';
-import { activeRegion } from '../world/travel.ts';
+import { activeRegion, walkRoute } from '../world/travel.ts';
 import { applyTurn, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
@@ -108,6 +108,11 @@ export async function playTurn(
   mode: Mode,
   recentTurns: string[] = [],
 ): Promise<TurnResult> {
+  // A typed "go to X" is walked by the ENGINE, and never reaches the model
+  // (DESIGN 6c §2d): the Director refused an adjacent stair three times live.
+  const route = walkRoute(state.world, input);
+  if (route) return walked(state, input, mode, route);
+
   const canonFacts = await (deps.retrieveFacts ?? recentFacts)(state, input);
   const output = await runDirector(deps.director, state, input, mode, canonFacts);
 
@@ -172,6 +177,27 @@ export async function playTurn(
   const record: TurnRecord = { ...draft, prose: written.prose };
 
   return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts };
+}
+
+/**
+ * A walk, as a turn: one record carrying the route, applied like any other, and a
+ * plain line of prose. No model is called — arrival narration waits for W3's stops.
+ */
+function walked(state: PlayState, input: string, mode: Mode, route: string[]): TurnResult {
+  const record: TurnRecord = {
+    kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
+    delta: { walk: route }, rejected: [], prose: '',
+  };
+  const applied = applyTurn(state, record);
+  const here = activeRegion(applied.state.world)?.places.find((p) => p.id === applied.state.world.currentPlace);
+  const prose = state.world.language === 'th' ? `คุณเดินไปถึง${here?.name ?? ''}` : `You walk to ${here?.name ?? 'where you meant to go'}.`;
+  return {
+    state: applied.state,
+    record: { ...record, prose },
+    writer: { prose, checks: [], regenerated: false },
+    rejected: [],
+    shifts: applied.shifts,
+  };
 }
 
 type Parley = Extract<CombatAction, { kind: 'parley' }>;

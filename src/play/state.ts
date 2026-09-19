@@ -60,6 +60,11 @@ export type Classification = (typeof CLASSES)[number];
 export type WorldDelta = {
   /** Must be an edge from where the player stands. */
   moveTo?: string;
+  /**
+   * A typed "go to X", walked by the ENGINE: every place passed through, in
+   * order (`walkRoute`). Never proposed by the model — `validateDelta` refuses it.
+   */
+  walk?: string[];
   /** New canon, embedded for later retrieval by the guard. */
   learnFacts?: string[];
   /** Per-person trust CHANGES, not absolutes. */

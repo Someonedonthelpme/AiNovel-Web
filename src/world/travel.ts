@@ -247,3 +247,62 @@ export function installRegion(world: World, region: Region, arriveAt: PlaceId): 
   );
   return result.kind === 'moved' ? result.world : withRegion;
 }
+
+/**
+ * Every place whose name the map has ever shown, in the region you stand in.
+ *
+ * Standing somewhere labels all of its connections, so anywhere you have been
+ * has already published its neighbours' names. Built on `discovered`, which only
+ * grows, so the set is MONOTONIC: an adjacency-only rule un-revealed a name the
+ * moment you walked on. The redaction wall and a typed walk share it, so what
+ * you may walk to by name is exactly what the Writer may name.
+ */
+export function signposted(region: Region | null, currentPlace: PlaceId): Set<PlaceId> {
+  const named = new Set<PlaceId>();
+  for (const p of region?.places ?? []) {
+    if (!p.discovered && p.id !== currentPlace) continue;
+    for (const c of p.connections) named.add(c);
+  }
+  return named;
+}
+
+/** "go to X", in the languages the game speaks. Anything after is the place's name. */
+const WALK = /^\s*(?:go to|walk to|เดินไปที่|ไปที่)\s*(.+?)\s*[.!]?\s*$/i;
+const plain = (name: string) => name.trim().toLowerCase().replace(/^the\s+/, '');
+
+/**
+ * The route a typed "go to X" walks, or null when the text is not a walk
+ * (DESIGN 6c §2d, 2026-09-19): X must name a place you can know of — seen, or
+ * signposted from where you have been — and the route is the fewest steps along
+ * the place graph. Null sends the turn to the Director as before, so "go to
+ * sleep" is still speech and a place you cannot know of is never guessed at.
+ */
+export function walkRoute(world: World, input: string): PlaceId[] | null {
+  const said = WALK.exec(input)?.[1];
+  const region = activeRegion(world);
+  if (!said || !region) return null;
+  const known = signposted(region, world.currentPlace);
+  const target = region.places.find((p) =>
+    (p.discovered || known.has(p.id)) && (plain(p.name) === plain(said) || p.id === said.trim()));
+  if (!target || target.id === world.currentPlace) return null;
+
+  // Fewest steps: breadth-first over the place graph.
+  const from = new Map<PlaceId, PlaceId>();
+  const queue: PlaceId[] = [world.currentPlace];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const at = queue.shift()!;
+    if (at === target.id) break;
+    for (const next of region.places.find((p) => p.id === at)?.connections ?? []) {
+      if (seen.has(next)) continue;
+      seen.add(next);
+      from.set(next, at);
+      queue.push(next);
+    }
+  }
+  if (!from.has(target.id)) return null;
+  const route: PlaceId[] = [];
+  for (let at: PlaceId | undefined = target.id; at && at !== world.currentPlace; at = from.get(at)) route.unshift(at);
+  return route;
+}
+
