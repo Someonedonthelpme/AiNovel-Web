@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
 import { FOLK } from '../character/species.ts';
-import { activeRegion, clockOf, linkCost, stairCost } from '../world/travel.ts';
+import { activeRegion, clockOf, linkMinutes, stairCost, travelTime } from '../world/travel.ts';
 import { MINUTES_PER_TICK, TICKS_PER_DAY } from '../world/calendar.ts';
 import { takeRest } from './rest.ts';
 import { NEED_MAX } from '../character/persona.ts';
@@ -358,18 +358,20 @@ test('an ambush costs no standing; drawing first still does', () => {
  * play-turn count. Each play turn covers the time its action takes.
  */
 
-test('a link costs the same both ways, 1 to 3, set by the seed', () => {
+// Respecified by W1 (DESIGN 6c §2): a link was a flat 1 to 3 ticks, set by the seed.
+// Its time is now minutes weighted by kind and biome; the clock pays it in whole ticks.
+test('a link costs whole ticks, rounded up from its minutes, the same both ways', () => {
   const w = playState().world;
-  const cost = linkCost(w, 'town', 'market');
-  assert.equal(cost, linkCost(w, 'market', 'town'));
-  assert.ok(cost >= 1 && cost <= 3, `cost ${cost}`);
+  const cost = travelTime(w, 'town', 'market');
+  assert.equal(cost, travelTime(w, 'market', 'town'));
+  assert.equal(cost, Math.ceil(linkMinutes(w, 'town', 'market') / MINUTES_PER_TICK));
 });
 
 test('a move covers its link on the clock; the turn count still moves by one', () => {
   const s = playState();
   const after = applyDelta(s, { moveTo: 'market' });
   assert.equal(after.world.turn, s.world.turn + 1, 'fights keep their seeds');
-  assert.equal(clockOf(after.world) - clockOf(s.world), linkCost(s.world, 'town', 'market'));
+  assert.equal(clockOf(after.world) - clockOf(s.world), travelTime(s.world, 'town', 'market'));
 });
 
 test('a turn that goes nowhere still covers time', () => {

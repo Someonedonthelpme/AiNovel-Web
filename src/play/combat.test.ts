@@ -23,8 +23,8 @@ import { stationOf } from './station.ts';
 import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { fadeDays, journeysOf, RECOVERY, setOut } from './journey.ts';
-import { clockOf, linkCost, travelTime } from '../world/travel.ts';
-import { calendarWords, dateOf, isNight, TICKS_PER_DAY } from '../world/calendar.ts';
+import { clockOf, linkMinutes, travelTime } from '../world/travel.ts';
+import { calendarWords, dateOf, isNight, MINUTES_PER_TICK, TICKS_PER_DAY } from '../world/calendar.ts';
 import { runDirector, runParley } from '../llm/director.ts';
 import { hearParley } from './turn.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
@@ -1035,8 +1035,9 @@ test('a grudge sets out on the turn it is fed, once', () => {
 test('a journey moves along links on the clock, and arrives when the time is spent', () => {
   const base = populated();
   const s = travelling({ ...base, world: { ...base.world, currentPlace: 'well' } }, 'smith', 'floor-2', 'market');
-  const toTown = linkCost(s.world, 'market', 'town');
-  const toWell = linkCost(s.world, 'town', 'well');
+  // Respecified by W1: was `linkCost`. A traveller waits what the player pays.
+  const toTown = travelTime(s.world, 'market', 'town');
+  const toWell = travelTime(s.world, 'town', 'well');
 
   const halfway = passTime(s, toTown);
   assert.equal(journeyOf(halfway, 'smith')?.place, 'town');
@@ -1306,9 +1307,12 @@ function wildWell(): PlayState {
 test('in winter a wild link takes half as long again, a tame one does not', () => {
   const winter = inSeason(wildWell(), WINTER);
   const summer = inSeason(wildWell(), SUMMER);
-  assert.equal(travelTime(winter.world, 'town', 'well'), Math.ceil(1.5 * linkCost(winter.world, 'town', 'well')));
-  assert.equal(travelTime(summer.world, 'town', 'well'), linkCost(summer.world, 'town', 'well'));
-  assert.equal(travelTime(winter.world, 'town', 'market'), linkCost(winter.world, 'town', 'market'), 'no end of it is wild');
+  // Respecified by W1: was ceil(1.5 × linkCost) in ticks. The half again is now
+  // taken on the link's minutes, and only then rounded up to ticks.
+  const ticks = (minutes: number) => Math.ceil(minutes / MINUTES_PER_TICK);
+  assert.equal(travelTime(winter.world, 'town', 'well'), ticks(1.5 * linkMinutes(winter.world, 'town', 'well')));
+  assert.equal(travelTime(summer.world, 'town', 'well'), ticks(linkMinutes(summer.world, 'town', 'well')));
+  assert.equal(travelTime(winter.world, 'town', 'market'), travelTime(summer.world, 'town', 'market'), 'no end of it is wild');
 });
 
 test('in winter, outside a settlement, food and rest drain half as fast again', () => {
