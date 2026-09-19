@@ -1,5 +1,6 @@
 import type { Abilities } from '../combat/types.ts';
 import type { CharacterClass } from '../character/classes.ts';
+import type { ClassNaming } from '../character/classbuild.ts';
 
 /**
  * Session Zero as a GM interview rather than a form.
@@ -34,6 +35,12 @@ export type CharacterDraft = {
    * list — see `classSpec` on the sheet. The id alone would resolve to nothing.
    */
   classSpec?: CharacterClass;
+  /**
+   * The WORDS this world's roster was shown in — names, descriptions, weapon
+   * words — so a class inferred at genesis wears the name the player saw.
+   * Words only: every number is rebuilt from the seed (2026-09-19).
+   */
+  roster?: ClassNaming[];
 };
 
 export type Interview = {

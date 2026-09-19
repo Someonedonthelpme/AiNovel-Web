@@ -4,6 +4,9 @@ import { FakeProvider } from '../llm/provider.ts';
 import { validateRegion } from '../world/validate.ts';
 import { generateCharacter, generateGroundFloor, runGenesis } from './genesis.ts';
 import { recordAnswer, setDraft, startInterview, STAGES } from './interview.ts';
+import type { CharacterDraft } from './interview.ts';
+import { classShapesFor } from '../character/classgen.ts';
+import { buildClass } from '../character/classbuild.ts';
 import type { Interview } from './interview.ts';
 import { activeSkills, finalAbilities, validateAbilities, validateSheet } from './sheet.ts';
 import { signatureSkill } from '../character/speciesskill.ts';
@@ -279,10 +282,14 @@ test('a background with no attack still yields a character who can fight', async
   assert.ok(sheet.background.startingAttacks.length > 0, 'a fallback weapon is supplied');
 });
 
-test('an implausible hit die is replaced rather than failing the sheet', async () => {
+test("the model's hit die is never used: the class decides it", async () => {
+  // Requirement changed by the user, 2026-09-19 (class inference). Old: a character
+  // with no class took the model's hit die, repaired to 8 when implausible. New:
+  // every character holds a class, and the class decides the die — the model's
+  // number is ignored, implausible or not.
   const odd = character({ hitDie: 7 });
   const { sheet } = await generateCharacter(provider(odd), completed());
-  assert.equal(sheet.hitDie, 8);
+  assert.equal(sheet.hitDie, sheet.classSpec?.hitDie);
   assert.equal(validateSheet(sheet).ok, true);
 });
 
@@ -483,4 +490,67 @@ test("the era band costs no model call, and is named in the engine's words", asy
   const w = (await runGenesis(bandCalls, completed(), 42, 'standard', 'dynamic', undefined, false, true)).world;
   assert.equal(bandCalls.calls.length, plainCalls.calls.length);
   assert.equal(w.strata?.era?.name, 'the eras');
+});
+
+/*
+ * CLASS INFERENCE (approved 2026-09-19). The creation page's default, "let the
+ * story decide", promised "a class is inferred from what you wrote above", and
+ * nothing inferred one: a player who kept the default was silently classless,
+ * and two live probe climbers died in their first floor-1 fight. Now the
+ * character call picks from this world's roster; a bad pick falls back to the
+ * class leaning on the character's strongest ability. And a class from the
+ * client is REBUILT from the seed — only its words are taken.
+ */
+const shapes = classShapesFor(42);
+const completedWith = (draft: CharacterDraft) => setDraft(completed(), draft);
+const characterCall = (p: FakeProvider) => {
+  const call = p.calls.find((c) => c.kind === 'structured' && c.req.schemaName === 'character');
+  assert.ok(call?.kind === 'structured', 'the character call was made');
+  return call.req;
+};
+
+test("no class chosen: the character call picks one of this world's classes, and it is held", async () => {
+  const r = await runGenesis(wholeGenesis(character({ classShape: shapes[1].id })), completed(), 42);
+  assert.equal(r.sheet.classSpec?.id, shapes[1].id);
+  assert.equal(r.sheet.hitDie, shapes[1].hitDie, 'the class decides the die');
+});
+
+test("the model is offered exactly this world's classes", async () => {
+  const p = wholeGenesis(character({ classShape: shapes[1].id }));
+  await runGenesis(p, completed(), 42);
+  const schema = characterCall(p).schema as { properties: { classShape: { enum: string[] } } };
+  assert.deepEqual(schema.properties.classShape.enum, shapes.map((s) => s.id));
+});
+
+test('a bad or missing pick falls back to the class leaning on the strongest ability — never classless', async () => {
+  const top = shapes[2].primary;
+  const strongest = Object.fromEntries(['str', 'dex', 'con', 'int', 'wis', 'cha', 'agi', 'vit', 'luk']
+    .map((a) => [a, a === top ? 15 : 10]));
+  for (const classShape of ['nonsense', undefined]) {
+    const r = await runGenesis(wholeGenesis(character({ classShape, baseAbilities: strongest as never })), completed(), 42);
+    assert.ok(r.sheet.classSpec, `never classless (${classShape})`);
+    assert.equal(r.sheet.classSpec.primary, top, `leans on ${top} (${classShape})`);
+    assert.ok(r.repairs.some((m) => /class inferred/.test(m)), 'and says so');
+  }
+});
+
+test('a class picked on the page still wins over the model', async () => {
+  const picked = await runGenesis(wholeGenesis(character({ classShape: shapes[0].id })),
+    completedWith({ classId: shapes[2].id, classSpec: buildClass(shapes[2], null, 'en') }), 42);
+  assert.equal(picked.sheet.classSpec?.id, shapes[2].id);
+});
+
+test("the page's own words name the inferred class; the numbers stay the seed's", async () => {
+  const named = await runGenesis(wholeGenesis(character({ classShape: shapes[1].id })),
+    completedWith({ roster: [{ shapeId: shapes[1].id, name: 'Harbour Guard', description: 'keeps the quay', weaponName: 'boathook', subclasses: [] }] }), 42);
+  assert.equal(named.sheet.classSpec?.name.en, 'Harbour Guard');
+  assert.equal(named.sheet.hitDie, shapes[1].hitDie);
+});
+
+test('a forged class from the client keeps its words and loses its numbers', async () => {
+  const real = buildClass(shapes[0], null, 'en');
+  const forged = { ...real, hitDie: (real.hitDie === 12 ? 6 : 12) as 6 | 12, name: { en: 'Forged', th: 'Forged' } };
+  const r = await runGenesis(wholeGenesis(), completedWith({ classId: shapes[0].id, classSpec: forged }), 42);
+  assert.equal(r.sheet.hitDie, shapes[0].hitDie, "the die is the seed's");
+  assert.equal(r.sheet.classSpec?.name.en, 'Forged', 'the words are theirs');
 });

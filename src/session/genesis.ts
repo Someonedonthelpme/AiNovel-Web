@@ -13,17 +13,21 @@ import type { Role } from '../social/roles.ts';
 import type { Edges } from '../social/edge.ts';
 import type { Provider } from '../llm/provider.ts';
 import { keepsake, stripMechanics } from '../items/catalogue.ts';
-import { classOf } from '../character/classes.ts';
+import { classById } from '../character/classes.ts';
+import type { CharacterClass } from '../character/classes.ts';
+import { classShapesFor } from '../character/classgen.ts';
+import type { ClassShape } from '../character/classgen.ts';
+import { buildClass, namingOf } from '../character/classbuild.ts';
 import { humanisePlaces, pruneDangling } from '../world/naming.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
 import { validateRegion } from '../world/validate.ts';
-import type { Interview } from './interview.ts';
+import type { Interview, CharacterDraft } from './interview.ts';
 import { isComplete, transcript } from './interview.ts';
 import { clampTemperament, neutralTemperament, metNeeds } from '../character/persona.ts';
 import { repairAbilities, repairRegion, repairVoice } from './repair.ts';
 import type { GeneratedCharacter, GeneratedGroundFloor } from './schema.ts';
-import { CHARACTER_SCHEMA, GROUND_FLOOR_SCHEMA } from './schema.ts';
+import { characterSchema, GROUND_FLOOR_SCHEMA } from './schema.ts';
 import type { Background, CharacterSheet, Skill } from './sheet.ts';
 import { POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, validateSheet } from './sheet.ts';
 import { sword } from '../combat/fixtures.ts';
@@ -123,6 +127,44 @@ export function driveFrom(
   return { want: subjects[wantAt].id, fear: subjects[fearAt].id };
 }
 
+/**
+ * The class the creation page picked — REBUILT from this world's shape, taking
+ * only the page's words (2026-09-19). The client used to send the whole class
+ * and have it believed, hit die and skills included. An authored id from before
+ * generated classes (`fighter`) still resolves; anything else is no pick at all.
+ */
+function pickedClass(draft: CharacterDraft, shapes: readonly ClassShape[], language: 'th' | 'en'): CharacterClass | null {
+  if (!draft.classId) return null;
+  const shape = shapes.find((s) => s.id === draft.classId);
+  if (shape) {
+    const words = draft.classSpec?.id === shape.id ? namingOf(draft.classSpec, language) : draft.roster?.find((n) => n.shapeId === shape.id);
+    return buildClass(shape, words ?? null, language);
+  }
+  return classById(draft.classId);
+}
+
+/**
+ * The class the story decided, when the page left it open: the model's pick from
+ * the roster, or — when it picked nothing valid — the class leaning on the
+ * character's strongest ability, the seed breaking a tie. Never classless; and a
+ * fallback says so, because an ability match hides a bad reply otherwise.
+ */
+function inferClass(
+  said: string | undefined, shapes: readonly ClassShape[], scores: Record<string, number>,
+  roster: CharacterDraft['roster'], language: 'th' | 'en', seed: number,
+): { held: CharacterClass; repair: string | null } | null {
+  if (!shapes.length) return null;
+  const words = (shape: ClassShape) => roster?.find((n) => n.shapeId === shape.id) ?? null;
+  const chosen = shapes.find((s) => s.id === said);
+  if (chosen) return { held: buildClass(chosen, words(chosen), language), repair: null };
+
+  const best = Math.max(...shapes.map((s) => scores[s.primary] ?? 0));
+  const closest = shapes.filter((s) => (scores[s.primary] ?? 0) === best);
+  const fallback = closest[Math.floor(mulberry32((seed ^ 0xc1a55 ^ 0x1f) >>> 0)() * closest.length)];
+  const held = buildClass(fallback, words(fallback), language);
+  return { held, repair: `class inferred from abilities: ${held.name[language]} (the model picked "${said ?? 'nothing'}")` };
+}
+
 export async function generateCharacter(
   provider: Provider,
   interview: Interview,
@@ -137,20 +179,22 @@ export async function generateCharacter(
   // The world's subjects, named if naming has run. Ids and kinds come from the
   // seed either way, so the drive matches the same things regardless.
   const subjects = named ?? subjectsFor(seed);
-  const held = classOf(draft);
+  // This world's roster, from the seed — the same shapes the creation page showed.
+  const shapes = classShapesFor(seed);
+  const picked = pickedClass(draft, shapes, language);
   const pinned = [
     draft.name ? `The character is named "${draft.name}".` : '',
     draft.backgroundName ? `Their background must be "${draft.backgroundName}".` : '',
     // Naming the class makes the generated prose READ like one, while the
     // numbers still come from code.
-    held ? `They are a ${held.name.en}: ${held.description.en} Write them as one.` : '',
+    picked ? `They are a ${picked.name.en}: ${picked.description.en} Write them as one.` : '',
     draft.traits?.length ? `They must have these traits: ${draft.traits.join(', ')}.` : '',
     draft.baseAbilities ? 'Ability scores are already fixed; propose anything and it will be ignored.' : '',
   ].filter(Boolean);
 
   const generated = await provider.structured<GeneratedCharacter>({
     schemaName: 'character',
-    schema: CHARACTER_SCHEMA,
+    schema: characterSchema(picked ? null : shapes.map((s) => s.id)),
     temperature: 0.8,
     messages: [
       {
@@ -182,6 +226,13 @@ export async function generateCharacter(
           'The subjects this world turns on. "drive" picks two of these BY NUMBER:',
           ...subjects.map((subject, at) => `  ${at}. ${subject.name} (${subject.kind})`),
           ...(pinned.length ? ['', 'Fixed by the player, do not contradict:', ...pinned] : []),
+          ...(picked
+            ? []
+            : [
+              '',
+              'The player left their class to the story. Set "classShape" to the id of the one that fits what they wrote:',
+              ...shapes.map((s) => `  ${s.id}: ${s.brief}`),
+            ]),
           ...(described
             ? [
               '',
@@ -196,6 +247,8 @@ export async function generateCharacter(
   });
 
   const abilities = repairAbilities(draft.baseAbilities ?? (generated.baseAbilities as never));
+  const inferred = picked ? null : inferClass(generated.classShape, shapes, abilities.value, draft.roster, language, seed);
+  const held = picked ?? inferred?.held ?? null;
 
   const background: Background = {
     id: generated.background.id,
@@ -234,7 +287,7 @@ export async function generateCharacter(
     // Carried onto the sheet, not just its id. A generated class is in no
     // global list, so the id alone would resolve to nothing the moment this
     // world's roster was regenerated with a different generator.
-    classSpec: draft.classSpec,
+    classSpec: held ?? undefined,
     // The class decides the die. Asking a model to pick one meant a scholar
     // could roll d12 and a barbarian d6, and nothing downstream could tell.
     hitDie: held ? held.hitDie : [6, 8, 10, 12].includes(generated.hitDie) ? generated.hitDie : 8,
@@ -260,7 +313,7 @@ export async function generateCharacter(
 
   return {
     sheet,
-    repairs: abilities.repairs,
+    repairs: [...abilities.repairs, ...(inferred?.repair ? [inferred.repair] : [])],
     warnings: check.warnings,
     ...(described && generated.species ? { speciesSaid: generated.species } : {}),
   };

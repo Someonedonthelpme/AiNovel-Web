@@ -89,6 +89,21 @@ function hash(text: string): number {
 }
 
 /** Assemble a class from its shape and whatever words we have for it. */
+/**
+ * A class's WORDS, and nothing else: what may cross from the client. A class the
+ * page sends is rebuilt from the seed's shape with these, so its numbers cannot
+ * be forged — only what it is called (2026-09-19).
+ */
+export function namingOf(held: CharacterClass, language: 'th' | 'en'): ClassNaming {
+  return {
+    shapeId: held.id,
+    name: held.name[language],
+    description: held.description[language],
+    weaponName: held.startingAttack.name,
+    subclasses: held.subclasses.map((s) => ({ shapeId: s.id, name: s.name[language], description: s.description[language] })),
+  };
+}
+
 export function buildClass(
   shape: ClassShape,
   naming: ClassNaming | null,

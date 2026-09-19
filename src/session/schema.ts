@@ -113,6 +113,22 @@ export const CHARACTER_SCHEMA = obj(
   ['name', 'traits', 'hitDie', 'voice', 'personality', 'drive', 'baseAbilities', 'background'],
 );
 
+/**
+ * The character schema, offering this world's classes when none was picked.
+ *
+ * "Let the story decide" on the creation page promised a class inferred from
+ * what the player wrote, and nothing inferred one. The character call already
+ * reads every word of it, so it picks — from a CLOSED list of the roster's ids,
+ * the way `amendLaw` names a law and never invents one (2026-09-19).
+ */
+export function characterSchema(classShapes: readonly string[] | null) {
+  if (!classShapes?.length) return CHARACTER_SCHEMA;
+  return obj(
+    { ...CHARACTER_SCHEMA.properties, classShape: { type: 'string', enum: [...classShapes] } },
+    [...CHARACTER_SCHEMA.required, 'classShape'],
+  );
+}
+
 const place = obj(
   {
     id: str,
@@ -205,6 +221,8 @@ export type GeneratedCharacter = {
   drive?: { want: number; fear: number };
   /** An id from the kinds the prompt listed, when the player described one. */
   species?: string;
+  /** The class the player's words fit, from this world's roster — only when none was picked. */
+  classShape?: string;
   baseAbilities: Record<string, number>;
   background: {
     id: string;

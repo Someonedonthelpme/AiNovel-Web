@@ -7,6 +7,7 @@ import {
   defaultAbilities, POINT_BUY_BUDGET, POINT_BUY_MAX, POINT_BUY_MIN, pointBuyCost, validateAbilities,
 } from '../../src/session/sheet.ts';
 import type { CharacterClass } from '../../src/character/classes.ts';
+import { namingOf } from '../../src/character/classbuild.ts';
 import { dominantOf, groupOf, leavesOf, speciesFor, TYPES } from '../../src/character/species.ts';
 import { huntedBy } from '../../src/character/prey.ts';
 import type { Species } from '../../src/character/species.ts';
@@ -152,6 +153,10 @@ export default function NewCharacter() {
         // list, so the id alone would resolve to nothing on the server.
         const chosen = roster?.find((c) => c.id === classId);
         if (chosen) draft.classSpec = chosen;
+      } else if (roster) {
+        // "Let the story decide": genesis infers the class, and wears the name the
+        // player was shown. Words only — the server rebuilds every number.
+        draft.roster = roster.map((c) => namingOf(c, language));
       }
 
       const response = await fetch('/api/sessions', {
