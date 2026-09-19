@@ -14,7 +14,7 @@ import { finalAbilities } from '../session/sheet.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { activeRegion, signposted, walkRoute } from '../world/travel.ts';
 import { holderOf, priceOf } from '../world/holding.ts';
-import { applyTurn, validateDelta } from './delta.ts';
+import { applyTurn, personRef, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
 import type { Mode, PlayState, TurnRecord, WorldDelta } from './state.ts';
@@ -95,6 +95,12 @@ function oppositionOf(state: PlayState, personId: string): { id: string; ability
   return { id: person.id, ability: 'resolve', modifier: Math.max(0, -trust) };
 }
 
+/** The person a check is rolled against, resolved like any person the model names. */
+const opposedBy = (state: PlayState, said: string) => {
+  const who = personRef(state, said);
+  return 'id' in who ? oppositionOf(state, who.id) : null;
+};
+
 /** Pick the branch the Director committed to before the dice were thrown. */
 export function outcomeFor(output: DirectorOutput, tier: 'miss' | 'partial' | 'hit') {
   if (tier === 'hit') return output.check.onHit;
@@ -135,7 +141,7 @@ export async function playTurn(
     rolled = roll(deps.rng, {
       ability: output.check.ability,
       modifier: abilityMod(abilities[ability] ?? 10) + edge,
-      vs: output.check.vsPerson ? oppositionOf(state, output.check.vsPerson) : null,
+      vs: output.check.vsPerson ? opposedBy(state, output.check.vsPerson) : null,
     });
     const chosen = outcomeFor(output, rolled.tier);
     delta = mergeDeltas(delta, toWorldDelta(chosen.delta));
@@ -144,7 +150,9 @@ export async function playTurn(
 
   // --- the engine decides what is allowed -----------------------------------
   const validated = validateDelta(state, delta);
-  const addressed = output.addressedPerson?.trim() || null;
+  // Resolved like any person the model names; an unknown one is nobody, not a string.
+  const addressedRef = output.addressedPerson?.trim() ? personRef(state, output.addressedPerson.trim()) : null;
+  const addressed = addressedRef && 'id' in addressedRef ? addressedRef.id : null;
 
   // The record is built BEFORE the prose, because the world has to move before
   // the Writer can describe it. Prose is attached afterwards.

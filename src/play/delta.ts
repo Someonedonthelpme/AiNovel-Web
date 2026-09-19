@@ -47,6 +47,32 @@ const MAX_TIME_PER_TURN = 3;
 const MAX_TRUST_SWING = 3;
 
 /**
+ * Who the model MEANT, when it names a person (approved 2026-09-19).
+ *
+ * The Director is shown `id "name"` and writes the name back as often as the id
+ * ("Kaelen Gearwright", "KaelenGearwright", "Rylan, Harbor Guard"); refusing all
+ * of those threw away nine "helped" deeds in ten, live. An id is taken as it is;
+ * otherwise a name, ignoring case, spaces and punctuation (never letters, so Thai
+ * survives), among the people HERE first and then anyone known. Exactly one match
+ * or none: the vocabulary stays closed, and an ambiguous name is never guessed.
+ */
+export function personRef(state: PlayState, ref: string): { id: string } | { error: 'no such person' | 'ambiguous' } {
+  const people = state.world.people;
+  if (people[ref]) return { id: ref };
+  const key = (text: string) => text.toLowerCase().replace(/[\s\p{P}]/gu, '');
+  const wanted = new Set([key(ref), key(ref.split(',')[0])]);
+  const matches = (ids: string[]) => ids.filter((id) => people[id] && wanted.has(key(people[id].name)));
+  const region = activeRegion(state.world);
+  const here = region?.places.find((p) => p.id === state.world.currentPlace)?.people ?? [];
+  for (const pool of [here, Object.keys(people)]) {
+    const found = [...new Set(matches(pool))];
+    if (found.length === 1) return { id: found[0] };
+    if (found.length > 1) return { error: 'ambiguous' };
+  }
+  return { error: 'no such person' };
+}
+
+/**
  * Why the player may NOT buy this settlement, or null when they may (DESIGN 6c
  * *Ownership*, O1). A deal is struck in person, in the place, with whoever holds
  * it, who must trust you, at a price you can pay, where the law lets you hold land.
@@ -100,11 +126,13 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
 
   if (proposed.trust) {
     const trust: Record<string, number> = {};
-    for (const [id, change] of Object.entries(proposed.trust)) {
-      if (!state.world.people[id]) {
-        rejected.push(`trust "${id}": no such person`);
+    for (const [said, change] of Object.entries(proposed.trust)) {
+      const who = personRef(state, said);
+      if ('error' in who) {
+        rejected.push(`trust "${said}": ${who.error}`);
         continue;
       }
+      const id = who.id;
       if (!Number.isFinite(change)) {
         rejected.push(`trust "${id}": not a number`);
         continue;
@@ -127,12 +155,13 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
    */
   if (proposed.deed) {
     const here = new Set(region?.places.find((p) => p.id === state.world.currentPlace)?.people ?? []);
-    if (!state.world.people[proposed.deed.toward]) {
-      rejected.push(`deed "${proposed.deed.kind}": no such person`);
-    } else if (!here.has(proposed.deed.toward)) {
+    const who = personRef(state, proposed.deed.toward);
+    if ('error' in who) {
+      rejected.push(`deed "${proposed.deed.kind}": ${who.error}`);
+    } else if (!here.has(who.id)) {
       rejected.push(`deed "${proposed.deed.kind}": ${proposed.deed.toward} is not here`);
     } else {
-      delta.deed = proposed.deed;
+      delta.deed = { ...proposed.deed, toward: who.id };
     }
   }
 
