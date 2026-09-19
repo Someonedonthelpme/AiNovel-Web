@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1 shipped 2026-09-19** (`d9ed7b3`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -679,7 +679,7 @@ after any that touches a fight):
    trade it fled from.
    **7.1c SHIPPED 2026-09-17** — sightings (`play/sighting.ts`, a `sighting` claim): a
    journey heads for the newest word of the player.
-   **7.1a SHIPPED 2026-09-17** — link costs (`world/travel.ts` `linkCost`) and the
+   **7.1a SHIPPED 2026-09-17** — link costs (`world/travel.ts` `linkCost`, replaced by `linkMinutes` in W1) and the
    world clock (`World.clock`, read through `clockOf`). A move wears you by the
    time its link took. Documentation waits for the whole of 7.1.
    **Proposed split, since this is now five mechanisms:** 7.1a link costs and a
@@ -887,8 +887,8 @@ matters still happens at a stop, turn by turn, in text.
 **Decided with the user, 2026-09-19:**
 - **Walk, don't click nodes.** No movement by clicking a place on a map.
 - **Travel time shapes the route.** A link's travel time is the INPUT that says how
-  long and how winding its route is — the inverse of today's `linkCost`, a flat 1–3
-  tick draw that is an output (`world/travel.ts:45`).
+  long and how winding its route is — the inverse of the old `linkCost`, a flat 1–3
+  tick draw that was an output. (Done in W1: `linkMinutes`, `routeOf`.)
 - **Route model C: a link is a FIELD map.** Places are HUB maps; each link between
   them is a field map between two portals — Ragnarok's towns and fields.
 - **A tile is 1.5 m** — D&D's five feet. Combat already counts in those units (base
@@ -913,8 +913,8 @@ to revisit):
 - **The route from the time budget:** the best path costs exactly the link's time, so
   NPC journeys — which never walk tiles — stay consistent; wandering costs more. Slack
   between the straight line and the budget is spent on obstacles. Terrain has a cost
-  per tile (marsh, snow), which is where winter's +50% moves. `linkCost` gets finer
-  grain, weighted by the two places' kinds and the biome — its own `ponytail:`.
+  per tile (marsh, snow), which is where winter's +50% moves. The link's time gets finer
+  grain, weighted by the two places' kinds and the biome (done in W1).
 - **The engine loop while walking never calls the model.** It pathfinds, charges time
   per tile, and every tick runs what the clock already drives (needs, journeys,
   sightings, night). It STOPS on arrival, a portal, someone in view, an encounter, a
@@ -982,7 +982,7 @@ compression, which §4 needs.
 
 | stage | what | depends on | done means |
 |---|---|---|---|
-| W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed |
+| W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed — **SHIPPED 2026-09-19** (`d9ed7b3`) |
 | W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change |
 | W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding |
 | W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing |
@@ -993,6 +993,20 @@ compression, which §4 needs.
 
 W1–W3 change no UI and each is testable alone; stopping after W3 still leaves real
 distances and a walk the model cannot refuse.
+
+**W1 as built (2026-09-19), and what it leaves for W2.** A link is 6–42 minutes:
+each end adds 3 (settlement, gate), 5 (landmark), 7 (dungeon) or 9 (wild), the
+seed adds 0–10, and the biome scales the sum ×1 / ×1.25 / ×1.5 by KEYWORD
+(`Region.biome` is free text; an unknown word is open ground) — a `ponytail:` until
+W2 gives tiles a closed terrain. The clock stays in 10-minute ticks: a link is
+charged `ceil(minutes / 10)`, so a 12-minute link reads 20 on the clock; moving the
+clock to minutes or seconds belongs to W3, which charges per tile. `routeOf` is
+blind to the season (winter stays in `travelTime` until tiles carry cost) and its
+shape is a SAWTOOTH — short vertical legs over a one-tile column, ends a third to
+two thirds of the length apart. It is a guaranteed best path, not a pretty one: W2
+should wind it at a larger scale before drawing a field around it. **Old sessions
+are not kept compatible** (user, 2026-09-19: still development): a session replayed
+without its snapshots re-derives its clock with the new link times.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
