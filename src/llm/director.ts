@@ -336,7 +336,8 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     // beside every villager is a word the model reads past on every turn, while
     // omitting "the made" is how a construct ends up complaining of hunger.
     const kind = state.world.species?.find((k) => k.id === p.species && k.id !== FOLK.id);
-    return `  - ${p.id} "${p.name}"${kind ? ` [${kind.name}]` : ''}: ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
+    const line = p.line ? state.world.people[p.line] : undefined;
+    return `  - ${p.id} "${p.name}"${kind ? ` [${kind.name}]` : ''}${line ? ` (of ${line.name}'s line)` : ''}: ${p.oneLine} (trust ${trustToward(state.world.edges, p.id)}, ${p.status}${notes.length ? `, ${notes.join(', ')}` : ''})`;
   });
 
   /*

@@ -46,7 +46,7 @@ import type { Stratum } from './types.ts';
 import { speciesIdFor } from '../character/species.ts';
 import { bossMember, crowdFighter } from '../character/crowd.ts';
 import { kindForFloor } from '../combat/encounter.ts';
-import { mulberry32 } from '../engine/roll.ts';
+import { hashText, mulberry32 } from '../engine/roll.ts';
 import { LOOT_CATEGORIES } from '../items/catalogue.ts';
 import type { LootCategory, LootProfile } from '../items/catalogue.ts';
 import { rulesOf } from '../rules/ruleset.ts';
@@ -505,6 +505,7 @@ export async function generateFloor(
 
   const wing = wingOf(generated, floor, region, stratum, world);
   const band = bandLandOf(world, floor, region);
+  dealLines(world, floor, people);
   return {
     region,
     people,
@@ -515,6 +516,28 @@ export async function generateFloor(
     repairs,
     warnings: check.warnings.map((w) => w.message),
   };
+}
+
+/**
+ * FAMILY LINES (DESIGN 6c era E5): one or two of a new era floor's people are
+ * of a line from the LIVING people of the era floor below, in the same band.
+ * Dealt from the seed, so the ancestor is always a real id and a replay deals
+ * the same; the first floor of a band has nobody below it to descend from.
+ */
+function dealLines(world: World, floor: number, people: Record<string, Person>): void {
+  const band = lawFrom(world, floor, 'time');
+  if (band?.laws?.time !== 'era' || lawFrom(world, floor - 1, 'time')?.id !== band.id) return;
+  const below = Object.values(world.regions).find((r) => r.floor === floor - 1)?.id;
+  const ancestors = Object.values(world.people)
+    .filter((p) => p.homeRegion === below && p.alive)
+    .map((p) => p.id)
+    .sort();
+  const heirs = Object.keys(people).filter((id) => !world.people[id]);
+  if (!ancestors.length || !heirs.length) return;
+  const rng = mulberry32((world.seed ^ hashText(`${band.id}|line|${floor}`)) >>> 0);
+  const count = Math.min(heirs.length, 1 + Math.floor(rng() * 2));
+  const picked = [...heirs].sort(() => rng() - 0.5).slice(0, count);
+  for (const id of picked) people[id] = { ...people[id], line: ancestors[Math.floor(rng() * ancestors.length)] };
 }
 
 /**

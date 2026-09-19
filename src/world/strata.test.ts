@@ -127,3 +127,21 @@ test("a wing inside a band keeps the band's laws", () => {
 test("a law the wing states itself wins over its parent's", () => {
   assert.equal(isLoop(banded(wingIn('loop', 3, { reset: 'never' })), 4), false);
 });
+
+test("the Director is told whose line somebody is", async () => {
+  const base = playState();
+  const state = {
+    ...base,
+    world: {
+      ...base.world,
+      people: {
+        ...base.world.people,
+        smith: { ...base.world.people.smith, line: 'ora' },
+        ora: { ...base.world.people.smith, id: 'ora', name: 'Ora of the old quay', homeRegion: 'floor-21' },
+      },
+    },
+  };
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, state, 'look around', 'exploration', []).catch(() => {});
+  assert.match(p.allSentText(), /of Ora of the old quay's line/);
+});

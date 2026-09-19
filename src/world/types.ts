@@ -232,6 +232,11 @@ export type Person = Persona & {
   oneLine: string;
   tags: string[];
   alive: boolean;
+  /**
+   * Whose family line this person is of: somebody on the era floor below
+   * (DESIGN 6c era E5). Dealt by the engine, so it is always a real id.
+   */
+  line?: PersonId;
   lastSeenTurn: number;
   /** What they pursue off-screen. Optional: most people just live their lives. */
   agenda?: string[];

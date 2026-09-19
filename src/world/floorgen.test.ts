@@ -352,3 +352,41 @@ test('a floor that opens a wing and gives the band its land records both', async
   assert.equal(first.stratum?.parent, 'era');
   assert.equal(first.band?.id, 'era');
 });
+
+/*
+ * 6c era E5: FAMILY LINES. When an era floor above the first is built, one or
+ * two of its new people are of a line from the living people of the era floor
+ * below — dealt from the seed, no model call.
+ */
+const belowAlive = (...alive: string[]) => ({
+  ...eraBanded(eraLand),
+  regions: { ...withKinds().regions, 'floor-21': { ...firstFloor(), id: 'floor-21', floor: 21 } },
+  people: {
+    ...withKinds().people,
+    ...Object.fromEntries(['ora', 'bram', 'cole'].map((id) =>
+      [id, person(id, { homeRegion: 'floor-21', alive: alive.includes(id) })])),
+  },
+});
+const linesOf = (built: { people: Record<string, { line?: string }> }) =>
+  Object.fromEntries(Object.entries(built.people).flatMap(([id, q]) => (q.line ? [[id, q.line]] : [])));
+
+test('some people on an era floor are of a line from the living people of the floor below', async () => {
+  const built = await generateFloor(provider(), belowAlive('ora', 'bram'), 22, pc);
+  const lined = Object.values(built.people).filter((q) => q.line);
+  assert.ok(lined.length >= 1 && lined.length <= 2, `${lined.length} lined`);
+  assert.ok(lined.every((q) => ['ora', 'bram'].includes(q.line!)), JSON.stringify(linesOf(built)));
+});
+
+test('the dead leave no line', async () => {
+  const built = await generateFloor(provider(), belowAlive('ora'), 22, pc);
+  assert.ok(Object.values(linesOf(built)).length > 0 && Object.values(linesOf(built)).every((l) => l === 'ora'));
+});
+
+test('the first era has no ancestors, and lines are dealt from the seed', async () => {
+  const first = await generateFloor(provider(), eraBanded(eraLand), 21, pc);
+  assert.equal(Object.values(first.people).some((q) => q.line), false);
+  assert.deepEqual(
+    linesOf(await generateFloor(provider(), belowAlive('ora', 'bram'), 22, pc)),
+    linesOf(await generateFloor(provider(), belowAlive('ora', 'bram'), 22, pc)),
+  );
+});
