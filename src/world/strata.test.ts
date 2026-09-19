@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dangerAt, stratumAt } from './strata.ts';
+import { dangerAt, eraOf, isLoop, stratumAt } from './strata.ts';
 import { world } from './fixtures.ts';
 import { rollCoin, rollLoot } from '../items/catalogue.ts';
 import { mulberry32 } from '../engine/roll.ts';
@@ -103,4 +103,27 @@ test('one profile, one stream: a wing pays the same on every replay', () => {
 
   assert.deepEqual(lootB.map((d) => d.item.id), lootA.map((d) => d.item.id));
   assert.equal(coinB, coinA);
+});
+
+/* -------------------------------------------------------------------------- */
+/* LAWS INHERIT (6c era E3a): a wing the model opens inside a band keeps the    */
+/* band's laws, read from the innermost stratum that STATES each one.          */
+/* -------------------------------------------------------------------------- */
+
+const lawTower: Stratum = { id: 'tower', name: 'the tower', kind: 'dynamic', from: 0 };
+const loopBand: Stratum = { id: 'loop', name: 'the loop', kind: 'dynamic', parent: 'tower', from: 1, to: 10, laws: { reset: 'untilCleared' } };
+const eraBand: Stratum = { id: 'era', name: 'the eras', kind: 'dynamic', parent: 'tower', from: 21, to: 30, laws: { time: 'era' } };
+const wingIn = (parent: string, from: number, laws?: Stratum['laws']): Stratum =>
+  ({ id: `wing-${from}`, name: 'a wing', kind: 'static', parent, from, to: from + 2, ...(laws ? { laws } : {}) });
+const banded = (...wings: Stratum[]) =>
+  world({ strata: { tower: lawTower, loop: loopBand, era: eraBand, ...Object.fromEntries(wings.map((s) => [s.id, s])) } });
+
+test("a wing inside a band keeps the band's laws", () => {
+  const withWings = banded(wingIn('loop', 3), wingIn('era', 24));
+  assert.equal(isLoop(withWings, 4), true, 'a wing inside the loop band still loops');
+  assert.equal(eraOf(withWings, 24), eraOf(banded(), 24), 'and inside the era band keeps its year');
+});
+
+test("a law the wing states itself wins over its parent's", () => {
+  assert.equal(isLoop(banded(wingIn('loop', 3, { reset: 'never' })), 4), false);
 });

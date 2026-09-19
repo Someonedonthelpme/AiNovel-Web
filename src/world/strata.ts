@@ -60,9 +60,27 @@ export function dangerAt(world: World, floor: number): number {
   return dangerFor(floor, rulesOf(world));
 }
 
+/**
+ * The stratum that speaks for one LAW on this floor: the innermost that states it.
+ *
+ * Laws INHERIT, like danger: a wing the model opens inside a band is still in
+ * the band. Reading only the innermost stratum let a wing inside the loop band
+ * quietly stop its floors looping (DESIGN 6c era E3a). A law the wing states
+ * itself still wins.
+ */
+export function lawFrom(world: Pick<World, 'strata'>, floor: number, law: keyof NonNullable<Stratum['laws']>): Stratum | null {
+  const strata = world.strata ?? {};
+  let at = stratumAt(world, floor);
+  for (let hops = 0; at && hops <= Object.keys(strata).length; hops += 1) {
+    if (at.laws?.[law] !== undefined) return at;
+    at = at.parent ? strata[at.parent] ?? null : null;
+  }
+  return null;
+}
+
 /** Whether this floor LOOPS: put back as it was built whenever it is left uncleared (DESIGN 6c). */
 export const isLoop = (world: World, floor: number): boolean =>
-  stratumAt(world, floor)?.laws?.reset === 'untilCleared';
+  lawFrom(world, floor, 'reset')?.laws?.reset === 'untilCleared';
 
 /** Whether this floor's stratum is frozen: authored once, never rebuilt. */
 export const isStatic = (world: World, floor: number): boolean =>
@@ -80,7 +98,7 @@ export const ERA_GAP = { min: 10, max: 100 } as const;
  * and the night stay the world's. Dealt from the seed, never stored.
  */
 export function eraOf(world: Pick<World, 'strata' | 'seed'>, floor: number): number {
-  const at = stratumAt(world, floor);
+  const at = lawFrom(world, floor, 'time');
   if (at?.laws?.time !== 'era') return 0;
   // Eras count down from the top floor, so an open-ended stratum has none to
   // count from. Refused loudly: quietly keeping the world clock would read as a
