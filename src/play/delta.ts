@@ -9,13 +9,15 @@ import { applySheetAction } from './sheetaction.ts';
 import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
 import { readPlayerRegister, registerConsequence } from '../llm/register.ts';
-import { nudge, nudgeAll, PLAYER } from '../social/edge.ts';
+import { nudge, nudgeAll, PLAYER, trustToward } from '../social/edge.ts';
 import { beliefsAfter, claimOf, ECHOING, witnessDeed } from '../social/deed.ts';
 import { carry, seed } from '../social/ambient.ts';
 import { firsthand } from '../character/belief.ts';
 import type { Deed, Echo } from '../social/deed.ts';
 import { lawFrom } from '../world/strata.ts';
-import { amend, BINDINGS, CONSTRAINTS, rulesOf } from '../rules/ruleset.ts';
+import { amend, BINDINGS, CONSTRAINTS, forbids, rulesOf } from '../rules/ruleset.ts';
+import { holderOf, priceOf, TRUST_TO_SELL } from '../world/holding.ts';
+import { playerSubject } from './signetbook.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
@@ -43,6 +45,42 @@ export type ValidatedDelta = { delta: WorldDelta; rejected: string[] };
 
 const MAX_TIME_PER_TURN = 3;
 const MAX_TRUST_SWING = 3;
+
+/**
+ * Why the player may NOT buy this settlement, or null when they may (DESIGN 6c
+ * *Ownership*, O1). A deal is struck in person, in the place, with whoever holds
+ * it, who must trust you, at a price you can pay, where the law lets you hold land.
+ */
+function refusalToSell(state: PlayState, placeId: string): string | null {
+  const region = activeRegion(state.world);
+  const place = region?.places.find((p) => p.id === placeId);
+  if (!region || !place || placeId !== state.world.currentPlace) return 'not here';
+  if (place.kind !== 'settlement') return 'not a settlement';
+  const holder = holderOf(place, state.world.people);
+  if (!holder) return 'no holder is here to deal with';
+  if (holder === PLAYER) return 'already yours';
+  if (forbids(state.world, playerSubject(state), 'holdSettlement')) return 'the law forbids you holding a settlement';
+  if (trustToward(state.world.edges, holder) < TRUST_TO_SELL) return `the holder's trust is too low to sell`;
+  if (state.pc.coin < priceOf(region.floor)) return `it costs ${priceOf(region.floor)} coin`;
+  return null;
+}
+
+/** The deal, once `validateDelta` has allowed it: the place is yours, the coin is theirs. */
+function bought(state: PlayState, placeId: string): PlayState {
+  const region = activeRegion(state.world);
+  if (!region) return state;
+  return {
+    ...state,
+    pc: { ...state.pc, coin: state.pc.coin - priceOf(region.floor) },
+    world: {
+      ...state.world,
+      regions: {
+        ...state.world.regions,
+        [region.id]: { ...region, places: region.places.map((p) => (p.id === placeId ? { ...p, holder: PLAYER } : p)) },
+      },
+    },
+  };
+}
 
 export function validateDelta(state: PlayState, proposed: WorldDelta): ValidatedDelta {
   const rejected: string[] = [];
@@ -167,6 +205,12 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
       delta.startCombat = true;
       if (proposed.startedBy === 'them') delta.startedBy = 'them';
     }
+  }
+
+  if (proposed.acquirePlace !== undefined) {
+    const why = refusalToSell(state, proposed.acquirePlace);
+    if (why) rejected.push(`acquirePlace "${proposed.acquirePlace}": ${why}`);
+    else delta.acquirePlace = proposed.acquirePlace;
   }
 
   if (proposed.useItem !== undefined) {
@@ -354,6 +398,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
     const equipped = equip(next.pc.inventory, delta.equipItem, gearRulesFor(next));
     if (!equipped.error) next = { ...next, pc: { ...next.pc, inventory: equipped.inventory } };
   }
+
+  if (delta.acquirePlace) next = bought(next, delta.acquirePlace);
 
   if (delta.useItem) {
     const used = useItem(next, delta.useItem);

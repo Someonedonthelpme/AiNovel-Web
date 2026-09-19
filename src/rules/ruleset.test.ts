@@ -570,6 +570,7 @@ const PROVEN_CONSTRAINTS = [
   'gainLevels',          // grantXp, asked by both payouts — the climb and the fight
   'takeLoot',            // concludeCombat: both rolls skipped together
   'keepMemories',        // the crossing, in the fold
+  'holdSettlement',      // validateDelta, refusing acquirePlace (6c O1)
 ];
 
 test('EVERY dial in the ruleset has a proven reader', () => {
@@ -639,6 +640,9 @@ test('every preset carries every group, so none can be half-defined', () => {
   for (const [name, rules] of Object.entries(PRESETS)) {
     for (const group of Object.keys(STANDARD) as (keyof Ruleset)[]) {
       assert.ok(rules[group], `${name} is missing ${group}`);
+      // `laws` is a list, not a bag of dials: a preset may be BORN with a law the
+      // others lack (DESIGN 6c *Ownership*), so its indices are not compared.
+      if (group === 'laws') continue;
       assert.deepEqual(
         Object.keys(rules[group]).sort(), Object.keys(STANDARD[group]).sort(),
         `${name}.${group} does not have the same dials as standard`,

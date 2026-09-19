@@ -92,6 +92,12 @@ export type WorldDelta = {
    */
   revealWay?: string;
   /**
+   * The player BUYS the settlement they stand in from its holder (DESIGN 6c
+   * *Ownership*). The model names the place; the engine checks the holder, the
+   * trust, the price and the law, and takes the coin.
+   */
+  acquirePlace?: string;
+  /**
    * A fight breaks out. The Director says only THAT one starts; depth decides
    * what shows up, because the difficulty curve is the whole progression.
    */

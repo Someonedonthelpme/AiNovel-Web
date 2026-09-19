@@ -10,6 +10,8 @@ import { abilityMod } from '../combat/types.ts';
 import { isSkillBook } from '../skills/book.ts';
 import { conditionMet } from './traits.ts';
 import { activeRegion, clockOf, currentPlace } from '../world/travel.ts';
+import { holderOf } from '../world/holding.ts';
+import { PLAYER } from '../social/edge.ts';
 import { TICKS_PER_HOUR } from '../world/calendar.ts';
 import type { PlayState } from './state.ts';
 
@@ -50,7 +52,8 @@ export function canRest(state: PlayState, kind: RestKind): RestCheck {
   const region = activeRegion(state.world);
   const place = currentPlace(state.world);
   if (!region || !place) return { ok: false, reason: 'there is nowhere to bed down here' };
-  if (place.kind !== 'settlement' || region.floor !== 0) {
+  // Or a settlement you HOLD, on any floor: a base halfway up the tower (DESIGN 6c).
+  if (place.kind !== 'settlement' || (region.floor !== 0 && holderOf(place, state.world.people) !== PLAYER)) {
     return { ok: false, reason: "a real night of sleep means going back down to town" };
   }
   return { ok: true, reason: null };

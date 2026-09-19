@@ -20,6 +20,7 @@ import type { Binding, Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
 import { eraOf, lawFrom, stratumAt } from '../world/strata.ts';
 import { FOLK } from '../character/species.ts';
+import { holderOf } from '../world/holding.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -63,6 +64,8 @@ const deltaSchema = obj(
     revealExit: str,
     /** A way OUT that is not the stair. Name the PLACE it leaves from; where it goes is not yours to say. */
     revealWay: str,
+    /** A settlement here the player BUYS from its holder. Whether they can is the engine's call. */
+    acquirePlace: str,
     /** Whether a fight breaks out. What shows up is decided by depth, not here. */
     startCombat: { type: 'boolean' },
     /** Who attacked first, when a fight starts: the player, or something else. */
@@ -94,7 +97,7 @@ const deltaSchema = obj(
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
-    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay',
+    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace',
   ],
 );
 
@@ -141,6 +144,8 @@ export type FlatDelta = {
   revealExit: string;
   /** A place a way LEADS OUT of, when the player finds one that is not the stair. */
   revealWay: string;
+  /** A settlement here the player buys. Empty on almost every turn. */
+  acquirePlace: string;
   startCombat: boolean;
   /** 'them' when the player was attacked; 'player' when they struck first. */
   startedBy: string;
@@ -184,6 +189,7 @@ const LAW_IN_WORDS: Record<Constraint, string> = {
   gainLevels: 'nobody here grows stronger by surviving',
   takeLoot: 'nothing here may be carried away',
   keepMemories: 'nothing is remembered across a crossing',
+  holdSettlement: 'no settlement here may be held by them',
 };
 
 /**
@@ -211,6 +217,8 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   if (revealExit) delta.revealExit = revealExit;
   const revealWay = meaningful(flat.revealWay);
   if (revealWay) delta.revealWay = revealWay;
+  const acquirePlace = meaningful(flat.acquirePlace);
+  if (acquirePlace) delta.acquirePlace = acquirePlace;
   if (flat.learnFacts?.length) {
     const facts = flat.learnFacts.filter((f) => meaningful(f));
     if (facts.length) delta.learnFacts = facts;
@@ -387,6 +395,8 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
 
   const here = region ? stratumAt(state.world, region.floor) : null;
   const echoes = region ? echoesTold(state.world, region.floor) : [];
+  const holder = place ? holderOf(place, state.world.people) : null;
+  const heldBy = holder === PLAYER ? 'the player' : holder ? state.world.people[holder]?.name : undefined;
 
   const workedOut = CONSTRAINTS
     .filter((c) => believes(state.sheet.beliefs ?? [], ruleClaim(c)))
@@ -412,7 +422,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     // inside a tower should read as the dungeon, not as "floor 9".
     `Region: ${region?.name ?? '?'} (floor ${region?.floor ?? 0}, danger ${region?.danger ?? 0}`
       + `${here ? `, in ${here.name}` : ''})`,
-    `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
+    `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}${heldBy ? ` (held by ${heldBy})` : ''}`,
     `Time: ${timeLine(state.world, region?.floor)}`,
     echoes.length ? `What this land remembers from its past (old stories, not news):\n${echoes.join('\n')}` : '',
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
@@ -475,6 +485,10 @@ const SYSTEM = [
   'revealWay is for a way OUT of this region that is not the stair — a road, a',
   'breach, a gate somebody opens. Name the place it leaves FROM and nothing else;',
   'where it goes is decided outside you.',
+  '',
+  'acquirePlace is for the player BUYING the settlement they stand in from the one',
+  'who holds it, and only when the fiction is a deal struck. The engine checks the',
+  'price, the trust and the law; name the place id and nothing else.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson must be an id from the',

@@ -2,6 +2,7 @@ import { trustToward } from '../social/edge.ts';
 import type { Gazetteer, PersonId, Region, RegionId, World } from './types.ts';
 import { isFull } from './types.ts';
 import { isLoop, isStatic } from './strata.ts';
+import { heldByPlayer } from './holding.ts';
 import { aggregate } from '../character/population.ts';
 
 /**
@@ -84,6 +85,9 @@ export function compressExcept(world: World, keep: RegionId[], turn: number): Wo
     // Nor a LOOP floor: its reset puts back the floor exactly as it was built,
     // which a rebuilt retelling of it could not match.
     if (isLoop(world, record.floor)) continue;
+    // Nor a floor where you HOLD a settlement: its places are rebuilt with new
+    // ids, and what you bought would go with them (DESIGN 6c *Ownership*).
+    if (record.places.some(heldByPlayer)) continue;
     // The standing you earned here travels with the summary. It lives on the
     // World so it survives rehydration too; this copy is what the returning
     // brief reads, and it is `Gazetteer.reputation`'s first writer ever.

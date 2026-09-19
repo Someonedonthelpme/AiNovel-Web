@@ -195,7 +195,7 @@ export type KnowledgeRules = {
 /**
  * The axes a law can govern. Four, and no more without a design decision.
  */
-export const RULE_AXES = ['movement', 'knowledge', 'progression', 'economy'] as const;
+export const RULE_AXES = ['movement', 'knowledge', 'progression', 'economy', 'territory'] as const;
 export type RuleAxis = (typeof RULE_AXES)[number];
 
 /**
@@ -216,6 +216,8 @@ export const CONSTRAINTS = [
   'takeLoot',
   // knowledge
   'keepMemories',
+  // territory (DESIGN 6c *Ownership*): who may hold a settlement
+  'holdSettlement',
 ] as const;
 export type Constraint = (typeof CONSTRAINTS)[number];
 
@@ -232,6 +234,7 @@ export const AXIS_OF: Record<Constraint, RuleAxis> = {
   gainLevels: 'progression',
   takeLoot: 'economy',
   keepMemories: 'knowledge',
+  holdSettlement: 'territory',
 };
 
 /**
@@ -390,6 +393,8 @@ export const HARSH: Ruleset = {
   gear: { ...STANDARD.gear, wearPerFight: 5, refineRisk: 0.4, refineLoss: 99, repairLoss: 15 },
   rest: { shortTurns: 2, longTurns: 12 },
   world: { ...STANDARD.world, dangerPerFloor: 1.5 },
+  // Land is not for sale to a climber here until the law is amended in play.
+  laws: [...copy(STANDARD).laws, { axis: 'territory', constraint: 'holdSettlement', binds: 'player' }],
 };
 
 export const PRESETS = { standard: STANDARD, plain: PLAIN, harsh: HARSH } as const;

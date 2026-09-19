@@ -45,6 +45,12 @@ export type Place = {
    */
   affordances: string[];
   discovered: boolean;
+  /**
+   * Who holds this settlement, when it is the PLAYER (DESIGN 6c *Ownership*).
+   * Anybody else's holding is derived from who is there (`holderOf`); only a
+   * bought one is stored, because it must not move.
+   */
+  holder?: PersonId;
 };
 
 export type StratumId = string;
