@@ -319,6 +319,9 @@ function userPrompt(
         'Vary what is IN it — the rooms, the trouble, who is standing where — never what it is.',
       ].join('\n')
       : recent.length ? 'Make this floor feel unlike any of those floors.' : 'Make this floor feel like somewhere new.',
+    // Two places of one name are two labels a player cannot choose between; the
+    // repair numbers any the model still repeats (`repairRegion`).
+    'Give every place its own name: no two places on this floor may share one.',
   ].filter(Boolean).join('\n');
 }
 

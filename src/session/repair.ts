@@ -84,7 +84,26 @@ export function repairRegion(region: Region): Repair<Region> {
     repairs.push(`renamed duplicate place id "${place.id}" to "${id}"`);
     return { ...place, id };
   });
-  region = { ...region, places: unique };
+  // --- one name per place ------------------------------------------------
+  // Two places of one name are two labels the player cannot choose between
+  // (live: the entrance and the way up, both "Outer Gate"). The later ones take
+  // a numeral, which invents no words in any language the game speaks.
+  const NUMERALS = ['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  const named = new Set<string>();
+  const told = unique.map((place) => {
+    const key = place.name.trim().toLowerCase();
+    if (!named.has(key)) {
+      named.add(key);
+      return place;
+    }
+    let n = 0;
+    while (named.has(`${key} ${(NUMERALS[n] ?? String(n + 2)).toLowerCase()}`)) n += 1;
+    const name = `${place.name.trim()} ${NUMERALS[n] ?? String(n + 2)}`;
+    named.add(name.toLowerCase());
+    repairs.push(`renamed a second place called "${place.name}" to "${name}"`);
+    return { ...place, name };
+  });
+  region = { ...region, places: told };
   const byId = new Map(region.places.map((p) => [p.id, p]));
 
   // --- clean the edges -----------------------------------------------------

@@ -282,25 +282,29 @@ export function walkRoute(world: World, input: string): PlaceId[] | null {
   const region = activeRegion(world);
   if (!said || !region) return null;
   const known = signposted(region, world.currentPlace);
-  const target = region.places.find((p) =>
-    (p.discovered || known.has(p.id)) && (plain(p.name) === plain(said) || p.id === said.trim()));
-  if (!target || target.id === world.currentPlace) return null;
 
-  // Fewest steps: breadth-first over the place graph.
+  // Fewest steps to everywhere: breadth-first over the place graph.
   const from = new Map<PlaceId, PlaceId>();
+  const steps = new Map<PlaceId, number>([[world.currentPlace, 0]]);
   const queue: PlaceId[] = [world.currentPlace];
-  const seen = new Set(queue);
   while (queue.length) {
     const at = queue.shift()!;
-    if (at === target.id) break;
     for (const next of region.places.find((p) => p.id === at)?.connections ?? []) {
-      if (seen.has(next)) continue;
-      seen.add(next);
+      if (steps.has(next)) continue;
+      steps.set(next, steps.get(at)! + 1);
       from.set(next, at);
       queue.push(next);
     }
   }
-  if (!from.has(target.id)) return null;
+
+  // Two places can share a name (live: two "Outer Gate"s, the entrance and the
+  // way up). A name never means where you stand; of the rest the NEAREST, and on
+  // a tie the one you have not been to — you have just come from the other.
+  const target = region.places
+    .filter((p) => p.id !== world.currentPlace && steps.has(p.id)
+      && (p.discovered || known.has(p.id)) && (plain(p.name) === plain(said) || p.id === said.trim()))
+    .sort((a, b) => steps.get(a.id)! - steps.get(b.id)! || Number(a.discovered) - Number(b.discovered))[0];
+  if (!target) return null;
   const route: PlaceId[] = [];
   for (let at: PlaceId | undefined = target.id; at && at !== world.currentPlace; at = from.get(at)) route.unshift(at);
   return route;

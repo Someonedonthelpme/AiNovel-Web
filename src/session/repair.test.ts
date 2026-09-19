@@ -203,3 +203,12 @@ test('duplicate place ids are renamed, not fatal: both places survive and the fl
   assert.ok(!validateRegion(r.value, people).errors.some((e) => e.code === 'DUPLICATE_PLACE_ID'));
   assert.ok(r.repairs.some((m) => /market/.test(m) && /duplicate/i.test(m)), 'and says what it did');
 });
+
+test('places that share a name are told apart: "Outer Gate" and "Outer Gate II"', () => {
+  const base = groundFloor();
+  const places = base.places.map((p) => (p.id === 'gate' ? { ...p, name: 'Outer Gate' } : p.id === 'stair' ? { ...p, name: 'Outer Gate' } : p));
+  const r = repairRegion({ ...base, places });
+  assert.equal(new Set(r.value.places.map((p) => p.name)).size, r.value.places.length, 'every name is unique');
+  assert.ok(r.value.places.some((p) => p.name === 'Outer Gate II'));
+  assert.ok(r.repairs.some((m) => /Outer Gate/.test(m)));
+});
