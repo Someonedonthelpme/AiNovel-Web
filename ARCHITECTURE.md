@@ -131,7 +131,7 @@ config ─┐
 - **React never mutates locally.** Every panel action goes to the server as an
   event ([Panels.tsx:11](app/play/[id]/Panels.tsx:11)); the whole view comes back.
 - **Routes stay thin** so the web surface and the terminal script cannot drift
-  apart ([game.ts:62](src/server/game.ts:62)).
+  apart ([game.ts:64](src/server/game.ts:64)).
 
 ---
 
@@ -191,8 +191,8 @@ lives) · `progress.ts` · `pathgen.ts` / `pathwords.ts` / `skilltree.ts` /
 mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts` ·
 `journey.ts` (a grudge on the road, and its fade) · `sighting.ts` (who is out, and
 word of where the player is) · `station.ts` (what a person is, for what their
-grudge can do) · `walker.ts` (a typed walk, tile by tile, and where it stops,
-[walker.ts:32](src/play/walker.ts:32)).
+grudge can do) · `walker.ts` (a typed walk or a click, tile by tile, and where it stops,
+[walker.ts:33](src/play/walker.ts:33)).
 
 ### `src/world/`
 `types.ts` · `floorgen.ts` (the only world-changing model call) · `travel.ts` ·
@@ -291,9 +291,12 @@ the log does not survive a reload.
 language**) · `local.ts` / `localProvider.ts` · `similarity.ts` / `canon.ts`.
 
 ### `src/db/`, `src/server/`, `app/`
-`db/schema.ts` (four tables) · `db/sessions.ts` (append, fold, snapshot) ·
-`db/facts.ts` (pgvector canon) · `server/game.ts` (every view, plus the
-in-memory fight store) · eight thin route handlers under `app/api/`.
+`db/schema.ts` (five tables — `maps` since W2; this said four until W4a's pass) · `db/sessions.ts` (append, fold, snapshot) ·
+`db/facts.ts` (pgvector canon) · `db/maps.ts` (a session's stored maps) ·
+`server/game.ts` (every view, plus the in-memory fight store) · `server/grid.ts`
+(the centre view: a window of the map you stand on, and its doors,
+[grid.ts:28](src/server/grid.ts:28)) · nine thin route handlers under `app/api/`
+(`walk` since W4a).
 
 ---
 
@@ -506,10 +509,12 @@ come from?"
 | `drawMap` ([map.ts:79](src/world/map.ts:79)) | seed, a map id, its region | a hub or field's tiles, drawn from the seed alone |
 | `portalsOf` ([map.ts:304](src/world/map.ts:304)) | a map + the place graph NOW | its doors, each at a bearing dealt from seed, place and target — never stored, so a revealed way gets a door and no other door moves |
 | `positionOf` ([map.ts:51](src/world/map.ts:51)) | `World.at`, the current place | the player's tile: `at`, else the centre of the current place's hub |
-| `walkAlong` ([walker.ts:32](src/play/walker.ts:32)) | state, a route of places, the stored maps | where a typed walk STOPS and what it cost: tile by tile, the first tick that brings a traveller, a need at 3, or night on wild ground |
+| `walkToTile` ([walker.ts:149](src/play/walker.ts:149)) | state, one tile of the map you stand on, the stored maps | a click's walk: to the tile, THROUGH it if it is a door (a hub's onto its field, a field's end into its place), and `then` a climb, a descent or a way out if it is one |
+| `gridOf` ([grid.ts:28](src/server/grid.ts:28)) | state, the stored map you stand on | a 41×25 window around you and EVERY door on the map, each labelled only with a name you could know |
+| `walkAlong` ([walker.ts:33](src/play/walker.ts:33)) | state, a route of places, the stored maps | where a typed walk STOPS and what it cost: tile by tile, the first tick that brings a traveller, a need at 3, or night on wild ground |
 | `bestPath` ([map.ts:131](src/world/map.ts:131)) | a map, two tiles | seconds along the cheapest way, eight ways, charging each tile entered; Infinity when there is none |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
-| `viewOf` and friends ([game.ts:295](src/server/game.ts:295)) | `PlayState` | the whole `GameView`, rebuilt per request |
+| `viewOf` and friends ([game.ts:304](src/server/game.ts:304)) | `PlayState`, the stored map you stand on | the whole `GameView`, rebuilt per request — with the centre grid from the STORED map, so what is shown is what is walked; looking at a map stores it |
 
 ---
 
@@ -594,7 +599,7 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
 | **Director** ([director.ts:536](src/llm/director.ts:536)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:86](src/llm/director.ts:86)) and the PLACE a new way out leaves from (`revealWay`, [:66](src/llm/director.ts:66)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:68](src/llm/director.ts:68)). Every person it names is resolved by `personRef` ([delta.ts:61](src/play/delta.ts:61)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:601](src/llm/director.ts:601)) | `PARLEY_SCHEMA` ([:574](src/llm/director.ts:574)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:356](src/play/turn.ts:356)); an answer outside the list is a refusal ([director.ts:598](src/llm/director.ts:598)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Parley** ([director.ts:601](src/llm/director.ts:601)) | `PARLEY_SCHEMA` ([:574](src/llm/director.ts:574)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:399](src/play/turn.ts:399)); an answer outside the list is a refusal ([director.ts:598](src/llm/director.ts:598)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:367](src/world/floorgen.ts:367)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture (at least the budget minimum of people, [floorgen.ts:129](src/world/floorgen.ts:129); shown the last four floors, [:298](src/world/floorgen.ts:298); a name per place, [:324](src/world/floorgen.ts:324)) — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:140](src/world/floorgen.ts:140)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:580](src/world/floorgen.ts:580)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:143](src/world/floorgen.ts:143)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:145](src/world/floorgen.ts:145)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:653](src/world/floorgen.ts:653), [:659](src/world/floorgen.ts:659)) | **yes, in full** — inside `ClimbRecord.built` |
@@ -634,7 +639,7 @@ app/new/page.tsx
         Left to the story, it carries the roster's words instead, and the
         character call picks the class (genesis.ts:152)
         │
-        newGame  (server/game.ts:455)
+        newGame  (server/game.ts:472)
           startInterview + recordAnswer per stage (blanks get canned defaults)
           runGenesis:
             1. generateCharacter  ──► sheet
@@ -667,14 +672,16 @@ rations, because a short rest spends one.
 ```
  0  ENGINE ACTS ──────────────────────── no model call at all
        a typed "go to X" naming a place you can know of is walked tile by
-       tile over the maps along the fewest-step route (turn.ts:125,
-       travel.ts:297, walker.ts:32), stopping on the first tick that brings a
+       tile over the maps along the fewest-step route (turn.ts:126,
+       travel.ts:297, walker.ts:33), stopping on the first tick that brings a
        traveller, a need at its line or night on wild ground; the record
        holds where it stopped, so a replay never pathfinds (delta.ts:309);
        "rest"/"sleep", "hunt"
-       and "buy X" go through validateDelta as if proposed (turn.ts:272);
-       a hunt that would open no fight says why (turn.ts:296). One record
-       each, and steps 1-7 never run.
+       and "buy X" go through validateDelta as if proposed (turn.ts:315);
+       a hunt that would open no fight says why (turn.ts:339). One record
+       each, and steps 1-7 never run. A CLICK on the map is the same walk
+       by another door (walk route → walkTarget, game.ts:688 → walkTile,
+       turn.ts:212): checked at the edge, never the model.
  1  canonFacts   ← pgvector nearest-neighbour over this session's facts
  2  DIRECTOR ────────────────────────────────────── model call #1
        sees: place, affordances, "the ONLY legal moveTo values",
@@ -934,7 +941,7 @@ finished while one is waiting ([play/combat.ts:503](src/play/combat.ts:503)), th
 only options are `kill` and `spare` ([:511](src/play/combat.ts:511)), and both are
 `CombatAction`s, so they ride in `combatActions` and replay like any decision
 ([:672](src/play/combat.ts:672)). The server holds the fight open on the same test
-([game.ts:714](src/server/game.ts:714)) and shows it as not over, so the choice
+([game.ts:792](src/server/game.ts:792)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:835](src/play/combat.ts:835)); spared writes the `spared` deed,
 toward the person if it was one ([delta.ts:630](src/play/delta.ts:630)), and whoever
@@ -989,7 +996,7 @@ instead: a creature composes from the best stat its kind can actually use
 
 A fight opens mid-turn and the record is **not written** until it ends. The
 encounter lives in an in-memory `fights` map on `globalThis`
-([game.ts:425](src/server/game.ts:425) — Next gives routes and server components
+([game.ts:442](src/server/game.ts:442) — Next gives routes and server components
 separate module instances, so a plain module-level `Map` would produce two).
 
 Every roll derives from state —
@@ -998,8 +1005,8 @@ Every roll derives from state —
 unaffordable skill is *not offered* rather than offered and refused. When it
 concludes, the original turn's draft record plus `combatActions` is appended as
 **one event**, and a snapshot is taken unconditionally. Its closing lines come back
-beside the finished view ([game.ts:737](src/server/game.ts:737)): the view carries a
-log only while a fight is open ([game.ts:269](src/server/game.ts:269)), which dropped
+beside the finished view ([game.ts:815](src/server/game.ts:815)): the view carries a
+log only while a fight is open ([game.ts:273](src/server/game.ts:273)), which dropped
 them for every fight until `d579b42`.
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
@@ -1024,10 +1031,10 @@ standing, of a kind with a company need, and not yet spoken to this fight
 ([play/combat.ts:571](src/play/combat.ts:571)), because a parley logs an event and the
 log's length seeds every roll, so a first-option picker like the harness must never
 reach one. The server hears it where a provider exists
-([game.ts:695](src/server/game.ts:695)): `hearParley` DISCARDS whatever roll and
+([game.ts:773](src/server/game.ts:773)): `hearParley` DISCARDS whatever roll and
 verdict the client sent, asks the model, rolls in the engine and writes the tier's
-answer into the action ([turn.ts:345](src/play/turn.ts:345)); a foe that cannot hear
-costs no call ([:348](src/play/turn.ts:348)). The fold only carries the verdict out
+answer into the action ([turn.ts:388](src/play/turn.ts:388)); a foe that cannot hear
+costs no call ([:391](src/play/turn.ts:391)). The fold only carries the verdict out
 ([combat/combat.ts:92](src/combat/combat.ts:92)): `yields` and `withdraws` are stage
 6's `yielded` and `fled` ([:100](src/combat/combat.ts:100)), so a fate, a survivor and
 a deed need nothing new, and `refuses` changes nothing. A foe still standing is above
@@ -1045,6 +1052,13 @@ sleep means going back down to town"* — otherwise a camp on floor 15 would und
 the whole climb — or at a settlement you HOLD, on any floor
 ([rest.ts:56](src/play/rest.ts:56)): a base you bought. This is where the difficulty curve lives.
 Rest and hunting are recognised by the engine from what you type (§9 step 0).
+
+**Walk by clicking** (W4a) — `POST /walk { map, x, y }` is checked twice: its
+shape at the route ([game.ts:688](src/server/game.ts:688)), then that the tile is on
+your map, inside it and not a wall ([turn.ts:212](src/play/turn.ts:212)); a bad one is
+refused with a reason and nothing is logged. The walk is logged as its own turn
+FIRST, then a stair or a way out is taken ([game.ts:611](src/server/game.ts:611)), so a
+climb that fails leaves you standing on the stair.
 
 **Climb** — a crossing is a **logged event**. `ClimbRecord.built` carries the
 generated region and its people, because `foldPlay` is synchronous and holds no
@@ -1084,7 +1098,7 @@ a parley's verdict is the one outcome it stores, because a fold holds no provide
 ([play/combat.ts:488](src/play/combat.ts:488)) — and a fold re-resolves them with today's code ([delta.ts:738](src/play/delta.ts:738)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
-snapshotted back to back ([game.ts:721](src/server/game.ts:721)), so normal play
+snapshotted back to back ([game.ts:799](src/server/game.ts:799)), so normal play
 never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
@@ -1098,7 +1112,7 @@ the rules.
 **2. Dice are recorded, never re-rolled.** Where a roll can be derived from
 state instead, it is — which is why a whole fight stores only decisions — except a
 parley's roll, which comes from the live path and is recorded
-([turn.ts:345](src/play/turn.ts:345)).
+([turn.ts:388](src/play/turn.ts:388)).
 
 **3. The model never decides an outcome.** It proposes; the engine validates and
 resolves.
@@ -1114,7 +1128,8 @@ mints the far side ([state.ts:100](src/play/state.ts:100)).
 **5. The redaction wall is a type, with a runtime backstop.** A place is hidden unless you have DISCOVERED it, on every floor
 ([redact.ts:208](src/llm/redact.ts:208)) — *"everything on another floor is hidden, discovered or not"* was
 true until `8dc4c32`, and refused every turn that mentioned the stair just climbed. Which
-names you may WALK to is the same rule ([travel.ts:277](src/world/travel.ts:277)).
+names you may WALK to is the same rule ([travel.ts:277](src/world/travel.ts:277)), and so is
+the label on a door in the centre view ([grid.ts:41](src/server/grid.ts:41)).
 
 **6. Adding an event kind means adding it to `FOLDED_KINDS`**
 ([sessions.ts:73](src/db/sessions.ts:73)) — or it is written and silently
@@ -1124,7 +1139,7 @@ dropped on reload. This has already happened once, to panel actions.
 
 **8. A step with one right answer never reaches the model.** Walking, resting,
 hunting and buying are recognised whole and applied by the engine
-([turn.ts:125](src/play/turn.ts:125), [:272](src/play/turn.ts:272)): live, the Director refused an adjacent stair three
+([turn.ts:126](src/play/turn.ts:126), [:315](src/play/turn.ts:315)): live, the Director refused an adjacent stair three
 times, started no fight on five "attack" turns in six, and rested only when it chose
 to. Speech that merely contains the words ("rest assured", "attack the warden")
 is still the Director's.
@@ -1173,7 +1188,7 @@ a geared climber measured identical to an ungeared one.
 
 The **`maps` table** had a writer, `mapFor` ([maps.ts:13](src/db/maps.ts:13)), and no
 caller when W2 shipped. **Resolved by W3:** the server stores each map on the first walk
-across it ([game.ts:551](src/server/game.ts:551)) and the walk reads it back from there.
+across it ([game.ts:568](src/server/game.ts:568)) and the walk reads it back from there.
 
 A foe's **signature skill** is on its sheet and never used, because `combat/ai.ts`
 cannot cast at all; step 9's AI rebuild is where that lands.
@@ -1248,7 +1263,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:981](src/server/game.ts:981)); and
+([game.ts:1059](src/server/game.ts:1059)); and
 [signet.test.ts:253](src/play/signet.test.ts:253) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
@@ -1596,7 +1611,8 @@ Every balance number, and where it lives.
 | a field's band | legs 6 columns apart, 2 tiles either side of the centreline, a straight run of at least 6 at the end | [map.ts:173](src/world/map.ts:173), [:176](src/world/map.ts:176) |
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:208](src/world/map.ts:208) |
 | hub radius | settlement 24, wild 18, landmark and dungeon 14, gate 10 tiles | [map.ts:270](src/world/map.ts:270) |
-| a walk's stop line | food or rest at 3 or under — the level the game calls "starving" | [walker.ts:14](src/play/walker.ts:14) |
+| the centre view | 41×25 tiles around you, clipped to the map | [grid.ts:8](src/server/grid.ts:8) |
+| a walk's stop line | food or rest at 3 or under — the level the game calls "starving" | [walker.ts:15](src/play/walker.ts:15) |
 | needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:489](src/play/delta.ts:489) |
 | night | 20:00–06:00 | [calendar.ts:175](src/world/calendar.ts:175) |
 | grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:212](src/play/journey.ts:212), [edge.ts:106](src/social/edge.ts:106) |
@@ -1723,14 +1739,15 @@ floor is built ([floorgen.ts:543](src/world/floorgen.ts:543)); a later killing c
 nothing on the floor above. Open in DESIGN *Stratum knobs*.
 
 *A walk arrives in a fixed line, not prose.* "You walk to the covered market." — the
-engine walks and no model narrates the arrival ([turn.ts:213](src/play/turn.ts:213)). **W3 decided:** every
-stop gets a fixed line, by why it stopped ([turn.ts:205](src/play/turn.ts:205)); the Director on stops waits
+engine walks and no model narrates the arrival ([turn.ts:256](src/play/turn.ts:256)). **W3 decided:** every
+stop gets a fixed line, by why it stopped ([turn.ts:248](src/play/turn.ts:248)); the Director on stops waits
 for W5, when a stop can mean someone in view (DESIGN 6c §2c).
 
 *There is no way down in the web app.* `godown` exists ([climb.ts:309](src/play/climb.ts:309)) and the view
-carries `canDescend` ([game.ts:393](src/server/game.ts:393)), but no route calls the one and nothing in `app/`
+carries `canDescend` ([game.ts:410](src/server/game.ts:410)), but no route calls the one and nothing in `app/`
 reads the other, so a climber can never return to the floor-0 town. Walkable maps make
-the down stair a portal (DESIGN 6c §2).
+the down stair a portal (DESIGN 6c §2). **Resolved by W4a:** clicking the down stair
+walks there and descends ([game.ts:725](src/server/game.ts:725)). `canDescend` is still read by nothing in `app/`.
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
@@ -1777,7 +1794,7 @@ classes now lean on stats and nothing is locked out.
 every thrown error into `status: 500`, `POST /api/sessions` among them
 ([route.ts:24](app/api/sessions/route.ts:24)). So a species choice that
 `speciesChoiceOf` refuses, with a message naming what was wrong
-([game.ts:600](src/server/game.ts:600)), reaches the client as a server fault. The
+([game.ts:662](src/server/game.ts:662)), reaches the client as a server fault. The
 only 400s are written by hand: a missing seed, a missing combat action, and a
 refused climb target.
 
