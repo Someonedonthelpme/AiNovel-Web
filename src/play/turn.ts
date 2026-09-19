@@ -12,7 +12,8 @@ import { runWriter } from '../llm/writer.ts';
 import type { WriterResult } from '../llm/writer.ts';
 import { finalAbilities } from '../session/sheet.ts';
 import { displayNames, humanise } from '../world/naming.ts';
-import { activeRegion, walkRoute } from '../world/travel.ts';
+import { activeRegion, signposted, walkRoute } from '../world/travel.ts';
+import { holderOf, priceOf } from '../world/holding.ts';
 import { applyTurn, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
@@ -114,7 +115,7 @@ export async function playTurn(
   if (route) return walked(state, input, mode, route);
   // So are a rest and a hunt: the probe found the Director starting no fight on
   // five "attack" turns in six, and rest reachable only when the model proposed it.
-  const act = engineAct(input);
+  const act = engineAct(state, input);
   if (act) return acted(state, input, mode, act);
 
   const canonFacts = await (deps.retrieveFacts ?? recentFacts)(state, input);
@@ -214,7 +215,37 @@ const HUNT = /^\s*(?:hunt|go hunting|look for (?:a fight|trouble)|ออกล�
 
 type EngineAct = { proposed: WorldDelta; line: { en: string; th: string } };
 
-function engineAct(input: string): EngineAct | null {
+/**
+ * "buy X" (approved 2026-09-19): X names a place you can know of, or "this
+ * settlement" / "here" means where you stand. O1's own rules then decide it,
+ * through `validateDelta` — so "buy" from the market is refused as "not here",
+ * and "buy some bread" names no place and stays speech. Free-form negotiation
+ * still reaches the Director, and is what earns the trust a sale needs.
+ */
+const BUY = /^\s*(?:buy|ซื้อ)\s*(.+?)\s*[.!]?\s*$/i;
+const HERE = /^(?:this (?:settlement|town|place)|here|ที่นี่)$/i;
+
+function buyAct(state: PlayState, input: string): EngineAct | null {
+  const said = BUY.exec(input)?.[1];
+  const region = activeRegion(state.world);
+  if (!said || !region) return null;
+  const known = signposted(region, state.world.currentPlace);
+  const plainName = (n: string) => n.trim().toLowerCase().replace(/^the\s+/, '');
+  const target = HERE.test(said.trim())
+    ? region.places.find((p) => p.id === state.world.currentPlace)
+    : region.places.find((p) => (p.discovered || known.has(p.id) || p.id === state.world.currentPlace)
+      && plainName(p.name) === plainName(said));
+  if (!target) return null;
+  const holder = holderOf(target, state.world.people);
+  const from = holder ? state.world.people[holder]?.name ?? holder : '';
+  const price = priceOf(region.floor);
+  return {
+    proposed: { acquirePlace: target.id },
+    line: { en: `You buy ${target.name} from ${from} for ${price} coin.`, th: `คุณซื้อ${target.name}จาก${from} ด้วยเงิน ${price} เหรียญ` },
+  };
+}
+
+function engineAct(state: PlayState, input: string): EngineAct | null {
   const rest = REST.exec(input);
   if (rest) {
     const long = rest[1]?.toLowerCase() === 'long' || Boolean(rest[3]) || Boolean(rest[5]);
@@ -222,6 +253,8 @@ function engineAct(input: string): EngineAct | null {
       ? { proposed: { rest: 'long' }, line: { en: 'You sleep through the night.', th: 'คุณนอนหลับจนข้ามคืน' } }
       : { proposed: { rest: 'short' }, line: { en: 'You rest a while.', th: 'คุณพักสักครู่' } };
   }
+  const buy = buyAct(state, input);
+  if (buy) return buy;
   if (HUNT.test(input)) {
     return { proposed: { startCombat: true, startedBy: 'player' }, line: { en: 'You go looking for trouble.', th: 'คุณออกล่า' } };
   }

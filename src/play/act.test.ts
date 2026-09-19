@@ -8,6 +8,9 @@ import { fightOpen } from './combat.ts';
 import { firstFloor, groundFloor } from '../world/fixtures.ts';
 import type { PlayState } from './state.ts';
 import { speciesFor } from '../character/species.ts';
+import { holderOf } from '../world/holding.ts';
+import { nudge, PLAYER } from '../social/edge.ts';
+import { isFull } from '../world/types.ts';
 
 /*
  * Fight and rest, engine-side (decided with the user, 2026-09-19): the probe
@@ -107,4 +110,50 @@ test('a hunt in a place hunted out says so, and no fight is recorded', async () 
 
 test('a place with a crowd still hunts as before', async () => {
   assert.ok(fightOpen((await playTurn(noModel(), withKinds(onFloor1()), 'hunt', 'exploration', [])).state));
+});
+
+/*
+ * Buying, engine-side (approved 2026-09-19). Every purchase went through the
+ * Director proposing `acquirePlace` from free text — the same kind of step the
+ * probe found the model dropping for walks, fights and rests. "buy X" is now
+ * the engine's, under O1's own rules; free-form negotiation still reaches the
+ * Director, and is what earns the trust a sale needs.
+ */
+const ready = (place: string, trust = 2, coin = 50): PlayState => {
+  const s = playState({ currentPlace: place });
+  return { ...s, pc: { ...s.pc, coin }, world: { ...s.world, edges: nudge(s.world.edges, 'warden', PLAYER, 'trust', trust) } };
+};
+const readyInTown = (trust = 2) => ready('town', trust);
+const readyInMarket = () => ready('market');
+const heldTown = (s: PlayState) => {
+  const r = s.world.regions['floor-0'];
+  assert.ok(isFull(r));
+  return holderOf(r.places.find((p) => p.id === 'town')!, s.world.people);
+};
+
+test('"buy" a settlement the rules allow: the engine closes it, with no model call', async () => {
+  const bought = await playTurn(noModel(), readyInTown(), 'buy Ashfall', 'exploration', []);
+  assert.equal(heldTown(bought.state), PLAYER);
+  assert.equal(bought.state.pc.coin, 0);
+  assert.equal(bought.record.delta.acquirePlace, 'town');
+});
+
+test('"this settlement" means where you stand, and Thai works', async () => {
+  assert.equal((await playTurn(noModel(), readyInTown(), 'buy this settlement', 'exploration', [])).record.delta.acquirePlace, 'town');
+  assert.equal((await playTurn(noModel(), readyInTown(), 'ซื้อที่นี่', 'exploration', [])).record.delta.acquirePlace, 'town');
+});
+
+test('a buy the rules refuse says why, and nobody is called', async () => {
+  const cold = await playTurn(noModel(), readyInTown(1), 'buy Ashfall', 'exploration', []);
+  assert.equal(cold.record.delta.acquirePlace, undefined);
+  assert.match(cold.rejected.join(' '), /trust/);
+  assert.equal(heldTown(cold.state), 'warden');
+});
+
+test('you buy where you stand', async () => {
+  assert.match((await playTurn(noModel(), readyInMarket(), 'buy Ashfall', 'exploration', [])).rejected.join(' '), /not here/);
+});
+
+test('shopping talk is still speech', async () => {
+  assert.equal((await playTurn(scripted(), readyInTown(), "I'd like to buy some bread", 'conversation', [])).record.delta.acquirePlace, undefined);
 });
