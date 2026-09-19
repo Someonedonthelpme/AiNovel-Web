@@ -32,8 +32,8 @@ const TARGET = Number(arg('--to') ?? 22);
 const SEED = Number(arg('--seed') ?? 20260919);
 /** Skip earning coin and buying: climbing needs no fight, so this checks the bands alone. */
 const NO_BUY = argv.includes('--no-buy');
-/** Fights to try for coin on one floor before moving on. */
-const FIGHTS_PER_FLOOR = 6;
+/** Fights to try for coin on one floor before moving on: about what a settlement costs (live, ~10). */
+const FIGHTS_PER_FLOOR = 14;
 /** Turns spent winning a holder's trust before trying to buy. */
 const COURTING_TURNS = 5;
 
@@ -155,6 +155,16 @@ async function earnCoin(id: string, want: number): Promise<number> {
       break;
     }
     const r = await turn(id, 'hunt', 'exploration');
+    // A place hunted out stays so; hunt somewhere else, as a player would.
+    if ((r?.rejected ?? []).some((why) => /nothing (left to hunt|is out hunting)/.test(why))) {
+      const here = await stateOf(id);
+      const region = activeRegion(here.world);
+      const next = region?.places.find((p) => p.id === here.world.currentPlace)?.connections
+        .find((c) => signposted(region, here.world.currentPlace).has(c));
+      log(`  ${r!.rejected.join('; ')} — moving on${next ? ` to ${next}` : ''}`);
+      if (next) await walkTo(id, next);
+      continue;
+    }
     if (r?.view.combat && !r.view.combat.over) {
       const after = await fight(id, r.view);
       log(`  coin now ${after.character.coin}, hp ${after.character.hp}/${after.character.maxHp}`);
