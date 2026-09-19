@@ -112,6 +112,10 @@ export async function playTurn(
   // (DESIGN 6c §2d): the Director refused an adjacent stair three times live.
   const route = walkRoute(state.world, input);
   if (route) return walked(state, input, mode, route);
+  // So are a rest and a hunt: the probe found the Director starting no fight on
+  // five "attack" turns in six, and rest reachable only when the model proposed it.
+  const act = engineAct(input);
+  if (act) return acted(state, input, mode, act);
 
   const canonFacts = await (deps.retrieveFacts ?? recentFacts)(state, input);
   const output = await runDirector(deps.director, state, input, mode, canonFacts);
@@ -196,6 +200,54 @@ function walked(state: PlayState, input: string, mode: Mode, route: string[]): T
     record: { ...record, prose },
     writer: { prose, checks: [], regenerated: false },
     rejected: [],
+    shifts: applied.shifts,
+  };
+}
+
+/**
+ * The acts with one right answer, recognised whole — "rest" but not "rest
+ * assured", "hunt" but not "attack the guard", which is a social act with a
+ * person in it and stays the Director's. Closed: a phrase nobody listed is speech.
+ */
+const REST = /^\s*(?:(?:take\s+a\s+)?(short|long)\s+rest|(rest)|(sleep)|(พัก(?:ผ่อน)?)|(นอน(?:หลับ)?))\s*[.!]?\s*$/i;
+const HUNT = /^\s*(?:hunt|go hunting|look for (?:a fight|trouble)|ออกล่า|ล่า(?:สัตว์)?)\s*[.!]?\s*$/i;
+
+type EngineAct = { proposed: WorldDelta; line: { en: string; th: string } };
+
+function engineAct(input: string): EngineAct | null {
+  const rest = REST.exec(input);
+  if (rest) {
+    const long = rest[1]?.toLowerCase() === 'long' || Boolean(rest[3]) || Boolean(rest[5]);
+    return long
+      ? { proposed: { rest: 'long' }, line: { en: 'You sleep through the night.', th: 'คุณนอนหลับจนข้ามคืน' } }
+      : { proposed: { rest: 'short' }, line: { en: 'You rest a while.', th: 'คุณพักสักครู่' } };
+  }
+  if (HUNT.test(input)) {
+    return { proposed: { startCombat: true, startedBy: 'player' }, line: { en: 'You go looking for trouble.', th: 'คุณออกล่า' } };
+  }
+  return null;
+}
+
+/**
+ * An engine act, as a turn: the proposal goes through `validateDelta` like the
+ * Director's would, so the rules that already decide a rest or a fight decide
+ * this one, and a refusal carries their reason. A refused act still spends the
+ * turn — you tried. No model is called.
+ */
+function acted(state: PlayState, input: string, mode: Mode, act: EngineAct): TurnResult {
+  const validated = validateDelta(state, act.proposed);
+  const record: TurnRecord = {
+    kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
+    delta: validated.delta, rejected: validated.rejected, prose: '',
+  };
+  const applied = applyTurn(state, record);
+  const done = validated.rejected.length === 0;
+  const prose = done ? act.line[state.world.language] : validated.rejected.join('; ');
+  return {
+    state: applied.state,
+    record: { ...record, prose },
+    writer: { prose, checks: [], regenerated: false },
+    rejected: validated.rejected,
     shifts: applied.shifts,
   };
 }
