@@ -236,7 +236,7 @@ on each of the five axes** ([ruleset.ts:210](src/rules/ruleset.ts:210)), and
 
 | constraint | axis | checked by |
 |---|---|---|
-| `descendBelowGround` | movement | `descend` ([travel.ts:219](src/world/travel.ts:219)) and the panel's way down ([climb.ts:327](src/play/climb.ts:327)) |
+| `descendBelowGround` | movement | `descend` ([travel.ts:234](src/world/travel.ts:234)) and the panel's way down ([climb.ts:327](src/play/climb.ts:327)) |
 | `crossFloors` | movement | the Director brief ([director.ts:392](src/llm/director.ts:392)), and whether a journey may take a stair ([journey.ts:156](src/play/journey.ts:156)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:291](src/play/climb.ts:291), [combat.ts:954](src/play/combat.ts:954)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:962](src/play/combat.ts:962)) |
@@ -256,7 +256,7 @@ Signet is. `playerSubject` builds one from the sheet
 ([signetbook.ts:202](src/play/signetbook.ts:202)); one Signet per world, the
 first to survive the reachability proof, exempts the first law that binds the
 player ([signetbook.ts:190](src/play/signetbook.ts:190)). `descend` defaults its
-subject to a plain `'player'` ([travel.ts:219](src/world/travel.ts:219)), so a
+subject to a plain `'player'` ([travel.ts:234](src/world/travel.ts:234)), so a
 caller that forgets to say who is asking gets the strictest reading.
 
 **A law can change mid-run.** `amend` returns a new ruleset with one law
@@ -270,7 +270,7 @@ as one that never changed.
 **Permission and geography are separate questions.** The ground law says who may
 dig; `world.depthBelowGround` says how far there is to dig
 ([ruleset.ts:153](src/rules/ruleset.ts:153), checked at
-[travel.ts:234](src/world/travel.ts:234)). Without it, a world that permits
+[travel.ts:249](src/world/travel.ts:249)). Without it, a world that permits
 digging had no bottom and every floor down was a model call.
 
 **A law is learned by hitting it.** `forbids` returns the `Law` rather than a
@@ -320,7 +320,7 @@ build `into` ([floorgen.ts:342](src/world/floorgen.ts:342)); its guard against
 overwriting the town keys on that id rather than on depth 0
 ([floorgen.ts:354](src/world/floorgen.ts:354)), because an outer world may sit
 at depth 0 perfectly legally. A region with no
-`exits` derives up and down from depth ([travel.ts:176](src/world/travel.ts:176))
+`exits` derives up and down from depth ([travel.ts:191](src/world/travel.ts:191))
 — every world saved before this.
 
 Eleven more are OPTIONAL, and absent means *nobody has done that yet* rather than
@@ -355,10 +355,10 @@ anything derives from the seed alone.
   what it fades from.
 - `clock` — world time in TEN-MINUTE ticks, separate from `turn`
   ([types.ts:328](src/world/types.ts:328)); absent reads the turn count
-  ([travel.ts:82](src/world/travel.ts:82)). `turn` stays the count of play turns
+  ([travel.ts:97](src/world/travel.ts:97)). `turn` stays the count of play turns
   because it seeds every fight. A play turn covers the time its action took: a
-  link's `travelTime` ([travel.ts:54](src/world/travel.ts:54)), a stair's
-  `stairCost` ([travel.ts:65](src/world/travel.ts:65)), an hour per rest turn
+  link's `travelTime` — its `linkMinutes`, rounded up to ticks ([travel.ts:71](src/world/travel.ts:71)), a stair's
+  `stairCost` ([travel.ts:80](src/world/travel.ts:80)), an hour per rest turn
   ([rest.ts:120](src/play/rest.ts:120)), and at least one tick otherwise.
 - `journeys` — grudges on the road ([types.ts:329](src/world/types.ts:329),
   [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
@@ -488,11 +488,12 @@ come from?"
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:14](src/world/strata.ts:14), [:52](src/world/strata.ts:52)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
 | `holderOf` ([holding.ts:14](src/world/holding.ts:14)) | a place, `World.people` | who holds a settlement: the player if stored, else the highest standing present |
-| `signposted` / `walkRoute` ([travel.ts:260](src/world/travel.ts:260), [:280](src/world/travel.ts:280)) | a region, where you stand, typed text | the place names you can know of — one rule, shared by the redaction wall and walking — and the fewest-step route a typed "go to" walks |
+| `signposted` / `walkRoute` ([travel.ts:275](src/world/travel.ts:275), [:295](src/world/travel.ts:295)) | a region, where you stand, typed text | the place names you can know of — one rule, shared by the redaction wall and walking — and the fewest-step route a typed "go to" walks |
 | `personRef` ([delta.ts:59](src/play/delta.ts:59)) | a name or id the model wrote | who it means: the id, else one name match ignoring case, spaces and punctuation, people here first; else refused, and never guessed |
 | `lawFrom` ([strata.ts:71](src/world/strata.ts:71)) | `World.strata`, floor, a law | the innermost stratum that STATES that law — how a wing inside a band keeps the band's laws |
 | `eraOf` → `dateOf` / `timeLine` ([strata.ts:100](src/world/strata.ts:100), [calendar.ts:74](src/world/calendar.ts:74), [:184](src/world/calendar.ts:184)) | seed, strata, floor | how many years an era floor lies behind the world's, and the date read on that floor — only the year moves |
-| `linksFrom` ([travel.ts:176](src/world/travel.ts:176)) | a region | its ways out: its own `exits`, or up/down derived from depth |
+| `linksFrom` ([travel.ts:191](src/world/travel.ts:191)) | a region | its ways out: its own `exits`, or up/down derived from depth |
+| `routeOf` ([route.ts:20](src/world/route.ts:20)) | seed, a linked pair, its region | a tile path whose 8-way best cost is exactly the link's minutes × 60, the same both ways, blind to the season |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:293](src/server/game.ts:293)) | `PlayState` | the whole `GameView`, rebuilt per request |
 
@@ -652,7 +653,7 @@ rations, because a short rest spends one.
 ```
  0  ENGINE ACTS ──────────────────────── no model call at all
        a typed "go to X" naming a place you can know of is walked the
-       fewest steps (turn.ts:120, travel.ts:280); "rest"/"sleep", "hunt"
+       fewest steps (turn.ts:120, travel.ts:295); "rest"/"sleep", "hunt"
        and "buy X" go through validateDelta as if proposed (turn.ts:256);
        a hunt that would open no fight says why (turn.ts:280). One record
        each, and steps 1-7 never run.
@@ -1032,8 +1033,8 @@ generated region and its people, because `foldPlay` is synchronous and holds no
 `Provider`. `applyClimb` is pure and drives **both** the live path and replay,
 so the two cannot drift apart ([climb.ts:43](src/play/climb.ts:43)). A crossing
 that is not a stair names its destination and goes through `traverse`
-([travel.ts:187](src/world/travel.ts:187)), which REFUSES a stair
-([:196](src/world/travel.ts:196)) — otherwise a derived down-link would be a way
+([travel.ts:202](src/world/travel.ts:202)), which REFUSES a stair
+([:211](src/world/travel.ts:211)) — otherwise a derived down-link would be a way
 around the ground law and the world's bottom, both of which live in `descend`.
 
 **Leaving a loop floor uncleared puts it back** ([climb.ts:137](src/play/climb.ts:137),
@@ -1095,7 +1096,7 @@ mints the far side ([state.ts:98](src/play/state.ts:98)).
 **5. The redaction wall is a type, with a runtime backstop.** A place is hidden unless you have DISCOVERED it, on every floor
 ([redact.ts:208](src/llm/redact.ts:208)) — *"everything on another floor is hidden, discovered or not"* was
 true until `8dc4c32`, and refused every turn that mentioned the stair just climbed. Which
-names you may WALK to is the same rule ([travel.ts:260](src/world/travel.ts:260)).
+names you may WALK to is the same rule ([travel.ts:275](src/world/travel.ts:275)).
 
 **6. Adding an event kind means adding it to `FOLDED_KINDS`**
 ([sessions.ts:73](src/db/sessions.ts:73)) — or it is written and silently
@@ -1559,7 +1560,7 @@ Every balance number, and where it lives.
 | grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:101](src/social/edge.ts:101) |
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:1015](src/play/combat.ts:1015) |
 | clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:13](src/world/calendar.ts:13) |
-| a place link / a stair | 1–3 ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:45](src/world/travel.ts:45), [:65](src/world/travel.ts:65), [:54](src/world/travel.ts:54) |
+| a place link / a stair | 6–42 min (each end by kind 3/5/7/9, seed 0–10, biome ×1/×1.25/×1.5 by keyword), charged in whole ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:36](src/world/travel.ts:36), [:45](src/world/travel.ts:45), [:80](src/world/travel.ts:80), [:71](src/world/travel.ts:71) |
 | needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:477](src/play/delta.ts:477) |
 | night | 20:00–06:00 | [calendar.ts:175](src/world/calendar.ts:175) |
 | grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:212](src/play/journey.ts:212), [edge.ts:106](src/social/edge.ts:106) |
@@ -1669,7 +1670,7 @@ evidence for the settlement rather than against it.
 *No `Stratum.topology` knob.* The plan had a stratum declare whether it is a
 stack or a graph. It does not need to: a region's own `exits` already says, and
 a region without them is a stack by derivation
-([travel.ts:176](src/world/travel.ts:176)). A knob would be a second source for
+([travel.ts:191](src/world/travel.ts:191)). A knob would be a second source for
 one fact.
 
 *No `story` stratum kind.* It would behave exactly like `static` until quests
