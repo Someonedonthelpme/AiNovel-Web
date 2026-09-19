@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **next after 6b** (user's call, 2026-09-11) | nothing built; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped 2026-09-19 (`91f2030`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8; stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -850,22 +850,151 @@ ruler of nations.
   (ARCHITECTURE §10). A settlement you hold is a place you can long-rest — a base
   halfway up the tower.
 
-### 2. Maps — the Ragnarok model
-- **Every province is one grid map**, joined to its neighbours at PORTALS. The
-  existing place graph IS the portal list, so the Director still picks from
-  connected places and the engine pathfinds the tiles.
-- **Bigger levels are coarser grids**: a floor is a grid whose cells are
-  provinces. One grid type at every scale; an interior is a finer grid.
-- **Maps are drawn by the engine from the seed and the place's id, never
-  stored.** Only changes are stored (what was built, what fell, who died where).
-  The model names and themes zones and never draws tiles — it counts and keeps
-  adjacency unreliably, the same reason it never sets a stat.
-- **Distance is travel time**, so crossing a big forest costs turns and needs.
-- **Combat happens on the local map** (decided), in a window around the player.
-  **Objection:** balance was measured on fixed open arenas; the window needs a
-  size clamp and `npm run fight` re-measured.
-- **Objection: text-first becomes map-first.** The grid sits UNDER the graph, so
-  nothing in the Director or validation changes — but pacing and UI do.
+### 2. Maps — walkable space (redesigned 2026-09-19)
+
+**What.** The world becomes space you WALK, not a graph you click. Every place is a
+map, every link between places is a map, and the player crosses them tile by tile.
+
+**Why.** A place graph moved by the Director fails in play: `scripts/probe.ts` found
+the Director refusing "go to" an ADJACENT stair three times, inventing a man who
+blocked the way, and stranding the climber on floor 0. Movement has one correct
+answer, so the model should not be asked for it. And the game the user wants is
+Ragnarok Online's fields and D&D's battle maps, not a node list.
+
+**Replaced, 2026-09-19** (the earlier 2026-09-11 text, kept as history):
+*"Every province is one grid map, joined to its neighbours at PORTALS … the engine
+pathfinds the tiles"* — kept, but the route between places is now a map of its own
+(C below), where before it had none. *"Maps are drawn by the engine from the seed
+and the place's id, never stored"* — REVERSED: a derived map shifts under every save
+the day the generator changes (walls move, a door lands in a river), and that failure
+is silent; maps are now stored on first entry. *"Combat happens on the local map"* —
+kept, and made exact by the tile size. *"Objection: text-first becomes map-first"* —
+answered by the walk loop below: walking never calls the model, and everything that
+matters still happens at a stop, turn by turn, in text.
+
+**Decided with the user, 2026-09-19:**
+- **Walk, don't click nodes.** No movement by clicking a place on a map.
+- **Travel time shapes the route.** A link's travel time is the INPUT that says how
+  long and how winding its route is — the inverse of today's `linkCost`, a flat 1–3
+  tick draw that is an output (`world/travel.ts:45`).
+- **Route model C: a link is a FIELD map.** Places are HUB maps; each link between
+  them is a field map between two portals — Ragnarok's towns and fields.
+- **A tile is 1.5 m** — D&D's five feet. Combat already counts in those units (base
+  speed 6), so walking and fighting are one grid.
+- **Maps are not fixed squares.** A map has a bounding box; its walkable shape comes
+  from terrain — a field is a winding band with side branches, a town is shaped by
+  its walls and streets.
+
+**Approved in bulk, 2026-09-19** (Claude's picks, approved together; the first things
+to revisit):
+- **Store each map once, on first entry**, in its own table — never in the world
+  snapshot or the event log. About 40 KB raw for a 200×200 hub (estimated, not
+  measured). A WALK event records where it stopped and what it cost, so replay never
+  re-runs pathfinding and the log does not depend on tiles.
+- **Map kinds, closed:** `hub | field | interior | dungeon`. A stratum WING stays a
+  range of floors; a dungeon map is one place's rooms and corridors.
+- **Scale follows the tile:** about one tile a second walking, so a 10–30 minute link
+  is a 600–1,800 tile route. The player sees a scrolling window (~40×25 tiles);
+  maps are generated and pathfound in chunks; walking animates fast on screen while
+  the game clock is charged per tile; a stair between floors stays abstract (a portal
+  with its 1–3 hours).
+- **The route from the time budget:** the best path costs exactly the link's time, so
+  NPC journeys — which never walk tiles — stay consistent; wandering costs more. Slack
+  between the straight line and the budget is spent on obstacles. Terrain has a cost
+  per tile (marsh, snow), which is where winter's +50% moves. `linkCost` gets finer
+  grain, weighted by the two places' kinds and the biome — its own `ponytail:`.
+- **The engine loop while walking never calls the model.** It pathfinds, charges time
+  per tile, and every tick runs what the clock already drives (needs, journeys,
+  sightings, night). It STOPS on arrival, a portal, someone in view, an encounter, a
+  need at its threshold, or nightfall on wild ground; only a stop that means
+  something calls the Director. The Director hears space coarsely ("forty minutes
+  along the salt marsh"; "twenty paces north"), never coordinates.
+- **Portals are everything that crosses:** a place's exits, links, stairs up AND down,
+  `revealWay`. Going down is walking onto the down stair — which gives the web app
+  the descent it has never had (`godown`, `play/climb.ts:307`, has no route).
+- **The side column** becomes information, not a control: a biome-shaded MINIMAP of
+  the map you are on (click to expand); a FLOOR MAP — the place graph laid out,
+  discovered only, view-only; and a TOWER VIEW tab — the strata, the bands, each era
+  floor's year, what you hold, the deepest floor, grudges on the road.
+- **Discovery is per map,** not per tile: no fog-of-war storage.
+- **Era floors of one band share one map seed** — the same hills and river in every
+  era, with different overlays. **A loop reset clears overlays.**
+
+### 2a. What the world holds — the types (2026-09-19, approved in bulk)
+
+| layer | type | what it is |
+|---|---|---|
+| space | **Map** | tiles with terrain; `hub \| field \| interior \| dungeon` |
+| space | **Zone** | a named or functional area of a map: a district, a plot, a room, a field |
+| space | **Portal** | a door, a stair, a map edge |
+| built | **Building** | a footprint on a zone; storeys, each an interior map; a TYPE from a closed catalogue; tier, condition, owner |
+| things | **Feature** | furniture, workstations, containers, doors, resource nodes, light, traps — each with state |
+| things | **Ground item** | item instances lying on a tile (the existing namespaced instances) |
+| living | **Actor** | named people and creatures: a position and a routine; crowds stay pooled (§5) |
+| identity | **Place** | the graph node (§3's province): name, holder, crowd, its hub map |
+| identity | **Site** | a named point on a field — shrine, camp, ruin — that can become a place |
+| storage | **Overlay** | not a thing: the stored record of what CHANGED on any of the above |
+
+- **The zone is the unit most things attach to:** ownership (you hold a plot, not 400
+  tiles), law scope (§3 already says laws gain a scope), naming (the model names
+  zones, never tiles), building permission, and where an actor lives and works —
+  which places people on the map for free.
+- **Buildings in a town come from what the place already knows:** streets from each
+  portal to a square; plots along them; one building per trade in the place's
+  population (`character/population.ts`), per named person with a role (the holder's
+  hall), per affordance that implies one (market, inn), and homes for the headcount;
+  style from culture and biome; each footprint's door is a portal to its interior.
+  The model NAMES the town and its notable buildings; the engine places every
+  footprint.
+- **Storeys are maps too:** each storey an interior map, stairs within a building are
+  portals costing seconds, upper storeys drawn from the ground footprint, cellars and
+  dungeon levels the same. Tower floor → storey → dungeon level is one idea at three
+  sizes. You see one storey at a time.
+- **An interior is generated when its door is first opened,** not with the town.
+
+### 2b. When things are created (2026-09-19, approved in bulk)
+
+| level | what | when |
+|---|---|---|
+| seed | everything, in principle | at creation — determinism fixes the world |
+| skeleton | strata, bands, floor count, each floor's rough shape | at creation, engine only |
+| content | names, people, culture (model); tiles (engine) | on first arrival, then stored |
+
+Generating every floor's content at creation would cost a model call per floor (30+
+minutes for 30 floors) and dynamic floors regenerate by design. Moving maps and places
+into their own tables takes them out of the `World` blob, and keeping that blob small is
+the only reason compression exists — so storing maps is also the road to removing
+compression, which §4 needs.
+
+### 2c. Stages
+
+| stage | what | depends on | done means |
+|---|---|---|---|
+| W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed |
+| W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change |
+| W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding |
+| W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing |
+| W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field |
+| W6 | era bands share a map seed; loop reset clears overlays | W2 | two era floors of a band have the same ground |
+| W7 | combat on a window of the map; re-measure balance (`npm run fight`) | W3, W4 | the balance chart re-pinned |
+| W8 | zones, buildings and interiors in towns | W2 | a town's smithy is where its smith works |
+
+W1–W3 change no UI and each is testable alone; stopping after W3 still leaves real
+distances and a walk the model cannot refuse.
+
+### 2d. Open, for the user
+1. Typed "go to X" — keep it, with the ENGINE pathfinding (no Director), as the text
+   path onto the same walk? Claude would keep it: it is the only fix for the stranded
+   climber before W3.
+2. The floor map — view-only, or click a far hub to auto-walk there (still walking,
+   charged time, every stop applies)? Claude: later, as a convenience.
+3. Night — walk freely with less vision, or stop at nightfall on wild ground?
+4. Named NPCs — fixed spots in their buildings now, daily routines with step 8?
+5. May you enter any house? Claude: yes, and entering a home uninvited is a DEED
+   witnesses see.
+6. What fills a field? At kilometre scale an empty field is a loading bar — resource
+   nodes, sites and crowds every few hundred tiles, or it should not be this long.
+7. A model-named thing (a hidden cave, `revealWay`) needs a tile; the ENGINE picks it.
 
 ### 3. The administrative hierarchy — the Paradox model
 
@@ -891,13 +1020,41 @@ ruler of nations.
   one floor, a floor to exactly one innermost stratum, checked at generation the
   way `validateRegion` checks a map.
 
-### 4. Building
-- A closed, law-gated verb: build a settlement on free cells in territory you
-  hold, for coin and materials.
-- **Objection, and it decides the design:** a compressed floor is REBUILT by the
-  model from its gazetteer, which would erase what the player built. Built
-  things are stored as diffs on the seeded map and handed to any rebuild as
-  fixed canon.
+### 4. Building — founding and upgrading (redesigned 2026-09-19)
+
+**Kept from 2026-09-11:** a closed, law-gated verb, paid in coin and materials; built
+things are stored as changes on the map, never re-authored by the model. *"Build a
+settlement on free cells in territory you hold"* is now two verbs, below. *"Stored as
+diffs on the seeded map and handed to any rebuild as fixed canon"* is now simpler:
+maps are stored (§2), so a change is an edit to a stored map — which needs
+compression gone first.
+
+**Approved in bulk, 2026-09-19** (Claude's picks; first to revisit):
+- **Founding a place.** Claim a zone (ownership widened from a settlement to land);
+  found a settlement on it — gated by the territory law (`holdLand`, `build`), paid in
+  coin, materials and SETTLERS drawn from the crowds of nearby places that trust you
+  (§5), since a town without people is empty. The engine adds a place node to the
+  floor's graph and turns the zone into a hub map carved from the field's own tiles,
+  so it is the same land. The player or the model names it.
+- **Upgrading a building.** A building TYPE in a closed catalogue defines its tiers.
+  An upgrade costs coin and materials, LABOUR (workers of the trade, from the crowd),
+  TIME (a project on the calendar), and SPACE (a larger footprint needs free tiles in
+  its zone — a smithy hemmed in by the river cannot grow). Every tier names its reader
+  before it exists (§5's objection): a workshop's tier caps what can be crafted and
+  refined; an inn's, how well you rest; a wall's, defence.
+- **Materials come from resource features** on tiles (trees, ore, wells), so gathering
+  is play; without them "materials" are coin by another name.
+
+**Open, for the user:**
+1. Building on a LOOP floor — wiped by the reset (a trap), or forbidden by law until
+   the floor is cleared? Claude: forbidden until cleared.
+2. Building on an ERA floor — what you build on floor 21 stands as RUINS on the era
+   floors above: an echo in stone. Claude: yes.
+3. Off-screen construction — until step 8's scheduler, a project catches up in one
+   closed-form step on return (§5).
+4. Do NPCs build? If only the player changes the world, towns never grow. Step 8 —
+   but the types should let an NPC use the same verbs.
+5. Decay and loss — wear, fire, conquest. Without loss, building is accumulation.
 
 ### 5. Crowds, markets and government — the Victoria model
 - **The crowd is the compressed form of people** — a population group (species,
