@@ -124,7 +124,9 @@ export function floorSchema(floor: number) {
       places: { type: 'array', items: placeSchema, minItems: places.min, maxItems: places.max },
       entrance: str,
       exit: str,
-      people: { type: 'array', items: personSchema, minItems: 0, maxItems: people.max },
+      // The budget's minimum, which nothing read: `minItems: 0` let a floor come back
+      // with nobody on it (era floor 21, live), and nobody to echo or descend from.
+      people: { type: 'array', items: personSchema, minItems: people.min, maxItems: people.max },
       /** Local ecology — names only; the numbers come from `statblock.ts`. */
       creatures: { type: 'array', items: str, minItems: 1, maxItems: 4 },
       /**
@@ -290,10 +292,16 @@ function userPrompt(
     ].filter(Boolean).join('\n');
   }
 
-  const belowName = Object.values(world.regions).find((r) => r.floor === floor - 1)?.name;
+  // The last few floors, not only the one below: shown one floor to be unlike,
+  // the model flipped between two opposites for twenty floors (Obsidian,
+  // Verdant, Obsidian...). `ponytail: four is a guess; widen it if pairs recur.`
+  const recent = [1, 2, 3, 4]
+    .map((back) => Object.values(world.regions).find((r) => r.floor === floor - back))
+    .filter((r): r is NonNullable<typeof r> => Boolean(r) && r!.floor > 0)
+    .map((r) => `"${r.name}"`);
   return [
     `Build floor ${floor}, newly reached.`,
-    belowName ? `The floor below was "${belowName}".` : '',
+    recent.length ? `The floors below, nearest first: ${recent.join(', ')}.` : '',
     `The world: ${world.regions[regionIdFor(0)]?.name ?? ''}.`,
     `The climber is ${sheet.name}, ${sheet.background.name}.`,
     /*
@@ -310,7 +318,7 @@ function userPrompt(
         `Who is found here: ${stratum.theme.people}.`,
         'Vary what is IN it — the rooms, the trouble, who is standing where — never what it is.',
       ].join('\n')
-      : 'Make this floor feel unlike the one below it.',
+      : recent.length ? 'Make this floor feel unlike any of those floors.' : 'Make this floor feel like somewhere new.',
   ].filter(Boolean).join('\n');
 }
 
@@ -514,7 +522,12 @@ export async function generateFloor(
     ...(wing ? { stratum: wing } : {}),
     ...(band ? { band } : {}),
     repairs,
-    warnings: check.warnings.map((w) => w.message),
+    warnings: [
+      ...check.warnings.map((w) => w.message),
+      // The engine invents no words, so a floor the model left empty stays empty —
+      // but loudly: nobody here means no deed witnessed and no line to descend.
+      ...(Object.keys(people).length === 0 ? [`floor ${floor}: nobody lives here — the model named no one`] : []),
+    ],
   };
 }
 

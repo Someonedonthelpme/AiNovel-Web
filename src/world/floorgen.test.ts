@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakeProvider } from '../llm/provider.ts';
 import { sheet } from '../session/fixtures.ts';
-import { placeBudget } from './budget.ts';
+import { peopleBudget, placeBudget } from './budget.ts';
 import { floorSchema, generateFloor } from './floorgen.ts';
 import type { GeneratedFloor } from './floorgen.ts';
 import { compressRegion } from './lod.ts';
@@ -389,4 +389,50 @@ test('the first era has no ancestors, and lines are dealt from the seed', async 
     linesOf(await generateFloor(provider(), belowAlive('ora', 'bram'), 22, pc)),
     linesOf(await generateFloor(provider(), belowAlive('ora', 'bram'), 22, pc)),
   );
+});
+
+/*
+ * A floor must have people (approved 2026-09-19). The schema asked for
+ * `minItems: 0` while `peopleBudget` defined a minimum nothing read, and the
+ * probe found era floor 21 generated with nobody on it — no one to echo a deed
+ * or carry a line. The engine still invents no words: a model that sends nobody
+ * anyway is flagged, not papered over.
+ */
+test('the floor schema asks for at least the budget minimum of people', () => {
+  const schema = floorSchema(21) as unknown as { properties: { people: { minItems: number } } };
+  assert.equal(schema.properties.people.minItems, peopleBudget(21).min);
+  assert.ok(peopleBudget(21).min >= 1);
+});
+
+test('a floor the model still gave nobody is flagged, not silent', async () => {
+  const empty = await generateFloor(provider(generated({ people: [] })), world(), 3, pc);
+  assert.ok(empty.warnings.some((w) => /nobody lives here/i.test(w)), JSON.stringify(empty.warnings));
+});
+
+/*
+ * The floor names alternated Obsidian / Verdant for twenty floors in three live
+ * runs. The prompt showed only the floor below and asked for something unlike
+ * it, so the model flipped between two opposites. It now sees the last four.
+ */
+const withFloors = (names: Record<number, string>) => world({
+  regions: {
+    ...world().regions,
+    ...Object.fromEntries(Object.entries(names).map(([f, name]) =>
+      [`floor-${f}`, { ...firstFloor(), id: `floor-${f}`, floor: Number(f), name }])),
+  },
+});
+
+test('the prompt names the last four floors, not just the one below', async () => {
+  const p = provider();
+  await generateFloor(p, withFloors({ 1: 'The Obsidian A', 2: 'The Verdant B', 3: 'The Obsidian C', 4: 'The Verdant D' }), 5, pc);
+  for (const n of ['The Obsidian A', 'The Verdant B', 'The Obsidian C', 'The Verdant D']) {
+    assert.ok(p.allSentText().includes(n), n);
+  }
+  assert.match(p.allSentText(), /unlike any of/i);
+});
+
+test('inside a themed band the recent floors are context, never an instruction to differ', async () => {
+  const q = provider();
+  await generateFloor(q, eraBanded(eraLand), 22, pc);
+  assert.doesNotMatch(q.allSentText(), /unlike/i);
 });
