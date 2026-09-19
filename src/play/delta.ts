@@ -10,10 +10,11 @@ import type { SheetRecord } from './sheetaction.ts';
 import type { AxisChange, DriftCause } from '../character/drift.ts';
 import { readPlayerRegister, registerConsequence } from '../llm/register.ts';
 import { nudge, nudgeAll, PLAYER } from '../social/edge.ts';
-import { beliefsAfter, claimOf, witnessDeed } from '../social/deed.ts';
+import { beliefsAfter, claimOf, ECHOING, witnessDeed } from '../social/deed.ts';
 import { carry, seed } from '../social/ambient.ts';
 import { firsthand } from '../character/belief.ts';
-import type { Deed } from '../social/deed.ts';
+import type { Deed, Echo } from '../social/deed.ts';
+import { lawFrom } from '../world/strata.ts';
 import { amend, BINDINGS, CONSTRAINTS, rulesOf } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
@@ -564,7 +565,20 @@ function afterDeeds(world: World, deeds: readonly Deed[], rules: Ruleset): World
     ? world.reputation
     : { ...world.reputation, [world.currentRegion]: (world.reputation?.[world.currentRegion] ?? 0) + moved };
 
-  return { ...world, edges, people, ambient, reputation };
+  return { ...world, edges, people, ambient, reputation, ...echoesAfter(world, deeds, place?.name ?? '') };
+}
+
+/** The weighty deeds of this turn, kept for the eras above, if this floor is an era's. */
+function echoesAfter(world: World, deeds: readonly Deed[], where: string): { echoes?: Echo[] } {
+  const floor = world.regions[world.currentRegion]?.floor;
+  if (floor === undefined || lawFrom(world, floor, 'time')?.laws?.time !== 'era') return {};
+  const kept = deeds
+    .filter((d) => (ECHOING as readonly string[]).includes(d.kind))
+    .map((d): Echo => ({
+      floor, kind: d.kind, where,
+      ...(d.toward && world.people[d.toward] ? { whom: world.people[d.toward].name } : {}),
+    }));
+  return kept.length ? { echoes: [...(world.echoes ?? []), ...kept] } : {};
 }
 
 /**

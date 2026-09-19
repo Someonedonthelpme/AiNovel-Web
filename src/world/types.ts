@@ -316,6 +316,8 @@ export type World = {
    */
   clock?: number;
   journeys?: import('../play/journey.ts').Journey[];
+  /** Deeds done on era floors, told on the era floors above them (`ECHOING`). Absent is none. */
+  echoes?: import('../social/deed.ts').Echo[];
   /** What this world calls its calendar. Absent means the fallback words (`calendarWords`). */
   calendar?: import('./calendar.ts').CalendarWords;
   /**

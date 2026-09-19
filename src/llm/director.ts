@@ -18,7 +18,7 @@ import type { WriterBrief } from './redact.ts';
 import { forbids, ruleClaim, BINDINGS, CONSTRAINTS } from '../rules/ruleset.ts';
 import type { Binding, Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
-import { stratumAt } from '../world/strata.ts';
+import { eraOf, lawFrom, stratumAt } from '../world/strata.ts';
 import { FOLK } from '../character/species.ts';
 
 /**
@@ -297,6 +297,22 @@ function driveLine(state: PlayState): string {
   return `They are climbing for ${want ?? 'something they will not name'}, and away from ${fear ?? 'something else'}.`;
 }
 
+/**
+ * ECHOES (DESIGN 6c era E4): what the climber did on the era floors BELOW this
+ * one, in the same band, and how many years back that was. Never the floors
+ * above: the past does not remember its future.
+ */
+function echoesTold(world: PlayState['world'], floor: number): string[] {
+  const band = lawFrom(world, floor, 'time');
+  if (band?.laws?.time !== 'era') return [];
+  return (world.echoes ?? [])
+    .filter((e) => e.floor < floor && lawFrom(world, e.floor, 'time')?.id === band.id)
+    // ponytail: the five most recent, to keep the prompt small; raise if it has room.
+    .slice(-5)
+    .map((e) => `  - the climber ${e.kind}${e.whom ? ` ${e.whom}` : ''}${e.where ? ` at ${e.where}` : ''}, `
+      + `${eraOf(world, floor) - eraOf(world, e.floor)} years ago`);
+}
+
 export function directorContext(state: PlayState, canonFacts: string[]): string {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
@@ -369,6 +385,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     : '';
 
   const here = region ? stratumAt(state.world, region.floor) : null;
+  const echoes = region ? echoesTold(state.world, region.floor) : [];
 
   const workedOut = CONSTRAINTS
     .filter((c) => believes(state.sheet.beliefs ?? [], ruleClaim(c)))
@@ -396,6 +413,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
       + `${here ? `, in ${here.name}` : ''})`,
     `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}`,
     `Time: ${timeLine(state.world, region?.floor)}`,
+    echoes.length ? `What this land remembers from its past (old stories, not news):\n${echoes.join('\n')}` : '',
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,
     people.length ? `People here:\n${people.join('\n')}` : 'People here: nobody',

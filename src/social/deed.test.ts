@@ -4,7 +4,7 @@ import { believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from './edge.ts';
 import type { Edges } from './edge.ts';
 import {
-  beliefsAbout, claimOf, DEEDS, guiltFor, isDirectorDeed, markOf, spreadOf, witnessDeed, witnessesOf,
+  beliefsAbout, claimOf, DEEDS, ECHOING, guiltFor, isDirectorDeed, markOf, spreadOf, witnessDeed, witnessesOf,
 } from './deed.ts';
 import type { Deed } from './deed.ts';
 import { applyTurn, validateDelta } from '../play/delta.ts';
@@ -16,7 +16,8 @@ import { toWriterView } from '../llm/redact.ts';
 import { runWriter } from '../llm/writer.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { withOverrides, STANDARD } from '../rules/ruleset.ts';
-import type { TurnRecord } from '../play/state.ts';
+import type { PlayState, TurnRecord } from '../play/state.ts';
+import { eraOf } from '../world/strata.ts';
 
 const deed = (over: Partial<Deed> = {}): Deed =>
   ({ kind: 'insulted', doer: PLAYER, toward: 'smith', at: 'town', ...over });
@@ -367,4 +368,43 @@ test('a stranger who saw nothing has nothing to go on', () => {
     speaking: 'smith',
   });
   assert.deepEqual(view.peoplePresent.find((x) => x.id === 'smith')?.believes, []);
+});
+
+/* -------------------------------------------------------------------------- */
+/* ECHOES (6c era E4): a weighty deed on an era floor is remembered on the era */
+/* floors above it, told as how many years ago it was.                         */
+/* -------------------------------------------------------------------------- */
+
+const eraStrata = {
+  tower: { id: 'tower', name: 'the tower', kind: 'dynamic' as const, from: 0 },
+  era: { id: 'era', name: 'the eras', kind: 'dynamic' as const, parent: 'tower', from: 21, to: 30, laws: { time: 'era' as const } },
+};
+const onFloor = (state: PlayState, floor: number): PlayState => ({
+  ...state,
+  world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...state.world.regions['floor-0'], floor } } },
+});
+const inEra = (floor: number) => onFloor(playState({ strata: eraStrata }), floor);
+const directorOn = async (state: PlayState, floor: number) => {
+  const p = new FakeProvider({ structured: [] });
+  await runDirector(p, onFloor(state, floor), 'look around', 'exploration', []).catch(() => {});
+  return p.allSentText();
+};
+
+test('the deeds that echo are closed, and chosen by the engine', () => {
+  assert.deepEqual([...ECHOING], ['helped', 'killed', 'spared']);
+});
+
+test('a weighty deed on an era floor is remembered on the era floors above it', async () => {
+  const after = applyTurn(inEra(22), turn({ delta: { deed: { kind: 'helped', toward: 'smith' } } })).state;
+  assert.deepEqual(after.world.echoes?.map((e) => [e.floor, e.kind]), [[22, 'helped']]);
+  const w = after.world;
+  assert.match(await directorOn(after, 25), new RegExp(`${eraOf(w, 25) - eraOf(w, 22)} years ago`));
+  assert.doesNotMatch(await directorOn(after, 21), /years ago/, 'the past does not remember its future');
+});
+
+test('an insult is not history, and outside an era band nothing echoes', () => {
+  const insult = turn({ delta: { deed: { kind: 'insulted', toward: 'smith' } } });
+  assert.equal(applyTurn(inEra(22), insult).state.world.echoes, undefined, 'an insult is not history');
+  const help = turn({ delta: { deed: { kind: 'helped', toward: 'smith' } } });
+  assert.equal(applyTurn(inEra(5), help).state.world.echoes, undefined, 'outside an era band nothing echoes');
 });

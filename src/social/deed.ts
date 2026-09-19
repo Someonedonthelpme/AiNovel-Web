@@ -55,6 +55,16 @@ export type DeedKind = (typeof DEEDS)[number];
  * engine resolves itself, and a model able to claim one could report a killing
  * that never happened.
  */
+/**
+ * The deeds that outlive their era (DESIGN 6c era E4): done on an era floor, they
+ * are told on the era floors above it. Chosen by the engine, like the marks — an
+ * insult is local, a life taken or saved is history.
+ */
+export const ECHOING = ['helped', 'killed', 'spared'] as const satisfies readonly DeedKind[];
+
+/** A deed remembered by later eras, kept as it was seen: names, not ids, since it is history. */
+export type Echo = { floor: number; kind: DeedKind; whom?: string; where: string };
+
 export const DIRECTOR_DEEDS = ['helped', 'insulted', 'humiliated', 'threatened'] as const;
 export type DirectorDeed = (typeof DIRECTOR_DEEDS)[number];
 
