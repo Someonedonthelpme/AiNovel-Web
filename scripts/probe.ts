@@ -213,6 +213,8 @@ async function tryToBuy(id: string): Promise<boolean> {
   const trust = (await getGame(id))!.people.find((p) => p.id === holder.id)?.trust ?? 0;
   log(`  ${holder.name}'s trust: ${trust}`);
 
+  // Talking can move you (live: the courting walked the climber out); buy standing in it.
+  await walkTo(id, settlement.id);
   const offer = await turn(id, 'buy this settlement', 'exploration');
   for (const why of offer?.rejected ?? []) log(`  refused: ${why}`);
   const after = await stateOf(id);
