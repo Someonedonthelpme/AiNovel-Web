@@ -65,6 +65,26 @@ export function repairAbilities(proposed: Partial<Abilities>): Repair<Abilities>
  */
 export function repairRegion(region: Region): Repair<Region> {
   const repairs: string[] = [];
+
+  // --- one id per place ---------------------------------------------------
+  // The model sometimes names two places with one id. Rejecting the floor left
+  // the climb with no way past (found live, floor 18), so the LATER ones are
+  // renamed and keep their own connections; every other reference still means
+  // the first, and the steps below link the renamed one in.
+  const taken = new Set<string>();
+  const unique = region.places.map((place) => {
+    if (!taken.has(place.id)) {
+      taken.add(place.id);
+      return place;
+    }
+    let n = 2;
+    while (taken.has(`${place.id}_${n}`)) n += 1;
+    const id = `${place.id}_${n}`;
+    taken.add(id);
+    repairs.push(`renamed duplicate place id "${place.id}" to "${id}"`);
+    return { ...place, id };
+  });
+  region = { ...region, places: unique };
   const byId = new Map(region.places.map((p) => [p.id, p]));
 
   // --- clean the edges -----------------------------------------------------

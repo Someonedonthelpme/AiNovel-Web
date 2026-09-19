@@ -190,3 +190,16 @@ test('repairing a voice fixes every band and reports what it changed', () => {
   assert.equal(r.value.particleBands['2'], 'นะ', 'untouched bands stay untouched');
   assert.equal(r.repairs.length, 3);
 });
+
+test('duplicate place ids are renamed, not fatal: both places survive and the floor is playable', () => {
+  // Live, floor 18 came back from the model with two places sharing an id, the
+  // validator refused it, and the climb failed with no way past (scripts/probe.ts).
+  const base = groundFloor();
+  const twin = place('market', { name: 'the fish market', connections: ['town'] });
+  const r = repairRegion({ ...base, places: [...base.places, twin] });
+  const names = r.value.places.map((p) => p.name);
+  assert.ok(names.includes('the covered market') && names.includes('the fish market'), 'both places survive');
+  assert.equal(new Set(r.value.places.map((p) => p.id)).size, r.value.places.length, 'every id is unique');
+  assert.ok(!validateRegion(r.value, people).errors.some((e) => e.code === 'DUPLICATE_PLACE_ID'));
+  assert.ok(r.repairs.some((m) => /market/.test(m) && /duplicate/i.test(m)), 'and says what it did');
+});
