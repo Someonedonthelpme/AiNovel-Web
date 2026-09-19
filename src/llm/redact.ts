@@ -203,8 +203,11 @@ export function hiddenStrings(world: World): string[] {
       const elsewhere = record.id !== current;
       // Standing somewhere discovers it, whatever the flag says. Without this
       // the place the player just left counts as a secret the moment they walk
-      // out of it, and every move fails the leak check.
-      const seen = !elsewhere && (place.id === world.currentPlace || place.discovered);
+      // out of it, and every move fails the leak check. A place you DISCOVERED
+      // is seen on any floor: hiding the floor you came up from refused every
+      // turn that mentioned the stair you had just climbed. Upstairs stays
+      // hidden because nothing there is discovered until you arrive.
+      const seen = place.discovered || (!elsewhere && place.id === world.currentPlace);
       const named = seen || (!elsewhere && signposted.has(place.id));
 
       if (!named && place.name.trim()) hidden.push(place.name);

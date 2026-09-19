@@ -41,13 +41,26 @@ test('a name the map already shows is not a secret, but what is inside it still 
   assert.ok(hidden.includes('a rope still hangs into the dark'), 'what you would find there is not');
 });
 
-test('everything on another floor is hidden, discovered or not', () => {
+test('everything upstairs you have not reached is hidden', () => {
   const w = world({
     currentPlace: 'town',
     regions: { 'floor-0': groundFloor(), 'floor-1': firstFloor() },
   });
   const hidden = hiddenStrings(w);
   assert.ok(hidden.includes('the grey grove'), 'the Writer has no business knowing what is upstairs');
+});
+
+test('a place you have been to is not a secret, whichever floor it is on', () => {
+  // Requirement changed by the user, 2026-09-19. Old: "everything on another
+  // floor is hidden, discovered or not" — which also hid the floor you came UP
+  // from, so any turn mentioning the stair you just climbed was refused (found
+  // live by scripts/probe.ts). New: a place is hidden unless you have discovered
+  // it, on every floor; upstairs stays hidden because it is undiscovered.
+  const ground = { ...groundFloor(), places: groundFloor().places.map((p) => (p.id === 'stair' ? { ...p, discovered: true } : p)) };
+  const w = world({ currentRegion: 'floor-1', currentPlace: 'landing', regions: { 'floor-0': ground, 'floor-1': firstFloor() } });
+  const hidden = hiddenStrings(w);
+  assert.ok(!hidden.includes('the first stair'), 'you climbed it');
+  assert.ok(hidden.includes('the dry well'), 'somewhere below you never went is still a secret');
 });
 
 test('a leaked secret is caught rather than narrated', () => {
