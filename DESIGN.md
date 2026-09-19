@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped 2026-09-19 (`91f2030`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8; stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -849,6 +849,18 @@ ruler of nations.
 - **First reader, on day one:** a long rest requires a settlement on floor 0
   (ARCHITECTURE §10). A settlement you hold is a place you can long-rest — a base
   halfway up the tower.
+- **O1 SHIPPED 2026-09-19** (`91f2030`; engine-side buy `2de335f`), verified live by
+  `scripts/probe.ts` (session `ac4c5e2b`): coin by hunting, trust by helping, a
+  purchase, and a long rest in what was bought. **Decided with the user, 2026-09-19:**
+  a settlement's holder is DERIVED from who is there (highest standing) and only the
+  player's holding is stored; a `territory` law axis with one constraint,
+  `holdSettlement`, forbidden to the player in HARSH only; price 50 × floor and trust
+  2 to sell — measured live at about ten won fights on floor 1; a held settlement is
+  a long-rest place on any floor and its floor is never compressed; "buy X" is the
+  engine's, with the Director's free-form negotiation kept alongside it — it is what
+  earns the trust. **Not built:** conquest and reward as ways to acquire; losing a
+  holding; anything a holder does; floor and stratum ownership (so standard and plain
+  do not yet differ).
 
 ### 2. Maps — walkable space (redesigned 2026-09-19)
 
@@ -983,9 +995,9 @@ W1–W3 change no UI and each is testable alone; stopping after W3 still leaves 
 distances and a walk the model cannot refuse.
 
 ### 2d. Open, for the user
-1. Typed "go to X" — keep it, with the ENGINE pathfinding (no Director), as the text
-   path onto the same walk? Claude would keep it: it is the only fix for the stranded
-   climber before W3.
+1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
+   Director (`c7c4ba1`). The same rule then took rest, hunting and buying: a step with
+   one right answer never reaches the model (`4bd5344`, `2de335f`).
 2. The floor map — view-only, or click a far hub to auto-walk there (still walking,
    charged time, every stop applies)? Claude: later, as a convenience.
 3. Night — walk freely with less vision, or stop at nightfall on wild ground?
