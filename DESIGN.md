@@ -1861,6 +1861,19 @@ make each named kind a preset of them:
   81→67) — a lone melee body closing on a ranged climber. d10 (boss anchor) moves
   1–4. Not retuned: the user's call. **Not built:** loop wings; `passage` (you can climb past an uncleared loop floor); what other
   people believe about an undone run.
+- **ERA SHIPPED 2026-09-19** (E1–E5, `0400e58`..`3f802f5`): the `time` law, an era
+  band on floors 21–30 at creation, laws that inherit into nested strata, the band's
+  land, echoes and family lines. ARCHITECTURE edits proposed 2026-09-19.
+  **Decided with the user, 2026-09-19:** an era moves only the YEAR (hour, season
+  and night stay the world's); eras run from the past toward the present going up,
+  10–100 years a floor, dealt from the seed; an era behind year 1 reads "N years
+  before" the reckoning; laws INHERIT up the parent chain and a law a wing states
+  wins (chosen over banning wings inside bands: it matches `dangerAt`, and fixes
+  wings inside the loop band); the band's land is its first floor's, no model call;
+  the echoing deeds are `helped | killed | spared`; one or two descendants per era
+  floor, from the living people of the floor below. **Not built:** echoes reaching
+  the Writer; a descendant whose ancestor you kill after meeting them (they stay);
+  an era band anywhere but 21–30; a band theme the model authors.
 - **A floor may stand empty out of season only where the law allows it.**
   Otherwise another group that lives at that depth fills in. Until stratum laws
   exist, this is a world dial.
