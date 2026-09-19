@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W3 and W4a shipped 2026-09-19** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W4 shipped 2026-09-19** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -985,9 +985,9 @@ compression, which §4 needs.
 | W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed — **SHIPPED 2026-09-19** (`d9ed7b3`) |
 | W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change — **SHIPPED 2026-09-19** (`07207b3`) |
 | W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding — **SHIPPED 2026-09-19** (`205c1bb`), the Director on stops deferred to W5 |
-| W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing — **split 2026-09-19 (user):** W4a, the centre grid, click-walking, doors and stairs, **SHIPPED** (`79be367`, verified live in session `2ffdec3b`); W4b, the minimap, floor map and tower view, next |
+| W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing — **split 2026-09-19 (user):** W4a, the centre grid, click-walking, doors and stairs, **SHIPPED** (`79be367`, verified live in session `2ffdec3b`); W4b, the minimap, floor map and tower view, **SHIPPED** (`4662106`, verified live) |
 | W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field |
-| W6 | era bands share a map seed; loop reset clears overlays | W2 | two era floors of a band have the same ground |
+| W6 | era bands share a map seed; ~~loop reset clears overlays~~ (moved, below) | W2 | two era floors of a band have the same ground |
 | W7 | combat on a window of the map; re-measure balance (`npm run fight`) | W3, W4 | the balance chart re-pinned |
 | W8 | zones, buildings and interiors in towns | W2 | a town's smithy is where its smith works |
 
@@ -1049,6 +1049,31 @@ climbed by command, W4); the Director's `moveTo` still exists and is charged in
 ticks; journeys still round up to whole ticks per link; resuming a walk stopped on a
 field toward the place you left is refused by `walkRoute` (a name never means where
 you stand) and goes to the Director.
+
+**Decided with the user, 2026-09-19, while drafting W4b–W8 (Claude's picks, each a "yes"):**
+- **Tower view grudges are redacted:** only people you have MET who are on the road, and
+  never where they are. The journeys are the engine's secret; showing every pursuer
+  broke invariant 5.
+- **W6 "same ground" means a shared PLACE GRAPH:** the later era floors of a band reuse
+  the first era floor's places — ids, kinds, links — with new names and people each
+  era, and their maps are drawn from the band, not the floor. Sharing only a terrain
+  style was the alternative; it is not the same ground.
+- **W8 needs a closed TRADE catalogue** on named people (smith, innkeeper, merchant,
+  priest, guard, …), chosen by the floor generator from the list and checked by the
+  engine; "Ora the smith" is free text today, and a rule on words enforces nothing. A
+  person with no trade lives in a home.
+- **"Loop reset clears overlays" leaves W6** for whichever stage first WRITES an overlay
+  (likely W8): nothing edits a map today, so the test would pass with nothing built.
+- Also carried by the W5–W8 drafts: the Director on stops stays deferred — a sighting
+  is an engine line, and the person sighted becomes who your next words reach; a fight
+  RECORDS its arena (W7), as a climb records its floor, so replay never needs tiles.
+
+**W4b as built (2026-09-19).** The side column is information: a minimap of the whole
+map you stand on (shrunk to at most 60 cells; click to enlarge), a floor map of
+discovered places only that moves nobody (the old place map walked you on a click), and
+a tower view — strata, each floor with its year, what you hold, deepest floor, and
+grudges as above. **Found live, suspected not proven:** one render crash reading the
+tower of a view fetched before the server change (hot reload); gone on a fresh load.
 
 **W4a as built (2026-09-19), and what it leaves.** The play page shows a 41×25
 window of the map you stand on, drawn from the session's STORED map (`mapFor`, so
