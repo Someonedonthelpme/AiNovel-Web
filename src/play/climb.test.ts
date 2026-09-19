@@ -337,6 +337,15 @@ test('a floor can begin a new wing, and the wing survives a fold', () => {
   assert.deepEqual(replayed.world.strata?.['wing-1'], wing, 'and a reload still knows about it');
 });
 
+// W3: a stair is abstract, so where you stood on the floor below means nothing above.
+test('a climb clears your place on the map: you arrive at the centre of the landing', async () => {
+  const stair = atTheStair();
+  const before = { ...stair, world: { ...stair.world, at: { map: 'hub:floor-0:stair', x: 3, y: 4 } } };
+  const r = await climb(provider(), before);
+  assert.equal(r.error, null);
+  assert.equal(r.state.world.at, undefined);
+});
+
 // 6b stage 7.1b: a climb is a crossing too, so it covers time on the world clock.
 test('climbing covers time on the clock', async () => {
   // A clock that is not the turn count, or a world reading its turns would pass this for free.

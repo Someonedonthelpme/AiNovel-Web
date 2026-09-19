@@ -1,5 +1,6 @@
 import { applyDrift } from '../character/drift.ts';
 import { bumpCounter } from '../character/persona.ts';
+import type { Needs } from '../character/persona.ts';
 import { awardTraits, COUNTERS } from './traits.ts';
 import type { Trait } from './traits.ts';
 import { traitOriginOf, traitsFor } from './traitbook.ts';
@@ -24,13 +25,14 @@ import { findItem, equip } from '../items/types.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { advanceJourneys, fadeGrudges, setOut } from './journey.ts';
-import { isWinter, TICKS_PER_HOUR } from '../world/calendar.ts';
+import { isWinter, MINUTES_PER_TICK, TICKS_PER_HOUR } from '../world/calendar.ts';
 import { passSightings, witnessSighting } from './sighting.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, clockOf, exitsFrom, moveWithinRegion, travelTime } from '../world/travel.ts';
 import type { Fact, Link, PlaceId, RegionId, World } from '../world/types.ts';
+import { unplaced } from '../world/map.ts';
 
 /**
  * The trust boundary between the model and the world.
@@ -237,7 +239,7 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
   }
 
   // Only the engine walks: a model able to propose a route would be choosing movement.
-  if (proposed.walk !== undefined) rejected.push('walk: only the engine walks');
+  if (proposed.walkTo !== undefined) rejected.push('walkTo: only the engine walks');
 
   if (proposed.acquirePlace !== undefined) {
     const why = refusalToSell(state, proposed.acquirePlace);
@@ -302,24 +304,28 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   let movedFrom: string | null = null;
 
   let discovered = false;
-  // A walk charges each step it took, where a moveTo charges its one link.
-  let walkedSteps = 0;
-  for (const to of delta.walk ?? []) {
+  // A walk across the maps (W3) is taken as RECORDED: every place it entered, and
+  // where it stopped. The fold never pathfinds and never looks at a tile.
+  for (const to of delta.walkTo?.through ?? []) {
     const before = activeRegion(world)?.places.find((p) => p.id === to)?.discovered ?? true;
     const moved = moveWithinRegion(world, to);
     if (moved.kind !== 'moved') break;
-    walkedSteps += travelTime({ ...moved.world, clock: clockOf(state.world) }, world.currentPlace, to);
     world = { ...moved.world, turn: world.turn };
     turnAdvanced = true;
     discovered ||= !before;
   }
-  if (turnAdvanced) world = { ...world, turn: state.world.turn + 1 };
+  if (delta.walkTo) {
+    const { map, x, y } = delta.walkTo;
+    world = { ...world, at: { map, x, y }, turn: state.world.turn + 1 };
+    turnAdvanced = true;
+  }
   if (delta.moveTo) {
     const before = activeRegion(world)?.places.find((p) => p.id === delta.moveTo)?.discovered ?? true;
     const moved = moveWithinRegion(world, delta.moveTo);
     if (moved.kind === 'moved') {
       movedFrom = world.currentPlace;
-      world = moved.world;
+      // A move the Director makes is not walked: you stand at the centre of where you arrive.
+      world = unplaced(moved.world);
       turnAdvanced = true;
       discovered = !before;
     }
@@ -399,9 +405,14 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   // THE CLOCK (7.1a). This turn covers the time its action took: a move its link,
   // anything else what the Director said it cost, and never nothing.
   // The season is read before this turn's time is added: you set out in it.
-  const walked = walkedSteps + (movedFrom ? travelTime({ ...world, clock: clockOf(state.world) }, movedFrom, world.currentPlace) : 0);
-  const elapsed = Math.max(1, delta.timeSpent ?? 0, walked);
-  world = { ...world, clock: clockOf(state.world) + elapsed };
+  const walked = movedFrom ? travelTime({ ...world, clock: clockOf(state.world) }, movedFrom, world.currentPlace) : 0;
+  if (delta.walkTo) {
+    // A walk is charged its seconds, carried inside the tick, so it may cover no whole tick at all.
+    const spent = (state.world.second ?? 0) + delta.walkTo.seconds;
+    world = { ...world, clock: clockOf(state.world) + Math.floor(spent / SECONDS_PER_TICK), second: spent % SECONDS_PER_TICK };
+  } else {
+    world = { ...world, clock: clockOf(state.world) + Math.max(1, delta.timeSpent ?? 0, walked) };
+  }
 
   let next: PlayState = { ...state, world };
 
@@ -474,6 +485,7 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
  * would quietly lose every personality change that had ever happened.
  */
 /** How often time passing takes a point of a need (7.1e-iv). */
+const SECONDS_PER_TICK = 60 * MINUTES_PER_TICK;
 const FOOD_EVERY = 4 * TICKS_PER_HOUR;
 const REST_EVERY = 2 * TICKS_PER_HOUR;
 /** In winter, outside a settlement, both come half as fast again (7.1e-v). */
@@ -481,6 +493,27 @@ const COLD = 1.5;
 
 /** How many multiples of `every` the clock crossed between two ticks. */
 const marks = (from: number, to: number, every: number) => Math.floor(to / every) - Math.floor(from / every);
+
+/**
+ * Needs drain by the HOURS covered, not by the turn (7.1e-iv): a point of food
+ * every four hours and of rest every two waking ones, faster in the cold outside
+ * a settlement. Sleeping does not tire you; it still makes you hungry.
+ */
+function drainOf(state: PlayState, from: number, to: number, resting: boolean): DriftCause {
+  const place = activeRegion(state.world)?.places.find((p) => p.id === state.world.currentPlace);
+  const cold = isWinter(state.world) && place?.kind !== 'settlement' ? COLD : 1;
+  return { kind: 'time', food: marks(from, to, FOOD_EVERY / cold), rest: resting ? 0 : marks(from, to, REST_EVERY / cold) };
+}
+
+/**
+ * The player's needs after the clock runs from one tick to another, drained
+ * exactly as the fold drains them — so a walk can stop on the tick a need falls
+ * to its line, and replaying it lands on the same number (W3).
+ */
+export function needsAfter(state: PlayState, from: number, to: number): Needs {
+  const kind = state.world.species?.find((k) => k.id === state.sheet.species);
+  return applyDrift(state.sheet, [drainOf(state, from, to, false)], rulesOf(state.world), kind).persona.needs;
+}
 
 function causesFor(state: PlayState, record: TurnRecord, from: number, to: number): { npc: DriftCause[]; pc: DriftCause[] } {
   const npc: DriftCause[] = [];
@@ -500,15 +533,7 @@ function causesFor(state: PlayState, record: TurnRecord, from: number, to: numbe
     npc.push({ kind: 'address', tone: readPlayerRegister(record.input).tone });
   }
 
-  // Needs drain by the HOURS the turn covered, not by the turn (7.1e-iv).
-  // Sleeping does not tire you; it still makes you hungry.
-  const place = activeRegion(state.world)?.places.find((p) => p.id === state.world.currentPlace);
-  const cold = isWinter(state.world) && place?.kind !== 'settlement' ? COLD : 1;
-  pc.push({
-    kind: 'time',
-    food: marks(from, to, FOOD_EVERY / cold),
-    rest: record.delta.rest ? 0 : marks(from, to, REST_EVERY / cold),
-  });
+  pc.push(drainOf(state, from, to, !!record.delta.rest));
 
   // Resting was a `DriftCause` that nothing ever emitted, so the one thing that
   // restores a need could never reach the person it restores.

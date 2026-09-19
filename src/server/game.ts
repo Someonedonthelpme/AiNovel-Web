@@ -8,6 +8,8 @@ import { describeChanges } from '../character/drift.ts';
 import { pgFactRetriever } from '../db/facts.ts';
 import { bootstrap } from '../db/db.ts';
 import { appendTurn, createSession, loadEvents, loadSession, saveSnapshot, shouldSnapshot } from '../db/sessions.ts';
+import { mapFor } from '../db/maps.ts';
+import { drawMap } from '../world/map.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import { LOCAL_MODELS } from '../llm/local.ts';
@@ -545,6 +547,8 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
       writer: provider(),
       rng: mulberry32(state.world.seed + state.world.turn),
       retrieveFacts: pgFactRetriever(id),
+      // A map is stored the first time a walk crosses it, and never redrawn (W2).
+      mapOf: (map) => mapFor(id, map, () => drawMap(state.world, map)),
     },
     state,
     input,

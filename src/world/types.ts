@@ -326,6 +326,14 @@ export type World = {
    * every fight. Absent means a world stored before the clock; `clockOf` reads it.
    */
   clock?: number;
+  /**
+   * Seconds already spent inside the current tick, 0..599 (W3). A walk is charged
+   * per tile, a second or two each; the clock keeps its ten-minute ticks and this
+   * carries the rest. Absent is none.
+   */
+  second?: number;
+  /** Where the player stands on a map (W3). Absent is the centre of the current place's hub (`positionOf`). */
+  at?: { map: string; x: number; y: number };
   journeys?: import('../play/journey.ts').Journey[];
   /** Deeds done on era floors, told on the era floors above them (`ECHOING`). Absent is none. */
   echoes?: import('../social/deed.ts').Echo[];

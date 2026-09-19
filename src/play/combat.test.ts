@@ -26,7 +26,7 @@ import { fadeDays, journeysOf, RECOVERY, setOut } from './journey.ts';
 import { clockOf, linkMinutes, travelTime } from '../world/travel.ts';
 import { calendarWords, dateOf, isNight, MINUTES_PER_TICK, TICKS_PER_DAY } from '../world/calendar.ts';
 import { runDirector, runParley } from '../llm/director.ts';
-import { hearParley } from './turn.ts';
+import { hearParley, playTurn } from './turn.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
@@ -1044,6 +1044,25 @@ test('a journey moves along links on the clock, and arrives when the time is spe
   assert.equal(halfway.combat, null);
   const there = passTime(halfway, toWell);
   assert.equal(foesOf(there)[0]?.person, 'smith', 'arriving opens the fight');
+});
+
+// W3: a traveller arriving where you are stops a walk, and the fight opens. Here,
+// because arrivals only open fights on a floor with danger, and its helpers are here.
+test('a traveller arriving mid-walk stops it, and the fight opens', async () => {
+  const base = populated();
+  const s = travelling({ ...base, world: { ...base.world, currentPlace: 'well' } }, 'smith', 'floor-2', 'market');
+  // The smith is one tick from the well, and the player ten seconds from that tick.
+  const due = travelTime(s.world, 'town', 'well');
+  const near: PlayState = {
+    ...s,
+    world: { ...s.world, second: 590, journeys: journeysOf(s.world).map((j) => ({ ...j, place: 'town', progress: due - 1 })) },
+  };
+  const r = await playTurn(
+    { director: new FakeProvider({}), writer: new FakeProvider({}), rng: () => 0.5 },
+    near, 'go to Ashfall', 'exploration', [],
+  );
+  assert.equal(r.record.delta.walkTo?.stop, 'encounter');
+  assert.equal(foesOf(r.state)[0]?.person, 'smith');
 });
 
 test('an arrival-opened fight replays from the log', () => {

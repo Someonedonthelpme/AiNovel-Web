@@ -61,10 +61,12 @@ export type WorldDelta = {
   /** Must be an edge from where the player stands. */
   moveTo?: string;
   /**
-   * A typed "go to X", walked by the ENGINE: every place passed through, in
-   * order (`walkRoute`). Never proposed by the model — `validateDelta` refuses it.
+   * A typed "go to X", walked by the ENGINE across the maps (W3) and recorded
+   * where it STOPPED and what it cost, so a replay never pathfinds and the log
+   * never depends on tiles. `through` is every place entered, in order. Never
+   * proposed by the model — `validateDelta` refuses it.
    */
-  walk?: string[];
+  walkTo?: WalkTo;
   /** New canon, embedded for later retrieval by the guard. */
   learnFacts?: string[];
   /** Per-person trust CHANGES, not absolutes. */
@@ -145,6 +147,11 @@ export type WorldDelta = {
    */
   rest?: 'short' | 'long';
 };
+
+/** Why a walk stopped (W3). Closed. */
+export const STOPS = ['arrived', 'nightfall', 'hungry', 'weary', 'encounter'] as const;
+export type Stop = (typeof STOPS)[number];
+export type WalkTo = { map: string; x: number; y: number; seconds: number; through: string[]; stop: Stop };
 
 export type TurnRecord = {
   kind: 'turn';

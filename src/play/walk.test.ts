@@ -4,7 +4,7 @@ import { FakeProvider } from '../llm/provider.ts';
 import { directorOutput, playState } from './fixtures.ts';
 import { playTurn } from './turn.ts';
 import { foldPlay, validateDelta } from './delta.ts';
-import { clockOf, travelTime, walkRoute } from '../world/travel.ts';
+import { clockOf, walkRoute } from '../world/travel.ts';
 import { groundFloor, link, place } from '../world/fixtures.ts';
 import type { World } from '../world/types.ts';
 import { isFull } from '../world/types.ts';
@@ -33,13 +33,14 @@ const scripted = () => ({
   rng: () => 0.5,
 });
 
-test('go to a place two steps away: the engine walks it, charging each step, with no model call', async () => {
+// Respecified by W3: the record was `delta.walk`, a list of places, and the clock was
+// charged each link's `travelTime`. A walk is now tile by tile on the maps; what it
+// charges is pinned in walkmap.test.ts.
+test('go to a place two steps away: the engine walks it through every place, with no model call', async () => {
   const start = at('gate', ['town']);
   const r = await playTurn(noModel(), start, 'go to the covered market', 'exploration', []);
   assert.equal(r.state.world.currentPlace, 'market');
-  assert.deepEqual(r.record.delta.walk, ['town', 'market']);
-  const w = start.world;
-  assert.equal(clockOf(r.state.world) - clockOf(w), travelTime(w, 'gate', 'town') + travelTime(w, 'town', 'market'));
+  assert.deepEqual(r.record.delta.walkTo?.through, ['town', 'market']);
 });
 
 test('a walk replays from its record alone', async () => {
@@ -58,16 +59,18 @@ test('Thai, and any capitalisation', async () => {
 test('a place you cannot know of is not walked to: the Director gets the turn', async () => {
   // At the gate with the town unvisited, the market is signposted from nowhere you have been.
   const r = await playTurn(scripted(), at('gate'), 'go to the covered market', 'exploration', []);
-  assert.equal(r.record.delta.walk, undefined);
+  assert.equal(r.record.delta.walkTo, undefined); // Respecified by W3: was `delta.walk`.
 });
 
 test('"go to sleep" is speech, not a walk', async () => {
   const r = await playTurn(scripted(), at('town'), 'go to sleep', 'exploration', []);
-  assert.equal(r.record.delta.walk, undefined);
+  assert.equal(r.record.delta.walkTo, undefined); // Respecified by W3: was `delta.walk`.
 });
 
+// Respecified by W3: was a proposed `walk: ['market']`.
 test('the model cannot propose a walk', () => {
-  assert.equal(validateDelta(at('town'), { walk: ['market'] }).delta.walk, undefined);
+  const walkTo = { map: 'hub:floor-0:market', x: 1, y: 1, seconds: 1, through: ['market'], stop: 'arrived' as const };
+  assert.equal(validateDelta(at('town'), { walkTo }).delta.walkTo, undefined);
 });
 
 /*

@@ -13,11 +13,14 @@ import type { WriterResult } from '../llm/writer.ts';
 import { finalAbilities } from '../session/sheet.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { activeRegion, signposted, walkRoute } from '../world/travel.ts';
+import { drawMap } from '../world/map.ts';
+import type { GameMap, MapId } from '../world/map.ts';
+import { walkAlong } from './walker.ts';
 import { holderOf, priceOf } from '../world/holding.ts';
 import { applyTurn, personRef, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
-import type { Mode, PlayState, TurnRecord, WorldDelta } from './state.ts';
+import type { Mode, PlayState, Stop, TurnRecord, WorldDelta } from './state.ts';
 import { beginEncounter, fightOpen, hearsWords } from './combat.ts';
 import type { CombatAction } from './combat.ts';
 
@@ -39,6 +42,8 @@ export type TurnDeps = {
    * tests run without the embedding endpoint.
    */
   retrieveFacts?: (state: PlayState, input: string) => Promise<string[]>;
+  /** The map a walk crosses: the session's stored copy (W3). Defaults to drawing it from the seed. */
+  mapOf?: (id: MapId) => GameMap | Promise<GameMap>;
 };
 
 export type TurnResult = {
@@ -118,7 +123,7 @@ export async function playTurn(
   // A typed "go to X" is walked by the ENGINE, and never reaches the model
   // (DESIGN 6c §2d): the Director refused an adjacent stair three times live.
   const route = walkRoute(state.world, input);
-  if (route) return walked(state, input, mode, route);
+  if (route) return walked(deps, state, input, mode, route);
   // So are a rest and a hunt: the probe found the Director starting no fight on
   // five "attack" turns in six, and rest reachable only when the model proposed it.
   const act = engineAct(state, input);
@@ -196,14 +201,25 @@ export async function playTurn(
  * A walk, as a turn: one record carrying the route, applied like any other, and a
  * plain line of prose. No model is called — arrival narration waits for W3's stops.
  */
-function walked(state: PlayState, input: string, mode: Mode, route: string[]): TurnResult {
+/** What an engine-walked turn says, by why it stopped. Closed, like `STOPS`. */
+const STOP_LINES: Record<Stop, { en: (to: string) => string; th: (to: string) => string }> = {
+  arrived: { en: (to) => `You walk to ${to}.`, th: (to) => `คุณเดินไปถึง${to}` },
+  nightfall: { en: (to) => `Night falls before you reach ${to}.`, th: (to) => `ค่ำลงก่อนคุณจะถึง${to}` },
+  hungry: { en: (to) => `Hunger stops you on the way to ${to}.`, th: (to) => `ความหิวทำให้คุณต้องหยุดระหว่างทางไป${to}` },
+  weary: { en: (to) => `You are too tired to go on toward ${to}.`, th: (to) => `คุณเหนื่อยเกินกว่าจะเดินต่อไปยัง${to}` },
+  encounter: { en: () => 'Someone has come for you.', th: () => 'มีคนตามมาหาคุณ' },
+};
+
+async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mode, route: string[]): Promise<TurnResult> {
+  const walkTo = await walkAlong(state, route, deps.mapOf ?? ((id) => drawMap(state.world, id)));
   const record: TurnRecord = {
     kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
-    delta: { walk: route }, rejected: [], prose: '',
+    delta: { walkTo }, rejected: [], prose: '',
   };
   const applied = applyTurn(state, record);
-  const here = activeRegion(applied.state.world)?.places.find((p) => p.id === applied.state.world.currentPlace);
-  const prose = state.world.language === 'th' ? `คุณเดินไปถึง${here?.name ?? ''}` : `You walk to ${here?.name ?? 'where you meant to go'}.`;
+  const goal = activeRegion(state.world)?.places.find((p) => p.id === route[route.length - 1])?.name ?? '';
+  const line = STOP_LINES[walkTo.stop];
+  const prose = state.world.language === 'th' ? line.th(goal) : line.en(goal);
   return {
     state: applied.state,
     record: { ...record, prose },

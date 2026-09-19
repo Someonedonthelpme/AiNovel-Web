@@ -47,6 +47,34 @@ function regionOf(world: World, id: RegionId, map: MapId): Region {
   return region;
 }
 
+/** Where the player stands: `world.at`, or the centre of the current place's hub. */
+export function positionOf(world: World): { map: MapId; x: number; y: number } {
+  if (world.at) return world.at;
+  const region = regionOf(world, world.currentRegion, hubId(world.currentRegion, world.currentPlace));
+  const kind = region.places.find((p) => p.id === world.currentPlace)?.kind ?? 'landmark';
+  // A hub is 2r+3 square about its centre (`drawHub`).
+  return { map: hubId(region.id, world.currentPlace), x: HUB_RADIUS[kind] + 1, y: HUB_RADIUS[kind] + 1 };
+}
+
+/**
+ * The world with no position on a map, so you stand at the centre of your place.
+ * The key is REMOVED, not set to undefined: a snapshot is JSON and drops it, and
+ * the fold must equal the snapshot exactly (invariant 1).
+ */
+export function unplaced(world: World): World {
+  const { at: _, ...rest } = world;
+  return rest;
+}
+
+/** Seconds to step onto a tile; Infinity for a wall. */
+export const tileSeconds = (m: GameMap, c: Cell): number => COST[m.rows[c.y]?.[c.x]] ?? Infinity;
+
+/** Whether a map id names a field, and if so the two places it joins. */
+export function fieldEnds(id: MapId): [PlaceId, PlaceId] | null {
+  const at = parse(id);
+  return at.kind === 'field' ? [at.lo, at.hi] : null;
+}
+
 /** Draw a map from the seed. Throws on a place or link the region does not have. */
 export function drawMap(world: World, id: MapId): GameMap {
   const at = parse(id);
