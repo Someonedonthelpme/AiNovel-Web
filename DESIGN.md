@@ -1303,26 +1303,29 @@ No second resource list — a recipe names item categories or it names nothing.
 (replacing W2's radius-by-place-kind), and the first thing built is the TOWN SKELETON —
 tier, caps, ruler title, shape, ways in, paths, plots — with no stations in it.
 
-**Still unspecified about a station, in the order they bite:**
-1. **When does it produce?** Claude: once a day, accrued from the clock when somebody
-   looks, the way needs drain — never per 10-minute tick, which would run hundreds of
-   times while you are away.
-2. **Where do input and output sit?** Claude: a stock ON the building, capped by tier;
-   the settlement's market is what moves goods between stations; the transporter slot
-   is what hauling means. This is the first thing here that must be STORED.
-3. **Where is that stored?** The world blob is already why compression exists; maps got
-   their own table. A settlement's economy probably wants one too.
-4. **What does `closed` do?** Claude: keeps its plot and its stock, produces nothing,
-   reopens when a worker arrives.
-5. **Policies must be a CLOSED list** with effects — three to start (push, careful,
-   frugal), each naming what it costs.
-6. **Whose mood?** A policy that presses people lands on the needs that exist
-   (`persona.ts`), not a new number.
-7. **Who staffs it?** Claude: the engine fits classes to slots; in a settlement the
-   PLAYER holds, the player may override.
-8. **Wages and upkeep:** Claude: none in v1 — goods only, coin when the market exists.
-9. **What the player can DO with one in v1:** buy from a shop (the `buy` verb exists),
-   see what it makes, own it later.
+**Answered by the user, 2026-09-21:**
+- **A TOOL is carried** — a pickaxe, a lantern. A **STATION is FURNITURE standing on the
+  floor** (an anvil, a forge), which is §2a's `Feature`, not an item in a pack. A
+  building's tier caps how many stations stand in it; tools are what a worker holds.
+- **Policy sets the WORK HOURS; the method says how long the work takes.** Output is
+  hours worked against the method's time, not a rate pulled from nowhere.
+- **Output has four homes, and the owner chooses:** stored in the building; stored in
+  ANOTHER building of the same owner; on shelves to sell where it was made; or on a
+  stall in the market.
+- **It is stored somewhere persistent** — its own table, as maps have.
+- **The minimum staff includes the OWNER.** A building is not manned by hired hands
+  alone; whoever holds it counts.
+- **A policy lands on the disposition and needs that exist**, and on each stakeholder's
+  relationship TOWARD THE OWNER — pressing people is something they hold against a
+  person, not an abstraction.
+- **Nobody overrides the staffing.** The engine fits classes to slots; a player who
+  wants more out of a building changes the POLICY, buys better TOOLS, or installs
+  better STATIONS — that is how the off-class penalty is bought down.
+- **No wages in v1.** Goods only.
+- **What the player does with a station in v1: buy, sell, steal.**
+
+**Still open, to define together:** the station catalogue itself — what a station is,
+what each one does, and how tier, method and stations multiply out.
 
 ### 3d. Where a TIER belongs — the survey the user asked for (2026-09-20)
 
