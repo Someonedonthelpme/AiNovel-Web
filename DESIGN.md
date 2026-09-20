@@ -1287,6 +1287,38 @@ production invents a second list of things, the two drift and every recipe has t
 mapped by hand. Whatever a station consumes and makes should be item categories from
 the start, even if the first stations only make one thing.
 
+### 3d. Where a TIER belongs — the survey the user asked for (2026-09-20)
+
+**Three rules first, or tiers rot.**
+1. **A tier exists only where something READS it.** A stored number nothing reads is
+   this codebase's signature bug, and §12 is a whole section of them.
+2. **A tier is a SMALL closed ladder** — three to five rungs — with a table saying what
+   each rung permits. Gear's `RARITIES` (`items/instance.ts:30`) is the shape to copy.
+3. **One owner per outcome.** If two ladders both decide how good a sword is, they will
+   disagree. Derive a tier where it can be derived; store it only where it must move on
+   its own.
+
+| system | tier today | what a tier means there | verdict |
+|---|---|---|---|
+| **gear / items** | rarity `common→storied`, refine, enhance, condition | how good a specific object is | **has one** — the model for the rest |
+| **climber** | level, subclass at 3 | how far the combat path has come | **has one** |
+| **floors / regions** | danger, per stratum curve | how hard the ground is | **has one** — do not add a second |
+| **creatures** | depth bands, subspecies, scaled by danger | what lives how deep | **has one** |
+| **people, socially** | `status`, `station`, standing per place | rank among others | **has one** — a life-class rank is skill, not rank; keep them apart |
+| **settlements** | none — only a holder | max population, max buildings, ruler's title, and the SIZE of its hub map | **ADD** (decided) — W2's hub radius by place-kind should become radius by tier |
+| **buildings** | none | max size, worker capacity, how many stations | **ADD** (decided) |
+| **life classes** | none | apprentice→master: what a worker may run, and how well | **design the field now, build with the non-combat path** |
+| **methods / recipes** | none | — | **NO** — output is the building's tier times the worker's grade; a third dial would fight both |
+| **policies** | none | — | **NO** — a policy is a switch with a cost, not a rank |
+| **ownership** | player holds a place (O1) | plot → building → settlement → floor → stratum | **a LADDER of scopes, not a tier** — the `territory` law vocabulary already names the levels |
+| **themes** (medieval, sci-fi, modern) | none | — | **NEVER a tier.** If a theme implied power, a sci-fi tower would simply be better than a medieval one; a theme changes NAMES and flavour, never numbers |
+| **quests** (step 7) | none | difficulty | **derive from floor danger** — no new axis |
+| **goods / economy** | item rarity | how good what a station makes is | **reuse rarity** — do not invent a second quality ladder |
+| **needs, drift, beliefs, laws, journeys** | none | — | **NO** — these are states and scopes, not ranks |
+
+**So: three new tiers in total** — settlement, building, life class — and every other
+system either already has one or must not get one.
+
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
 **Kept from 2026-09-11:** a closed, law-gated verb, paid in coin and materials; built
