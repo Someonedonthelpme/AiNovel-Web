@@ -1092,6 +1092,29 @@ test of the React grid (no UI test tooling in the repo — checked live instead)
 **Found live, not fixed:** screenshots of the pane timed out, so the grid was checked
 through the DOM, not by eye.
 
+**Debt from W1–W4, cleared 2026-09-20** (`fa0fd66`), each with its check: a walk
+stopped on a field can be turned back by NAME (either end of the field you stand on
+counts, even the one you set out from — it was going to the Director); a field's legs
+are three walls apart instead of one and one-tile SPURS run off the band as dead ends,
+so it reads as country rather than a maze and the best path is untouched; arrow keys
+and WASD step a tile; `canDescend` left the view (nothing read it once a stair door
+descends, closing that §14 deviation); a climb's world is checked to survive JSON (the
+invariant-1 bug W3 shipped); the tower panel tolerates a view fetched before a deploy.
+
+**Still deferred, with reasons:** the Director's `moveTo` still teleports and is charged
+in ticks (making it a walk respecifies a dozen tests; it should probably go once nothing
+needs it — W5 decides); NPC journeys still round each link up to whole ticks, so the
+player walks a little faster than they travel (the tick is the floor of a journey's
+grain; fixing it means fractional journey progress); a way up found AFTER a road was can
+still move that road's door (any order-independent rule can displace an older door; the
+only real fix is storing doors, which W2 deliberately did not); no walk animation; the
+React views have no automated tests (no UI tooling in the repo); `walkTarget`'s edge test
+was written with its code rather than before it.
+
+**Found 2026-09-20:** an UNPINNED test run failed one field test and then hung past two
+minutes; the same file pinned to the efficiency cores passed 12/12 in 3.6 s. The
+P-core fault is real and the pinning rule earns its place.
+
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
    Director (`c7c4ba1`). The same rule then took rest, hunting and buying: a step with
