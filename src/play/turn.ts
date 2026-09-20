@@ -16,6 +16,8 @@ import { activeRegion, signposted, walkRoute } from '../world/travel.ts';
 import { drawMap, fieldEnds, positionOf, tileSeconds } from '../world/map.ts';
 import type { GameMap, MapId } from '../world/map.ts';
 import { walkAlong, walkToTile } from './walker.ts';
+import { arenaAt } from './arena.ts';
+import type { Arena } from './arena.ts';
 import type { Then } from './walker.ts';
 import { holderOf, priceOf } from '../world/holding.ts';
 import { applyTurn, personRef, validateDelta } from './delta.ts';
@@ -114,6 +116,22 @@ export function outcomeFor(output: DirectorOutput, tier: 'miss' | 'partial' | 'h
   return output.check.onMiss;
 }
 
+/**
+ * The ground this turn would be fought on, if a fight opens (W7): a window of the
+ * map you stand on. Cut BEFORE the turn is applied, because the fold must fight on
+ * exactly what the live turn fought on, and dropped again when no fight opened.
+ */
+async function arenaFor(deps: TurnDeps, state: PlayState): Promise<Arena | undefined> {
+  if (!activeRegion(state.world)) return undefined;
+  const at = positionOf(state.world);
+  const mapOf = deps.mapOf ?? ((id: MapId) => drawMap(state.world, id));
+  return arenaAt(await mapOf(at.map), at);
+}
+
+/** The record as it is stored: the arena is kept only when a fight actually opened. */
+const asStored = (record: TurnRecord, fought: boolean): TurnRecord =>
+  (fought || !record.arena ? record : (({ arena: _, ...rest }) => rest)(record));
+
 export async function playTurn(
   deps: TurnDeps,
   state: PlayState,
@@ -128,7 +146,7 @@ export async function playTurn(
   // So are a rest and a hunt: the probe found the Director starting no fight on
   // five "attack" turns in six, and rest reachable only when the model proposed it.
   const act = engineAct(state, input);
-  if (act) return acted(state, input, mode, act);
+  if (act) return acted(deps, state, input, mode, act);
 
   const canonFacts = await (deps.retrieveFacts ?? recentFacts)(state, input);
   const output = await runDirector(deps.director, state, input, mode, canonFacts);
@@ -172,6 +190,7 @@ export async function playTurn(
     delta: validated.delta,
     rejected: validated.rejected,
     prose: '',
+    arena: await arenaFor(deps, state),
   };
 
   const applied = applyTurn(state, draft);
@@ -193,7 +212,7 @@ export async function playTurn(
 
   const written = await runWriter(deps.writer, view);
 
-  const record: TurnRecord = { ...draft, prose: written.prose };
+  const record = asStored({ ...draft, prose: written.prose }, Boolean(next.combat));
 
   return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts };
 }
@@ -226,7 +245,7 @@ export async function walkTile(deps: TurnDeps, state: PlayState, target: { map: 
   const { walkTo, then } = await walkToTile(state, target, mapOf);
   const record: TurnRecord = {
     kind: 'turn', input: '', mode: 'exploration', classification: 'NEUTRAL', addressed: null, roll: null,
-    delta: { walkTo }, rejected: [], prose: '',
+    delta: { walkTo }, rejected: [], prose: '', arena: await arenaFor(deps, state),
   };
   const applied = applyTurn(state, record);
   const places = activeRegion(state.world)?.places ?? [];
@@ -243,7 +262,7 @@ export async function walkTile(deps: TurnDeps, state: PlayState, target: { map: 
     : entered ? (th ? STOP_LINES.arrived.th(entered) : STOP_LINES.arrived.en(entered))
     : road ? (th ? `คุณออกเดินทางไปทาง${road}` : `You set out toward ${road}.`)
     : th ? `คุณเดินไปในบริเวณ${standing}` : `You walk across ${standing}.`;
-  return { state: applied.state, record: { ...record, prose }, then, error: null };
+  return { state: applied.state, record: asStored({ ...record, prose }, Boolean(applied.state.combat)), then, error: null };
 }
 
 /** What an engine-walked turn says, by why it stopped. Closed, like `STOPS`. */
@@ -260,7 +279,7 @@ async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mod
   const walkTo = await walkAlong(state, route, deps.mapOf ?? ((id) => drawMap(state.world, id)));
   const record: TurnRecord = {
     kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
-    delta: { walkTo }, rejected: [], prose: '',
+    delta: { walkTo }, rejected: [], prose: '', arena: await arenaFor(deps, state),
   };
   const applied = applyTurn(state, record);
   // A sighting names WHO you saw; every other stop names where you were going.
@@ -271,7 +290,7 @@ async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mod
   const prose = state.world.language === 'th' ? line.th(goal) : line.en(goal);
   return {
     state: applied.state,
-    record: { ...record, prose },
+    record: asStored({ ...record, prose }, Boolean(applied.state.combat)),
     writer: { prose, checks: [], regenerated: false },
     rejected: [],
     shifts: applied.shifts,
@@ -356,7 +375,7 @@ function nothingToHunt(state: PlayState): { reason: string; line: { en: string; 
  * this one, and a refusal carries their reason. A refused act still spends the
  * turn — you tried. No model is called.
  */
-function acted(state: PlayState, input: string, mode: Mode, act: EngineAct): TurnResult {
+async function acted(deps: TurnDeps, state: PlayState, input: string, mode: Mode, act: EngineAct): Promise<TurnResult> {
   const validated = validateDelta(state, act.proposed);
   const empty = validated.delta.startCombat ? nothingToHunt(state) : null;
   if (empty) {
@@ -367,14 +386,14 @@ function acted(state: PlayState, input: string, mode: Mode, act: EngineAct): Tur
   }
   const record: TurnRecord = {
     kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
-    delta: validated.delta, rejected: validated.rejected, prose: '',
+    delta: validated.delta, rejected: validated.rejected, prose: '', arena: await arenaFor(deps, state),
   };
   const applied = applyTurn(state, record);
   const done = validated.rejected.length === 0;
   const prose = done || empty ? act.line[state.world.language] : validated.rejected.join('; ');
   return {
     state: applied.state,
-    record: { ...record, prose },
+    record: asStored({ ...record, prose }, Boolean(applied.state.combat)),
     writer: { prose, checks: [], regenerated: false },
     rejected: validated.rejected,
     shifts: applied.shifts,

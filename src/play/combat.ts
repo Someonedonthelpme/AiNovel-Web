@@ -39,6 +39,9 @@ import { axisOf, CHASE_THRESHOLD, hostileToward, nudge, PLAYER } from '../social
 import type { Person, Region } from '../world/types.ts';
 import { arrivedHere, journeysOf } from './journey.ts';
 import { crowdAround } from './onroad.ts';
+import { positionOf } from '../world/map.ts';
+import { gridOfArena, inArena } from './arena.ts';
+import type { Arena } from './arena.ts';
 import { dateOf, isNight } from '../world/calendar.ts';
 import { preyOf } from '../character/prey.ts';
 import { groupsAt, habitOf, livesAt, packAt } from '../character/habitat.ts';
@@ -415,13 +418,16 @@ const RANK_OF: Record<FoeRole, Rank> = { minion: 'whelp', regular: 'ordinary', e
  * because the difficulty curve is the whole progression and cannot be
  * re-invented per encounter by a model.
  */
-export function beginEncounter(before: PlayState, startedBy?: 'player' | 'them'): PlayState {
+export function beginEncounter(before: PlayState, startedBy?: 'player' | 'them', arena?: Arena): PlayState {
   if (before.combat && !before.combat.over) return before;
 
   const region = activeRegion(before.world);
   const state = armComer(before, region?.danger ?? 0);
   const danger = region?.danger ?? 0;
-  const grid = arenaFor(state.world.seed + state.world.turn, danger);
+  // The ground you are standing on, when the turn recorded it (W7); otherwise the
+  // old bare arena, which is what a fight outside the walk loop still gets.
+  const grid = arena ? gridOfArena(arena) : arenaFor(state.world.seed + state.world.turn, danger);
+  const standing = arena ? inArena(arena, positionOf(state.world)) : null;
   const me = playerCombatant(state);
   const ambushed = startedBy === 'them';
 
@@ -430,7 +436,13 @@ export function beginEncounter(before: PlayState, startedBy?: 'player' | 'them')
    * only spent the turn closing the gap, which handed the PLAYER the first swing —
    * an ambush measured as raising your odds.
    */
-  const origin = ambushed ? { x: me.pos.x + 1, y: me.pos.y } : { x: ARENA_SIZE - 2, y: Math.floor(ARENA_SIZE / 2) };
+  // On real ground you fight where you stand — nudged to the nearest open square
+  // if a map put you on a wall, since nobody fights inside rock.
+  if (standing) me.pos = freeCellsNear(grid, standing, new Set(), 1)[0] ?? me.pos;
+  const origin = ambushed
+    ? freeCellsNear(grid, { x: me.pos.x + 1, y: me.pos.y }, new Set([cellKey(me.pos)]), 1)[0] ?? { x: me.pos.x + 1, y: me.pos.y }
+    : freeCellsNear(grid, { x: grid.width - 2, y: Math.floor(grid.height / 2) }, new Set([cellKey(me.pos)]), 1)[0]
+      ?? { x: grid.width - 2, y: Math.floor(grid.height / 2) };
   const taken = new Set([cellKey(me.pos)]);
   const asCharacters = crowdFoes(state, danger, region?.floor ?? 0, grid, origin, taken);
   // Nobody lives here any more, so nobody attacks: the one visible end of

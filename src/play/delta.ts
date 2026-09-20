@@ -739,7 +739,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   // from state, so a replay opens the same one.
   const arriving = !record.delta.startCombat && arrivalOpens(moved);
   if (record.delta.startCombat || arriving) {
-    const fight = beginEncounter(moved, arriving ? 'them' : record.delta.startedBy);
+    const fight = beginEncounter(moved, arriving ? 'them' : record.delta.startedBy, record.arena);
     if (record.combatActions) {
       // REPLAY. The decisions are known, and every roll comes from state, so
       // this reproduces the original encounter exactly.

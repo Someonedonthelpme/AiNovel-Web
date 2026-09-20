@@ -171,6 +171,11 @@ export type TurnRecord = {
   rejected: string[];
   prose: string;
   /**
+   * The ground the fight was fought on (W7): a window of the map, recorded like
+   * a climb records the floor it built, because the fold holds no tiles.
+   */
+  arena?: { x0: number; y0: number; rows: string[] };
+  /**
    * The choices made in a fight this turn, if one broke out.
    *
    * A whole encounter is ONE event in the log. Only the decisions are stored —
