@@ -988,7 +988,7 @@ compression, which §4 needs.
 | W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing — **split 2026-09-19 (user):** W4a, the centre grid, click-walking, doors and stairs, **SHIPPED** (`79be367`, verified live in session `2ffdec3b`); W4b, the minimap, floor map and tower view, **SHIPPED** (`4662106`, verified live) |
 | W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field — **SHIPPED 2026-09-20** (`b46586a`) |
 | W6 | era bands share a map seed; ~~loop reset clears overlays~~ (moved, below) | W2 | two era floors of a band have the same ground |
-| W7 | combat on a window of the map; re-measure balance (`npm run fight`) | W3, W4 | the balance chart re-pinned |
+| W7 | combat on a window of the map; ~~re-measure balance~~ (deferred, see the standing rule below) | W3, W4 | a fight is fought on the ground you stand on, and replays from its record |
 | W8 | zones, buildings and interiors in towns | W2 | a town's smithy is where its smith works |
 
 W1–W3 change no UI and each is testable alone; stopping after W3 still leaves real
@@ -1136,6 +1136,16 @@ the person becomes who your next words reach); resource nodes and sites on field
 **`moveTo` measured, 2026-09-20:** removing the Director's move touches 26 test uses
 and 24 in `src/`, including the Director's prompt vocabulary and the redaction view —
 too large to carry inside W5. It stays until a stage is given to it.
+
+**STANDING RULE — no rebalancing until the game is finished (user, 2026-09-20).**
+Combat is not to be tuned, and the balance instruments are not to be re-run or
+re-pinned (`npm run fight`, `npm run chart`, ARCHITECTURE §12b's numbers), until every
+part of this game is built. A test's job until then is to show that a system WORKS,
+not that its numbers are good — numbers measured against an unfinished game get
+measured again anyway. This retires W7's "re-measure balance" half: W7 builds fights
+on real ground and tests that they work and replay, and the pinned anchor is left
+exactly where it is so it stays comparable later. Whatever the new terrain does to win
+rates is a question for the balance pass at the end.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
