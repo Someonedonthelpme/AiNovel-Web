@@ -123,7 +123,7 @@ export async function playTurn(
 ): Promise<TurnResult> {
   // A typed "go to X" is walked by the ENGINE, and never reaches the model
   // (DESIGN 6c §2d): the Director refused an adjacent stair three times live.
-  const route = walkRoute(state.world, input);
+  const route = walkRoute(state.world, input, fieldEnds(positionOf(state.world).map) ?? []);
   if (route) return walked(deps, state, input, mode, route);
   // So are a rest and a hunt: the probe found the Director starting no fight on
   // five "attack" turns in six, and rest reachable only when the model proposed it.

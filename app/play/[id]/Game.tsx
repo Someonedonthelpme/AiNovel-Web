@@ -354,6 +354,25 @@ export default function Game({ initial }: { initial: GameView }) {
     }
   }
 
+  // One tile at a time, for hands already on the keys. Arrows or WASD; ignored
+  // while you are typing, mid-fight, or with no ground to walk on.
+  useEffect(() => {
+    const STEP: Record<string, [number, number]> = {
+      ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+      w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+    };
+    function onKey(e: KeyboardEvent) {
+      const typing = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName);
+      const step = STEP[e.key];
+      if (!step || typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (busy || panel || view.combat || view.ended || !view.grid) return;
+      e.preventDefault();
+      walkTo(view.grid.you.x + step[0], view.grid.you.y + step[1]);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   async function ascend(to?: string) {
     if (busy) return;
     setBusy(true);
@@ -610,8 +629,10 @@ export default function Game({ initial }: { initial: GameView }) {
             {view.minimap && <Minimap minimap={view.minimap} />}
             <p className="label" style={{ marginTop: '0.8rem' }}>This floor</p>
             <FloorMap view={view} />
-            <p className="label" style={{ marginTop: '0.8rem' }}>The tower</p>
-            <Tower tower={view.tower} />
+            {view.tower && <>
+              <p className="label" style={{ marginTop: '0.8rem' }}>The tower</p>
+              <Tower tower={view.tower} />
+            </>}
           </section>
 
           <section className="panel">

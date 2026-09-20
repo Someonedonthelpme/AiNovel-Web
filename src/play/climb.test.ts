@@ -533,3 +533,14 @@ test("climbing into an unthemed era band gives it the first floor's land, and a 
   assert.deepEqual(r.state.world.strata?.era?.theme, theme);
   assert.deepEqual(foldPlay(base, [record]).world.strata?.era?.theme, theme, 'and a reload still knows it');
 });
+
+// W3 shipped a bug where clearing a value wrote `at: undefined`: a snapshot is
+// JSON and drops the key, so the fold stopped equalling its own snapshot. Every
+// world a climb produces must survive the round trip unchanged (invariant 1).
+test('the world a climb produces survives JSON unchanged', async () => {
+  const stair = atTheStair();
+  const before = { ...stair, world: { ...stair.world, at: { map: 'hub:floor-0:stair', x: 3, y: 4 } } };
+  const r = await climb(provider(), before);
+  assert.equal(r.error, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.state.world)), r.state.world);
+});

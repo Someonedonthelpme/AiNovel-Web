@@ -293,8 +293,13 @@ const plain = (name: string) => name.trim().toLowerCase().replace(/^the\s+/, '')
  * signposted from where you have been — and the route is the fewest steps along
  * the place graph. Null sends the turn to the Director as before, so "go to
  * sleep" is still speech and a place you cannot know of is never guessed at.
+ *
+ * `ends` are the two places of the field you are standing on, if you are on one
+ * (W4). Either may be named, INCLUDING the one you set out from — stopped on the
+ * road at nightfall, "go to Ashfall" means turn back, and refusing it sent the
+ * turn to the Director.
  */
-export function walkRoute(world: World, input: string): PlaceId[] | null {
+export function walkRoute(world: World, input: string, ends: readonly PlaceId[] = []): PlaceId[] | null {
   const said = WALK.exec(input)?.[1];
   const region = activeRegion(world);
   if (!said || !region) return null;
@@ -318,10 +323,11 @@ export function walkRoute(world: World, input: string): PlaceId[] | null {
   // way up). A name never means where you stand; of the rest the NEAREST, and on
   // a tie the one you have not been to — you have just come from the other.
   const target = region.places
-    .filter((p) => p.id !== world.currentPlace && steps.has(p.id)
+    .filter((p) => (p.id !== world.currentPlace || ends.includes(p.id)) && steps.has(p.id)
       && (p.discovered || known.has(p.id)) && (plain(p.name) === plain(said) || p.id === said.trim()))
     .sort((a, b) => steps.get(a.id)! - steps.get(b.id)! || Number(a.discovered) - Number(b.discovered))[0];
   if (!target) return null;
+  if (target.id === world.currentPlace) return [target.id];
   const route: PlaceId[] = [];
   for (let at: PlaceId | undefined = target.id; at && at !== world.currentPlace; at = from.get(at)) route.unshift(at);
   return route;

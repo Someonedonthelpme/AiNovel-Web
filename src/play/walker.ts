@@ -70,6 +70,8 @@ export async function walkAlong(
       legs.push({ map: field, from: start, to: fieldEnd(field, place), enters: null });
       hub = await hubOf(place);
       cell = hubDoor(hub, place, other);
+      // "Go to where I set out from" is that walk and no more.
+      if (queue[0] === place) queue.shift();
     }
   } else {
     hub = await hubOf(place);

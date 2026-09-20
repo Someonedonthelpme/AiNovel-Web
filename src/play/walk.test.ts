@@ -5,6 +5,7 @@ import { directorOutput, playState } from './fixtures.ts';
 import { playTurn } from './turn.ts';
 import { foldPlay, validateDelta } from './delta.ts';
 import { clockOf, walkRoute } from '../world/travel.ts';
+import { dateOf, isWinter } from '../world/calendar.ts';
 import { groundFloor, link, place } from '../world/fixtures.ts';
 import type { World } from '../world/types.ts';
 import { isFull } from '../world/types.ts';
@@ -26,6 +27,14 @@ const at = (place: string, beenTo: string[] = []): PlayState => {
 };
 /** A provider that throws on any call: a walk must never reach the model. */
 const noModel = () => ({ director: new FakeProvider({}), writer: new FakeProvider({}), rng: () => 0.5 });
+/** The same state just before nightfall, on an ordinary day. */
+const atDusk = (s: PlayState): PlayState => {
+  for (let clock = 0; clock < 360 * 144; clock++) {
+    const d = dateOf({ ...s.world, clock });
+    if (d.hour === 19 && d.minute === 50 && !isWinter({ ...s.world, clock })) return { ...s, world: { ...s.world, clock, second: 480 } };
+  }
+  throw new Error('no dusk');
+};
 /** The ordinary turn, for input that is not a walk. */
 const scripted = () => ({
   director: new FakeProvider({ structured: [directorOutput()] }),
@@ -99,4 +108,20 @@ test('a shared name never means the place you stand in', () => {
 
 test('a tie between places of one name goes to where you have not been', () => {
   assert.deepEqual(walkRoute(standingAt(twinGates(), 'harbour'), 'go to Outer Gate'), ['gate_out']);
+});
+
+// Found while reviewing W3: stopped on a field at nightfall, "go to <the place you
+// left>" named where you still count as being, so `walkRoute` refused it and the
+// turn went to the Director. Either end of the field you stand on is walkable.
+test('on a field you can walk back by name to the place you set out from', async () => {
+  const start = at('town', ['well']);
+  const stopped = await playTurn(noModel(), atDusk(start), 'go to the dry well', 'exploration', []);
+  assert.equal(stopped.record.delta.walkTo?.stop, 'nightfall', 'stopped on the field');
+  const back = await playTurn(noModel(), stopped.state, 'go to Ashfall', 'exploration', []);
+  // Nothing is ENTERED: on the field you already counted as being at the town you
+  // left, so walking back is just standing in it again.
+  assert.deepEqual(back.record.delta.walkTo?.through, []);
+  assert.equal(back.record.delta.walkTo?.stop, 'arrived');
+  assert.equal(back.state.world.at?.map, 'hub:floor-0:town');
+  assert.equal(back.state.world.currentPlace, 'town');
 });

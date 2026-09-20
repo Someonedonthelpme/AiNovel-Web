@@ -246,7 +246,6 @@ export type GameView = {
   people: PersonView[];
   suggestions: string[];
   canClimb: boolean;
-  canDescend: boolean;
   /**
    * The ways out that are not stairs, for a world that is not a stack.
    *
@@ -386,7 +385,6 @@ function baseViewOf(id: string, state: PlayState, transcript: TranscriptEntry[],
     signets: signetsViewOf(state),
     suggestions: suggestedActions(state),
     canClimb: exits.canClimb,
-    canDescend: exits.canDescend,
     ways: (activeRegion(state.world)?.exits ?? []).map((l) => ({
       to: l.to,
       via: l.via,

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
+import { bestPath, bestRoute, drawMap, fieldId, hubId, portalsOf } from './map.ts';
 import type { GameMap } from './map.ts';
 import { linkMinutes } from './travel.ts';
 import { firstFloor, groundFloor, world } from './fixtures.ts';
@@ -104,5 +104,22 @@ test('every door of a hub has a tile of its own', () => {
       const tiles = new Set(doors.map((d) => `${d.x},${d.y}`));
       assert.equal(tiles.size, doors.length, `seed ${seed} ${p.id}: ${JSON.stringify(doors)}`);
     }
+  }
+});
+
+// W2 left a field as a bare band with one-tile walls between its legs: a maze,
+// not country. Walls are thicker now, and side branches lead off the road.
+test('a field has side branches off the road: dead ends, one tile wide', () => {
+  for (const seed of [1, 4, 9]) {
+    const m = drawMap(world({ seed }), fieldId('floor-0', 'town', 'market'));
+    const open = (x: number, y: number) => (m.rows[y]?.[x] ?? '#') !== '#';
+    let tips = 0;
+    for (let y = 0; y < m.rows.length; y++) for (let x = 0; x < m.rows[0].length; x++) {
+      if (!open(x, y)) continue;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && open(x + dx, y + dy)) n++;
+      if (n === 1) tips++;                       // the end of a one-tile spur
+    }
+    assert.ok(tips >= 3, `seed ${seed}: ${tips} dead ends`);
   }
 });

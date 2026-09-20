@@ -169,8 +169,10 @@ class Heap {
 
 // ─── fields ─────────────────────────────────────────────────────────────────
 
-/** Columns between the legs of a field's meander: a 5-wide band, a wall, the next leg's band. */
-const GAP = 6;
+/** Columns between the legs of a field's meander: a 5-wide band, three walls, the next leg's band. */
+const GAP = 8;
+/** How far a side branch runs off the band, in tiles. */
+const SPUR = { min: 4, max: 8 } as const;
 const HALF = 2;
 /** The shortest straight run a field ends on; below this the fit is not exact. */
 const TAIL = 6;
@@ -227,6 +229,28 @@ function drawField(world: World, region: Region, lo: PlaceId, hi: PlaceId): Game
     const on = new Set(line.map((c) => `${c.x},${c.y}`));
     const band = new Set<string>();
     for (const c of line) for (let dy = -HALF; dy <= HALF; dy++) for (let dx = -HALF; dx <= HALF; dx++) band.add(`${c.x + dx},${c.y + dy}`);
+    // SIDE BRANCHES: one-tile spurs off the band into the wall, each stopping
+    // before it touches anything else, so a branch is always a dead end and the
+    // best path across the field is untouched.
+    const open = (x: number, y: number) => band.has(`${x},${y}`) || spur.has(`${x},${y}`);
+    const spur = new Set<string>();
+    for (const c of line) {
+      if (cellHash(salt ^ 0x5adf, c.x, c.y) > 0.04 || c.x >= runFrom) continue;
+      const dir = cellHash(salt ^ 0x11, c.x, c.y) < 0.5 ? 1 : -1;
+      const length = SPUR.min + Math.floor(cellHash(salt ^ 0x22, c.x, c.y) * (SPUR.max - SPUR.min + 1));
+      for (let k = 1; k <= length; k++) {
+        const at = { x: c.x, y: c.y + dir * (HALF + k) };
+        // Free means: nothing walkable around it but the spur cell behind it.
+        let touches = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) {
+          if (open(at.x + dx, at.y + dy)) touches++;
+        }
+        if (touches > (k === 1 ? 3 : 1)) break;
+        spur.add(`${at.x},${at.y}`);
+      }
+    }
+    for (const k of spur) band.add(k);
+
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const k of band) {
       const [x, y] = k.split(',').map(Number);
@@ -238,6 +262,7 @@ function drawField(world: World, region: Region, lo: PlaceId, hi: PlaceId): Game
       const rough = !on.has(k) && !trodden.has(k) && x < runFrom && cellHash(salt, x, y) < roughShare;
       grid[y - minY + 1][x - minX + 1] = rough ? ',' : '.';
     }
+
     const local = (c: Cell): Cell => ({ x: c.x - minX + 1, y: c.y - minY + 1 });
     return { id, kind: 'field', rows: grid.map((r) => r.join('')), ends: [local(line[0]), local(line[line.length - 1])] };
   };
