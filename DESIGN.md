@@ -1287,6 +1287,43 @@ production invents a second list of things, the two drift and every recipe has t
 mapped by hand. Whatever a station consumes and makes should be item categories from
 the start, even if the first stations only make one thing.
 
+### 3c-i. GOODS, and what a station still needs specified (2026-09-20/21)
+
+**Goods are the item catalogue, widened (user, 2026-09-21).** What a station consumes
+and makes are `LOOT_CATEGORIES` (`items/catalogue.ts:235`): today `rations · draught ·
+weapon · armour · pack · part · material · book`. **New: `seed`, `tool`, `ingredient`.**
+No second resource list — a recipe names item categories or it names nothing.
+- The user's list maps on: food is `rations`, bag is `pack`, skill book is `book`,
+  material is already there. **Accessory is a SLOT, not a category** — the world
+  declares its slots (`items/types.ts:28`) — so it must not become a good as well.
+- **`tool` pays for itself twice:** a station's tier caps how many stations/machines it
+  holds, and a machine is a tool ITEM installed in it. One vocabulary, two uses.
+
+**Confirmed by the user, 2026-09-21:** a settlement's TIER owns the size of its hub map
+(replacing W2's radius-by-place-kind), and the first thing built is the TOWN SKELETON —
+tier, caps, ruler title, shape, ways in, paths, plots — with no stations in it.
+
+**Still unspecified about a station, in the order they bite:**
+1. **When does it produce?** Claude: once a day, accrued from the clock when somebody
+   looks, the way needs drain — never per 10-minute tick, which would run hundreds of
+   times while you are away.
+2. **Where do input and output sit?** Claude: a stock ON the building, capped by tier;
+   the settlement's market is what moves goods between stations; the transporter slot
+   is what hauling means. This is the first thing here that must be STORED.
+3. **Where is that stored?** The world blob is already why compression exists; maps got
+   their own table. A settlement's economy probably wants one too.
+4. **What does `closed` do?** Claude: keeps its plot and its stock, produces nothing,
+   reopens when a worker arrives.
+5. **Policies must be a CLOSED list** with effects — three to start (push, careful,
+   frugal), each naming what it costs.
+6. **Whose mood?** A policy that presses people lands on the needs that exist
+   (`persona.ts`), not a new number.
+7. **Who staffs it?** Claude: the engine fits classes to slots; in a settlement the
+   PLAYER holds, the player may override.
+8. **Wages and upkeep:** Claude: none in v1 — goods only, coin when the market exists.
+9. **What the player can DO with one in v1:** buy from a shop (the `buy` verb exists),
+   see what it makes, own it later.
+
 ### 3d. Where a TIER belongs — the survey the user asked for (2026-09-20)
 
 **Three rules first, or tiers rot.**
