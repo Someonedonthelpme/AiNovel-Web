@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W4 shipped 2026-09-19** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -986,7 +986,7 @@ compression, which §4 needs.
 | W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change — **SHIPPED 2026-09-19** (`07207b3`) |
 | W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding — **SHIPPED 2026-09-19** (`205c1bb`), the Director on stops deferred to W5 |
 | W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing — **split 2026-09-19 (user):** W4a, the centre grid, click-walking, doors and stairs, **SHIPPED** (`79be367`, verified live in session `2ffdec3b`); W4b, the minimap, floor map and tower view, **SHIPPED** (`4662106`, verified live) |
-| W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field |
+| W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field — **SHIPPED 2026-09-20** (`b46586a`) |
 | W6 | era bands share a map seed; ~~loop reset clears overlays~~ (moved, below) | W2 | two era floors of a band have the same ground |
 | W7 | combat on a window of the map; re-measure balance (`npm run fight`) | W3, W4 | the balance chart re-pinned |
 | W8 | zones, buildings and interiors in towns | W2 | a town's smithy is where its smith works |
@@ -1114,6 +1114,28 @@ was written with its code rather than before it.
 **Found 2026-09-20:** an UNPINNED test run failed one field test and then hung past two
 minutes; the same file pinned to the efficiency cores passed 12/12 in 3.6 s. The
 P-core fault is real and the pinning rule earns its place.
+
+**W5 as built (2026-09-20).** A journey between two places is a FIGURE on that
+link's field, as far along as its traveller has come (`onroad.ts`). A walk stops on
+`sighted` the moment somebody NEW is in view — twelve tiles, line of sight by the
+combat grid's own rule — and whoever was already visible when you set off never stops
+you again, or you could not walk at all. **Sighting is asked every TILE, not every
+tick:** a traveller crosses a two-tick link while the player is halfway over the same
+field, and tick sampling missed them passing entirely — the journey tick-rounding debt,
+biting. `WalkTo.met` records who, so the fold opens the same fight with no tiles: it
+ends that traveller's journey where you both stand and the existing arrival machinery
+does the rest. Out on a road `presentHere` is whoever you MET, not the people of the
+place you left (the Director and the redaction wall read it, so it stays tile-free);
+the game view shows whoever is in view on the field. A field's crowd is both ends'.
+**Respecified:** W3's "a traveller arriving mid-walk" test — the stop is `sighted`
+now, because out there you see them coming before they reach the place you left.
+**Not built:** the Director on stops (still deferred — a sighting is an engine line and
+the person becomes who your next words reach); resource nodes and sites on fields
+(§2d Q6); crowds as visible figures — only named travellers appear.
+
+**`moveTo` measured, 2026-09-20:** removing the Director's move touches 26 test uses
+and 24 in `src/`, including the Director's prompt vocabulary and the redaction view —
+too large to carry inside W5. It stays until a stage is given to it.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
