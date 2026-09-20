@@ -131,7 +131,7 @@ config ─┐
 - **React never mutates locally.** Every panel action goes to the server as an
   event ([Panels.tsx:11](app/play/[id]/Panels.tsx:11)); the whole view comes back.
 - **Routes stay thin** so the web surface and the terminal script cannot drift
-  apart ([game.ts:65](src/server/game.ts:65)).
+  apart ([game.ts:66](src/server/game.ts:66)).
 
 ---
 
@@ -150,7 +150,7 @@ so AGI can mean something) · `cast.ts` (wind-up casts; whether a skill
 telegraphs is a *build* decision, not a property of the skill) · `grid.ts`
 (Chebyshev distance, supercover LOS) · `combat.ts` (the state machine) ·
 `ai.ts` · `statblock.ts` (foe numbers from depth, so the curve can be
-*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:442](src/play/combat.ts:442)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:280](src/character/crowd.ts:280)) by `crowdFoes` ([play/combat.ts:169](src/play/combat.ts:169)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
+*simulated*) · `encounter.ts` (every 10th floor is a boss — by depth, never by danger, [play/combat.ts:444](src/play/combat.ts:444)). **There are no mass foes.** A foe is somebody out of the floor's population: a lineage, a trade and a standing, built as a sheet ([crowd.ts:280](src/character/crowd.ts:280)) by `crowdFoes` ([play/combat.ts:170](src/play/combat.ts:170)). A pack comes from ONE group, chosen from the ones living at that depth ([habitat.ts:95](src/character/habitat.ts:95)), and the population is a stored thing that killing THINS ([population.ts](src/character/population.ts)).
 
 ### `src/skills/` — composed, never authored
 `statgrammar.ts` — `STAT_GRAMMAR` ([:40](src/skills/statgrammar.ts:40)), the
@@ -191,8 +191,9 @@ lives) · `progress.ts` · `pathgen.ts` / `pathwords.ts` / `skilltree.ts` /
 mechanism traits, Signets, subclasses and books all share) · `sheetaction.ts` ·
 `journey.ts` (a grudge on the road, and its fade) · `sighting.ts` (who is out, and
 word of where the player is) · `station.ts` (what a person is, for what their
-grudge can do) · `walker.ts` (a typed walk or a click, tile by tile, and where it stops,
-[walker.ts:33](src/play/walker.ts:33)).
+grudge can do) · `onroad.ts` (who is out on the roads with you, [onroad.ts:50](src/play/onroad.ts:50)) ·
+`walker.ts` (a typed walk or a click, tile by tile, and where it stops,
+[walker.ts:35](src/play/walker.ts:35)).
 
 ### `src/world/`
 `types.ts` · `floorgen.ts` (the only world-changing model call) · `travel.ts` ·
@@ -240,9 +241,9 @@ on each of the five axes** ([ruleset.ts:210](src/rules/ruleset.ts:210)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:236](src/world/travel.ts:236)) and the panel's way down ([climb.ts:329](src/play/climb.ts:329)) |
-| `crossFloors` | movement | the Director brief ([director.ts:392](src/llm/director.ts:392)), and whether a journey may take a stair ([journey.ts:156](src/play/journey.ts:156)) — see §12 |
-| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:293](src/play/climb.ts:293), [combat.ts:954](src/play/combat.ts:954)) |
-| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:962](src/play/combat.ts:962)) |
+| `crossFloors` | movement | the Director brief ([director.ts:392](src/llm/director.ts:392)), and whether a journey may take a stair ([journey.ts:162](src/play/journey.ts:162)) — see §12 |
+| `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:293](src/play/climb.ts:293), [combat.ts:956](src/play/combat.ts:956)) |
+| `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:964](src/play/combat.ts:964)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:283](src/play/climb.ts:283)) |
 | `holdSettlement` | territory | `validateDelta`, refusing a purchase (`acquirePlace`, [delta.ts:82](src/play/delta.ts:82)); HARSH is born forbidding it to the player ([ruleset.ts:397](src/rules/ruleset.ts:397)) |
 
@@ -346,7 +347,7 @@ anything derives from the seed alone.
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:295](src/world/types.ts:295)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:335](src/play/delta.ts:335)).
+  mid-run writer ([delta.ts:341](src/play/delta.ts:341)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:699](src/session/genesis.ts:699)). Stored for the same reason
   `subjects` is.
@@ -371,7 +372,7 @@ anything derives from the seed alone.
   `stairCost` ([travel.ts:82](src/world/travel.ts:82)), an hour per rest turn
   ([rest.ts:120](src/play/rest.ts:120)), and at least one tick otherwise. A WALK is
   the exception: it is charged its seconds, and `second` carries what is left inside
-  the tick ([types.ts:334](src/world/types.ts:334), [delta.ts:411](src/play/delta.ts:411)),
+  the tick ([types.ts:334](src/world/types.ts:334), [delta.ts:417](src/play/delta.ts:417)),
   so a short walk may cover no whole tick.
 - `journeys` — grudges on the road ([types.ts:337](src/world/types.ts:337),
   [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
@@ -379,7 +380,7 @@ anything derives from the seed alone.
   replay; advanced only by the fold.
 - `echoes` — weighty deeds done on an era floor ([types.ts:339](src/world/types.ts:339)):
   the engine keeps the `ECHOING` ones only ([deed.ts:63](src/social/deed.ts:63)), in the
-  fold ([delta.ts:687](src/play/delta.ts:687)), as NAMES rather than ids since they are
+  fold ([delta.ts:693](src/play/delta.ts:693)), as NAMES rather than ids since they are
   history; the Director on a higher era floor of the same band hears them with how many
   years back they were ([director.ts:313](src/llm/director.ts:313)). Absent is none.
 - `calendar` — the world's WORDS for its reckoning, days, months and seasons
@@ -467,7 +468,7 @@ they cannot drift ([sheet.ts:79](src/session/sheet.ts:79)).
 **`PlayEvent`** = `{kind:'start'} | TurnRecord | SheetRecord | ClimbRecord`.
 A `TurnRecord` stores the *recorded* roll and the *validated* delta, and a whole
 fight is **one event** carrying only the decisions — and, for a parley, the answer
-that was heard ([play/combat.ts:488](src/play/combat.ts:488)). A `ClimbRecord` names the
+that was heard ([play/combat.ts:490](src/play/combat.ts:490)). A `ClimbRecord` names the
 far side in `to` when the crossing is not a stair
 ([climb.ts:59](src/play/climb.ts:59)), and carries any wing the new floor opened in `built.stratum`
 ([climb.ts:77](src/play/climb.ts:77)), and the era band it gave its land to in
@@ -510,15 +511,20 @@ come from?"
 | `drawMap` ([map.ts:79](src/world/map.ts:79)) | seed, a map id, its region | a hub or field's tiles, drawn from the seed alone |
 | `portalsOf` ([map.ts:329](src/world/map.ts:329)) | a map + the place graph NOW | its doors, each at a bearing dealt from seed, place and target — never stored, so a revealed way gets a door and no other door moves |
 | `positionOf` ([map.ts:51](src/world/map.ts:51)) | `World.at`, the current place | the player's tile: `at`, else the centre of the current place's hub |
-| `walkToTile` ([walker.ts:151](src/play/walker.ts:151)) | state, one tile of the map you stand on, the stored maps | a click's walk: to the tile, THROUGH it if it is a door (a hub's onto its field, a field's end into its place), and `then` a climb, a descent or a way out if it is one |
+| `ridersOn` / `riderAt` ([onroad.ts:50](src/play/onroad.ts:50), [:65](src/play/onroad.ts:65)) | a field, the journeys on it | who is crossing it, and where each stands at any moment — whole ticks or between them |
+| `figuresOn` ([onroad.ts:76](src/play/onroad.ts:76)) | a field | the travellers on it right now, for the view |
+| `inView` ([onroad.ts:38](src/play/onroad.ts:38)) | a map, two tiles | whether one can see the other: twelve tiles, and the combat grid's own line of sight |
+| `peopleHere` ([onroad.ts:105](src/play/onroad.ts:105)) | state, the map you stand on | who is with you: in view on the road, or the place's people |
+| `crowdAround` ([onroad.ts:93](src/play/onroad.ts:93)) | state, a floor | the crowd a fight draws from: a place's own, or BOTH ends' out on a field |
+| `walkToTile` ([walker.ts:176](src/play/walker.ts:176)) | state, one tile of the map you stand on, the stored maps | a click's walk: to the tile, THROUGH it if it is a door (a hub's onto its field, a field's end into its place), and `then` a climb, a descent or a way out if it is one |
 | `minimapOf` ([views.ts:37](src/server/views.ts:37)) | state, the stored map you stand on | the whole map shrunk by a whole factor to at most 60 cells wide, each cell the best ground in its block, and where you are |
 | `floorMapOf` ([views.ts:58](src/server/views.ts:58)) | state | the floor's places — DISCOVERED ONLY, and where you stand — and the roads between them; view-only, it moves nobody |
 | `towerOf` ([views.ts:77](src/server/views.ts:77)) | state | strata, every floor held with the year it stands in, what you hold, deepest floor, and grudges on the road of people you have MET, never where |
 | `gridOf` ([grid.ts:28](src/server/grid.ts:28)) | state, the stored map you stand on | a 41×25 window around you and EVERY door on the map, each labelled only with a name you could know |
-| `walkAlong` ([walker.ts:33](src/play/walker.ts:33)) | state, a route of places, the stored maps | where a typed walk STOPS and what it cost: tile by tile, the first tick that brings a traveller, a need at 3, or night on wild ground |
+| `walkAlong` ([walker.ts:35](src/play/walker.ts:35)) | state, a route of places, the stored maps | where a typed walk STOPS and what it cost: tile by tile, the first tick that brings a traveller, a need at 3, or night on wild ground |
 | `bestPath` ([map.ts:131](src/world/map.ts:131)) | a map, two tiles | seconds along the cheapest way, eight ways, charging each tile entered; Infinity when there is none |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
-| `viewOf` and friends ([game.ts:297](src/server/game.ts:297)) | `PlayState`, the stored map you stand on | the whole `GameView`, rebuilt per request — with the centre grid from the STORED map, so what is shown is what is walked; looking at a map stores it |
+| `viewOf` and friends ([game.ts:298](src/server/game.ts:298)) | `PlayState`, the stored map you stand on | the whole `GameView`, rebuilt per request — with the centre grid from the STORED map, so what is shown is what is walked; looking at a map stores it |
 
 ---
 
@@ -603,7 +609,7 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
 | **Director** ([director.ts:536](src/llm/director.ts:536)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:86](src/llm/director.ts:86)) and the PLACE a new way out leaves from (`revealWay`, [:66](src/llm/director.ts:66)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:68](src/llm/director.ts:68)). Every person it names is resolved by `personRef` ([delta.ts:61](src/play/delta.ts:61)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:601](src/llm/director.ts:601)) | `PARLEY_SCHEMA` ([:574](src/llm/director.ts:574)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:399](src/play/turn.ts:399)); an answer outside the list is a refusal ([director.ts:598](src/llm/director.ts:598)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Parley** ([director.ts:601](src/llm/director.ts:601)) | `PARLEY_SCHEMA` ([:574](src/llm/director.ts:574)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:405](src/play/turn.ts:405)); an answer outside the list is a refusal ([director.ts:598](src/llm/director.ts:598)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:367](src/world/floorgen.ts:367)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture (at least the budget minimum of people, [floorgen.ts:129](src/world/floorgen.ts:129); shown the last four floors, [:298](src/world/floorgen.ts:298); a name per place, [:324](src/world/floorgen.ts:324)) — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:140](src/world/floorgen.ts:140)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:580](src/world/floorgen.ts:580)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:143](src/world/floorgen.ts:143)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:145](src/world/floorgen.ts:145)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:653](src/world/floorgen.ts:653), [:659](src/world/floorgen.ts:659)) | **yes, in full** — inside `ClimbRecord.built` |
@@ -643,7 +649,7 @@ app/new/page.tsx
         Left to the story, it carries the roster's words instead, and the
         character call picks the class (genesis.ts:152)
         │
-        newGame  (server/game.ts:449)
+        newGame  (server/game.ts:451)
           startInterview + recordAnswer per stage (blanks get canned defaults)
           runGenesis:
             1. generateCharacter  ──► sheet
@@ -677,14 +683,16 @@ rations, because a short rest spends one.
  0  ENGINE ACTS ──────────────────────── no model call at all
        a typed "go to X" naming a place you can know of is walked tile by
        tile over the maps along the fewest-step route (turn.ts:126,
-       travel.ts:302, walker.ts:33), stopping on the first tick that brings a
-       traveller, a need at its line or night on wild ground; the record
-       holds where it stopped, so a replay never pathfinds (delta.ts:309);
+       travel.ts:302, walker.ts:35), stopping on the first tick that brings a
+       traveller, somebody NEW in view on the road, a need at its line or
+       night on wild ground; the record
+       holds where it stopped and WHO it met, so a replay never pathfinds
+       and never reads a tile (delta.ts:309, delta.ts:323);
        "rest"/"sleep", "hunt"
-       and "buy X" go through validateDelta as if proposed (turn.ts:315);
-       a hunt that would open no fight says why (turn.ts:339). One record
+       and "buy X" go through validateDelta as if proposed (turn.ts:321);
+       a hunt that would open no fight says why (turn.ts:345). One record
        each, and steps 1-7 never run. A CLICK on the map is the same walk
-       by another door (walk route → walkTarget, game.ts:665 → walkTile,
+       by another door (walk route → walkTarget, game.ts:667 → walkTile,
        turn.ts:212): checked at the edge, never the model.
  1  canonFacts   ← pgvector nearest-neighbour over this session's facts
  2  DIRECTOR ────────────────────────────────────── model call #1
@@ -709,7 +717,7 @@ rations, because a short rest spends one.
        applyDelta → combat (live or replayed; a finished live fight is
        re-folded by settleFight) → drift causes derived FROM
        THE RECORD → traits awarded LAST
-       drift runs by THIS world's rules and each person's kind (delta.ts:770)
+       drift runs by THIS world's rules and each person's kind (delta.ts:776)
  6  toWriterView + assertNoLeak ─── the wall
  7  WRITER ─────────────────────────────────────── model call #2 (+1 retry)
        sees only the redacted view and what already happened
@@ -729,11 +737,11 @@ A place holds cohorts of (subspecies, profession, size), and the draw is weighte
 by size ([crowd.ts:83](src/character/crowd.ts:83)), so a lineage that has been
 hunted down is rarer to meet. Two readers make that more than bookkeeping: the
 encounter fields **no more bodies than live there**
-([play/combat.ts:247](src/play/combat.ts:247)), and a place cleared out **opens no
-fight at all** ([play/combat.ts:436](src/play/combat.ts:436)). Each body carries
+([play/combat.ts:249](src/play/combat.ts:249)), and a place cleared out **opens no
+fight at all** ([play/combat.ts:438](src/play/combat.ts:438)). Each body carries
 the cohort it came from — `Combatant.kind` and `trade`
 ([combat/types.ts:168](src/combat/types.ts:168)) — so what dies is taken out of
-the population it came from ([play/combat.ts:848](src/play/combat.ts:848)),
+the population it came from ([play/combat.ts:850](src/play/combat.ts:850)),
 whoever won.
 
 "No population here" and "nothing lives here any more" are **different answers**
@@ -746,11 +754,11 @@ naming a foe `names[i % names.length]` meant a floor of undead could be handed a
 wolf's name; the name now **follows the lineage** — whichever creature word maps
 to this body is what it is called — and a lineage no word covers wears its own
 kind, because the engine invents no words
-([play/combat.ts:324](src/play/combat.ts:324)).
+([play/combat.ts:326](src/play/combat.ts:326)).
 
 `scaleFoe` still decides what it is like to **fight**: hit points, AC,
 proficiency, the attack it swings, its speed — and its abilities, **plus its kind's
-template** ([play/combat.ts:309](src/play/combat.ts:309)), through the same
+template** ([play/combat.ts:311](src/play/combat.ts:311)), through the same
 `withTemplate` a statblock foe has always had
 ([statblock.ts:128](src/combat/statblock.ts:128)). Amended 2026-09-13: from 3n
 until then a character foe fought with raw `scaleFoe` abilities, so its kind sat
@@ -821,11 +829,11 @@ at that depth, decided by the seed and the floor alone so the model's name for
 them changes nothing about what they are ([crowd.ts:114](src/character/crowd.ts:114)).
 While they live, the fight on that floor is against THEM, alone, on the boss
 role's anchor plus their kind on a landmark, and on the ELITE anchor on a loop
-floor — notable, not a boss ([play/combat.ts:237](src/play/combat.ts:237)); the
+floor — notable, not a boss ([play/combat.ts:239](src/play/combat.ts:239)); the
 combatant carries `person`, so a holder killed is written dead — the first writer
-`Person.alive = false` has had ([play/combat.ts:863](src/play/combat.ts:863)) —
+`Person.alive = false` has had ([play/combat.ts:865](src/play/combat.ts:865)) —
 and is never counted out of a population they were not drawn from
-([play/combat.ts:854](src/play/combat.ts:854)). After that the floor's fights are
+([play/combat.ts:856](src/play/combat.ts:856)). After that the floor's fights are
 the crowd's. No mutation yet: that arrives with the kin tree, after quests. A floor
 generated before this, or one the model named nobody for, keeps the crowd boss; a
 loop floor the model named nobody for is still held, by the lineage's own word
@@ -837,11 +845,11 @@ below the resentment ([edge.ts:115](src/social/edge.ts:115)). Resentment rather
 than regard, because contempt is not a grudge; and not `Person.stance`, which is
 an order to a companion, not hostility. Whoever qualifies fights alone and in
 place of the crowd, on the elite anchor plus their kind
-([play/combat.ts:212](src/play/combat.ts:212)). One at a time, the most resentful
+([play/combat.ts:214](src/play/combat.ts:214)). One at a time, the most resentful
 first, and a landmark's living holder before any of them
-([play/combat.ts:348](src/play/combat.ts:348)). Their sheet is written the first
+([play/combat.ts:350](src/play/combat.ts:350)). Their sheet is written the first
 time they fight, at that fight's danger, and kept
-([play/combat.ts:386](src/play/combat.ts:386)); one killed is written dead the way
+([play/combat.ts:388](src/play/combat.ts:388)); one killed is written dead the way
 a holder is.
 
 *"Whoever qualifies is in your next fight … nothing pursues anybody yet"* was true
@@ -850,7 +858,7 @@ turn it is fed, walks on the world clock, and only a traveller who has ARRIVED
 where you stand fights (`arrivedHere`, [journey.ts:56](src/play/journey.ts:56)).
 The law is read on the road: a traveller takes a stair only where `crossFloors`
 does not forbid them as a resident of their group
-([journey.ts:156](src/play/journey.ts:156)), so under `STANDARD` a grudge still
+([journey.ts:162](src/play/journey.ts:162)), so under `STANDARD` a grudge still
 stays on its own floor.
 
 **A grudge on the road** (6b stage 7.1). It SETS OUT on the turn it is fed
@@ -866,29 +874,31 @@ recovers for a day first ([journey.ts:36](src/play/journey.ts:36)). Each turn a
 traveller walks for the time the turn covered, toward the newest word it or its
 bearer holds ([journey.ts:96](src/play/journey.ts:96)): the cheapest route through
 a region, no further than the entrance of one where fighting is refused, and one
-stair at a time where `crossFloors` allows ([journey.ts:142](src/play/journey.ts:142)).
+stair at a time where `crossFloors` allows ([journey.ts:148](src/play/journey.ts:148)).
 ARRIVING opens the fight, decided from state so a replay opens the same one
-([delta.ts:734](src/play/delta.ts:734)). Only an arrived traveller fights, and
+([delta.ts:740](src/play/delta.ts:740)). Only an arrived traveller fights, and
 only while the bearer's grudge is worth a chase
-([combat.ts:342](src/play/combat.ts:342)): 2 or more
+([combat.ts:344](src/play/combat.ts:344)): 2 or more
 ([edge.ts:106](src/social/edge.ts:106)), one below what it takes to set out, so a
 grudge that fades a point on the road still arrives.
 
 **Word of the player.** A `sighting` is a belief, one per person seen
 ([belief.ts:44](src/character/belief.ts:44)); for sightings the NEWER account wins,
-not the surer ([sighting.ts:36](src/play/sighting.ts:36)). Each turn word passes one
-hop along people's edges ([sighting.ts:85](src/play/sighting.ts:85)), then
+not the surer ([sighting.ts:37](src/play/sighting.ts:37)). Each turn word passes one
+hop along people's edges ([sighting.ts:90](src/play/sighting.ts:90)), then
 whoever is where the player stands sees them firsthand
-([sighting.ts:76](src/play/sighting.ts:76), in the fold at
-[delta.ts:789](src/play/delta.ts:789)). WHO IS OUT is one function
-([sighting.ts:54](src/play/sighting.ts:54)): the place's people, less any away on
-the road, plus arrived travellers, and at night only guards and night kinds
-([sighting.ts:66](src/play/sighting.ts:66)). The Director's list of people here and
+([sighting.ts:81](src/play/sighting.ts:81), in the fold at
+[delta.ts:795](src/play/delta.ts:795)). WHO IS OUT is one function
+([sighting.ts:55](src/play/sighting.ts:55)): the place's people, less any away on
+the road, plus arrived travellers, and at night only guards and night kinds — but OUT
+ON A ROAD it is only whoever you MET, since the people of the place you set out from
+are a road behind you (W5); tile-free, because the fold reads it
+([sighting.ts:71](src/play/sighting.ts:71)). The Director's list of people here and
 the Writer's view read it too.
 
-**Grudges fade** ([journey.ts:228](src/play/journey.ts:228)): a point per the
+**Grudges fade** ([journey.ts:234](src/play/journey.ts:234)): a point per the
 bearer's `fadeDays` unfed, 1 to 5 by temper
-([journey.ts:212](src/play/journey.ts:212)), doubled if they owe the player; the
+([journey.ts:218](src/play/journey.ts:218)), doubled if they owe the player; the
 timer restarts at each point lost, and a traveller whose grudge falls below 2
 turns back.
 
@@ -903,20 +913,20 @@ own year on an era floor, "N years before" the reckoning behind year 1
 the floor at [director.ts:426](src/llm/director.ts:426) and
 [redact.ts:141](src/llm/redact.ts:141)) — which genesis asks for last, so the
 game does without them ([calendar.ts:131](src/world/calendar.ts:131)). Needs drain
-by the hour marks a turn crossed ([delta.ts:489](src/play/delta.ts:489)), faster in
-winter outside a settlement ([delta.ts:492](src/play/delta.ts:492)); winter
+by the hour marks a turn crossed ([delta.ts:495](src/play/delta.ts:495)), faster in
+winter outside a settlement ([delta.ts:498](src/play/delta.ts:498)); winter
 ([calendar.ts:29](src/world/calendar.ts:29)) also slows a wild link. About one
 group in six keeps night hours and one in six keeps to some seasons
 ([habitat.ts:110](src/character/habitat.ts:110)); a group out of season is left
-out of a place's crowd ([combat.ts:180](src/play/combat.ts:180)). *"A floor whose one
+out of a place's crowd ([combat.ts:181](src/play/combat.ts:181)). *"A floor whose one
 group is away fields nobody"* held for a day: since 2026-09-18 another group that lives
 at that depth and is out fills in, and a floor stands empty out of season only where
-`world.emptyOutOfSeason` allows it ([combat.ts:196](src/play/combat.ts:196)) — a crowd
+`world.emptyOutOfSeason` allows it ([combat.ts:198](src/play/combat.ts:198)) — a crowd
 thinned to nothing still stays gone. A hunter by trade fights at night with the
 advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
 
 **Eras** (6c). The deeds `ECHOING` names — helped, killed, spared — done on an era floor
-are kept as echoes ([delta.ts:687](src/play/delta.ts:687)) and told on the era floors
+are kept as echoes ([delta.ts:693](src/play/delta.ts:693)) and told on the era floors
 ABOVE it in the same band, the five most recent, with the years between
 ([director.ts:313](src/llm/director.ts:313)); never below — the past does not remember
 its future. When an era floor above the band's first is built, one or two of its new
@@ -926,8 +936,8 @@ somebody is ([director.ts:348](src/llm/director.ts:348)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
 ([types.ts:183](src/combat/types.ts:183)), set where it is built
-([play/combat.ts:296](src/play/combat.ts:296)): `floor(maxHp × (3 − nerve) / 12)`
-([play/combat.ts:403](src/play/combat.ts:403)) — a quarter at nerve 0, half at −3,
+([play/combat.ts:298](src/play/combat.ts:298)): `floor(maxHp × (3 − nerve) / 12)`
+([play/combat.ts:405](src/play/combat.ts:405)) — a quarter at nerve 0, half at −3,
 none at +3 — and none at all for a kind with no safety need, which is undead,
 construct and elemental ([species.ts:84](src/character/species.ts:84)). Nerve is
 the person's own for a holder or a grudge; a crowd foe's sheet is a blank persona,
@@ -941,36 +951,36 @@ means "out of the fight". A blow that carries a foe from above its line to nothi
 kills it; breaking needs a blow that leaves it standing.
 
 A yielded foe's fate is the PLAYER's once the fight is won: the fight is not
-finished while one is waiting ([play/combat.ts:503](src/play/combat.ts:503)), the
-only options are `kill` and `spare` ([:511](src/play/combat.ts:511)), and both are
+finished while one is waiting ([play/combat.ts:505](src/play/combat.ts:505)), the
+only options are `kill` and `spare` ([:513](src/play/combat.ts:513)), and both are
 `CombatAction`s, so they ride in `combatActions` and replay like any decision
-([:672](src/play/combat.ts:672)). The server holds the fight open on the same test
-([game.ts:769](src/server/game.ts:769)) and shows it as not over, so the choice
+([:674](src/play/combat.ts:674)). The server holds the fight open on the same test
+([game.ts:771](src/server/game.ts:771)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
-([play/combat.ts:835](src/play/combat.ts:835)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:630](src/play/delta.ts:630)), and whoever
-was spared is counted present to feel it ([delta.ts:652](src/play/delta.ts:652)).
+([play/combat.ts:837](src/play/combat.ts:837)); spared writes the `spared` deed,
+toward the person if it was one ([delta.ts:636](src/play/delta.ts:636)), and whoever
+was spared is counted present to feel it ([delta.ts:658](src/play/delta.ts:658)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
-([play/combat.ts:953](src/play/combat.ts:953)). Losing or drawing decides nothing:
+([play/combat.ts:955](src/play/combat.ts:955)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
 until step 9, where joining the party gives it one.
 
 **Survivors with a future** (6b stage 7). A foe that FLED BADLY BEATEN — at or under
-half its break line ([play/combat.ts:885](src/play/combat.ts:885)) — or that was
+half its break line ([play/combat.ts:887](src/play/combat.ts:887)) — or that was
 SPARED becomes a person. Any other survivor goes back into the crowd, which was
 never thinned for it, because `world.people` is never compressed and breaking is
 common. A new person's id is the region, the turn and the body
-([:891](src/play/combat.ts:891)), so a replay makes the same one. They have the
+([:893](src/play/combat.ts:893)), so a replay makes the same one. They have the
 kind and trade they fought with, at a veteran's standing
-([:1026](src/play/combat.ts:1026)), and keep their kind's word for a name: nothing
+([:1028](src/play/combat.ts:1028)), and keep their kind's word for a name: nothing
 calls a model when a fight ends. They live where they broke, added to that
-place's people ([:903](src/play/combat.ts:903)), so they witness the turn's deeds
+place's people ([:905](src/play/combat.ts:905)), so they witness the turn's deeds
 firsthand and the Director sees them there. Fleeing badly beaten leaves resentment
-`FLED_GRUDGE + BEATEN_GRUDGE`, which is 3 ([:896](src/play/combat.ts:896)):
+`FLED_GRUDGE + BEATEN_GRUDGE`, which is 3 ([:898](src/play/combat.ts:898)):
 exactly the grudge threshold, so they come back, and a crowd foe has grown into a
 notable. A foe that already was a person gains the grudge and is not made twice. A
 spared one is the person the `spared` deed lands on
-([:926](src/play/combat.ts:926)).
+([:928](src/play/combat.ts:928)).
 
 A world stored before the species tree still meets statblock foes: inventing a
 population for it would be inventing the bodies of creatures somebody is already
@@ -1000,7 +1010,7 @@ instead: a creature composes from the best stat its kind can actually use
 
 A fight opens mid-turn and the record is **not written** until it ends. The
 encounter lives in an in-memory `fights` map on `globalThis`
-([game.ts:419](src/server/game.ts:419) — Next gives routes and server components
+([game.ts:421](src/server/game.ts:421) — Next gives routes and server components
 separate module instances, so a plain module-level `Map` would produce two).
 
 Every roll derives from state —
@@ -1009,13 +1019,13 @@ Every roll derives from state —
 unaffordable skill is *not offered* rather than offered and refused. When it
 concludes, the original turn's draft record plus `combatActions` is appended as
 **one event**, and a snapshot is taken unconditionally. Its closing lines come back
-beside the finished view ([game.ts:792](src/server/game.ts:792)): the view carries a
-log only while a fight is open ([game.ts:266](src/server/game.ts:266)), which dropped
+beside the finished view ([game.ts:794](src/server/game.ts:794)): the view carries a
+log only while a fight is open ([game.ts:267](src/server/game.ts:267)), which dropped
 them for every fight until `d579b42`.
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:798](src/play/delta.ts:798)), because the live turn ran drift, deeds
+([delta.ts:804](src/play/delta.ts:804)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -1023,27 +1033,27 @@ replay agree by construction.
 party in the initiative order, though everybody still rolls, so the dice after
 it fall the same ([combat/combat.ts:191](src/combat/combat.ts:191)). And they
 spawn beside the player instead of across the arena
-([play/combat.ts:431](src/play/combat.ts:431)): acting first from 9 squares away
+([play/combat.ts:433](src/play/combat.ts:433)): acting first from 9 squares away
 only closes the gap, which measured as an ambush RAISING the player's win rate
 by 4–10 points. Adjacent, it costs 0–4. Striking first earns the player nothing.
 
 **A parley** (6b stage 8) is a word to one foe that costs the turn
-([play/combat.ts:776](src/play/combat.ts:776)). It is offered for a foe that is
+([play/combat.ts:778](src/play/combat.ts:778)). It is offered for a foe that is
 standing, of a kind with a company need, and not yet spoken to this fight
-([play/combat.ts:589](src/play/combat.ts:589)) — once, read off the fight's own log
+([play/combat.ts:591](src/play/combat.ts:591)) — once, read off the fight's own log
 ([combat/combat.ts:83](src/combat/combat.ts:83)) — and listed AFTER `end turn`
-([play/combat.ts:571](src/play/combat.ts:571)), because a parley logs an event and the
+([play/combat.ts:573](src/play/combat.ts:573)), because a parley logs an event and the
 log's length seeds every roll, so a first-option picker like the harness must never
 reach one. The server hears it where a provider exists
-([game.ts:750](src/server/game.ts:750)): `hearParley` DISCARDS whatever roll and
+([game.ts:752](src/server/game.ts:752)): `hearParley` DISCARDS whatever roll and
 verdict the client sent, asks the model, rolls in the engine and writes the tier's
-answer into the action ([turn.ts:388](src/play/turn.ts:388)); a foe that cannot hear
-costs no call ([:391](src/play/turn.ts:391)). The fold only carries the verdict out
+answer into the action ([turn.ts:394](src/play/turn.ts:394)); a foe that cannot hear
+costs no call ([:397](src/play/turn.ts:397)). The fold only carries the verdict out
 ([combat/combat.ts:92](src/combat/combat.ts:92)): `yields` and `withdraws` are stage
 6's `yielded` and `fled` ([:100](src/combat/combat.ts:100)), so a fate, a survivor and
 a deed need nothing new, and `refuses` changes nothing. A foe still standing is above
 its break line, so one talked away is never "badly beaten" and gains no grudge. The
-fight log shows engine words ([play/combat.ts:1074](src/play/combat.ts:1074)), never
+fight log shows engine words ([play/combat.ts:1076](src/play/combat.ts:1076)), never
 the model's.
 
 ---
@@ -1058,10 +1068,10 @@ the whole climb — or at a settlement you HOLD, on any floor
 Rest and hunting are recognised by the engine from what you type (§9 step 0).
 
 **Walk by clicking** (W4a) — `POST /walk { map, x, y }` is checked twice: its
-shape at the route ([game.ts:665](src/server/game.ts:665)), then that the tile is on
+shape at the route ([game.ts:667](src/server/game.ts:667)), then that the tile is on
 your map, inside it and not a wall ([turn.ts:212](src/play/turn.ts:212)); a bad one is
 refused with a reason and nothing is logged. The walk is logged as its own turn
-FIRST, then a stair or a way out is taken ([game.ts:588](src/server/game.ts:588)), so a
+FIRST, then a stair or a way out is taken ([game.ts:590](src/server/game.ts:590)), so a
 climb that fails leaves you standing on the stair.
 
 **Climb** — a crossing is a **logged event**. `ClimbRecord.built` carries the
@@ -1099,10 +1109,10 @@ migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes —
 a parley's verdict is the one outcome it stores, because a fold holds no provider
-([play/combat.ts:488](src/play/combat.ts:488)) — and a fold re-resolves them with today's code ([delta.ts:738](src/play/delta.ts:738)).
+([play/combat.ts:490](src/play/combat.ts:490)) — and a fold re-resolves them with today's code ([delta.ts:744](src/play/delta.ts:744)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
-snapshotted back to back ([game.ts:776](src/server/game.ts:776)), so normal play
+snapshotted back to back ([game.ts:778](src/server/game.ts:778)), so normal play
 never re-runs an old fight. But delete the snapshots of any session older than a
 fight-rule change — stages 2, 3c-ii, 3m, 3n, anchor plus delta, `58095bd`,
 which made worn gear count, stage 5 (`1526dfe`), which fields a person with a
@@ -1116,7 +1126,7 @@ the rules.
 **2. Dice are recorded, never re-rolled.** Where a roll can be derived from
 state instead, it is — which is why a whole fight stores only decisions — except a
 parley's roll, which comes from the live path and is recorded
-([turn.ts:388](src/play/turn.ts:388)).
+([turn.ts:394](src/play/turn.ts:394)).
 
 **3. The model never decides an outcome.** It proposes; the engine validates and
 resolves.
@@ -1145,7 +1155,7 @@ dropped on reload. This has already happened once, to panel actions.
 
 **8. A step with one right answer never reaches the model.** Walking, resting,
 hunting and buying are recognised whole and applied by the engine
-([turn.ts:126](src/play/turn.ts:126), [:315](src/play/turn.ts:315)): live, the Director refused an adjacent stair three
+([turn.ts:126](src/play/turn.ts:126), [:321](src/play/turn.ts:321)): live, the Director refused an adjacent stair three
 times, started no fight on five "attack" turns in six, and rested only when it chose
 to. Speech that merely contains the words ("rest assured", "attack the warden")
 is still the Director's.
@@ -1155,10 +1165,15 @@ redrawn ([maps.ts:13](src/db/maps.ts:13)), so a change to the generator cannot s
 walls under a save; its doors are derived from the place graph on every read
 ([map.ts:329](src/world/map.ts:329)), so a way revealed later never forces a redraw.
 
+**9a. A meeting on the road is RECORDED, not recomputed.** A walk stores who came
+into view ([walker.ts:152](src/play/walker.ts:152)); the fold ends that traveller's
+journey where you both stand ([delta.ts:323](src/play/delta.ts:323)) and the ordinary
+arrival machinery opens the fight — so the log still never depends on a tile.
+
 **10. A position is removed, never set to undefined.** A snapshot is JSON and drops an
 undefined key, so a fold that wrote `at: undefined` disagreed with its own snapshot —
 the snapshot test caught it in W3. `unplaced` removes the key
-([map.ts:64](src/world/map.ts:64); [delta.ts:328](src/play/delta.ts:328), [climb.ts:266](src/play/climb.ts:266)).
+([map.ts:64](src/world/map.ts:64); [delta.ts:334](src/play/delta.ts:334), [climb.ts:266](src/play/climb.ts:266)).
 
 ---
 
@@ -1187,14 +1202,14 @@ and carry weight's drag on speed did nothing in a fight: a player whose sheet sa
 AC 17 fought at 11, swinging the background's 1d6 with a d12 in hand. `fd16f7a`
 gave `toCombatant` the parameter the same day the play path was written without
 it, and no test crossed the two. It now passes the inventory
-([play/combat.ts:96](src/play/combat.ts:96)). Found building 3o's harness climber:
+([play/combat.ts:97](src/play/combat.ts:97)). Found building 3o's harness climber:
 a geared climber measured identical to an ungeared one.
 
 ### Waiting on a reader, by decision
 
 The **`maps` table** had a writer, `mapFor` ([maps.ts:13](src/db/maps.ts:13)), and no
 caller when W2 shipped. **Resolved by W3:** the server stores each map on the first walk
-across it ([game.ts:545](src/server/game.ts:545)) and the walk reads it back from there.
+across it ([game.ts:547](src/server/game.ts:547)) and the walk reads it back from there.
 
 A foe's **signature skill** is on its sheet and never used, because `combat/ai.ts`
 cannot cast at all; step 9's AI rebuild is where that lands.
@@ -1223,23 +1238,23 @@ witness a deed or carry a line). It now asks for the budget's minimum
 **Cleared: a parley's roll had no reader.** — *"the fold applies the verdict alone,
 and the fight log shows the answer but not the dice, unlike a turn's roll"* was true
 until `d579b42`. The roll is still recorded in the action
-([play/combat.ts:488](src/play/combat.ts:488)); the log event now carries it
+([play/combat.ts:490](src/play/combat.ts:490)); the log event now carries it
 ([combat/combat.ts:92](src/combat/combat.ts:92)) and the fight log prints it as the
-transcript prints a turn's ([play/combat.ts:1073](src/play/combat.ts:1073)).
+transcript prints a turn's ([play/combat.ts:1075](src/play/combat.ts:1075)).
 
 **Cleared: a crowd's stored size.** — *"killing does not yet thin a floor"* was
 true until 3n-ii. A population is stored per place, the draw is weighted by what
 is left, the encounter is capped by it, and a cleared place opens no fight
 ([population.ts:124](src/character/population.ts:124),
-[play/combat.ts:247](src/play/combat.ts:247)).
+[play/combat.ts:249](src/play/combat.ts:249)).
 
 ### Confirmed dead
 
 **Cleared: `Person.sheet`** — *listed here as dead* until 6b stage 4. A landmark
 floor's holder is given one at generation ([floorgen.ts:653](src/world/floorgen.ts:653))
-and the fight reads it ([play/combat.ts:230](src/play/combat.ts:230)). `recruited`
+and the fight reads it ([play/combat.ts:232](src/play/combat.ts:232)). `recruited`
 and `stance` are still dead. Stage 5 gave it a second writer: whoever comes for you
-with a grudge gets one at their first fight ([play/combat.ts:386](src/play/combat.ts:386)).
+with a grudge gets one at their first fight ([play/combat.ts:388](src/play/combat.ts:388)).
 
 **Cleared: `Person.homeRegion`** — *listed here as dead* until 6b stage 5, which
 read it as where a person IS, to decide whether a grudge was on your floor. Since
@@ -1269,7 +1284,7 @@ any code path … the whole branch is inert in play"* was **reversed on
 ([sheetaction.ts:258](src/play/sheetaction.ts:258)); the skill tree grafts a
 branch for every held Signet that `opens` one
 ([skilltree.ts:637](src/play/skilltree.ts:637)); the panel marks it held
-([game.ts:1036](src/server/game.ts:1036)); and
+([game.ts:1038](src/server/game.ts:1038)); and
 [signet.test.ts:253](src/play/signet.test.ts:253) proves a claimed Signet is on
 the sheet and survives replay. Writer and readers both exist. `Signet.grant`
 and `Signet.augments` above are NOT cleared by this — a Signet can be held now
@@ -1401,7 +1416,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:770](src/play/delta.ts:770)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:776](src/play/delta.ts:776)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:326](src/session/genesis.ts:326),
@@ -1432,7 +1447,7 @@ NPC, so nobody ever tries."* True until 6b stage 5, when it gained its first
 enforcer: a person with a grudge on another floor came for you only when the law
 did not forbid them. Since 7.1b NPCs MOVE (journeys), and that movement asks the
 law: a traveller takes a stair only where it allows
-([journey.ts:156](src/play/journey.ts:156)). For everything else it is still true
+([journey.ts:162](src/play/journey.ts:162)). For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
 and the Director brief ([director.ts:392](src/llm/director.ts:392)) is the only
 check on what gets narrated.
@@ -1516,7 +1531,7 @@ both.
 
   **Re-pinned again 2026-09-18**, within 2 points of the row above: a floor whose
   only group is away is now filled by another that lives at its depth, so almost
-  every trial opens a fight again ([play/combat.ts:196](src/play/combat.ts:196)).
+  every trial opens a fight again ([play/combat.ts:198](src/play/combat.ts:198)).
 
   **Re-pinned 2026-09-15 at 6b stage 6**, world 7 — foes now
   break, so a climber skips the last quarter of each at depth. Measured pinned; the
@@ -1611,21 +1626,22 @@ Every balance number, and where it lives.
 | need range | 0..10 | [persona.ts:125](src/character/persona.ts:125) |
 | trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
 | grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:101](src/social/edge.ts:101) |
-| survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:1015](src/play/combat.ts:1015) |
+| survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:1017](src/play/combat.ts:1017) |
 | clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:13](src/world/calendar.ts:13) |
 | a place link / a stair | 6–42 min (each end by kind 3/5/7/9, seed 0–10, biome ×1/×1.25/×1.5 by keyword), charged in whole ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:36](src/world/travel.ts:36), [:45](src/world/travel.ts:45), [:82](src/world/travel.ts:82), [:73](src/world/travel.ts:73) |
 | a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:173](src/world/map.ts:173), [:175](src/world/map.ts:175), [:178](src/world/map.ts:178) | [map.ts:173](src/world/map.ts:173), [:178](src/world/map.ts:178) |
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:210](src/world/map.ts:210) |
 | hub radius | settlement 24, wild 18, landmark and dungeon 14, gate 10 tiles | [map.ts:295](src/world/map.ts:295) |
+| sight on the road | 12 tiles, and not through a wall | [onroad.ts:24](src/play/onroad.ts:24) |
 | the centre view | 41×25 tiles around you, clipped to the map | [grid.ts:8](src/server/grid.ts:8) |
 | the minimap | at most 60 cells wide | [views.ts:17](src/server/views.ts:17) |
-| a walk's stop line | food or rest at 3 or under — the level the game calls "starving" | [walker.ts:15](src/play/walker.ts:15) |
-| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:489](src/play/delta.ts:489) |
+| a walk's stop line | food or rest at 3 or under — the level the game calls "starving" | [walker.ts:17](src/play/walker.ts:17) |
+| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:495](src/play/delta.ts:495) |
 | night | 20:00–06:00 | [calendar.ts:175](src/world/calendar.ts:175) |
-| grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:212](src/play/journey.ts:212), [edge.ts:106](src/social/edge.ts:106) |
+| grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:218](src/play/journey.ts:218), [edge.ts:106](src/social/edge.ts:106) |
 | recovery after fleeing | one day | [journey.ts:36](src/play/journey.ts:36) |
 | night kinds / seasonal groups | about 1 group in 6 each | [habitat.ts:110](src/character/habitat.ts:110) |
-| break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:403](src/play/combat.ts:403), [combat/combat.ts:71](src/combat/combat.ts:71) |
+| break line | `floor(maxHp × (3 − nerve) / 12)`; none with no safety need; yield within 1 square | [play/combat.ts:405](src/play/combat.ts:405), [combat/combat.ts:71](src/combat/combat.ts:71) |
 | time per turn | 0..3 | [delta.ts](src/play/delta.ts) |
 | short / long rest turns | 1 / 8 | [rest.ts:28](src/play/rest.ts:28) |
 | base speed / floor | 6 (+AGI mod) / 3 | [sheet.ts](src/session/sheet.ts) |
@@ -1713,11 +1729,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:118](src/play/state.ts:118)),
-and being jumped is no deed ([delta.ts:622](src/play/delta.ts:622)). A fight
+and being jumped is no deed ([delta.ts:628](src/play/delta.ts:628)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:626](src/play/delta.ts:626)). `spared` — *"has no writer until 6b stage
+([delta.ts:632](src/play/delta.ts:632)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:630](src/play/delta.ts:630)).
+([delta.ts:636](src/play/delta.ts:636)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -1746,22 +1762,22 @@ floor is built ([floorgen.ts:543](src/world/floorgen.ts:543)); a later killing c
 nothing on the floor above. Open in DESIGN *Stratum knobs*.
 
 *A walk arrives in a fixed line, not prose.* "You walk to the covered market." — the
-engine walks and no model narrates the arrival ([turn.ts:256](src/play/turn.ts:256)). **W3 decided:** every
-stop gets a fixed line, by why it stopped ([turn.ts:248](src/play/turn.ts:248)); the Director on stops waits
+engine walks and no model narrates the arrival ([turn.ts:259](src/play/turn.ts:259)). **W3 decided:** every
+stop gets a fixed line, by why it stopped ([turn.ts:250](src/play/turn.ts:250)); the Director on stops waits
 for W5, when a stop can mean someone in view (DESIGN 6c §2c).
 
 *There is no way down in the web app.* `godown` exists ([climb.ts:309](src/play/climb.ts:309)) and the view
 carried `canDescend`, but no route called the one and nothing in `app/`
 read the other, so a climber could never return to the floor-0 town. Walkable maps make
 the down stair a portal (DESIGN 6c §2). **Resolved by W4a:** clicking the down stair
-walks there and descends ([game.ts:702](src/server/game.ts:702)). **Closed 2026-09-20:**
+walks there and descends ([game.ts:704](src/server/game.ts:704)). **Closed 2026-09-20:**
 `canDescend` left the view; `exitStatus` still derives it for the climb path
 ([climb.ts:334](src/play/climb.ts:334)).
 
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
 ([genesis.ts:755](src/session/genesis.ts:755)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:356](src/play/delta.ts:356)).
+`Region.exits` is a way out found in play ([delta.ts:362](src/play/delta.ts:362)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
@@ -1803,7 +1819,7 @@ classes now lean on stats and nothing is locked out.
 every thrown error into `status: 500`, `POST /api/sessions` among them
 ([route.ts:24](app/api/sessions/route.ts:24)). So a species choice that
 `speciesChoiceOf` refuses, with a message naming what was wrong
-([game.ts:639](src/server/game.ts:639)), reaches the client as a server fault. The
+([game.ts:641](src/server/game.ts:641)), reaches the client as a server fault. The
 only 400s are written by hand: a missing seed, a missing combat action, and a
 refused climb target.
 
