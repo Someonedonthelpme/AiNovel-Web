@@ -3,6 +3,8 @@ import { needsAfter } from './delta.ts';
 import { advanceJourneys } from './journey.ts';
 import type { PlayState, Stop, WalkTo } from './state.ts';
 import { bestRoute, fieldEnds, fieldId, hubId, portalsOf, positionOf, tileSeconds } from '../world/map.ts';
+import { figuresOn, inView, riderAt, ridersOn } from './onroad.ts';
+import type { Rider } from './onroad.ts';
 import type { Cell, GameMap, MapId } from '../world/map.ts';
 import { isNight, MINUTES_PER_TICK } from '../world/calendar.ts';
 import { activeRegion, clockOf } from '../world/travel.ts';
@@ -103,16 +105,35 @@ function walkLegs(state: PlayState, legs: Leg[], arrival: { map: MapId; x: numbe
   const needs0 = state.sheet.needs ?? { food: NEED_MAX, rest: NEED_MAX };
   const kind = new Map(region.places.map((p) => [p.id, p.kind]));
 
-  /** What stops the walk on the tick `t`, standing in `here`'s ground on map `m`. */
-  const stopAt = (t: number, m: GameMap, here: PlaceId): Stop | null => {
+  // Whoever was ALREADY in view when you set off: seeing them again is not news,
+  // and stopping for it would leave you unable to walk on at all.
+  const first = legs[0];
+  const known = new Set(first && fieldEnds(first.map.id)
+    ? figuresOn(world, first.map.id).filter((f) => inView(first.map, first.from, f)).map((f) => f.who)
+    : []);
+  /** Who is crossing this leg's field, and where each of them is `secs` into the walk. */
+  const ridersFor = new Map<MapId, Rider[]>();
+  const sighted = (m: GameMap, c: Cell, secs: number): PlaceId | null => {
+    if (!fieldEnds(m.id)) return null;
+    if (!ridersFor.has(m.id)) ridersFor.set(m.id, ridersOn(world, m.id));
+    for (const r of ridersFor.get(m.id)!) {
+      if (known.has(r.who)) continue;
+      const at = riderAt(r, (carried + secs) / SECONDS_PER_TICK);
+      if (at && inView(m, c, at)) return r.who;
+    }
+    return null;
+  };
+
+  /** What stops the walk on the tick `t`, standing in `here`'s ground on map `m`, at `c`. */
+  const stopAt = (t: number, m: GameMap, here: PlaceId, c: Cell): { stop: Stop; met?: PlaceId } | null => {
     const there = { ...world, currentPlace: here };
     const later = { ...advanceJourneys(there, clock0, t), clock: t };
-    if (arrivalOpens({ ...state, world: later })) return 'encounter';
+    if (arrivalOpens({ ...state, world: later })) return { stop: 'encounter' };
     const needs = needsAfter({ ...state, world: there }, clock0, t);
-    if (needs0.food > NEED_LINE && needs.food <= NEED_LINE) return 'hungry';
-    if (needs0.rest > NEED_LINE && needs.rest <= NEED_LINE) return 'weary';
+    if (needs0.food > NEED_LINE && needs.food <= NEED_LINE) return { stop: 'hungry' };
+    if (needs0.rest > NEED_LINE && needs.rest <= NEED_LINE) return { stop: 'weary' };
     const wild = fieldEnds(m.id) !== null || kind.get(here) === 'wild' || kind.get(here) === 'dungeon';
-    if (wild && isNight({ ...world, clock: t }) && !isNight({ ...world, clock: t - 1 })) return 'nightfall';
+    if (wild && isNight({ ...world, clock: t }) && !isNight({ ...world, clock: t - 1 })) return { stop: 'nightfall' };
     return null;
   };
 
@@ -125,11 +146,15 @@ function walkLegs(state: PlayState, legs: Leg[], arrival: { map: MapId; x: numbe
     if (path.length === 0) throw new Error(`walk: no way across "${leg.map.id}"`);
     for (const c of path.slice(1)) {
       spent += tileSeconds(leg.map, c);
+      // Seeing somebody is asked every tile: a traveller can cross a whole link
+      // between two ticks, and passing them unseen is the thing W5 is for.
+      const met = sighted(leg.map, c, spent);
+      if (met) return { map: leg.map.id, x: c.x, y: c.y, seconds: spent, through, stop: 'sighted', met };
       const crossed = Math.floor((carried + spent) / SECONDS_PER_TICK);
       if (crossed === ticks) continue;
       ticks = crossed;
-      const stop = stopAt(clock0 + ticks, leg.map, here);
-      if (stop) return { map: leg.map.id, x: c.x, y: c.y, seconds: spent, through, stop };
+      const stop = stopAt(clock0 + ticks, leg.map, here, c);
+      if (stop) return { map: leg.map.id, x: c.x, y: c.y, seconds: spent, through, ...stop };
     }
     if (leg.enters) {
       through.push(leg.enters);

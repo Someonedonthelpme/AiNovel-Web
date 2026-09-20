@@ -149,9 +149,13 @@ export type WorldDelta = {
 };
 
 /** Why a walk stopped (W3). Closed. */
-export const STOPS = ['arrived', 'nightfall', 'hungry', 'weary', 'encounter'] as const;
+export const STOPS = ['arrived', 'nightfall', 'hungry', 'weary', 'encounter', 'sighted'] as const;
 export type Stop = (typeof STOPS)[number];
-export type WalkTo = { map: string; x: number; y: number; seconds: number; through: string[]; stop: Stop };
+/**
+ * `met` is who came into view on the road (W5) — recorded, because the fold holds
+ * no tiles and must still open the fight the sighting opened.
+ */
+export type WalkTo = { map: string; x: number; y: number; seconds: number; through: string[]; stop: Stop; met?: string };
 
 export type TurnRecord = {
   kind: 'turn';

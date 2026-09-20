@@ -38,6 +38,7 @@ import { FOLK, groupOf, leavesUnder, needScale, readSpecies, speciesIdFor } from
 import { axisOf, CHASE_THRESHOLD, hostileToward, nudge, PLAYER } from '../social/edge.ts';
 import type { Person, Region } from '../world/types.ts';
 import { arrivedHere, journeysOf } from './journey.ts';
+import { crowdAround } from './onroad.ts';
 import { dateOf, isNight } from '../world/calendar.ts';
 import { preyOf } from '../character/prey.ts';
 import { groupsAt, habitOf, livesAt, packAt } from '../character/habitat.ts';
@@ -179,7 +180,8 @@ function crowdFoes(
   // Only the groups that are out this season (7.1e-v); the rest are away, not gone.
   const season = dateOf(state.world).season;
   const out = (group: string | undefined) => !group || habitOf(state.world.seed, group).seasons.includes(season);
-  const everyone = populationAt(state.world, state.world.currentRegion, state.world.currentPlace, floor);
+  // On a field, the crowd is both ends' (W5); in a place, its own.
+  const everyone = crowdAround(state.world, floor);
   let cohorts = everyone?.filter((c) => out(groupOf(kinds, c.subspecies))) ?? null;
 
   /*

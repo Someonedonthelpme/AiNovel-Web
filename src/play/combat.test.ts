@@ -1048,7 +1048,10 @@ test('a journey moves along links on the clock, and arrives when the time is spe
 
 // W3: a traveller arriving where you are stops a walk, and the fight opens. Here,
 // because arrivals only open fights on a floor with danger, and its helpers are here.
-test('a traveller arriving mid-walk stops it, and the fight opens', async () => {
+// Respecified by W5: the stop is now `sighted`, not `encounter` — the two of you are
+// on the same road, so you SEE them coming before they reach the place you left. The
+// fight still opens, with them.
+test('a traveller met mid-walk stops it, and the fight opens', async () => {
   const base = populated();
   const s = travelling({ ...base, world: { ...base.world, currentPlace: 'well' } }, 'smith', 'floor-2', 'market');
   // The smith is one tick from the well, and the player ten seconds from that tick.
@@ -1061,7 +1064,8 @@ test('a traveller arriving mid-walk stops it, and the fight opens', async () => 
     { director: new FakeProvider({}), writer: new FakeProvider({}), rng: () => 0.5 },
     near, 'go to Ashfall', 'exploration', [],
   );
-  assert.equal(r.record.delta.walkTo?.stop, 'encounter');
+  assert.equal(r.record.delta.walkTo?.stop, 'sighted');
+  assert.equal(r.record.delta.walkTo?.met, 'smith');
   assert.equal(foesOf(r.state)[0]?.person, 'smith');
 });
 

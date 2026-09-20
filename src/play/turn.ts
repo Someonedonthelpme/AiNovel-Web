@@ -236,8 +236,10 @@ export async function walkTile(deps: TurnDeps, state: PlayState, target: { map: 
   const onto = fieldEnds(walkTo.map)?.find((p) => p !== state.world.currentPlace);
   const road = places.find((p) => p.id === onto)?.name;
   const standing = places.find((p) => p.id === state.world.currentPlace)?.name ?? '';
+  // A sighting names WHO, not where you were going.
+  const met = walkTo.met ? state.world.people[walkTo.met]?.name ?? walkTo.met : null;
   const prose = walkTo.stop !== 'arrived'
-    ? (th ? STOP_LINES[walkTo.stop].th(entered ?? 'ปลายทาง') : STOP_LINES[walkTo.stop].en(entered ?? 'where you were going'))
+    ? (th ? STOP_LINES[walkTo.stop].th(met ?? entered ?? 'ปลายทาง') : STOP_LINES[walkTo.stop].en(met ?? entered ?? 'where you were going'))
     : entered ? (th ? STOP_LINES.arrived.th(entered) : STOP_LINES.arrived.en(entered))
     : road ? (th ? `คุณออกเดินทางไปทาง${road}` : `You set out toward ${road}.`)
     : th ? `คุณเดินไปในบริเวณ${standing}` : `You walk across ${standing}.`;
@@ -251,6 +253,7 @@ const STOP_LINES: Record<Stop, { en: (to: string) => string; th: (to: string) =>
   hungry: { en: (to) => `Hunger stops you on the way to ${to}.`, th: (to) => `ความหิวทำให้คุณต้องหยุดระหว่างทางไป${to}` },
   weary: { en: (to) => `You are too tired to go on toward ${to}.`, th: (to) => `คุณเหนื่อยเกินกว่าจะเดินต่อไปยัง${to}` },
   encounter: { en: () => 'Someone has come for you.', th: () => 'มีคนตามมาหาคุณ' },
+  sighted: { en: (who) => `You see ${who} on the road.`, th: (who) => `คุณเห็น${who}อยู่บนถนน` },
 };
 
 async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mode, route: string[]): Promise<TurnResult> {
@@ -260,7 +263,10 @@ async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mod
     delta: { walkTo }, rejected: [], prose: '',
   };
   const applied = applyTurn(state, record);
-  const goal = activeRegion(state.world)?.places.find((p) => p.id === route[route.length - 1])?.name ?? '';
+  // A sighting names WHO you saw; every other stop names where you were going.
+  const goal = walkTo.met
+    ? state.world.people[walkTo.met]?.name ?? walkTo.met
+    : activeRegion(state.world)?.places.find((p) => p.id === route[route.length - 1])?.name ?? '';
   const line = STOP_LINES[walkTo.stop];
   const prose = state.world.language === 'th' ? line.th(goal) : line.en(goal);
   return {

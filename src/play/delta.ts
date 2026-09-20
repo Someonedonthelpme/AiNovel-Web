@@ -315,8 +315,14 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
     discovered ||= !before;
   }
   if (delta.walkTo) {
-    const { map, x, y } = delta.walkTo;
+    const { map, x, y, met } = delta.walkTo;
     world = { ...world, at: { map, x, y }, turn: state.world.turn + 1 };
+    // Whoever you MET on the road has met you: their journey ends where you both
+    // stand, which is what opens a fight with them (W5). Taken from the record,
+    // never from the tiles, so a replay meets the same person in the same place.
+    if (met) {
+      world = { ...world, journeys: (world.journeys ?? []).map((j) => (j.who === met ? { ...j, place: world.currentPlace, progress: 0 } : j)) };
+    }
     turnAdvanced = true;
   }
   if (delta.moveTo) {

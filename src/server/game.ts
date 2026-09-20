@@ -11,6 +11,7 @@ import { appendTurn, createSession, loadEvents, loadSession, saveSnapshot, shoul
 import { mapFor } from '../db/maps.ts';
 import { drawMap, positionOf } from '../world/map.ts';
 import { gridOf } from './grid.ts';
+import { peopleHere } from '../play/onroad.ts';
 import type { GridView } from './grid.ts';
 import { floorMapOf, minimapOf, towerOf } from './views.ts';
 import type { FloorMapView, MinimapView, TowerView } from './views.ts';
@@ -368,8 +369,9 @@ function baseViewOf(id: string, state: PlayState, transcript: TranscriptEntry[],
     grid: null,
     minimap: null,
     tower: towerOf(state),
-    people: (place?.people ?? [])
-      .map((pid) => state.world.people[pid])
+    // Out on a field this is who is in VIEW on it, not the people of the place
+    // you set out from (W5).
+    people: peopleHere(state)
       .filter((p): p is NonNullable<typeof p> => Boolean(p) && p.alive)
       .map((p) => ({
         id: p.id,
