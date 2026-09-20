@@ -1327,6 +1327,40 @@ tier, caps, ruler title, shape, ways in, paths, plots — with no stations in it
 **Still open, to define together:** the station catalogue itself — what a station is,
 what each one does, and how tier, method and stations multiply out.
 
+### 3c-ii. The settlement ladder (user, 2026-09-21)
+
+**Six rungs:** hamlet · village · town · city · **metropolis** · **megacity**.
+
+**A real curve, and the split it forces.** Real settlements go up by about ten times a
+rung — a hamlet is scores of people, a megacity is ten million. The game cannot field
+ten million bodies, and a hub map cannot hold a million buildings. So a tier carries
+TWO numbers and they are not the same kind of number:
+- **SOULS — the real curve**, dealt from the seed inside the rung's range. It is what
+  the place says it is, what its economy is scaled against, and what the Writer may
+  say. 20–100 · 100–1,000 · 1,000–20,000 · 20,000–100,000 · 100,000–1,000,000 ·
+  1,000,000+.
+- **What is SIMULATED — a flat curve**: how many bodies the crowd may field, how many
+  plots the map draws, how wide the hub is. These grow gently, because they are things
+  the engine walks over and fights.
+
+| tier | souls | crowd | plots | hub radius |
+|---|---|---|---|---|
+| hamlet | 20–100 | 6 | 3 | 12 |
+| village | 100–1,000 | 12 | 8 | 18 |
+| town | 1,000–20,000 | 20 | 16 | 26 |
+| city | 20,000–100,000 | 30 | 28 | 34 |
+| metropolis | 100,000–1,000,000 | 40 | 40 | 42 |
+| megacity | 1,000,000+ | 50 | 52 | 50 |
+
+**The consequence, for later:** past a city, one hub map is a lie — a real metropolis is
+DISTRICTS, which this design already has a shape for (§2a zones, §3's recursive
+provinces). A metropolis should eventually be several linked hubs, not one enormous one.
+Not now: the top two rungs exist in the ladder so upgrading and the outer world can
+reach them, but a tower floor only ever DEALS hamlet through city.
+
+**Ruler ranks** (plain English until the theme layer names them): elder · headman ·
+mayor · lord · governor · overlord.
+
 ### 3d. Where a TIER belongs — the survey the user asked for (2026-09-20)
 
 **Three rules first, or tiers rot.**
