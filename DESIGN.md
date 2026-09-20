@@ -1249,33 +1249,43 @@ people.`
 **A settlement's TIER gives** its maximum population, its maximum buildings, and its
 ruler's title.
 
-**Claude's proposal for making this buildable, for approval:**
-- **Two layers, the split this codebase already uses everywhere** (a closed mechanic,
-  a model-named surface — places, loot categories, stratum themes all work this way):
-  the ENGINE owns a closed CATEGORY and a closed FUNCTION (what a building does:
-  rules, arms, makes, grows, feeds, houses) plus its job SLOTS and capacities; the
-  WORLD owns the NAME and flavour, picked per structure theme — "rice farm" here,
-  "hydroponics bay" there. A theme that invents a mechanic is refused; a theme that
-  invents a name is the point.
-- **Slots, not a single runner:** a building type declares `{ lifeClass, count }` slots.
-  Who fills them comes from the floor's own people and its crowd; OWNER is a separate
-  relation from WORKER, and an investor is an owner who does not work there.
-- **Tier lives on the place**, dealt at generation from seed, floor and stratum, and is
-  what §4's upgrading moves later. Caps come from a table on the tier, so a tier change
-  changes a town without anything being re-authored.
-- **Local laws reuse the law vocabulary that exists** (closed constraints, bound to a
-  subject or a group, §3) with a place as their scope; the ruler's TITLE is a name the
-  theme gives, not a mechanic.
+**A BUILDING IS A STATION, not a label (user, 2026-09-20).** Claude had proposed a
+closed `category` plus a closed `function`; the user is right that those are one thing.
+What a building is:
 
-**Open, for the user:**
-1. A building whose slots cannot be filled: not built at all, or built and standing
-   closed until somebody can run it?
-2. Does a settlement's tier come from the world at generation, or grow out of its
-   population as it fills?
-3. When the PLAYER holds a settlement (O1), do they hire into the same slots — and is
-   an investor purely money, or do they take a share of what the building makes?
-4. Does the theme layer land on gear and classes at the same time, or buildings first?
-5. Are life classes for NPCs only for now, or can a climber take one?
+| part | what it holds |
+|---|---|
+| **tier** | maximum size, worker capacity, how many stations/machines it may hold |
+| **category** | government · production · agriculture · amenities · residential |
+| **input** | what it consumes |
+| **method** | how it turns input into output |
+| **output** | what it produces |
+| **workers** | slots, each with a life class it is BEST to have — not a requirement |
+| **policy** | how it is run: more output for more input, harder on the people, and so on |
+
+- **AMENITIES include shop and market** (with pub, theatre, inn) — an earlier draft had
+  no shop at all, which would have left a town nothing to buy in.
+- **The worker rule, which is the good part:** a slot names the life class that suits
+  it, and anyone may fill it. Off-class, the worker is judged on the STAT that class
+  works from, with a penalty on their part of the work; if their own class does not use
+  that stat at all, they are judged on the raw stat alone, worst to best. So a town
+  that has no smith is not stuck — it is worse off, by an amount the engine can say.
+- **This is not just a town's smithy.** The same station describes a farm, a theatre or
+  an armoury, and the outer world's factory.
+
+**Answered by the user, 2026-09-20** (Claude's five, all accepted): an unfillable
+building is BUILT AND CLOSED, not absent — a shuttered smithy is a reason to bring a
+smith; a settlement's tier is dealt at generation and moved later by §4's upgrading,
+not grown out of population; a player who holds a settlement hires into the same slots,
+and an investor is money only for now; the theme layer lands on BUILDINGS first and
+proves itself there before it touches gear or classes; life classes are NPC-only until
+the non-combat path is designed.
+
+**Claude's remaining objection, for the user:** input and output need a vocabulary of
+GOODS, and this game already has one — the item catalogue and its loot categories. If
+production invents a second list of things, the two drift and every recipe has to be
+mapped by hand. Whatever a station consumes and makes should be item categories from
+the start, even if the first stations only make one thing.
 
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
