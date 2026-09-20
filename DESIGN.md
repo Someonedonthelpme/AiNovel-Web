@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 and W7 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`, `53067fd`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -988,7 +988,7 @@ compression, which §4 needs.
 | W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing — **split 2026-09-19 (user):** W4a, the centre grid, click-walking, doors and stairs, **SHIPPED** (`79be367`, verified live in session `2ffdec3b`); W4b, the minimap, floor map and tower view, **SHIPPED** (`4662106`, verified live) |
 | W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field — **SHIPPED 2026-09-20** (`b46586a`) |
 | W6 | era bands share a map seed; ~~loop reset clears overlays~~ (moved, below) | W2 | two era floors of a band have the same ground |
-| W7 | combat on a window of the map; ~~re-measure balance~~ (deferred, see the standing rule below) | W3, W4 | a fight is fought on the ground you stand on, and replays from its record |
+| W7 | combat on a window of the map; ~~re-measure balance~~ (deferred, see the standing rule below) | W3, W4 | a fight is fought on the ground you stand on, and replays from its record — **SHIPPED 2026-09-20** (`53067fd`) |
 | W8 | zones, buildings and interiors in towns | W2 | a town's smithy is where its smith works |
 
 W1–W3 change no UI and each is testable alone; stopping after W3 still leaves real
@@ -1146,6 +1146,21 @@ measured again anyway. This retires W7's "re-measure balance" half: W7 builds fi
 on real ground and tests that they work and replay, and the pinned anchor is left
 exactly where it is so it stays comparable later. Whatever the new terrain does to win
 rates is a question for the balance pass at the end.
+
+**W7 as built (2026-09-20).** A fight's board is a 12-square window of the map you
+stand on (`play/arena.ts`), shifted to stay inside the map rather than shrunk: the
+map's `#` are walls, its `,` is difficult ground costing two to enter. `reachable`
+therefore walks cheapest-first rather than breadth-first — breadth-first would price a
+square reached the long way over open ground like the short way through a marsh.
+Nobody starts inside a wall: the player is nudged to the nearest open square, and so
+are the foes. The arena is RECORDED on the turn (`TurnRecord.arena`), the same trick a
+climb uses for the floor it built, so the fold fights on the same ground with no tiles;
+it is dropped from the stored record when no fight opened. A turn with no position on
+a map still gets the old bare arena. **Not done, on purpose:** no balance pass (the
+standing rule), and the pinned anchor is untouched — its harness fights on its own
+empty 12×12 board, so nothing it measures moved. **Not verified live:** floor 0 has no
+danger, and reaching a floor that does needs model-driven exploration to find the way
+up; the tests cover the ground, the record and the replay.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
