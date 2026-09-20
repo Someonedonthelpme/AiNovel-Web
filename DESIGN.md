@@ -1201,6 +1201,31 @@ up; the tests cover the ground, the record and the replay.
   one floor, a floor to exactly one innermost stratum, checked at generation the
   way `validateRegion` checks a map.
 
+### 3b. LIFE CLASSES, and what runs a building (decided with the user, 2026-09-20)
+
+**Two kinds of class, and the old name moves.** What the game has today are **COMBAT
+CLASSES** — the stat-driven paths a climber walks, carried on the sheet. The new axis
+is **LIFE CLASSES**: the non-combat paths — smith, innkeeper, healer, farmer and the
+rest. In the end they are gameplay of their own (a whole non-combat path, Paradox- and
+simulation-game shaped). **For now they do one job: they say who can RUN a building.**
+
+- **The closed vocabulary is of BUILDINGS, not of people.** A building type names the
+  life class that runs it; a person holds a life class. Earlier drafts had a `trade`
+  on the person and derived the building from it, which had the dependency backwards:
+  what a town can hold is a property of the catalogue, not of whoever wandered in.
+- **A building needs people to run it.** A smithy with no smith is not a smithy the
+  town has — a building exists where somebody who can run it does. What an unstaffed
+  building becomes (closed, derelict, or never built) is for the stage that builds it.
+- **Hierarchy is wanted on all three — town, building and life class** — the way gear
+  has rarity and refinement and a species has its bands: a tier or level that says how
+  far a thing has come. **Not built now**, but every one of these gets its number later,
+  and §4's founding and upgrading is what will move it. Design so nothing has to be
+  unpicked: a building carries its type and its runner, and a tier is a field it has
+  not got yet.
+- **Not decided yet:** what a life class costs to take, whether a climber holds one,
+  how a class levels, and whether a town's tier is derived from its buildings or held
+  on the place. Answer these when the life-class path is built, not at W8.
+
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
 **Kept from 2026-09-11:** a closed, law-gated verb, paid in coin and materials; built
