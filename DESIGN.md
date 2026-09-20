@@ -1226,6 +1226,57 @@ simulation-game shaped). **For now they do one job: they say who can RUN a build
   how a class levels, and whether a town's tier is derived from its buildings or held
   on the place. Answer these when the life-class path is built, not at W8.
 
+### 3c. Towns, buildings and themes — UNDER DISCUSSION (user, 2026-09-20)
+
+The user's shape, taken down as said and not yet approved in detail.
+
+**A building is run by SEVERAL people, not one.** A smithy wants a smith, a clerk and
+a transporter. No hierarchy among them yet. One of them may be the building's OWNER,
+or an outside INVESTOR / entrepreneur may hold it instead.
+
+**Buildings differ by world.** The outer world is modern; tower A is medieval; tower B
+is science fiction. The same probably goes for classes, gear and other mechanics.
+
+**Building types, by category:** government (hall, armoury), production (smithy),
+agriculture (pasture, rice farm), amenities (pub, theatre, inn), residential (home,
+mansion).
+
+**The generation flow the user wants:**
+`tier of this map → government (laws announced by the ruler, local laws), max
+population, max buildings, map shape → the ways in and out → paths → buildings →
+people.`
+
+**A settlement's TIER gives** its maximum population, its maximum buildings, and its
+ruler's title.
+
+**Claude's proposal for making this buildable, for approval:**
+- **Two layers, the split this codebase already uses everywhere** (a closed mechanic,
+  a model-named surface — places, loot categories, stratum themes all work this way):
+  the ENGINE owns a closed CATEGORY and a closed FUNCTION (what a building does:
+  rules, arms, makes, grows, feeds, houses) plus its job SLOTS and capacities; the
+  WORLD owns the NAME and flavour, picked per structure theme — "rice farm" here,
+  "hydroponics bay" there. A theme that invents a mechanic is refused; a theme that
+  invents a name is the point.
+- **Slots, not a single runner:** a building type declares `{ lifeClass, count }` slots.
+  Who fills them comes from the floor's own people and its crowd; OWNER is a separate
+  relation from WORKER, and an investor is an owner who does not work there.
+- **Tier lives on the place**, dealt at generation from seed, floor and stratum, and is
+  what §4's upgrading moves later. Caps come from a table on the tier, so a tier change
+  changes a town without anything being re-authored.
+- **Local laws reuse the law vocabulary that exists** (closed constraints, bound to a
+  subject or a group, §3) with a place as their scope; the ruler's TITLE is a name the
+  theme gives, not a mechanic.
+
+**Open, for the user:**
+1. A building whose slots cannot be filled: not built at all, or built and standing
+   closed until somebody can run it?
+2. Does a settlement's tier come from the world at generation, or grow out of its
+   population as it fills?
+3. When the PLAYER holds a settlement (O1), do they hire into the same slots — and is
+   an investor purely money, or do they take a share of what the building makes?
+4. Does the theme layer land on gear and classes at the same time, or buildings first?
+5. Are life classes for NPCs only for now, or can a climber take one?
+
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
 **Kept from 2026-09-11:** a closed, law-gated verb, paid in coin and materials; built
