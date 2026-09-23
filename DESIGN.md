@@ -1361,6 +1361,21 @@ reach them, but a tower floor only ever DEALS hamlet through city.
 **Ruler ranks** (plain English until the theme layer names them): elder · headman ·
 mayor · lord · governor · overlord.
 
+**The town skeleton as built (2026-09-23, `984bc8d`).** `world/settlement.ts` holds the
+ladder, the caps and the plan. A settlement's tier is stored on the place when it was
+dealt or upgraded and otherwise dealt from the seed, weighted small (35/30/20/15 over
+hamlet…city). Souls are dealt inside the rung. A hub is `2r+3` square with `r` from the
+tier, so ground follows what a place GREW into rather than what kind of place it is;
+untiered places keep their kind's radius. The crowd is trimmed to the tier's cap by
+`populationAt` — **which only bites where the caller holds a whole world**: the
+population derivation and the balance harness pass a narrow shape with no places in it,
+see no tier, and are untouched, which is what the standing no-rebalance rule wants. The
+PLAN (square, streets from every way in, plots along them) is DERIVED, not drawn: the
+ground is open, and a plot is where a footprint may go. Measured: seed 1 draws a city of
+22,469 souls, 71² of ground, 28 plots; seed 3 a village of 185 souls, 39², 8 plots.
+**Not built:** anything standing on a plot, and the district question the top two rungs
+raise.
+
 ### 3d. Where a TIER belongs — the survey the user asked for (2026-09-20)
 
 **Three rules first, or tiers rot.**
