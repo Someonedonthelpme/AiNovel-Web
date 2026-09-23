@@ -204,8 +204,10 @@ grudge can do) · `arena.ts` (the ground a fight is fought on: a window of the m
 places, a loop floor's, nor a floor where you hold a settlement's**, [lod.ts:61](src/world/lod.ts:61), [:84](src/world/lod.ts:84), [:87](src/world/lod.ts:87), [:90](src/world/lod.ts:90)) · `validate.ts` · `budget.ts` ·
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic positions for the floor map) ·
+`settlement.ts` (what a settlement GREW into, and what follows from it,
+[settlement.ts:51](src/world/settlement.ts:51)) ·
 `map.ts` (hub and field maps and 8-way pathfinding; doors read off the place graph,
-never stored, [map.ts:329](src/world/map.ts:329)) · `route.ts` (a link's best path across its field).
+never stored, [map.ts:335](src/world/map.ts:335)) · `route.ts` (a link's best path across its field).
 
 ### `src/world/subjects.ts` + `src/play/lore.ts` — what a world is about
 A world mints 10–14 `Subject`s from its seed ([subjects.ts:74](src/world/subjects.ts:74)),
@@ -317,17 +319,17 @@ Five tables ([db/schema.ts](src/db/schema.ts)). `EMBEDDING_DIMENSION = 1024`.
 
 ### The shapes
 
-**`World`** ([world/types.ts:268](src/world/types.ts:268)) — `seed`, `language`,
+**`World`** ([world/types.ts:274](src/world/types.ts:274)) — `seed`, `language`,
 `regions: Record<RegionId, RegionRecord>`, `people` (flat, never compressed),
 `facts`, `currentRegion`, `currentPlace`, `deepestFloor`, `turn`, `flags`;
 `at`, the player's tile on a map, absent meaning the centre of the current place's hub
-([types.ts:336](src/world/types.ts:336), [map.ts:51](src/world/map.ts:51)).
-`regionIdFor(floor) = 'floor-' + floor` ([:384](src/world/types.ts:384)).
+([types.ts:342](src/world/types.ts:342), [map.ts:52](src/world/map.ts:52)).
+`regionIdFor(floor) = 'floor-' + floor` ([:390](src/world/types.ts:390)).
 **"One floor is one region is one integer" was true until step 6, and is now
 only the default.** `floor` had meant both how DEEP (danger, budgets, depth XP,
 the ground law) and what CONNECTS to what, so a world could only be a stack.
 Depth stays on `floor`; adjacency moved to `Region.exits`
-([:160](src/world/types.ts:160)), and `generateFloor` takes the region id to
+([:166](src/world/types.ts:166)), and `generateFloor` takes the region id to
 build `into` ([floorgen.ts:342](src/world/floorgen.ts:342)); its guard against
 overwriting the town keys on that id rather than on depth 0
 ([floorgen.ts:354](src/world/floorgen.ts:354)), because an outer world may sit
@@ -346,13 +348,13 @@ anything derives from the seed alone.
   stores the WHOLE preset rather than its name
   ([genesis.ts:700](src/session/genesis.ts:700)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
-  ([world/types.ts:295](src/world/types.ts:295)), which is why a law can change
+  ([world/types.ts:301](src/world/types.ts:301)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:341](src/play/delta.ts:341)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:699](src/session/genesis.ts:699)). Stored for the same reason
   `subjects` is.
-- `strata` — the structures this world holds ([types.ts:310](src/world/types.ts:310)).
+- `strata` — the structures this world holds ([types.ts:316](src/world/types.ts:316)).
   Genesis writes the tower, covering floor 0 up
   ([genesis.ts:755](src/session/genesis.ts:755)), and under it, when the creation page
   asks, a loop band for floors 1–10 ([:756](src/session/genesis.ts:756)) and an era band
@@ -366,66 +368,77 @@ anything derives from the seed alone.
   tick it last rose (`fedAt`, [edge.ts:78](src/social/edge.ts:78)), which is
   what it fades from.
 - `clock` — world time in TEN-MINUTE ticks, separate from `turn`
-  ([types.ts:328](src/world/types.ts:328)); absent reads the turn count
+  ([types.ts:334](src/world/types.ts:334)); absent reads the turn count
   ([travel.ts:99](src/world/travel.ts:99)). `turn` stays the count of play turns
   because it seeds every fight. A play turn covers the time its action took: a
   link's `travelTime` — its `linkMinutes`, rounded up to ticks ([travel.ts:73](src/world/travel.ts:73)), a stair's
   `stairCost` ([travel.ts:82](src/world/travel.ts:82)), an hour per rest turn
   ([rest.ts:120](src/play/rest.ts:120)), and at least one tick otherwise. A WALK is
   the exception: it is charged its seconds, and `second` carries what is left inside
-  the tick ([types.ts:334](src/world/types.ts:334), [delta.ts:417](src/play/delta.ts:417)),
+  the tick ([types.ts:340](src/world/types.ts:340), [delta.ts:417](src/play/delta.ts:417)),
   so a short walk may cover no whole tick.
-- `journeys` — grudges on the road ([types.ts:337](src/world/types.ts:337),
+- `journeys` — grudges on the road ([types.ts:343](src/world/types.ts:343),
   [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
   got to, and when they may set out. Stored, because where a traveller is must
   replay; advanced only by the fold.
-- `echoes` — weighty deeds done on an era floor ([types.ts:339](src/world/types.ts:339)):
+- `echoes` — weighty deeds done on an era floor ([types.ts:345](src/world/types.ts:345)):
   the engine keeps the `ECHOING` ones only ([deed.ts:63](src/social/deed.ts:63)), in the
   fold ([delta.ts:693](src/play/delta.ts:693)), as NAMES rather than ids since they are
   history; the Director on a higher era floor of the same band hears them with how many
   years back they were ([director.ts:313](src/llm/director.ts:313)). Absent is none.
 - `calendar` — the world's WORDS for its reckoning, days, months and seasons
-  ([types.ts:341](src/world/types.ts:341)). The shape (7-day weeks, 30-day months,
+  ([types.ts:347](src/world/types.ts:347)). The shape (7-day weeks, 30-day months,
   12 months, 4 seasons) and the start date are the engine's, dealt from the seed
   and never stored ([calendar.ts:54](src/world/calendar.ts:54)).
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
-- `populations` — who lives per PLACE ([types.ts:368](src/world/types.ts:368)):
+- `populations` — who lives per PLACE ([types.ts:374](src/world/types.ts:374)):
   cohorts of (subspecies, profession, size). **Absent until something has been
   killed** — a place answers from the seed until then
-  ([population.ts:99](src/character/population.ts:99)), so an old world needs no
+  ([population.ts:101](src/character/population.ts:101)), so an old world needs no
   migration and a world nobody has killed in stores nothing. Keyed by place for
   the reason `ambient` is, and because 6c makes a province one place with one
   map. Compression folds a floor's places into ONE aggregate keyed by region id
-  ([population.ts:150](src/character/population.ts:150),
+  ([population.ts:172](src/character/population.ts:172),
   [lod.ts:95](src/world/lod.ts:95)), because place ids are the model's own words
   and come back different; 6c removes compression and the aggregate with it.
 - `loops` — a loop floor as it stood when you first arrived, with the people and
-  first impressions it was built with ([types.ts:374](src/world/types.ts:374)). Copied
+  first impressions it was built with ([types.ts:380](src/world/types.ts:380)). Copied
   from the crossing's own `built` ([climb.ts:172](src/play/climb.ts:172)), so it is
   already in the log; only loop floors are kept.
 
-**`Region`** ([types.ts:132](src/world/types.ts:132), full detail) — places,
+**`Region`** ([types.ts:138](src/world/types.ts:138), full detail) — places,
 entrance, exit, danger, creatures, optionally `exits: Link[]`, and on a landmark
-floor `boss` — the person who HOLDS it ([:169](src/world/types.ts:169)), on the
+floor `boss` — the person who HOLDS it ([:175](src/world/types.ts:175)), on the
 region because holding is a fact about the floor, with the person themselves in
 `World.people`, never compressed, so a rebuilt floor finds its holder again. A `Link`
-([:179](src/world/types.ts:179)) carries the far side's DEPTH as well as its id,
+([:185](src/world/types.ts:185)) carries the far side's DEPTH as well as its id,
 because danger and budgets have to answer before that region exists.
-**`Place.holder`** ([types.ts:53](src/world/types.ts:53)) — set only when the PLAYER holds a
+**`Place.tier`** ([types.ts:53](src/world/types.ts:53)) — what a settlement GREW into, one
+of six rungs, stored when it was dealt or upgraded and otherwise dealt from the seed
+([settlement.ts:51](src/world/settlement.ts:51)). It carries TWO kinds of number and they must not be made
+one: SOULS on the real curve — ten times a rung, up to millions, which is what the
+place says it is — and what the engine actually simulates, which grows gently: the
+crowd it may field, the plots its ground holds, how wide that ground is
+([settlement.ts:23](src/world/settlement.ts:23)). Ten million people cannot be walked past.
+**`Place.holder`** ([types.ts:59](src/world/types.ts:59)) — set only when the PLAYER holds a
 settlement; anybody else's holding is DERIVED from who is there, the highest standing
 first ([holding.ts:14](src/world/holding.ts:14)), so a world stored before ownership has holders and a dead
 holder passes it on. A floor where you hold one is never compressed
 ([lod.ts:90](src/world/lod.ts:90)): its places would come back with new ids, and the holding with them.
+The crowd is trimmed to the tier's cap where it is read ([population.ts:121](src/character/population.ts:121)) —
+**and only where the caller holds a whole world.** The population derivation and the
+balance harness pass a narrow shape with no places in it, see no tier, and are
+untouched, which is what the standing no-rebalance rule (DESIGN 6c) wants.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
 known people survive ([lod.ts:40](src/world/lod.ts:40)).
 
-**`Stratum`** ([types.ts:81](src/world/types.ts:81)) — a structure above a
+**`Stratum`** ([types.ts:87](src/world/types.ts:87)) — a structure above a
 floor: `kind` `static | dynamic`, an optional `parent`, a floor range, and
-optional `danger`, `theme`, `loot` and `laws` ([types.ts:99](src/world/types.ts:99)) —
-two laws, `reset` from the closed `RESETS` ([:63](src/world/types.ts:63)) and `time`
-from the closed `TIMES` ([:70](src/world/types.ts:70)). Strata NEST, so the plan is a
+optional `danger`, `theme`, `loot` and `laws` ([types.ts:105](src/world/types.ts:105)) —
+two laws, `reset` from the closed `RESETS` ([:69](src/world/types.ts:69)) and `time`
+from the closed `TIMES` ([:76](src/world/types.ts:76)). Strata NEST, so the plan is a
 tree and the innermost stratum containing a floor speaks for it
 ([strata.ts:14](src/world/strata.ts:14)) — except for a LAW, which comes from the
 innermost stratum that STATES it, walking up the parents as danger does
@@ -502,6 +515,10 @@ come from?"
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:14](src/world/strata.ts:14), [:52](src/world/strata.ts:52)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
+| `tierOf` ([settlement.ts:51](src/world/settlement.ts:51)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:37](src/world/settlement.ts:37)) |
+| `soulsOf` ([settlement.ts:64](src/world/settlement.ts:64)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
+| `rulerOf` ([settlement.ts:73](src/world/settlement.ts:73)) | the holder, the tier | who rules, and what a ruler of a place this size is called |
+| `townPlan` ([settlement.ts:89](src/world/settlement.ts:89)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
 | `holderOf` ([holding.ts:14](src/world/holding.ts:14)) | a place, `World.people` | who holds a settlement: the player if stored, else the highest standing present |
 | `signposted` / `walkRoute` ([travel.ts:277](src/world/travel.ts:277), [:302](src/world/travel.ts:302)) | a region, where you stand, typed text, and the ends of the field you are on | the place names you can know of — one rule, shared by the redaction wall and walking — and the fewest-step route a typed "go to" walks — including back to the place you set out from, when you are on its field |
 | `personRef` ([delta.ts:61](src/play/delta.ts:61)) | a name or id the model wrote | who it means: the id, else one name match ignoring case, spaces and punctuation, people here first; else refused, and never guessed |
@@ -509,9 +526,9 @@ come from?"
 | `eraOf` → `dateOf` / `timeLine` ([strata.ts:100](src/world/strata.ts:100), [calendar.ts:74](src/world/calendar.ts:74), [:184](src/world/calendar.ts:184)) | seed, strata, floor | how many years an era floor lies behind the world's, and the date read on that floor — only the year moves |
 | `linksFrom` ([travel.ts:193](src/world/travel.ts:193)) | a region | its ways out: its own `exits`, or up/down derived from depth |
 | `routeOf` ([route.ts:17](src/world/route.ts:17)) | seed, a linked pair, its region | the best path across its field map: exactly the link's minutes × 60, one tile a second, the same both ways, blind to the season |
-| `drawMap` ([map.ts:79](src/world/map.ts:79)) | seed, a map id, its region | a hub or field's tiles, drawn from the seed alone |
-| `portalsOf` ([map.ts:329](src/world/map.ts:329)) | a map + the place graph NOW | its doors, each at a bearing dealt from seed, place and target — never stored, so a revealed way gets a door and no other door moves |
-| `positionOf` ([map.ts:51](src/world/map.ts:51)) | `World.at`, the current place | the player's tile: `at`, else the centre of the current place's hub |
+| `drawMap` ([map.ts:82](src/world/map.ts:82)) | seed, a map id, its region | a hub or field's tiles, drawn from the seed alone |
+| `portalsOf` ([map.ts:335](src/world/map.ts:335)) | a map + the place graph NOW | its doors, each at a bearing dealt from seed, place and target — never stored, so a revealed way gets a door and no other door moves |
+| `positionOf` ([map.ts:52](src/world/map.ts:52)) | `World.at`, the current place | the player's tile: `at`, else the centre of the current place's hub |
 | `arenaAt` / `gridOfArena` ([arena.ts:15](src/play/arena.ts:15), [:24](src/play/arena.ts:24)) | the map you stand on, your tile | a 12-square window of real ground as a combat grid: the map's walls, and its rough as difficult ground |
 | `ridersOn` / `riderAt` ([onroad.ts:50](src/play/onroad.ts:50), [:65](src/play/onroad.ts:65)) | a field, the journeys on it | who is crossing it, and where each stands at any moment — whole ticks or between them |
 | `figuresOn` ([onroad.ts:76](src/play/onroad.ts:76)) | a field | the travellers on it right now, for the view |
@@ -524,7 +541,7 @@ come from?"
 | `towerOf` ([views.ts:77](src/server/views.ts:77)) | state | strata, every floor held with the year it stands in, what you hold, deepest floor, and grudges on the road of people you have MET, never where |
 | `gridOf` ([grid.ts:28](src/server/grid.ts:28)) | state, the stored map you stand on | a 41×25 window around you and EVERY door on the map, each labelled only with a name you could know |
 | `walkAlong` ([walker.ts:35](src/play/walker.ts:35)) | state, a route of places, the stored maps | where a typed walk STOPS and what it cost: tile by tile, the first tick that brings a traveller, a need at 3, or night on wild ground |
-| `bestPath` ([map.ts:131](src/world/map.ts:131)) | a map, two tiles | seconds along the cheapest way, eight ways, charging each tile entered; Infinity when there is none |
+| `bestPath` ([map.ts:134](src/world/map.ts:134)) | a map, two tiles | seconds along the cheapest way, eight ways, charging each tile entered; Infinity when there is none |
 | `playerSubject` ([signetbook.ts:202](src/play/signetbook.ts:202)) | held Signets + the kept catalogue + what is WORN | the `Subject` every law check on the player takes |
 | `viewOf` and friends ([game.ts:298](src/server/game.ts:298)) | `PlayState`, the stored map you stand on | the whole `GameView`, rebuilt per request — with the centre grid from the STORED map, so what is shown is what is walked; looking at a map stores it |
 
@@ -566,7 +583,7 @@ travels in the crossing's `built.people`, so a replay deals neither again.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
-([types.ts:278](src/world/types.ts:278), [subjects.ts:111](src/world/subjects.ts:111)),
+([types.ts:284](src/world/types.ts:284), [subjects.ts:111](src/world/subjects.ts:111)),
 because a word derived from nothing would be lost on the next derivation. The
 same split as `classSpec` on the sheet. **The ids never change**, so anything that
 matched before naming still matches after it.
@@ -747,7 +764,7 @@ the population it came from ([play/combat.ts:862](src/play/combat.ts:862)),
 whoever won.
 
 "No population here" and "nothing lives here any more" are **different answers**
-and the callers keep them apart ([population.ts:99](src/character/population.ts:99)):
+and the callers keep them apart ([population.ts:101](src/character/population.ts:101)):
 collapsing them would let thinning a place to nothing quietly summon back the
 statblock foes the population replaced.
 
@@ -1143,8 +1160,8 @@ resolves.
 **4. Closed unions, never free text.** `ActiveEffect`, `ItemEffect`,
 `WorldDelta`, `TraitCondition`, `Gate`, `CONSTRAINTS`, `BINDINGS`,
 `PARLEY_EFFECTS` ([combat/types.ts:291](src/combat/types.ts:291)), `RESETS`
-([world/types.ts:63](src/world/types.ts:63)), `TIMES` ([:70](src/world/types.ts:70)) and
-`ECHOING` ([social/deed.ts:63](src/social/deed.ts:63)) are all closed, and so is a map tile: `.` `,` `#` ([map.ts:92](src/world/map.ts:92)). A model names things; it never invents a mechanic — nor a law, nor
+([world/types.ts:69](src/world/types.ts:69)), `TIMES` ([:76](src/world/types.ts:76)) and
+`ECHOING` ([social/deed.ts:63](src/social/deed.ts:63)) are all closed, and so is a map tile: `.` `,` `#` ([map.ts:95](src/world/map.ts:95)). A model names things; it never invents a mechanic — nor a law, nor
 where a road goes: `revealWay` names the place a way leaves FROM and the engine
 mints the far side ([state.ts:100](src/play/state.ts:100)).
 
@@ -1172,7 +1189,7 @@ is still the Director's.
 **9. A map a session has seen never moves.** It is stored on first ask and never
 redrawn ([maps.ts:13](src/db/maps.ts:13)), so a change to the generator cannot shift
 walls under a save; its doors are derived from the place graph on every read
-([map.ts:329](src/world/map.ts:329)), so a way revealed later never forces a redraw.
+([map.ts:335](src/world/map.ts:335)), so a way revealed later never forces a redraw.
 
 **9a. A meeting on the road is RECORDED, not recomputed.** A walk stores who came
 into view ([walker.ts:152](src/play/walker.ts:152)); the fold ends that traveller's
@@ -1182,7 +1199,7 @@ arrival machinery opens the fight — so the log still never depends on a tile.
 **10. A position is removed, never set to undefined.** A snapshot is JSON and drops an
 undefined key, so a fold that wrote `at: undefined` disagreed with its own snapshot —
 the snapshot test caught it in W3. `unplaced` removes the key
-([map.ts:64](src/world/map.ts:64); [delta.ts:334](src/play/delta.ts:334), [climb.ts:266](src/play/climb.ts:266)).
+([map.ts:67](src/world/map.ts:67); [delta.ts:334](src/play/delta.ts:334), [climb.ts:266](src/play/climb.ts:266)).
 
 ---
 
@@ -1254,7 +1271,7 @@ transcript prints a turn's ([play/combat.ts:1087](src/play/combat.ts:1087)).
 **Cleared: a crowd's stored size.** — *"killing does not yet thin a floor"* was
 true until 3n-ii. A population is stored per place, the draw is weighted by what
 is left, the encounter is capped by it, and a cleared place opens no fight
-([population.ts:124](src/character/population.ts:124),
+([population.ts:146](src/character/population.ts:146),
 [play/combat.ts:252](src/play/combat.ts:252)).
 
 ### Confirmed dead
@@ -1461,7 +1478,7 @@ by construction: `Person.homeRegion` is written at generation and never updated,
 and the Director brief ([director.ts:392](src/llm/director.ts:392)) is the only
 check on what gets narrated.
 
-**`Person.line` is always a real id** ([types.ts:245](src/world/types.ts:245)) — by
+**`Person.line` is always a real id** ([types.ts:251](src/world/types.ts:251)) — by
 construction: the engine deals it from people who exist, alive, on the floor below
 ([floorgen.ts:543](src/world/floorgen.ts:543)); the model never names one.
 
@@ -1638,9 +1655,10 @@ Every balance number, and where it lives.
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:1029](src/play/combat.ts:1029) |
 | clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:13](src/world/calendar.ts:13) |
 | a place link / a stair | 6–42 min (each end by kind 3/5/7/9, seed 0–10, biome ×1/×1.25/×1.5 by keyword), charged in whole ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:36](src/world/travel.ts:36), [:45](src/world/travel.ts:45), [:82](src/world/travel.ts:82), [:73](src/world/travel.ts:73) |
-| a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:173](src/world/map.ts:173), [:175](src/world/map.ts:175), [:178](src/world/map.ts:178) | [map.ts:173](src/world/map.ts:173), [:178](src/world/map.ts:178) |
-| rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:210](src/world/map.ts:210) |
-| hub radius | settlement 24, wild 18, landmark and dungeon 14, gate 10 tiles | [map.ts:295](src/world/map.ts:295) |
+| a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:176](src/world/map.ts:176), [:178](src/world/map.ts:178), [:181](src/world/map.ts:181) | [map.ts:176](src/world/map.ts:176), [:181](src/world/map.ts:181) |
+| rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:213](src/world/map.ts:213) |
+| hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
+| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:19](src/world/settlement.ts:19), [:23](src/world/settlement.ts:23) |
 | difficult ground | rough costs 2 movement to enter, open 1 | [grid.ts:102](src/combat/grid.ts:102) |
 | sight on the road | 12 tiles, and not through a wall | [onroad.ts:24](src/play/onroad.ts:24) |
 | the centre view | 41×25 tiles around you, clipped to the map | [grid.ts:8](src/server/grid.ts:8) |
@@ -1671,7 +1689,7 @@ Every balance number, and where it lives.
 | hunting | about one group in three hunts one other; the edge is ADVANTAGE | [prey.ts:19](src/character/prey.ts:19) |
 | a crowd's standing | four ordinary to one whelp to one veteran | [crowd.ts:60](src/character/crowd.ts:60) |
 | a rank's gear CAP | whelp common +0, ordinary uncommon +2, veteran rare +4 — a ceiling, not a choice: what it actually carries is solved against the anchor, and only a whelp is bare by rule | [crowd.ts:53](src/character/crowd.ts:53) |
-| a place's population | 1–3 trades per lineage, 2–6 of each; small on purpose, since a place holding sixty would never visibly thin inside one playthrough | [population.ts:36](src/character/population.ts:36), [:45](src/character/population.ts:45) |
+| a place's population | 1–3 trades per lineage, 2–6 of each; small on purpose, since a place holding sixty would never visibly thin inside one playthrough | [population.ts:38](src/character/population.ts:38), [:47](src/character/population.ts:47) |
 | how worn looted gear is | `PRISTINE` less 15%, less up to 55% more — 31–85, used but never wrecked | [crowd.ts:343](src/character/crowd.ts:343) |
 | the gear solve's reach | 12 draws × 8 depths per slot, one term at a time; the product was 1600 builds a foe | [crowd.ts:235](src/character/crowd.ts:235) |
 | wing length | 1–6 floors, whatever the model asks | [floorgen.ts:580](src/world/floorgen.ts:580) |
@@ -1759,7 +1777,7 @@ a region without them is a stack by derivation
 one fact.
 
 *No `story` stratum kind.* It would behave exactly like `static` until quests
-exist ([types.ts:93](src/world/types.ts:93) has `static | dynamic` only), so it
+exist ([types.ts:99](src/world/types.ts:99) has `static | dynamic` only), so it
 would be a word with no reader — the signature bug, introduced on purpose. It
 arrives with quests (DESIGN step 7).
 
