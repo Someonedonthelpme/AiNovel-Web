@@ -46,6 +46,12 @@ export type Place = {
   affordances: string[];
   discovered: boolean;
   /**
+   * How big a settlement is (DESIGN 6c §3c-ii): its souls, its crowd, how many
+   * plots its ground holds, and what its ruler is called. Dealt at generation;
+   * §4's upgrading is what moves it. Only a settlement has one.
+   */
+  tier?: import('./settlement.ts').SettlementTier;
+  /**
    * Who holds this settlement, when it is the PLAYER (DESIGN 6c *Ownership*).
    * Anybody else's holding is derived from who is there (`holderOf`); only a
    * bought one is stored, because it must not move.

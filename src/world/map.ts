@@ -1,5 +1,6 @@
 import { mulberry32 } from '../engine/roll.ts';
 import { linkMinutes, pairDraw, terrainFactor } from './travel.ts';
+import { CAPS, tierOf } from './settlement.ts';
 import { isFull, regionIdFor } from './types.ts';
 import type { PlaceId, PlaceKind, Region, RegionId, World } from './types.ts';
 
@@ -52,8 +53,10 @@ export function positionOf(world: World): { map: MapId; x: number; y: number } {
   if (world.at) return world.at;
   const region = regionOf(world, world.currentRegion, hubId(world.currentRegion, world.currentPlace));
   const kind = region.places.find((p) => p.id === world.currentPlace)?.kind ?? 'landmark';
+  const tier = tierOf(world, region.id, world.currentPlace);
   // A hub is 2r+3 square about its centre (`drawHub`).
-  return { map: hubId(region.id, world.currentPlace), x: HUB_RADIUS[kind] + 1, y: HUB_RADIUS[kind] + 1 };
+  const r = tier ? CAPS[tier].radius : HUB_RADIUS[kind];
+  return { map: hubId(region.id, world.currentPlace), x: r + 1, y: r + 1 };
 }
 
 /**
@@ -300,7 +303,10 @@ const HUB_RADIUS: Record<PlaceKind, number> = { settlement: 24, gate: 10, landma
  * reachable from every other. Streets, plots and buildings are W8.
  */
 function drawHub(world: World, region: Region, place: PlaceId, kind: PlaceKind): GameMap {
-  const r = HUB_RADIUS[kind];
+  // A settlement is as wide as it GREW (DESIGN 6c §3c-ii); anything else is as
+  // wide as its kind — a dry well has no tier, and inventing one would say nothing.
+  const tier = tierOf(world, region.id, place);
+  const r = tier ? CAPS[tier].radius : HUB_RADIUS[kind];
   const rng = mulberry32(Math.floor(pairDraw(world.seed, 0x4b0b, region.id, place) * 2 ** 32));
   const blobs = Array.from({ length: 3 + Math.floor(rng() * 3) }, () => ({ rx: r * (0.4 + 0.6 * rng()), ry: r * (0.4 + 0.6 * rng()) }));
   const c = r + 1;
