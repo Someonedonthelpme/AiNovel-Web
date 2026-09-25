@@ -903,8 +903,11 @@ to revisit):
   snapshot or the event log. About 40 KB raw for a 200×200 hub (estimated, not
   measured). A WALK event records where it stopped and what it cost, so replay never
   re-runs pathfinding and the log does not depend on tiles.
-- **Map kinds, closed:** `hub | field | interior | dungeon`. A stratum WING stays a
-  range of floors; a dungeon map is one place's rooms and corridors.
+- **Map kinds, closed:** `hub | field | interior`. A stratum WING stays a range of
+  floors. **`dungeon` dropped 2026-09-25** — a dungeon is a large Building whose
+  storeys go down instead of up; it was a fourth kind here while §2a's own storey
+  rule (*"cellars and dungeon levels the same"*) already treated it as an interior.
+  One mechanism, not two disagreeing ones.
 - **Scale follows the tile:** about one tile a second walking, so a 10–30 minute link
   is a 600–1,800 tile route. The player sees a scrolling window (~40×25 tiles);
   maps are generated and pathfound in chunks; walking animates fast on screen while
@@ -936,11 +939,11 @@ to revisit):
 
 | layer | type | what it is |
 |---|---|---|
-| space | **Map** | tiles with terrain; `hub \| field \| interior \| dungeon` |
+| space | **Map** | tiles with terrain; `hub \| field \| interior` |
 | space | **Zone** | a named or functional area of a map: a district, a plot, a room, a field |
 | space | **Portal** | a door, a stair, a map edge |
 | built | **Building** | a footprint on a zone; storeys, each an interior map; a TYPE from a closed catalogue; tier, condition, owner |
-| things | **Feature** | furniture, workstations, containers, doors, resource nodes, light, traps — each with state |
+| things | **Feature** | `kind`, closed (§3g): `furniture \| station \| container \| resource node` — each with state |
 | things | **Ground item** | item instances lying on a tile (the existing namespaced instances) |
 | living | **Actor** | named people and creatures: a position and a routine; crowds stay pooled (§5) |
 | identity | **Place** | the graph node (§3's province): name, holder, crowd, its hub map |
@@ -1407,6 +1410,156 @@ raise.
 
 **So: three new tiers in total** — settlement, building, life class — and every other
 system either already has one or must not get one.
+
+### 3e. Provinces, wild ground, and the administrative layer (user, 2026-09-24/25)
+
+**Two orthogonal systems, not one — Claude first conflated them, corrected 2026-09-25.**
+- **Map Type (MT)** — physical, built ON tiles: `wild {forest, plain, ...}` and the
+  settlement ladder (`hamlet…megacity`, §3c-ii). What terrain is actually generated.
+- **Administrative Layer (AL)** — `state → province → district → subdistrict → village`,
+  a pure indicator OVER the same shared tile pool. Governs law scope and population
+  counting; blind to whether the tiles under it are wild or settled.
+- A **city-internal load zone** (§2's *"generated and pathfound in chunks"*) is a third,
+  separate thing again — a client streaming boundary inside one settlement's own hub
+  map, not an AL rung. Claude's earlier "split a city into several linked hub-Places"
+  idea is DROPPED; this was the actual ask instead.
+
+**Wild ground gets a Place id at generation**, not only when founded. Floor generation
+lays out every province — settled or not — at the *skeleton* stage (§2b: engine-only,
+no model call). Each province's actual tiles/buildings/people still wait for first
+arrival, exactly as §2b already timed it. A field map is therefore conceptually an
+unsettled province; §4's founding mechanic (*"turns the zone into a hub map carved from
+the field's own tiles"*) already matches this — no rework of shipped W1/W2 route code
+(`travel.ts`, `map.ts`, keyed by place-pair) is forced by this reading.
+
+**AL is an unbounded tree, not a fixed 5-rung ladder** — same shape §3 already gave
+strata (*"strata NEST... the tower plan is a TREE, not a list"*; `state = stratum`).
+No stored min or max on branching OR territorial size at any rung: a city-state's
+"state" can be barely bigger than its one settlement; an empire (Russia; the British
+Empire) is just a stratum whose children are other state-strata — reuses `region = a
+parent stratum` literally, no sixth rung invented.
+- **Skip rule:** an AL rung is skipped only when it is a pure single-child pass-through
+  with nothing of its own — no population, no law, no seat (§3d rule 1: a tier exists
+  only where something reads it). A rung with its own wild population or its own law,
+  even with no settlement seated in it, is NOT empty and stays.
+- **Seat rule:** each AL unit hosts at most one settlement of the tier tied to it —
+  `state↔megacity · province↔metropolis · district↔city · subdistrict↔town`. Smaller
+  settlements (village/hamlet-tier) scatter inside an AL unit without their own seat.
+- **Population aggregates UP the AL tree.** A settlement's souls figure is not the
+  population of its own hub map — it is read off its own AL unit: the settlement, plus
+  every wild tile, plus every smaller settlement nested beneath it. This is what
+  actually answers the density objection below, not an accepted abstraction: a
+  "city" of 22,469 is the district's count, not bodies standing on a 71² hub.
+- **A settlement's own hub CAN grow to equal its AL unit's full size**, for a dense
+  modern settlement that genuinely fills its province — a ceiling, never a requirement;
+  older/smaller tiers stay a small seed inside a mostly-wild AL unit.
+
+**Landmark test (2026-09-24):** can it become its own Place? Yes → `Site` (shrine,
+camp, ruin — §2a already has this). No, purely decorative/interactive → `Feature`.
+Not a blanket "landmark = Feature."
+
+**Still open:** does any AL unit (district, province, ...) ever need its own ruler or
+law independent of the settlements inside it? Not decided — the model above works
+whether the answer is yes or no, but the answer changes whether AL units need a
+`holder` field of their own.
+
+### 3f. Buildings: modules, and tier as a derived indicator (2026-09-25)
+
+**A plot is an anchor, not a fixed footprint.** `townPlan` (`world/settlement.ts:89`)
+marks a door plus open space; the actual footprint is a combination of MODULES —
+geometric pieces, not the fixed 3×3 the shipped code stamps today — carved at
+founding/upgrade time from `(building type, building tier)`. This is a real change to
+where footprint-stamping happens (out of `townPlan`, into §4's founding step), not a
+rewrite of what a plot marks.
+- **A module typically holds 1–3 related stations** (a "forge room" pairs anvil +
+  forge, not one module each).
+- **Footprint growth eats the settlement's plot budget** — real tension, not a new
+  dial: a building expanding consumes neighbouring plot anchors.
+- Worked once, smithy, 4 rungs (names are smithy's own, not yet confirmed as generic
+  across every type — **still open**): workshop (1 module, anvil) → smithy (+forge) →
+  forge hall (+trip-hammer, needs water nearby) → armory works (multiple linked
+  footprints, tech-gated later).
+
+**Building tier is a derived indicator, exactly like settlement tier.** Tile count,
+worker count and station count are read OFF the building, never a stored gate. The
+real gate is the runner's life-class rank (apprentice→master, §3b) — same principle
+§3d already applied to settlements, where the numeric tier is a read-out and the
+REAL gate is the ruler's rank.
+
+**No building is purely stationless.** A station is the general unit of "a building
+DOES something" — goods, a need, or an administrative edit — not only production;
+`Feature` already listed non-economic examples (doors, traps) before this session.
+Consequence: a building with literally zero stations isn't a degenerate case, it IS
+pure scenery — footprint and flavour, no mechanical role. **This answers HANDOFF's
+long-standing "scenery buildings" open question**, not something decided fresh here.
+- **`hall`** — one administrative station, no new `palace` type. Its scope SCALES by
+  the settlement's AL-seat rank (§3e): a village hall writes only village law; a
+  metropolis hall, being a province seat, writes province law. Reuses one type instead
+  of inventing a second building for the same job at a bigger scope.
+- **`home`** — one service station (hearth/bed) targeting the `rest` need, same
+  mechanism as an inn's hearth (§3h) — plugs into the already-decided long-rest rule
+  (§1: *"a settlement you hold is a place you can long-rest"*).
+
+### 3g. Feature: a closed `kind` vocabulary (2026-09-25)
+
+§2a's Feature row was prose (*"furniture, workstations, containers, doors, resource
+nodes, light, traps"*), not a closed list, and it listed "doors" — which §2a's own
+table already gives a separate type, `Portal` (*"a door, a stair, a map edge"*). Same
+class of self-contradiction as the `dungeon` map-kind fix above.
+
+**`Feature.kind`, closed:** `furniture | station | container | resource node`.
+- `furniture` — presence only, no state to speak of (a light, a trap).
+- `container` — a goods pool, capacity read from the building's tier. **Absorbs
+  "storage module" as a special case** — storage is simply `kind: container`, nothing
+  new.
+- `resource node` — what it yields on interaction (§4's gathering); no runner.
+- `station` — see §3h.
+
+### 3h. Stations: a method per station, not per building (2026-09-25)
+
+**"Method slot" is not a building-level abstraction.** Each `station`-kind Feature
+carries its own method directly; a building's behaviour is the SUM of its stations',
+not a count of abstract slots on the building. This is deliberately more granular
+than Vic3's per-building production-method slots.
+
+**`station` sub-kinds, closed** — the three jobs a station can do do not share a
+shape:
+
+| subkind | state | runner | example |
+|---|---|---|---|
+| `economic` | purpose · technique · input(goods) · output(goods) · time · quality | a life class, off-class judged on the class's stat (§3c) | anvil, plough |
+| `service` | purpose · technique · output(a `need` axis, amount) · time | a life class, same off-class rule | hearth, healer's table |
+| `administrative` | scope (derived, §3e/§3f) · what law or policy it may edit | **none — the settlement's holder/ruler operates it directly** | hall's council table |
+
+- **`service` resolves the healer/inn-rest gap** flagged twice earlier: a station's
+  output is EITHER `{category: LootCategory, count}` OR `{need: NeedAxis, amount}` —
+  the second reuses the persona/needs substrate that already exists (step 4), not a
+  third invented vocabulary. §3c-i's rule (*"no second resource list"*) is respected —
+  this is the SECOND list that was already there, not a new one.
+- **Method is a category of sub-methods**; the sub-method is the executable unit,
+  unlocked today by `(building tier, required station present)`, later also gated by a
+  tech tree — same shape both times, no rework when tech lands.
+- **input/output** are lists of `{category, count}` pairs (`LOOT_CATEGORIES` +
+  `seed`/`tool`/`ingredient`, §3c-i); **time** is one scalar; **quality reuses item
+  rarity** — §3d already forbids a second quality ladder.
+- **Policy stays building-wide**, not per-station: sets work hours, lands on
+  stakeholder disposition and relationship toward the owner, and modulates output only
+  INDIRECTLY through that — never a second direct output dial. **Policy changes only
+  through a station** (an office/ledger, `economic` or bundled with the building's
+  primary station) — never a value edited with nothing in the world as its lever, the
+  same rule an administrative station enforces for law.
+- **Transport-in resolved.** Inside one building it is free — a station reads/writes
+  the building's own `container`. Crossing a building's boundary reuses the
+  already-decided NPC-journey mechanism (§2: *"NPC journeys — which never walk
+  tiles — stay consistent"* with the link's time budget) — a supply run between two
+  buildings' containers costs exactly the link's time, no literal goods-on-tiles
+  needed, no new system.
+
+**Still open:** building tier's rung NAMES — one generic 4-rung ladder shared by every
+building type, or does each type name its own (as the smithy example did)? The
+catalogue itself is still only worked through one example (smithy) in this depth; the
+other nine types from the earlier draft table haven't been run through modules,
+stations and tier yet.
 
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
