@@ -135,3 +135,13 @@ export function townPlan(world: World, region: RegionId, place: PlaceId): TownPl
   }
   return { square, streets, plots };
 }
+
+/**
+ * How many of a settlement's plots are still free, given `occupiedModules`
+ * already standing (DESIGN 6c §3f). No `Building` schema yet — the caller
+ * tracks what's occupied; this only reads the real plot count off the plan.
+ */
+export function freePlotsOf(world: World, region: RegionId, place: PlaceId, occupiedModules: number): number | null {
+  const plan = townPlan(world, region, place);
+  return plan ? plan.plots.length - occupiedModules : null;
+}

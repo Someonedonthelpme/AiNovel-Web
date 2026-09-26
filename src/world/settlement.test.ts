@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CAPS, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
+import { CAPS, freePlotsOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
 import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
 import { linkMinutes } from './travel.ts';
 import { groundFloor, world } from './fixtures.ts';
@@ -108,4 +108,25 @@ test('fields and their link times are untouched by what a town grew into', () =>
   assert.equal(linkMinutes(townOfTier('city'), 'town', 'market'), linkMinutes(townOfTier('hamlet'), 'town', 'market'));
   assert.deepEqual(drawMap(townOfTier('city'), fieldId('floor-0', 'town', 'market')).rows,
     drawMap(townOfTier('hamlet'), fieldId('floor-0', 'town', 'market')).rows);
+});
+
+/*
+ * A building's footprint eats the settlement's plot budget (DESIGN 6c §3f).
+ * No `Building` schema yet — just accounting against a real town's plots.
+ */
+
+test('a settlement with nothing built yet has all its plots free', () => {
+  const w = world({ seed: 5 });
+  const plan = townPlan(w, 'floor-0', 'town')!;
+  assert.equal(freePlotsOf(w, 'floor-0', 'town', 0), plan.plots.length);
+});
+
+test('occupied modules are subtracted from the real plot count', () => {
+  const w = world({ seed: 5 });
+  const plan = townPlan(w, 'floor-0', 'town')!;
+  assert.equal(freePlotsOf(w, 'floor-0', 'town', 2), plan.plots.length - 2);
+});
+
+test('a non-settlement place has no free plots to speak of', () => {
+  assert.equal(freePlotsOf(world({ seed: 5 }), 'floor-0', 'gate', 0), null);
 });
