@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { capacityOf, runAt, runMethod } from './workstation.ts';
-import type { SubMethod } from './workstation.ts';
+import { capacityOf, runAt, runMethod, runWorkstation } from './workstation.ts';
+import type { Building, SubMethod } from './workstation.ts';
 
 /*
  * A workstation runs a sub-method against a building's container (DESIGN 6c §3h):
@@ -67,4 +67,40 @@ test('running past capacity fills it exactly, never over', () => {
   const cap = capacityOf(1);
   const out = runAt({ tier: 1, container: {} }, { input: [], output: [{ category: 'weapon', count: 1 }], time: 1 }, cap * 2);
   assert.equal(out.container.weapon, cap);
+});
+
+/*
+ * A workstation carries its own method (DESIGN 6c §3h) - runWorkstation looks
+ * it up by id and runs it through runAt, rather than the caller supplying a
+ * method externally. Scoped to `economic` only for now.
+ */
+
+test('running a workstation not on the building does nothing', () => {
+  assert.equal(runWorkstation({ tier: 1, container: {} }, 'nope', 1), null);
+});
+
+test('running a workstation with no method does nothing', () => {
+  const b: Building = { tier: 1, container: {}, workstations: [{ id: 'w1', subkind: 'administrative' }] };
+  assert.equal(runWorkstation(b, 'w1', 1), null);
+});
+
+test('running a workstation runs its own stored method, same as runAt would', () => {
+  const method: SubMethod = { input: [{ category: 'material', count: 2 }], output: [{ category: 'weapon', count: 1 }], time: 1 };
+  const b: Building = { tier: 1, container: { material: 2 }, workstations: [{ id: 'w1', subkind: 'economic', method }] };
+  assert.deepEqual(runWorkstation(b, 'w1', 1), runAt({ tier: 1, container: { material: 2 } }, method, 1));
+});
+
+test('two workstations on one building run independently by id', () => {
+  const forge: SubMethod = { input: [{ category: 'material', count: 1 }], output: [{ category: 'weapon', count: 1 }], time: 1 };
+  const anvil: SubMethod = { input: [{ category: 'material', count: 1 }], output: [{ category: 'part', count: 1 }], time: 1 };
+  const b: Building = {
+    tier: 1,
+    container: { material: 5 },
+    workstations: [
+      { id: 'forge', subkind: 'economic', method: forge },
+      { id: 'anvil', subkind: 'economic', method: anvil },
+    ],
+  };
+  assert.equal(runWorkstation(b, 'forge', 1)!.container.weapon, 1);
+  assert.equal(runWorkstation(b, 'anvil', 1)!.container.part, 1);
 });

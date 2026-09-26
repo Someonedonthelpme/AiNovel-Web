@@ -10,7 +10,7 @@ export type Container = Partial<Record<LootCategory, number>>;
 export type SubMethod = { input: Good[]; output: Good[]; time: number };
 export const WORKSTATION_SUBKINDS = ['economic', 'service', 'administrative'] as const;
 export type WorkstationSubkind = (typeof WORKSTATION_SUBKINDS)[number];
-export type Workstation = { id?: string; subkind: WorkstationSubkind };
+export type Workstation = { id?: string; subkind: WorkstationSubkind; method?: SubMethod };
 
 export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[] };
 
@@ -45,4 +45,10 @@ export function capacityOf(tier: number): number {
 /** Run `method` against `building`'s own container, capped by its tier-derived capacity. */
 export function runAt(building: Building, method: SubMethod, hoursWorked: number): { container: Container; batches: number } {
   return runMethod(building.container, method, hoursWorked, capacityOf(building.tier));
+}
+
+/** Run the workstation `workstationId`'s own method against `building`. Null if it isn't there, or has none to run. */
+export function runWorkstation(building: Building, workstationId: string, hoursWorked: number): { container: Container; batches: number } | null {
+  const method = building.workstations?.find((w) => w.id === workstationId)?.method;
+  return method ? runAt(building, method, hoursWorked) : null;
 }
