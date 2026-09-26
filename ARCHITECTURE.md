@@ -205,7 +205,7 @@ places, a loop floor's, nor a floor where you hold a settlement's**, [lod.ts:61]
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic positions for the floor map) ·
 `settlement.ts` (what a settlement GREW into, and what follows from it,
-[settlement.ts:51](src/world/settlement.ts:51)) ·
+[settlement.ts:53](src/world/settlement.ts:53)) ·
 `workstation.ts` (a workstation runs its own recipe against a building's container,
 capped by tier-derived capacity and scaled by the runner's class fit — nothing in
 `play/` calls it yet, [workstation.ts:30](src/world/workstation.ts:30)) ·
@@ -353,7 +353,7 @@ anything derives from the seed alone.
   stores the WHOLE preset rather than its name
   ([genesis.ts:700](src/session/genesis.ts:700)), so retuning a preset cannot
   reach into a run already under way. It carries `laws` alongside its dials
-  ([world/types.ts:301](src/world/types.ts:301)), which is why a law can change
+  ([world/types.ts:306](src/world/types.ts:306)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
   mid-run writer ([delta.ts:341](src/play/delta.ts:341)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
@@ -380,7 +380,7 @@ anything derives from the seed alone.
   `stairCost` ([travel.ts:82](src/world/travel.ts:82)), an hour per rest turn
   ([rest.ts:120](src/play/rest.ts:120)), and at least one tick otherwise. A WALK is
   the exception: it is charged its seconds, and `second` carries what is left inside
-  the tick ([types.ts:340](src/world/types.ts:340), [delta.ts:417](src/play/delta.ts:417)),
+  the tick ([types.ts:345](src/world/types.ts:345), [delta.ts:417](src/play/delta.ts:417)),
   so a short walk may cover no whole tick.
 - `journeys` — grudges on the road ([types.ts:343](src/world/types.ts:343),
   [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
@@ -398,7 +398,7 @@ anything derives from the seed alone.
 - `reputation` — per region, kept here because a region compresses to a
   gazetteer and is REBUILT, and standing would not survive that.
 - `ambient` — what is going around per PLACE, not per region.
-- `populations` — who lives per PLACE ([types.ts:374](src/world/types.ts:374)):
+- `populations` — who lives per PLACE ([types.ts:379](src/world/types.ts:379)):
   cohorts of (subspecies, profession, size). **Absent until something has been
   killed** — a place answers from the seed until then
   ([population.ts:101](src/character/population.ts:101)), so an old world needs no
@@ -409,7 +409,7 @@ anything derives from the seed alone.
   [lod.ts:95](src/world/lod.ts:95)), because place ids are the model's own words
   and come back different; 6c removes compression and the aggregate with it.
 - `loops` — a loop floor as it stood when you first arrived, with the people and
-  first impressions it was built with ([types.ts:380](src/world/types.ts:380)). Copied
+  first impressions it was built with ([types.ts:385](src/world/types.ts:385)). Copied
   from the crossing's own `built` ([climb.ts:172](src/play/climb.ts:172)), so it is
   already in the log; only loop floors are kept.
 
@@ -418,11 +418,11 @@ entrance, exit, danger, creatures, optionally `exits: Link[]`, and on a landmark
 floor `boss` — the person who HOLDS it ([:175](src/world/types.ts:175)), on the
 region because holding is a fact about the floor, with the person themselves in
 `World.people`, never compressed, so a rebuilt floor finds its holder again. A `Link`
-([:185](src/world/types.ts:185)) carries the far side's DEPTH as well as its id,
+([:190](src/world/types.ts:190)) carries the far side's DEPTH as well as its id,
 because danger and budgets have to answer before that region exists.
 **`Place.tier`** ([types.ts:53](src/world/types.ts:53)) — what a settlement GREW into, one
 of six rungs, stored when it was dealt or upgraded and otherwise dealt from the seed
-([settlement.ts:51](src/world/settlement.ts:51)). It carries TWO kinds of number and they must not be made
+([settlement.ts:53](src/world/settlement.ts:53)). It carries TWO kinds of number and they must not be made
 one: SOULS on the real curve — ten times a rung, up to millions, which is what the
 place says it is — and what the engine actually simulates, which grows gently: the
 crowd it may field, the plots its ground holds, how wide that ground is
@@ -447,9 +447,9 @@ known people survive ([lod.ts:40](src/world/lod.ts:40)).
 
 **`Stratum`** ([types.ts:87](src/world/types.ts:87)) — a structure above a
 floor: `kind` `static | dynamic`, an optional `parent`, a floor range, and
-optional `danger`, `theme`, `loot` and `laws` ([types.ts:105](src/world/types.ts:105)) —
-two laws, `reset` from the closed `RESETS` ([:69](src/world/types.ts:69)) and `time`
-from the closed `TIMES` ([:76](src/world/types.ts:76)). Strata NEST, so the plan is a
+optional `danger`, `theme`, `loot` and `laws` ([types.ts:110](src/world/types.ts:110)) —
+two laws, `reset` from the closed `RESETS` ([:74](src/world/types.ts:74)) and `time`
+from the closed `TIMES` ([:81](src/world/types.ts:81)). Strata NEST, so the plan is a
 tree and the innermost stratum containing a floor speaks for it
 ([strata.ts:14](src/world/strata.ts:14)) — except for a LAW, which comes from the
 innermost stratum that STATES it, walking up the parents as danger does
@@ -526,9 +526,9 @@ come from?"
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:14](src/world/strata.ts:14), [:52](src/world/strata.ts:52)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
-| `tierOf` ([settlement.ts:51](src/world/settlement.ts:51)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:37](src/world/settlement.ts:37)) |
-| `soulsOf` ([settlement.ts:64](src/world/settlement.ts:64)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
-| `rulerOf` ([settlement.ts:73](src/world/settlement.ts:73)) | the holder, the tier | who rules, and what a ruler of a place this size is called |
+| `tierOf` ([settlement.ts:53](src/world/settlement.ts:53)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:37](src/world/settlement.ts:37)) |
+| `soulsOf` ([settlement.ts:66](src/world/settlement.ts:66)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
+| `rulerOf` ([settlement.ts:75](src/world/settlement.ts:75)) | the holder, the tier | who rules, and what a ruler of a place this size is called |
 | `townPlan` ([settlement.ts:89](src/world/settlement.ts:89)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
 | `freePlotsOf` ([settlement.ts:146](src/world/settlement.ts:146)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
 | `buildingAt` ([settlement.ts:152](src/world/settlement.ts:152)) | a place, a building id | the building standing there, or null |
@@ -605,7 +605,7 @@ travels in the crossing's `built.people`, so a replay deals neither again.
 
 **Seeded shape, stored words** — `subjects` are drawn from the seed, but the
 names the model gives them are stored on the `World`
-([types.ts:284](src/world/types.ts:284), [subjects.ts:111](src/world/subjects.ts:111)),
+([types.ts:289](src/world/types.ts:289), [subjects.ts:111](src/world/subjects.ts:111)),
 because a word derived from nothing would be lost on the next derivation. The
 same split as `classSpec` on the sheet. **The ids never change**, so anything that
 matched before naming still matches after it.
@@ -1182,7 +1182,7 @@ resolves.
 **4. Closed unions, never free text.** `ActiveEffect`, `ItemEffect`,
 `WorldDelta`, `TraitCondition`, `Gate`, `CONSTRAINTS`, `BINDINGS`,
 `PARLEY_EFFECTS` ([combat/types.ts:291](src/combat/types.ts:291)), `RESETS`
-([world/types.ts:69](src/world/types.ts:69)), `TIMES` ([:76](src/world/types.ts:76)) and
+([world/types.ts:74](src/world/types.ts:74)), `TIMES` ([:81](src/world/types.ts:81)) and
 `ECHOING` ([social/deed.ts:63](src/social/deed.ts:63)) are all closed, and so is a map tile: `.` `,` `#` ([map.ts:95](src/world/map.ts:95)). A model names things; it never invents a mechanic — nor a law, nor
 where a road goes: `revealWay` names the place a way leaves FROM and the engine
 mints the far side ([state.ts:100](src/play/state.ts:100)).
@@ -1680,7 +1680,7 @@ Every balance number, and where it lives.
 | a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:176](src/world/map.ts:176), [:178](src/world/map.ts:178), [:181](src/world/map.ts:181) | [map.ts:176](src/world/map.ts:176), [:181](src/world/map.ts:181) |
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:213](src/world/map.ts:213) |
 | hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
-| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:19](src/world/settlement.ts:19), [:23](src/world/settlement.ts:23) |
+| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:25](src/world/settlement.ts:25), [:23](src/world/settlement.ts:23) |
 | a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:41](src/world/workstation.ts:41) |
 | workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
 | the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:8](src/world/workstation.ts:8) |
@@ -1727,7 +1727,7 @@ Every balance number, and where it lives.
 | settlement price | 50 × floor (floor 0 counts as 1) — about ten won fights on floor 1, measured live | [holding.ts:24](src/world/holding.ts:24) |
 | trust to sell | 2 | [holding.ts:27](src/world/holding.ts:27) |
 | floors a new floor is shown | the last 4 | [floorgen.ts:298](src/world/floorgen.ts:298) |
-| loot profile | a multiplier per category on the standing chance; absent is ×1 | [catalogue.ts:254](src/items/catalogue.ts:254) |
+| loot profile | a multiplier per category on the standing chance; absent is ×1 | [catalogue.ts:255](src/items/catalogue.ts:255) |
 | places per floor | `clamp(4 + floor/3, 4, 24)` | [budget.ts:14](src/world/budget.ts:14) |
 | people per floor | `clamp(2 + floor/6, 2, 10) + 2` | [budget.ts:20](src/world/budget.ts:20) |
 | XP to next level | `100 × level` | [progress.ts:20](src/play/progress.ts:20) |
