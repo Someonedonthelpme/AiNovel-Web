@@ -146,6 +146,13 @@ export type WorldDelta = {
    * the difficulty curve actually lives.
    */
   rest?: 'short' | 'long';
+  /**
+   * Work a workstation the player stands at, for this turn's labour (DESIGN 6c
+   * §3h). The model names WHICH workstation on WHICH building; the engine runs
+   * its own stored method for however many hours a turn counts as — never a
+   * duration the model invents, the same line `useItem` draws.
+   */
+  runWorkstation?: { building: string; workstation: string };
 };
 
 /** Why a walk stopped (W3). Closed. */

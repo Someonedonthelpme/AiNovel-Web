@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addBuilding, buildingAt, CAPS, freePlotsOf, occupiedModulesOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
+import { addBuilding, buildingAt, CAPS, freePlotsOf, occupiedModulesOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan, withBuilding } from './settlement.ts';
 import { modulesNeeded } from './building.ts';
 import { WORKSTATION_SUBKINDS } from './workstation.ts';
 import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
@@ -191,4 +191,11 @@ test("a settlement's free plots follow real building occupancy", () => {
   });
   const plan = townPlan(w, 'floor-0', 'town')!;
   assert.equal(freePlotsOf(w, 'floor-0', 'town', occupiedModulesOf(built)), plan.plots.length - modulesNeeded(4));
+});
+
+test('a building can be replaced on a place, leaving the others untouched', () => {
+  const p1 = addBuilding(addBuilding(place('p1'), { id: 'a', tier: 1, container: {} }), { id: 'b', tier: 1, container: {} });
+  const p2 = withBuilding(p1, { id: 'a', tier: 2, container: { material: 5 } });
+  assert.equal(buildingAt(p2, 'a')?.tier, 2);
+  assert.equal(buildingAt(p2, 'b')?.tier, 1);
 });

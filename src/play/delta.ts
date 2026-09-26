@@ -18,6 +18,8 @@ import type { Deed, Echo } from '../social/deed.ts';
 import { lawFrom } from '../world/strata.ts';
 import { amend, BINDINGS, CONSTRAINTS, forbids, rulesOf } from '../rules/ruleset.ts';
 import { holderOf, priceOf, TRUST_TO_SELL } from '../world/holding.ts';
+import { buildingAt, withBuilding } from '../world/settlement.ts';
+import { runWorkstation } from '../world/workstation.ts';
 import { playerSubject } from './signetbook.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
@@ -106,6 +108,41 @@ function bought(state: PlayState, placeId: string): PlayState {
         ...state.world.regions,
         [region.id]: { ...region, places: region.places.map((p) => (p.id === placeId ? { ...p, holder: PLAYER } : p)) },
       },
+    },
+  };
+}
+
+// ponytail: flat placeholder — no tick-to-hours conversion for labour is decided; real pacing waits until it matters.
+const WORK_HOURS_PER_TURN = 1;
+
+/** Why the player may NOT work this workstation, or null when they may (DESIGN 6c §3h). */
+function refusalToWork(state: PlayState, req: { building: string; workstation: string }): string | null {
+  const region = activeRegion(state.world);
+  const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  if (!region || !place) return 'not here';
+  const building = buildingAt(place, req.building);
+  if (!building) return `no such building "${req.building}" here`;
+  const ws = building.workstations?.find((w) => w.id === req.workstation);
+  if (!ws) return `no such workstation "${req.workstation}"`;
+  if (!ws.method) return `"${req.workstation}" has no method to run`;
+  return null;
+}
+
+/** The work, once `validateDelta` has allowed it: the workstation's own method, run for the turn's hours. */
+function worked(state: PlayState, req: { building: string; workstation: string }): PlayState {
+  const region = activeRegion(state.world);
+  if (!region) return state;
+  const place = region.places.find((p) => p.id === state.world.currentPlace);
+  const building = place && buildingAt(place, req.building);
+  if (!place || !building) return state;
+  const result = runWorkstation(building, req.workstation, WORK_HOURS_PER_TURN);
+  if (!result) return state;
+  const nextPlace = withBuilding(place, { ...building, container: result.container });
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      regions: { ...state.world.regions, [region.id]: { ...region, places: region.places.map((p) => (p.id === place.id ? nextPlace : p)) } },
     },
   };
 }
@@ -245,6 +282,12 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     const why = refusalToSell(state, proposed.acquirePlace);
     if (why) rejected.push(`acquirePlace "${proposed.acquirePlace}": ${why}`);
     else delta.acquirePlace = proposed.acquirePlace;
+  }
+
+  if (proposed.runWorkstation !== undefined) {
+    const why = refusalToWork(state, proposed.runWorkstation);
+    if (why) rejected.push(`runWorkstation "${proposed.runWorkstation.workstation}": ${why}`);
+    else delta.runWorkstation = proposed.runWorkstation;
   }
 
   if (proposed.useItem !== undefined) {
@@ -461,6 +504,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   }
 
   if (delta.acquirePlace) next = bought(next, delta.acquirePlace);
+
+  if (delta.runWorkstation) next = worked(next, delta.runWorkstation);
 
   if (delta.useItem) {
     const used = useItem(next, delta.useItem);

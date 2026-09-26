@@ -159,6 +159,11 @@ export function addBuilding(place: Place, building: Building): Place {
   return { ...place, buildings: [...(place.buildings ?? []), building] };
 }
 
+/** `place` with the building matching `building.id` replaced by it. A no-op if no building there has that id. */
+export function withBuilding(place: Place, building: Building): Place {
+  return { ...place, buildings: (place.buildings ?? []).map((b) => (b.id === building.id ? building : b)) };
+}
+
 /** How many modules every building standing on `place` occupies, summed — the real count `freePlotsOf` wants. */
 export function occupiedModulesOf(place: Place): number {
   return (place.buildings ?? []).reduce((sum, b) => sum + modulesNeeded(b.workstations?.length ?? 0), 0);

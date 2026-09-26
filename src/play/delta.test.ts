@@ -9,7 +9,11 @@ import { takeRest } from './rest.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState } from './fixtures.ts';
 import { forbids, STANDARD } from '../rules/ruleset.ts';
-import type { TurnRecord, WorldDelta } from './state.ts';
+import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
+import { addBuilding, buildingAt } from '../world/settlement.ts';
+import { isFull } from '../world/types.ts';
+import type { Building } from '../world/workstation.ts';
+import type { Region } from '../world/types.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
   kind: 'turn', input: 'x', mode: 'conversation', classification: 'NEUTRAL',
@@ -417,4 +421,46 @@ test('a short rest covers an hour on the clock, a long rest eight', () => {
   assert.equal(clockOf(takeRest(s, 'short').state.world) - clockOf(s.world), 6);
   assert.equal(clockOf(takeRest(s, 'long').state.world) - clockOf(s.world), 48);
   assert.equal(clockOf(applyDelta(s, { rest: 'long' }).world) - clockOf(s.world), 48, 'and as a turn');
+});
+
+/*
+ * Working a workstation, the first play verb to reach DESIGN 6c §3h's station
+ * system. One economic workstation with a real method, one administrative
+ * one with none, both on a building standing in `town`.
+ */
+
+const withWorkstation = (state: PlayState): PlayState => {
+  const r = state.world.regions['floor-0'];
+  if (!isFull(r)) throw new Error('fixture: floor-0 must be full detail');
+  const smithy: Building = {
+    id: 'smithy-1',
+    tier: 1,
+    container: { material: 2 },
+    workstations: [
+      { id: 'anvil', subkind: 'economic', method: { input: [{ category: 'material', count: 2 }], output: [{ category: 'weapon', count: 1 }], time: 1 } },
+      { id: 'hall-desk', subkind: 'administrative' },
+    ],
+  };
+  return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? addBuilding(p, smithy) : p)) } } } };
+};
+
+test('a workstation runs its own method for the turn, updating the building in place', () => {
+  const done = applyTurn(withWorkstation(playState()), record({ runWorkstation: { building: 'smithy-1', workstation: 'anvil' } })).state;
+  const town = (done.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!;
+  assert.deepEqual(buildingAt(town, 'smithy-1')?.container, { material: 0, weapon: 1 });
+});
+
+test('the engine refuses working a station it should not, and says why', () => {
+  const elsewhere = (): PlayState => { const s = withWorkstation(playState()); return { ...s, world: { ...s.world, currentPlace: 'market' } }; };
+  const cases: [string, PlayState, { building: string; workstation: string }, RegExp][] = [
+    ['no such building', withWorkstation(playState()), { building: 'nope', workstation: 'anvil' }, /building/],
+    ['no such workstation', withWorkstation(playState()), { building: 'smithy-1', workstation: 'nope' }, /workstation/],
+    ['no method to run', withWorkstation(playState()), { building: 'smithy-1', workstation: 'hall-desk' }, /no method/],
+    ['not standing there', elsewhere(), { building: 'smithy-1', workstation: 'anvil' }, /here/],
+  ];
+  for (const [why, state, req, reason] of cases) {
+    const v = validateDelta(state, { runWorkstation: req });
+    assert.equal(v.delta.runWorkstation, undefined, why);
+    assert.match(v.rejected.join(' '), reason, why);
+  }
 });
