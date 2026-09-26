@@ -8,7 +8,7 @@ import type { LootCategory } from '../items/catalogue.ts';
 export type Good = { category: LootCategory; count: number };
 export type Container = Partial<Record<LootCategory, number>>;
 export type SubMethod = { input: Good[]; output: Good[]; time: number };
-export type Building = { tier: number; container: Container };
+export type Building = { id?: string; tier: number; container: Container };
 
 const sumOf = (goods: Good[]): number => goods.reduce((s, { count }) => s + count, 0);
 const totalOf = (container: Container): number => Object.values(container).reduce((s: number, n) => s + (n ?? 0), 0);

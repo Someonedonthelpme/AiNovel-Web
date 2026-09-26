@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CAPS, freePlotsOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
+import { addBuilding, buildingAt, CAPS, freePlotsOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
 import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
 import { linkMinutes } from './travel.ts';
-import { groundFloor, world } from './fixtures.ts';
+import { groundFloor, place, world } from './fixtures.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { speciesFor } from '../character/species.ts';
 import { PLAYER } from '../social/edge.ts';
@@ -129,4 +129,29 @@ test('occupied modules are subtracted from the real plot count', () => {
 
 test('a non-settlement place has no free plots to speak of', () => {
   assert.equal(freePlotsOf(world({ seed: 5 }), 'floor-0', 'gate', 0), null);
+});
+
+/*
+ * A place can hold buildings, each addressable by a stable id (DESIGN 6c
+ * §2a). Module/plot occupancy isn't wired in yet - that waits on real
+ * per-building workstation counts, which don't exist as stored data yet.
+ */
+
+test('a place with nothing built has no buildings', () => {
+  assert.deepEqual(place('p1').buildings ?? [], []);
+});
+
+test('a building can be found on a place by id', () => {
+  const p = addBuilding(place('p1'), { id: 'smithy-1', tier: 1, container: {} });
+  assert.deepEqual(buildingAt(p, 'smithy-1'), { id: 'smithy-1', tier: 1, container: {} });
+});
+
+test('a building not on the place is not found', () => {
+  assert.equal(buildingAt(place('p1'), 'nope'), null);
+});
+
+test('adding a building with a taken id is a no-op', () => {
+  const p1 = addBuilding(place('p1'), { id: 'x', tier: 1, container: {} });
+  const p2 = addBuilding(p1, { id: 'x', tier: 2, container: {} });
+  assert.equal(buildingAt(p2, 'x')!.tier, 1);
 });

@@ -57,6 +57,11 @@ export type Place = {
    * bought one is stored, because it must not move.
    */
   holder?: PersonId;
+  /**
+   * What stands here (DESIGN 6c §2a/§3f). Module/plot occupancy isn't wired
+   * to this yet — that waits on a building carrying its own workstation count.
+   */
+  buildings?: import('./workstation.ts').Building[];
 };
 
 export type StratumId = string;

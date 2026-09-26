@@ -5,6 +5,7 @@ import type { Cell } from './map.ts';
 import { pairDraw } from './travel.ts';
 import { isFull } from './types.ts';
 import type { Place, PlaceId, RegionId, World } from './types.ts';
+import type { Building } from './workstation.ts';
 
 /**
  * How big a settlement is (DESIGN 6c §3c-ii), and everything that follows from it.
@@ -144,4 +145,15 @@ export function townPlan(world: World, region: RegionId, place: PlaceId): TownPl
 export function freePlotsOf(world: World, region: RegionId, place: PlaceId, occupiedModules: number): number | null {
   const plan = townPlan(world, region, place);
   return plan ? plan.plots.length - occupiedModules : null;
+}
+
+/** The building `id` standing on `place`, or null if none does. */
+export function buildingAt(place: Place, id: string): Building | null {
+  return place.buildings?.find((b) => b.id === id) ?? null;
+}
+
+/** `place` with `building` added, unless its id is already taken — a no-op then, never a silent overwrite. */
+export function addBuilding(place: Place, building: Building): Place {
+  if (building.id !== undefined && buildingAt(place, building.id)) return place;
+  return { ...place, buildings: [...(place.buildings ?? []), building] };
 }
