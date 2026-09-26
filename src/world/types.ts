@@ -46,11 +46,22 @@ export type Place = {
   affordances: string[];
   discovered: boolean;
   /**
+   * How big a settlement is (DESIGN 6c §3c-ii): its souls, its crowd, how many
+   * plots its ground holds, and what its ruler is called. Dealt at generation;
+   * §4's upgrading is what moves it. Only a settlement has one.
+   */
+  tier?: import('./settlement.ts').SettlementTier;
+  /**
    * Who holds this settlement, when it is the PLAYER (DESIGN 6c *Ownership*).
    * Anybody else's holding is derived from who is there (`holderOf`); only a
    * bought one is stored, because it must not move.
    */
   holder?: PersonId;
+  /**
+   * What stands here (DESIGN 6c §2a/§3f). Module/plot occupancy reads off each
+   * building's own workstation count (`occupiedModulesOf`, `settlement.ts:163`).
+   */
+  buildings?: import('./workstation.ts').Building[];
 };
 
 export type StratumId = string;
@@ -326,6 +337,14 @@ export type World = {
    * every fight. Absent means a world stored before the clock; `clockOf` reads it.
    */
   clock?: number;
+  /**
+   * Seconds already spent inside the current tick, 0..599 (W3). A walk is charged
+   * per tile, a second or two each; the clock keeps its ten-minute ticks and this
+   * carries the rest. Absent is none.
+   */
+  second?: number;
+  /** Where the player stands on a map (W3). Absent is the centre of the current place's hub (`positionOf`). */
+  at?: { map: string; x: number; y: number };
   journeys?: import('../play/journey.ts').Journey[];
   /** Deeds done on era floors, told on the era floors above them (`ECHOING`). Absent is none. */
   echoes?: import('../social/deed.ts').Echo[];

@@ -337,6 +337,15 @@ test('a floor can begin a new wing, and the wing survives a fold', () => {
   assert.deepEqual(replayed.world.strata?.['wing-1'], wing, 'and a reload still knows about it');
 });
 
+// W3: a stair is abstract, so where you stood on the floor below means nothing above.
+test('a climb clears your place on the map: you arrive at the centre of the landing', async () => {
+  const stair = atTheStair();
+  const before = { ...stair, world: { ...stair.world, at: { map: 'hub:floor-0:stair', x: 3, y: 4 } } };
+  const r = await climb(provider(), before);
+  assert.equal(r.error, null);
+  assert.equal(r.state.world.at, undefined);
+});
+
 // 6b stage 7.1b: a climb is a crossing too, so it covers time on the world clock.
 test('climbing covers time on the clock', async () => {
   // A clock that is not the turn count, or a world reading its turns would pass this for free.
@@ -523,4 +532,15 @@ test("climbing into an unthemed era band gives it the first floor's land, and a 
   const theme = { biome: land.biome, culture: land.culture, people: land.culture };
   assert.deepEqual(r.state.world.strata?.era?.theme, theme);
   assert.deepEqual(foldPlay(base, [record]).world.strata?.era?.theme, theme, 'and a reload still knows it');
+});
+
+// W3 shipped a bug where clearing a value wrote `at: undefined`: a snapshot is
+// JSON and drops the key, so the fold stopped equalling its own snapshot. Every
+// world a climb produces must survive the round trip unchanged (invariant 1).
+test('the world a climb produces survives JSON unchanged', async () => {
+  const stair = atTheStair();
+  const before = { ...stair, world: { ...stair.world, at: { map: 'hub:floor-0:stair', x: 3, y: 4 } } };
+  const r = await climb(provider(), before);
+  assert.equal(r.error, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.state.world)), r.state.world);
 });

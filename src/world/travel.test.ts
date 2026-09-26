@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, linksFrom, moveWithinRegion, traverse } from './travel.ts';
+import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, linkMinutes, linksFrom, moveWithinRegion, traverse } from './travel.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, groundFloor, link, place, world } from './fixtures.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { STANDARD } from '../rules/ruleset.ts';
-import type { Region, World } from './types.ts';
+import type { PlaceKind, Region, World } from './types.ts';
 
 const atGround = (over: Partial<World> = {}) => world({ currentPlace: 'gate', ...over });
 
@@ -280,4 +280,40 @@ test('traverse is not a way around the law that guards the stairs', () => {
   assert.equal(sneak.kind, 'error');
   if (sneak.kind === 'error') assert.match(sneak.reason, /stair/);
   assert.equal(descend(w).kind, 'error', 'and the honest way down is still refused by the law');
+});
+
+// W1 (DESIGN 6c §2c): a link's time in minutes, weighted by the two places' kinds and the biome.
+const withKinds = (k: PlaceKind): Region => ({ ...groundFloor(), places: groundFloor().places.map((p) => ({ ...p, kind: k })) });
+const seeded = (seed: number, r: Region = groundFloor()) => world({ seed, regions: { 'floor-0': r } });
+
+test('a link takes whole minutes, the same both ways, 5 to 45, dealt from the seed', () => {
+  const seen = new Set<number>();
+  for (let seed = 1; seed <= 50; seed++) {
+    const m = linkMinutes(seeded(seed), 'town', 'market');
+    assert.equal(m, linkMinutes(seeded(seed), 'market', 'town'));
+    assert.ok(Number.isInteger(m) && m >= 5 && m <= 45, `seed ${seed}: ${m}`);
+    seen.add(m);
+  }
+  assert.ok(seen.size > 5, 'the seed moves it');
+});
+
+test('settled ground is quickest, then a landmark, a dungeon, the wild', () => {
+  const m = (k: PlaceKind) => linkMinutes(seeded(7, withKinds(k)), 'town', 'market');
+  assert.ok(m('settlement') < m('landmark') && m('landmark') < m('dungeon') && m('dungeon') < m('wild'),
+    `${m('settlement')} ${m('landmark')} ${m('dungeon')} ${m('wild')}`);
+});
+
+test('a rough biome slows a link, a hard one more; an unknown word is open ground', () => {
+  const m = (biome: string) => linkMinutes(seeded(7, { ...groundFloor(), biome }), 'town', 'market');
+  assert.ok(m('grass plain') < m('dead forest') && m('dead forest') < m('salt marsh'),
+    `${m('grass plain')} ${m('dead forest')} ${m('salt marsh')}`);
+  assert.equal(m('shattered glass'), m('grass plain'));
+});
+
+test('a place the region does not hold weighs as a landmark', () => {
+  const w = seeded(7);
+  const without = (...ids: string[]): Region => ({ ...groundFloor(), places: groundFloor().places.filter((p) => !ids.includes(p.id)) });
+  // The fixture's market IS a landmark, so losing it must change nothing.
+  assert.equal(linkMinutes(w, 'town', 'market', without('market')), linkMinutes(w, 'town', 'market', groundFloor()));
+  assert.equal(linkMinutes(w, 'town', 'market', without('town', 'market')), linkMinutes(w, 'town', 'market', withKinds('landmark')));
 });

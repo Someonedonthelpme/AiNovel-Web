@@ -5,6 +5,7 @@ import {
 import type { PlayState, TurnRecord } from '../play/state.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import type { World } from '../world/types.ts';
+import type { GameMap } from '../world/map.ts';
 
 /**
  * The database schema, as TypeScript.
@@ -78,6 +79,20 @@ export const facts = pgTable('facts', {
   // Cosine, matching how similarity is scored everywhere else in the codebase.
   index('facts_embedding_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
 ]);
+
+/**
+ * Walkable maps (DESIGN 6c §2, W2), one row per map a session has entered.
+ *
+ * Stored on first entry and never redrawn: a map derived on every read would
+ * shift under every save the day the generator changed, and silently. Kept out
+ * of the world snapshot and the event log, which never depend on tiles.
+ */
+export const maps = pgTable('maps', {
+  sessionId: uuid('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  mapId: text('map_id').notNull(),
+  map: jsonb('map').$type<GameMap>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.sessionId, t.mapId] })]);
 
 /** pgvector must exist before the facts table can be created. */
 export const ENSURE_VECTOR_EXTENSION = sql`CREATE EXTENSION IF NOT EXISTS vector`;

@@ -13,11 +13,17 @@ import type { WriterResult } from '../llm/writer.ts';
 import { finalAbilities } from '../session/sheet.ts';
 import { displayNames, humanise } from '../world/naming.ts';
 import { activeRegion, signposted, walkRoute } from '../world/travel.ts';
+import { drawMap, fieldEnds, positionOf, tileSeconds } from '../world/map.ts';
+import type { GameMap, MapId } from '../world/map.ts';
+import { walkAlong, walkToTile } from './walker.ts';
+import { arenaAt } from './arena.ts';
+import type { Arena } from './arena.ts';
+import type { Then } from './walker.ts';
 import { holderOf, priceOf } from '../world/holding.ts';
 import { applyTurn, personRef, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
-import type { Mode, PlayState, TurnRecord, WorldDelta } from './state.ts';
+import type { Mode, PlayState, Stop, TurnRecord, WorldDelta } from './state.ts';
 import { beginEncounter, fightOpen, hearsWords } from './combat.ts';
 import type { CombatAction } from './combat.ts';
 
@@ -39,6 +45,8 @@ export type TurnDeps = {
    * tests run without the embedding endpoint.
    */
   retrieveFacts?: (state: PlayState, input: string) => Promise<string[]>;
+  /** The map a walk crosses: the session's stored copy (W3). Defaults to drawing it from the seed. */
+  mapOf?: (id: MapId) => GameMap | Promise<GameMap>;
 };
 
 export type TurnResult = {
@@ -108,6 +116,22 @@ export function outcomeFor(output: DirectorOutput, tier: 'miss' | 'partial' | 'h
   return output.check.onMiss;
 }
 
+/**
+ * The ground this turn would be fought on, if a fight opens (W7): a window of the
+ * map you stand on. Cut BEFORE the turn is applied, because the fold must fight on
+ * exactly what the live turn fought on, and dropped again when no fight opened.
+ */
+async function arenaFor(deps: TurnDeps, state: PlayState): Promise<Arena | undefined> {
+  if (!activeRegion(state.world)) return undefined;
+  const at = positionOf(state.world);
+  const mapOf = deps.mapOf ?? ((id: MapId) => drawMap(state.world, id));
+  return arenaAt(await mapOf(at.map), at);
+}
+
+/** The record as it is stored: the arena is kept only when a fight actually opened. */
+const asStored = (record: TurnRecord, fought: boolean): TurnRecord =>
+  (fought || !record.arena ? record : (({ arena: _, ...rest }) => rest)(record));
+
 export async function playTurn(
   deps: TurnDeps,
   state: PlayState,
@@ -117,12 +141,12 @@ export async function playTurn(
 ): Promise<TurnResult> {
   // A typed "go to X" is walked by the ENGINE, and never reaches the model
   // (DESIGN 6c §2d): the Director refused an adjacent stair three times live.
-  const route = walkRoute(state.world, input);
-  if (route) return walked(state, input, mode, route);
+  const route = walkRoute(state.world, input, fieldEnds(positionOf(state.world).map) ?? []);
+  if (route) return walked(deps, state, input, mode, route);
   // So are a rest and a hunt: the probe found the Director starting no fight on
   // five "attack" turns in six, and rest reachable only when the model proposed it.
   const act = engineAct(state, input);
-  if (act) return acted(state, input, mode, act);
+  if (act) return acted(deps, state, input, mode, act);
 
   const canonFacts = await (deps.retrieveFacts ?? recentFacts)(state, input);
   const output = await runDirector(deps.director, state, input, mode, canonFacts);
@@ -166,6 +190,7 @@ export async function playTurn(
     delta: validated.delta,
     rejected: validated.rejected,
     prose: '',
+    arena: await arenaFor(deps, state),
   };
 
   const applied = applyTurn(state, draft);
@@ -187,7 +212,7 @@ export async function playTurn(
 
   const written = await runWriter(deps.writer, view);
 
-  const record: TurnRecord = { ...draft, prose: written.prose };
+  const record = asStored({ ...draft, prose: written.prose }, Boolean(next.combat));
 
   return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts };
 }
@@ -196,17 +221,76 @@ export async function playTurn(
  * A walk, as a turn: one record carrying the route, applied like any other, and a
  * plain line of prose. No model is called — arrival narration waits for W3's stops.
  */
-function walked(state: PlayState, input: string, mode: Mode, route: string[]): TurnResult {
+export type TileWalk = { state: PlayState; record: TurnRecord | null; then: Then | null; error: string | null };
+
+/**
+ * A click on the map you stand on (W4a): walk there, no typing and no model.
+ * The tile is checked HERE, at the edge — it must be on your map, inside it and
+ * not a wall — and a bad one is refused with a reason and nothing moves.
+ */
+export async function walkTile(deps: TurnDeps, state: PlayState, target: { map: MapId; x: number; y: number }): Promise<TileWalk> {
+  const refuse = (error: string): TileWalk => ({ state, record: null, then: null, error });
+  if (state.ended) return refuse('the story has ended');
+  if (state.combat) return refuse('not while fighting');
+  const start = positionOf(state.world);
+  if (target.map !== start.map) return refuse(`"${target.map}" is not the map you are on`);
+  const mapOf = deps.mapOf ?? ((id: MapId) => drawMap(state.world, id));
+  const map = await mapOf(start.map);
+  const { x, y } = target;
+  if (!Number.isInteger(x) || !Number.isInteger(y) || y < 0 || y >= map.rows.length || x < 0 || x >= map.rows[0].length) {
+    return refuse(`(${x}, ${y}) is outside the map`);
+  }
+  if (tileSeconds(map, { x, y }) === Infinity) return refuse(`(${x}, ${y}) is a wall`);
+
+  const { walkTo, then } = await walkToTile(state, target, mapOf);
   const record: TurnRecord = {
-    kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
-    delta: { walk: route }, rejected: [], prose: '',
+    kind: 'turn', input: '', mode: 'exploration', classification: 'NEUTRAL', addressed: null, roll: null,
+    delta: { walkTo }, rejected: [], prose: '', arena: await arenaFor(deps, state),
   };
   const applied = applyTurn(state, record);
-  const here = activeRegion(applied.state.world)?.places.find((p) => p.id === applied.state.world.currentPlace);
-  const prose = state.world.language === 'th' ? `คุณเดินไปถึง${here?.name ?? ''}` : `You walk to ${here?.name ?? 'where you meant to go'}.`;
+  const places = activeRegion(state.world)?.places ?? [];
+  const entered = places.find((p) => p.id === walkTo.through[walkTo.through.length - 1])?.name;
+  const th = state.world.language === 'th';
+  // Every click says something: an empty line is an empty transcript entry.
+  const onto = fieldEnds(walkTo.map)?.find((p) => p !== state.world.currentPlace);
+  const road = places.find((p) => p.id === onto)?.name;
+  const standing = places.find((p) => p.id === state.world.currentPlace)?.name ?? '';
+  // A sighting names WHO, not where you were going.
+  const met = walkTo.met ? state.world.people[walkTo.met]?.name ?? walkTo.met : null;
+  const prose = walkTo.stop !== 'arrived'
+    ? (th ? STOP_LINES[walkTo.stop].th(met ?? entered ?? 'ปลายทาง') : STOP_LINES[walkTo.stop].en(met ?? entered ?? 'where you were going'))
+    : entered ? (th ? STOP_LINES.arrived.th(entered) : STOP_LINES.arrived.en(entered))
+    : road ? (th ? `คุณออกเดินทางไปทาง${road}` : `You set out toward ${road}.`)
+    : th ? `คุณเดินไปในบริเวณ${standing}` : `You walk across ${standing}.`;
+  return { state: applied.state, record: asStored({ ...record, prose }, Boolean(applied.state.combat)), then, error: null };
+}
+
+/** What an engine-walked turn says, by why it stopped. Closed, like `STOPS`. */
+const STOP_LINES: Record<Stop, { en: (to: string) => string; th: (to: string) => string }> = {
+  arrived: { en: (to) => `You walk to ${to}.`, th: (to) => `คุณเดินไปถึง${to}` },
+  nightfall: { en: (to) => `Night falls before you reach ${to}.`, th: (to) => `ค่ำลงก่อนคุณจะถึง${to}` },
+  hungry: { en: (to) => `Hunger stops you on the way to ${to}.`, th: (to) => `ความหิวทำให้คุณต้องหยุดระหว่างทางไป${to}` },
+  weary: { en: (to) => `You are too tired to go on toward ${to}.`, th: (to) => `คุณเหนื่อยเกินกว่าจะเดินต่อไปยัง${to}` },
+  encounter: { en: () => 'Someone has come for you.', th: () => 'มีคนตามมาหาคุณ' },
+  sighted: { en: (who) => `You see ${who} on the road.`, th: (who) => `คุณเห็น${who}อยู่บนถนน` },
+};
+
+async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mode, route: string[]): Promise<TurnResult> {
+  const walkTo = await walkAlong(state, route, deps.mapOf ?? ((id) => drawMap(state.world, id)));
+  const record: TurnRecord = {
+    kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
+    delta: { walkTo }, rejected: [], prose: '', arena: await arenaFor(deps, state),
+  };
+  const applied = applyTurn(state, record);
+  // A sighting names WHO you saw; every other stop names where you were going.
+  const goal = walkTo.met
+    ? state.world.people[walkTo.met]?.name ?? walkTo.met
+    : activeRegion(state.world)?.places.find((p) => p.id === route[route.length - 1])?.name ?? '';
+  const line = STOP_LINES[walkTo.stop];
+  const prose = state.world.language === 'th' ? line.th(goal) : line.en(goal);
   return {
     state: applied.state,
-    record: { ...record, prose },
+    record: asStored({ ...record, prose }, Boolean(applied.state.combat)),
     writer: { prose, checks: [], regenerated: false },
     rejected: [],
     shifts: applied.shifts,
@@ -291,7 +375,7 @@ function nothingToHunt(state: PlayState): { reason: string; line: { en: string; 
  * this one, and a refusal carries their reason. A refused act still spends the
  * turn — you tried. No model is called.
  */
-function acted(state: PlayState, input: string, mode: Mode, act: EngineAct): TurnResult {
+async function acted(deps: TurnDeps, state: PlayState, input: string, mode: Mode, act: EngineAct): Promise<TurnResult> {
   const validated = validateDelta(state, act.proposed);
   const empty = validated.delta.startCombat ? nothingToHunt(state) : null;
   if (empty) {
@@ -302,14 +386,14 @@ function acted(state: PlayState, input: string, mode: Mode, act: EngineAct): Tur
   }
   const record: TurnRecord = {
     kind: 'turn', input, mode, classification: 'NEUTRAL', addressed: null, roll: null,
-    delta: validated.delta, rejected: validated.rejected, prose: '',
+    delta: validated.delta, rejected: validated.rejected, prose: '', arena: await arenaFor(deps, state),
   };
   const applied = applyTurn(state, record);
   const done = validated.rejected.length === 0;
   const prose = done || empty ? act.line[state.world.language] : validated.rejected.join('; ');
   return {
     state: applied.state,
-    record: { ...record, prose },
+    record: asStored({ ...record, prose }, Boolean(applied.state.combat)),
     writer: { prose, checks: [], regenerated: false },
     rejected: validated.rejected,
     shifts: applied.shifts,

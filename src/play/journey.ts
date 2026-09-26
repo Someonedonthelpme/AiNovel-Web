@@ -105,6 +105,12 @@ export function advanceJourneys(world: World, from: number, to: number): World {
   };
 }
 
+/** The step a traveller is taking now, toward wherever they last heard the player was (W5). */
+export function nextHopOf(world: World, j: Journey): { to: Spot; cost: number } | null {
+  const target = heardOf(world, j);
+  return target ? nextHop(world, j, target) : null;
+}
+
 /** The newest word of the player that the traveller or the bearer holds. */
 function heardOf(world: World, j: Journey): Spot | null {
   const mine = newestSighting(world.people[j.who]?.beliefs ?? [], PLAYER);
@@ -139,7 +145,7 @@ function walk(world: World, journey: Journey, target: Spot, budget: number): Jou
  * `ponytail: towers only — a sideways region (the outer world) is not walked yet;
  * add region adjacency when the outer world is built.`
  */
-function nextHop(world: World, j: Journey, target: Spot): { to: Spot; cost: number } | null {
+export function nextHop(world: World, j: Journey, target: Spot): { to: Spot; cost: number } | null {
   if (j.region === target.region) {
     const region = world.regions[j.region];
     if (!region || !isFull(region)) return null;

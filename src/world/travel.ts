@@ -1,8 +1,8 @@
 import { compressExcept } from './lod.ts';
-import type { Gazetteer, Link, PlaceId, Region, RegionId, World } from './types.ts';
+import type { Gazetteer, Link, PlaceId, PlaceKind, Region, RegionId, World } from './types.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { mulberry32 } from '../engine/roll.ts';
-import { isWinter, TICKS_PER_HOUR } from './calendar.ts';
+import { isWinter, MINUTES_PER_TICK, TICKS_PER_HOUR } from './calendar.ts';
 import { forbids, rulesOf } from '../rules/ruleset.ts';
 import type { Subject } from '../rules/ruleset.ts';
 import type { Law } from '../rules/ruleset.ts';
@@ -32,30 +32,47 @@ export function currentRegion(world: World): Region | Gazetteer | null {
 }
 
 /** The full record for the region the player is standing in. */
-/**
- * How much TIME it takes to cross between two places (DESIGN 6b stage 7.1a).
- *
- * Seeded on the world and the pair alone, and the same both ways, so the model
- * never decides a distance: it counts and keeps adjacency unreliably, the reason
- * 6c keeps maps out of its hands. Every character pays it, the player included.
- *
- * `ponytail: a flat 1..3 draw. Weight it by what the two places are when 6c
- * draws maps.`
- */
-export function linkCost(world: Pick<World, 'seed'>, a: PlaceId, b: PlaceId): number {
-  return 1 + Math.floor(pairDraw(world.seed, 0x71a, a, b) * 3);
-}
+/** Minutes each END of a link adds, by what the place is (DESIGN 6c §2, W1). */
+const KIND_MINUTES: Record<PlaceKind, number> = { settlement: 3, gate: 3, landmark: 5, dungeon: 7, wild: 9 };
 
 /**
- * How long crossing a link takes NOW (7.1e-v): its cost, and half as long again
- * in winter when either end is wild. What `linkCost` is to the map, this is to
- * the season. `region` is the one the link is in; the player's by default.
+ * How much a biome slows walking. `Region.biome` is free text the model wrote, so
+ * this matches words, and a biome it does not recognise is open ground (x1).
+ *
+ * `ponytail: keywords over prose. Replace with a closed terrain field on the
+ * region when W2 gives tiles a terrain.`
+ */
+const TERRAIN: [RegExp, number][] = [
+  [/\b(marsh|swamp|bog|fen|snow|ice|icy|frozen|mountain|peak|dune|sand)/i, 1.5],
+  [/\b(forest|wood|jungle|hill|ruin|cave)/i, 1.25],
+];
+
+/**
+ * How many MINUTES it takes to cross between two places (W1), before the season.
+ *
+ * Each end adds minutes by its kind, the seed adds 0 to 10, and the biome scales
+ * the sum: 6 to 42. The model never decides a distance: it counts and keeps
+ * adjacency unreliably, the reason 6c keeps maps out of its hands. The same both
+ * ways. A place the region does not hold weighs as a landmark, the middle, rather
+ * than throwing inside a fold.
+ */
+export function linkMinutes(world: World, a: PlaceId, b: PlaceId, region: Region | null = activeRegion(world)): number {
+  const end = (id: PlaceId) => KIND_MINUTES[region?.places.find((p) => p.id === id)?.kind ?? 'landmark'];
+  return Math.round((end(a) + end(b) + Math.floor(pairDraw(world.seed, 0x71a, a, b) * 11)) * terrainFactor(region?.biome ?? ''));
+}
+
+/** How much a biome slows walking: 1, 1.25 or 1.5. */
+export const terrainFactor = (biome: string): number => TERRAIN.find(([words]) => words.test(biome))?.[1] ?? 1;
+
+/**
+ * How long crossing a link takes NOW, in clock TICKS (7.1e-v): its minutes, half
+ * as long again in winter when either end is wild, rounded up to whole ticks.
+ * Every character pays it, the player and every journey alike. `region` is the
+ * one the link is in; the player's by default.
  */
 export function travelTime(world: World, a: PlaceId, b: PlaceId, region: Region | null = activeRegion(world)): number {
-  const base = linkCost(world, a, b);
-  if (!isWinter(world)) return base;
-  const wild = region?.places.some((p) => (p.id === a || p.id === b) && p.kind === 'wild') ?? false;
-  return wild ? Math.ceil(base * 1.5) : base;
+  const wild = isWinter(world) && (region?.places.some((p) => (p.id === a || p.id === b) && p.kind === 'wild') ?? false);
+  return Math.ceil((wild ? 1.5 : 1) * linkMinutes(world, a, b, region) / MINUTES_PER_TICK);
 }
 
 /**
@@ -67,7 +84,7 @@ export function stairCost(world: Pick<World, 'seed'>, a: RegionId, b: RegionId):
 }
 
 /** A draw in [0, 1) for an unordered pair, so both directions agree. */
-function pairDraw(seed: number, salt: number, a: string, b: string): number {
+export function pairDraw(seed: number, salt: number, a: string, b: string): number {
   const pair = a < b ? `${a}|${b}` : `${b}|${a}`;
   let hash = (seed ^ salt) >>> 0;
   for (const ch of pair) hash = (Math.imul(hash, 31) + ch.charCodeAt(0)) >>> 0;
@@ -276,8 +293,13 @@ const plain = (name: string) => name.trim().toLowerCase().replace(/^the\s+/, '')
  * signposted from where you have been — and the route is the fewest steps along
  * the place graph. Null sends the turn to the Director as before, so "go to
  * sleep" is still speech and a place you cannot know of is never guessed at.
+ *
+ * `ends` are the two places of the field you are standing on, if you are on one
+ * (W4). Either may be named, INCLUDING the one you set out from — stopped on the
+ * road at nightfall, "go to Ashfall" means turn back, and refusing it sent the
+ * turn to the Director.
  */
-export function walkRoute(world: World, input: string): PlaceId[] | null {
+export function walkRoute(world: World, input: string, ends: readonly PlaceId[] = []): PlaceId[] | null {
   const said = WALK.exec(input)?.[1];
   const region = activeRegion(world);
   if (!said || !region) return null;
@@ -301,10 +323,11 @@ export function walkRoute(world: World, input: string): PlaceId[] | null {
   // way up). A name never means where you stand; of the rest the NEAREST, and on
   // a tie the one you have not been to — you have just come from the other.
   const target = region.places
-    .filter((p) => p.id !== world.currentPlace && steps.has(p.id)
+    .filter((p) => (p.id !== world.currentPlace || ends.includes(p.id)) && steps.has(p.id)
       && (p.discovered || known.has(p.id)) && (plain(p.name) === plain(said) || p.id === said.trim()))
     .sort((a, b) => steps.get(a.id)! - steps.get(b.id)! || Number(a.discovered) - Number(b.discovered))[0];
   if (!target) return null;
+  if (target.id === world.currentPlace) return [target.id];
   const route: PlaceId[] = [];
   for (let at: PlaceId | undefined = target.id; at && at !== world.currentPlace; at = from.get(at)) route.unshift(at);
   return route;

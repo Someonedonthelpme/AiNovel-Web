@@ -93,28 +93,32 @@ export function occupancyFor(combatants: Combatant[], moverSide: string): Occupa
 }
 
 /**
- * Every square reachable within `budget` movement, with its cost. Breadth-first
- * because every step costs exactly 1.
+ * Every square reachable within `budget` movement, with its cost.
+ *
+ * A step costs 1, or 2 onto DIFFICULT ground (W7) — so this walks cheapest-first
+ * rather than breadth-first, or a square reached the long way round on open
+ * ground would be recorded at the price of the short way through a marsh.
  */
 export function reachable(grid: Grid, from: Vec, budget: number, occ: Occupancy): Map<string, number> {
   const costs = new Map<string, number>([[cellKey(from), 0]]);
-  let frontier: Vec[] = [from];
+  // Budgets are a handful of squares, so a bucket per cost is plenty.
+  const buckets: Vec[][] = Array.from({ length: budget + 1 }, () => []);
+  buckets[0].push(from);
 
-  for (let step = 1; step <= budget; step++) {
-    const next: Vec[] = [];
-    for (const cell of frontier) {
+  for (let spent = 0; spent <= budget; spent++) {
+    for (const cell of buckets[spent]) {
+      if ((costs.get(cellKey(cell)) ?? Infinity) < spent) continue;
       for (const d of NEIGHBOURS) {
         const to = { x: cell.x + d.x, y: cell.y + d.y };
         const key = cellKey(to);
-        if (costs.has(key)) continue;
         if (!passable(grid, to)) continue;
         if (occ.blocksPassage(to)) continue;
-        costs.set(key, step);
-        next.push(to);
+        const next = spent + (grid.rough?.has(key) ? 2 : 1);
+        if (next > budget || (costs.get(key) ?? Infinity) <= next) continue;
+        costs.set(key, next);
+        buckets[next].push(to);
       }
     }
-    if (next.length === 0) break;
-    frontier = next;
   }
 
   costs.delete(cellKey(from));

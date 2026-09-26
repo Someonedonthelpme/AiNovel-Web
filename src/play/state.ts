@@ -61,10 +61,12 @@ export type WorldDelta = {
   /** Must be an edge from where the player stands. */
   moveTo?: string;
   /**
-   * A typed "go to X", walked by the ENGINE: every place passed through, in
-   * order (`walkRoute`). Never proposed by the model — `validateDelta` refuses it.
+   * A typed "go to X", walked by the ENGINE across the maps (W3) and recorded
+   * where it STOPPED and what it cost, so a replay never pathfinds and the log
+   * never depends on tiles. `through` is every place entered, in order. Never
+   * proposed by the model — `validateDelta` refuses it.
    */
-  walk?: string[];
+  walkTo?: WalkTo;
   /** New canon, embedded for later retrieval by the guard. */
   learnFacts?: string[];
   /** Per-person trust CHANGES, not absolutes. */
@@ -144,7 +146,23 @@ export type WorldDelta = {
    * the difficulty curve actually lives.
    */
   rest?: 'short' | 'long';
+  /**
+   * Work a workstation the player stands at, for this turn's labour (DESIGN 6c
+   * §3h). The model names WHICH workstation on WHICH building; the engine runs
+   * its own stored method for however many hours a turn counts as — never a
+   * duration the model invents, the same line `useItem` draws.
+   */
+  runWorkstation?: { building: string; workstation: string };
 };
+
+/** Why a walk stopped (W3). Closed. */
+export const STOPS = ['arrived', 'nightfall', 'hungry', 'weary', 'encounter', 'sighted'] as const;
+export type Stop = (typeof STOPS)[number];
+/**
+ * `met` is who came into view on the road (W5) — recorded, because the fold holds
+ * no tiles and must still open the fight the sighting opened.
+ */
+export type WalkTo = { map: string; x: number; y: number; seconds: number; through: string[]; stop: Stop; met?: string };
 
 export type TurnRecord = {
   kind: 'turn';
@@ -159,6 +177,11 @@ export type TurnRecord = {
   /** What the Director asked for and was refused, with reasons. */
   rejected: string[];
   prose: string;
+  /**
+   * The ground the fight was fought on (W7): a window of the map, recorded like
+   * a climb records the floor it built, because the fold holds no tiles.
+   */
+  arena?: { x0: number; y0: number; rows: string[] };
   /**
    * The choices made in a fight this turn, if one broke out.
    *

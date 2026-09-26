@@ -1,4 +1,6 @@
 import { hashText, mulberry32 } from '../engine/roll.ts';
+import { CAPS, tierOf } from '../world/settlement.ts';
+import type { World } from '../world/types.ts';
 import { packAt } from './habitat.ts';
 import { leavesUnder } from './species.ts';
 import type { Species } from './species.ts';
@@ -107,7 +109,27 @@ export function populationAt(
   if (!group) return null;
 
   const stored = world.populations?.[place] ?? world.populations?.[aggregateKey(region)];
-  return stored ?? derivePopulation(world.seed, kinds, group, place, floor);
+  return cappedByTier(world as World, region, place, stored ?? derivePopulation(world.seed, kinds, group, place, floor));
+}
+
+/**
+ * A settlement fields no more bodies than it grew big enough to hold (DESIGN 6c
+ * §3c-ii). The SOULS a place claims follow the real curve; this is the other
+ * number — what the engine actually walks past and fights. Cohorts are trimmed
+ * from the last, so the crowd thins evenly rather than losing a whole lineage.
+ */
+function cappedByTier(world: World, region: string, place: string, cohorts: Cohort[]): Cohort[] {
+  const tier = tierOf(world, region, place);
+  if (!tier) return cohorts;
+  const cap = CAPS[tier].crowd;
+  const kept: Cohort[] = [];
+  let left = cap;
+  for (const cohort of cohorts) {
+    if (left <= 0) break;
+    kept.push(cohort.size <= left ? cohort : { ...cohort, size: left });
+    left -= Math.min(cohort.size, left);
+  }
+  return kept;
 }
 
 /** How many live there, all lineages and trades together. */

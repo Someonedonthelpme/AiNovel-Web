@@ -8,6 +8,13 @@ import { describeChanges } from '../character/drift.ts';
 import { pgFactRetriever } from '../db/facts.ts';
 import { bootstrap } from '../db/db.ts';
 import { appendTurn, createSession, loadEvents, loadSession, saveSnapshot, shouldSnapshot } from '../db/sessions.ts';
+import { mapFor } from '../db/maps.ts';
+import { drawMap, positionOf } from '../world/map.ts';
+import { gridOf } from './grid.ts';
+import { peopleHere } from '../play/onroad.ts';
+import type { GridView } from './grid.ts';
+import { floorMapOf, minimapOf, towerOf } from './views.ts';
+import type { FloorMapView, MinimapView, TowerView } from './views.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { SocialRoll } from '../engine/roll.ts';
 import { LOCAL_MODELS } from '../llm/local.ts';
@@ -21,7 +28,7 @@ import { traitOriginOf, traitsFor } from '../play/traitbook.ts';
 import { isEmergent } from '../play/emergent.ts';
 import { visibleSignets } from '../play/signet.ts';
 import { signetsFor } from '../play/signetbook.ts';
-import { climb, exitStatus, travelTo } from '../play/climb.ts';
+import { climb, exitStatus, godown, travelTo } from '../play/climb.ts';
 import {
   awaitingPlayer, combatOptions, fightOpen, notableEvents, takeCombatAction,
 } from '../play/combat.ts';
@@ -29,7 +36,7 @@ import { settleFight } from '../play/delta.ts';
 import type { CombatAction } from '../play/combat.ts';
 import { initialPlayState } from '../play/state.ts';
 import type { Mode, PlayState, TurnRecord } from '../play/state.ts';
-import { hearParley, playTurn, suggestedActions } from '../play/turn.ts';
+import { hearParley, playTurn, suggestedActions, walkTile } from '../play/turn.ts';
 import { runGenesis } from '../session/genesis.ts';
 import type { PresetName } from '../rules/ruleset.ts';
 import type { SpeciesChoice } from '../character/species.ts';
@@ -51,7 +58,6 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Item } from '../items/types.ts';
 import { boardOf, findHolding, isContainer, placementsIn, spaceIn } from '../items/types.ts';
 import type { Holding, Inventory } from '../items/types.ts';
-import { layoutRegion, mapEdges } from '../world/layout.ts';
 import { activeRegion } from '../world/travel.ts';
 
 /**
@@ -67,17 +73,6 @@ export const provider = () => new LocalProvider(LOCAL_MODELS.writer);
 /* The shape the browser receives                                              */
 /* -------------------------------------------------------------------------- */
 
-export type MapNode = {
-  id: string;
-  name: string;
-  kind: string;
-  /** Undiscovered neighbours are drawn as unknowns rather than hidden. */
-  known: boolean;
-  current: boolean;
-  reachable: boolean;
-  x: number;
-  y: number;
-};
 
 export type PersonView = {
   id: string;
@@ -242,11 +237,16 @@ export type GameView = {
   signets: { id: string; name: string; description: string; held: boolean; available: boolean; augments: string }[];
   region: { floor: number; name: string; biome: string; danger: number };
   place: { id: string; name: string; description: string; affordances: string[] };
-  map: { nodes: MapNode[]; edges: { from: string; to: string }[] };
+  /** The floor map: discovered places only, and view-only (W4b). */
+  map: FloorMapView;
+  /** The centre view: a window of the map you stand on, and its doors (W4a). */
+  grid: GridView | null;
+  /** The whole map you stand on, shrunk (W4b). */
+  minimap: MinimapView | null;
+  tower: TowerView;
   people: PersonView[];
   suggestions: string[];
   canClimb: boolean;
-  canDescend: boolean;
   /**
    * The ways out that are not stairs, for a world that is not a stack.
    *
@@ -290,28 +290,23 @@ function combatViewOf(state: PlayState, log: string[]): CombatView | null {
   };
 }
 
-function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], combatLog: string[] = []): GameView {
+/**
+ * The view, with the centre grid drawn from the session's STORED map — the one a
+ * walk crosses — so what is shown and what is walked cannot disagree. Looking at
+ * a map is entering it, so this stores it the first time.
+ */
+async function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], combatLog: string[] = []): Promise<GameView> {
+  const view = baseViewOf(id, state, transcript, combatLog);
+  if (!activeRegion(state.world)) return view;
+  const at = positionOf(state.world);
+  const map = await mapFor(id, at.map, () => drawMap(state.world, at.map));
+  return { ...view, grid: gridOf(state, map), minimap: minimapOf(state, map) };
+}
+
+function baseViewOf(id: string, state: PlayState, transcript: TranscriptEntry[], combatLog: string[] = []): GameView {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
   const d = derive(state.sheet, state.pc.inventory);
-  const here = new Set(place?.connections ?? []);
-
-  const positions = new Map(region ? layoutRegion(region).map((p) => [p.id, p]) : []);
-  const nodes: MapNode[] = (region?.places ?? []).map((p) => {
-    const pos = positions.get(p.id);
-    const known = p.discovered || p.id === state.world.currentPlace || here.has(p.id);
-    return {
-      id: p.id,
-      // A place you have not been to yet is a shape on the map, not a name.
-      name: known ? p.name : '?',
-      kind: p.kind,
-      known,
-      current: p.id === state.world.currentPlace,
-      reachable: here.has(p.id),
-      x: pos?.x ?? 50,
-      y: pos?.y ?? 50,
-    };
-  });
 
   const exits = exitStatus(state);
 
@@ -370,9 +365,13 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
       description: place?.description ?? '',
       affordances: place?.affordances ?? [],
     },
-    map: { nodes, edges: region ? mapEdges(region) : [] },
-    people: (place?.people ?? [])
-      .map((pid) => state.world.people[pid])
+    map: floorMapOf(state),
+    grid: null,
+    minimap: null,
+    tower: towerOf(state),
+    // Out on a field this is who is in VIEW on it, not the people of the place
+    // you set out from (W5).
+    people: peopleHere(state)
       .filter((p): p is NonNullable<typeof p> => Boolean(p) && p.alive)
       .map((p) => ({
         id: p.id,
@@ -388,7 +387,6 @@ function viewOf(id: string, state: PlayState, transcript: TranscriptEntry[], com
     signets: signetsViewOf(state),
     suggestions: suggestedActions(state),
     canClimb: exits.canClimb,
-    canDescend: exits.canDescend,
     ways: (activeRegion(state.world)?.exits ?? []).map((l) => ({
       to: l.to,
       via: l.via,
@@ -514,11 +512,11 @@ export async function getGame(id: string): Promise<GameView | null> {
   // when it resolves. Without this, reloading the page mid-fight would drop the
   // player back into the scene with the encounter invisibly still running.
   const fight = fights.get(id);
-  if (fight) return viewOf(id, fight.state, await transcriptOf(id), fight.log);
+  if (fight) return await viewOf(id, fight.state, await transcriptOf(id), fight.log);
 
   const loaded = await loadSession(id);
   if (!loaded) return null;
-  return viewOf(id, loaded.state, await transcriptOf(id));
+  return await viewOf(id, loaded.state, await transcriptOf(id));
 }
 
 export type TurnOutcomeView = {
@@ -545,6 +543,8 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
       writer: provider(),
       rng: mulberry32(state.world.seed + state.world.turn),
       retrieveFacts: pgFactRetriever(id),
+      // A map is stored the first time a walk crosses it, and never redrawn (W2).
+      mapOf: (map) => mapFor(id, map, () => drawMap(state.world, map)),
     },
     state,
     input,
@@ -557,7 +557,7 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
   if (fightOpen(result.state)) {
     fights.set(id, { pre: state, state: result.state, draft: result.record, actions: [], log: [] });
     return {
-      view: viewOf(id, result.state, await transcriptOf(id), []),
+      view: await viewOf(id, result.state, await transcriptOf(id), []),
       prose: result.record.prose,
       roll: result.record.roll,
       shifts: describeChanges(result.shifts),
@@ -570,13 +570,58 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
   if (shouldSnapshot(seq)) await saveSnapshot(id, result.state);
 
   return {
-    view: viewOf(id, result.state, await transcriptOf(id)),
+    view: await viewOf(id, result.state, await transcriptOf(id)),
     prose: result.record.prose,
     roll: result.record.roll,
     shifts: describeChanges(result.shifts),
     rejected: result.rejected,
     registerFailed: result.writer.checks.filter((c) => !c.check.ok).map((c) => c.person),
   };
+}
+
+export type WalkOutcomeView = { view: GameView; error: string | null; prose: string; arrived: string | null };
+
+/**
+ * A click on the map (W4a): walk there, and if it was a stair or a way out, take
+ * it. The walk is logged first, as its own turn, so a climb that fails still
+ * leaves you standing on the stair. A traveller met on the way holds the fight
+ * open exactly as a typed turn does.
+ */
+export async function walkOnMap(id: string, target: { map: string; x: number; y: number }): Promise<WalkOutcomeView | null> {
+  await bootstrap();
+  const fight = fights.get(id);
+  if (fight) return { view: await viewOf(id, fight.state, await transcriptOf(id), fight.log), error: 'not while fighting', prose: '', arrived: null };
+  const loaded = await loadSession(id);
+  if (!loaded) return null;
+  const state = loaded.state;
+
+  const result = await walkTile(
+    {
+      director: provider(),
+      writer: provider(),
+      rng: mulberry32(state.world.seed + state.world.turn),
+      mapOf: (map) => mapFor(id, map, () => drawMap(state.world, map)),
+    },
+    state,
+    target,
+  );
+  if (result.error || !result.record) {
+    return { view: await viewOf(id, state, await transcriptOf(id)), error: result.error, prose: '', arrived: null };
+  }
+  if (fightOpen(result.state)) {
+    fights.set(id, { pre: state, state: result.state, draft: result.record, actions: [], log: [] });
+    return { view: await viewOf(id, result.state, await transcriptOf(id), []), error: null, prose: result.record.prose, arrived: null };
+  }
+  const seq = await appendTurn(id, result.record);
+  if (shouldSnapshot(seq)) await saveSnapshot(id, result.state);
+
+  if (result.then) {
+    const crossed = 'travel' in result.then
+      ? await climbFloor(id, result.then.travel)
+      : await climbFloor(id, undefined, result.then.climb === 'down');
+    if (crossed) return { view: crossed.view, error: crossed.error, prose: result.record.prose, arrived: crossed.arrived };
+  }
+  return { view: await viewOf(id, result.state, await transcriptOf(id)), error: null, prose: result.record.prose, arrived: null };
 }
 
 export type ClimbOutcomeView = { view: GameView; error: string | null; arrived: string | null };
@@ -618,6 +663,21 @@ export const loopBandOf = (raw: unknown): boolean => bandOf('loop', raw);
 /** Whether the client asked for an era band (floors 21–30), checked the same way. */
 export const eraBandOf = (raw: unknown): boolean => bandOf('era', raw);
 
+/** A click on the map, checked at the edge (W4a): a map id and two whole numbers, or refused. */
+export function walkTarget(text: string): { target?: { map: string; x: number; y: number }; error?: string } {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return { error: `malformed walk request: ${text.slice(0, 80)}` };
+  }
+  const { map, x, y } = (body ?? {}) as { map?: unknown; x?: unknown; y?: unknown };
+  if (typeof map !== 'string' || !map || !Number.isInteger(x) || !Number.isInteger(y)) {
+    return { error: `a walk needs { map, x, y } with whole-number x and y, got ${text.slice(0, 80)}` };
+  }
+  return { target: { map, x: x as number, y: y as number } };
+}
+
 export function climbTarget(text: string): { to?: string; error?: string } {
   let body: unknown = {};
   try {
@@ -635,14 +695,15 @@ export function climbTarget(text: string): { to?: string; error?: string } {
  * `to` names a way out that is not a stair; without it this is the stair up,
  * which is what every world had before regions could be anything but a stack.
  */
-export async function climbFloor(id: string, to?: string): Promise<ClimbOutcomeView | null> {
+export async function climbFloor(id: string, to?: string, down = false): Promise<ClimbOutcomeView | null> {
   await bootstrap();
   const loaded = await loadSession(id);
   if (!loaded) return null;
 
-  const result = to ? await travelTo(provider(), loaded.state, to) : await climb(provider(), loaded.state);
+  const result = to ? await travelTo(provider(), loaded.state, to)
+    : down ? await godown(provider(), loaded.state) : await climb(provider(), loaded.state);
   if (result.error || !result.record) {
-    return { view: viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, arrived: null };
+    return { view: await viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, arrived: null };
   }
 
   // The crossing goes in the log, carrying the floor that was generated to make
@@ -652,7 +713,7 @@ export async function climbFloor(id: string, to?: string): Promise<ClimbOutcomeV
   await saveSnapshot(id, result.state);
   const region = activeRegion(result.state.world);
   return {
-    view: viewOf(id, result.state, await transcriptOf(id)),
+    view: await viewOf(id, result.state, await transcriptOf(id)),
     error: null,
     arrived: region ? `${region.name} — ${region.biome}` : null,
   };
@@ -697,7 +758,7 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   const step = takeCombatAction(fight.state, action);
   if (step.error) {
     return {
-      view: viewOf(id, fight.state, await transcriptOf(id), fight.log),
+      view: await viewOf(id, fight.state, await transcriptOf(id), fight.log),
       error: step.error,
       finished: false,
     };
@@ -709,7 +770,7 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
 
   if (fightOpen(fight.state)) {
     fights.set(id, fight);
-    return { view: viewOf(id, fight.state, await transcriptOf(id), fight.log), error: null, finished: false };
+    return { view: await viewOf(id, fight.state, await transcriptOf(id), fight.log), error: null, finished: false };
   }
 
   // Over. Fold the consequences out, write the turn, and forget the encounter.
@@ -730,7 +791,7 @@ export async function actInCombat(id: string, action: CombatAction): Promise<Com
   ];
   void seq;
 
-  return { view: viewOf(id, settled.state, await transcriptOf(id)), error: null, finished: true, closing: tail };
+  return { view: await viewOf(id, settled.state, await transcriptOf(id)), error: null, finished: true, closing: tail };
 }
 
 /** Whether a fight is waiting on the player, e.g. after a page reload. */
@@ -996,7 +1057,7 @@ export async function actOnSheet(id: string, action: SheetAction): Promise<Sheet
   const fight = fights.get(id);
   if (fight) {
     return {
-      view: viewOf(id, fight.state, await transcriptOf(id), fight.log),
+      view: await viewOf(id, fight.state, await transcriptOf(id), fight.log),
       error: 'not in the middle of a fight',
       note: null,
     };
@@ -1007,13 +1068,13 @@ export async function actOnSheet(id: string, action: SheetAction): Promise<Sheet
 
   const result = applySheetAction(loaded.state, action);
   if (result.error) {
-    return { view: viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, note: null };
+    return { view: await viewOf(id, loaded.state, await transcriptOf(id)), error: result.error, note: null };
   }
 
   const seq = await appendTurn(id, sheetRecord(action));
   if (shouldSnapshot(seq)) await saveSnapshot(id, result.state);
 
-  return { view: viewOf(id, result.state, await transcriptOf(id)), error: null, note: result.note };
+  return { view: await viewOf(id, result.state, await transcriptOf(id)), error: null, note: result.note };
 }
 
 

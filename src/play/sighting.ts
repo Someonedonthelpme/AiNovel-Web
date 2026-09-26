@@ -3,6 +3,7 @@ import type { Belief, Claim } from '../character/belief.ts';
 import { PLAYER, reachedBy, regardedBy } from '../social/edge.ts';
 import { activeRegion, clockOf } from '../world/travel.ts';
 import { isNight } from '../world/calendar.ts';
+import { fieldEnds, positionOf } from '../world/map.ts';
 import { groupOf, speciesIdFor } from '../character/species.ts';
 import { habitOf } from '../character/habitat.ts';
 import { stationOf } from './station.ts';
@@ -52,7 +53,11 @@ export function hearOf(beliefs: readonly Belief[], belief: Belief): Belief[] {
  * Director and the Writer read this too. In the place's own order, arrivals last.
  */
 export function presentHere(world: World): string[] {
-  const place = activeRegion(world)?.places.find((p) => p.id === world.currentPlace);
+  // OUT ON THE ROAD (W5): the people of the place you set out from are a road
+  // behind you. Only somebody who has come to where you are is with you — which
+  // is what a meeting on a field records. Kept free of tiles: the fold reads this.
+  const onRoad = fieldEnds(positionOf(world).map) !== null;
+  const place = onRoad ? undefined : activeRegion(world)?.places.find((p) => p.id === world.currentPlace);
   const journeys = world.journeys ?? [];
   const isHere = (j: { region: string; place: string | null }) =>
     j.region === world.currentRegion && j.place === world.currentPlace;

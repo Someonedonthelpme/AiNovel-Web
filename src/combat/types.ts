@@ -200,6 +200,8 @@ export type Grid = {
   width: number;
   height: number;
   walls: ReadonlySet<string>;
+  /** Difficult ground (W7): entering one of these costs two of your movement. */
+  rough?: ReadonlySet<string>;
 };
 
 export const ADVANTAGE = ['none', 'advantage', 'disadvantage'] as const;

@@ -21,7 +21,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 5 | The inventory rework | **shipped** | `items/shape.ts`, `items/parts.ts`, `items/refine.ts`; the last eight commits |
 | 6 | World rules and strata | **shipped, less two** | five constraints across all four axes with real checkers; `forbids` per subject; Signets exempt (`Signet.exempts`); amendments as logged events (`WorldDelta.amendLaw`); the stratum layer — nesting, theme, loot, frozen floors, sub-strata a floor can open; depth split from adjacency, so a world can be a graph. **Left:** `crossFloors` has no enforcer and per-NPC rule knowledge no writer — both need NPC movement (step 8). No `story` kind, no `topology` knob (see ARCHITECTURE §14 for why) |
 | 6b | Enemies after victory | **in progress** (user's call, 2026-09-11) | stage 0 fixed; stages 1–2 and 3a–3n-ii shipped; anchor plus delta 2026-09-13; 3o prerequisites 1–2 shipped, **the rest of 3o deferred until step 9 (companions)**; stage 4 (bosses, no mutation) shipped 2026-09-14; stage 5 (grudges come for you) shipped 2026-09-14; stage 6 (defeat is not death, without capture) shipped 2026-09-15; stage 7 (survivors) shipped 2026-09-17; stages 7.1a–d (link costs and clock, journeys, sightings, who goes) shipped 2026-09-17; 7.1e (time and the calendar) and 7.1f (grudges fade) shipped 2026-09-17 — 7.1 complete; stage 8 (parley) shipped 2026-09-18 — **6b complete except 3o**; next is 6c; re-planned 2026-09-12 (four-level taxonomy, group mechanics, species skills, NO mass foes — every foe is a character); design in [Enemies after victory](#enemies-after-victory--decided-not-built) |
-| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
+| 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 and W7 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`, `53067fd`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
 | 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
@@ -679,7 +679,7 @@ after any that touches a fight):
    trade it fled from.
    **7.1c SHIPPED 2026-09-17** — sightings (`play/sighting.ts`, a `sighting` claim): a
    journey heads for the newest word of the player.
-   **7.1a SHIPPED 2026-09-17** — link costs (`world/travel.ts` `linkCost`) and the
+   **7.1a SHIPPED 2026-09-17** — link costs (`world/travel.ts` `linkCost`, replaced by `linkMinutes` in W1) and the
    world clock (`World.clock`, read through `clockOf`). A move wears you by the
    time its link took. Documentation waits for the whole of 7.1.
    **Proposed split, since this is now five mechanisms:** 7.1a link costs and a
@@ -887,8 +887,8 @@ matters still happens at a stop, turn by turn, in text.
 **Decided with the user, 2026-09-19:**
 - **Walk, don't click nodes.** No movement by clicking a place on a map.
 - **Travel time shapes the route.** A link's travel time is the INPUT that says how
-  long and how winding its route is — the inverse of today's `linkCost`, a flat 1–3
-  tick draw that is an output (`world/travel.ts:45`).
+  long and how winding its route is — the inverse of the old `linkCost`, a flat 1–3
+  tick draw that was an output. (Done in W1: `linkMinutes`, `routeOf`.)
 - **Route model C: a link is a FIELD map.** Places are HUB maps; each link between
   them is a field map between two portals — Ragnarok's towns and fields.
 - **A tile is 1.5 m** — D&D's five feet. Combat already counts in those units (base
@@ -903,8 +903,11 @@ to revisit):
   snapshot or the event log. About 40 KB raw for a 200×200 hub (estimated, not
   measured). A WALK event records where it stopped and what it cost, so replay never
   re-runs pathfinding and the log does not depend on tiles.
-- **Map kinds, closed:** `hub | field | interior | dungeon`. A stratum WING stays a
-  range of floors; a dungeon map is one place's rooms and corridors.
+- **Map kinds, closed:** `hub | field | interior`. A stratum WING stays a range of
+  floors. **`dungeon` dropped 2026-09-25** — a dungeon is a large Building whose
+  storeys go down instead of up; it was a fourth kind here while §2a's own storey
+  rule (*"cellars and dungeon levels the same"*) already treated it as an interior.
+  One mechanism, not two disagreeing ones.
 - **Scale follows the tile:** about one tile a second walking, so a 10–30 minute link
   is a 600–1,800 tile route. The player sees a scrolling window (~40×25 tiles);
   maps are generated and pathfound in chunks; walking animates fast on screen while
@@ -913,8 +916,8 @@ to revisit):
 - **The route from the time budget:** the best path costs exactly the link's time, so
   NPC journeys — which never walk tiles — stay consistent; wandering costs more. Slack
   between the straight line and the budget is spent on obstacles. Terrain has a cost
-  per tile (marsh, snow), which is where winter's +50% moves. `linkCost` gets finer
-  grain, weighted by the two places' kinds and the biome — its own `ponytail:`.
+  per tile (marsh, snow), which is where winter's +50% moves. The link's time gets finer
+  grain, weighted by the two places' kinds and the biome (done in W1).
 - **The engine loop while walking never calls the model.** It pathfinds, charges time
   per tile, and every tick runs what the clock already drives (needs, journeys,
   sightings, night). It STOPS on arrival, a portal, someone in view, an encounter, a
@@ -936,11 +939,11 @@ to revisit):
 
 | layer | type | what it is |
 |---|---|---|
-| space | **Map** | tiles with terrain; `hub \| field \| interior \| dungeon` |
+| space | **Map** | tiles with terrain; `hub \| field \| interior` |
 | space | **Zone** | a named or functional area of a map: a district, a plot, a room, a field |
 | space | **Portal** | a door, a stair, a map edge |
 | built | **Building** | a footprint on a zone; storeys, each an interior map; a TYPE from a closed catalogue; tier, condition, owner |
-| things | **Feature** | furniture, workstations, containers, doors, resource nodes, light, traps — each with state |
+| things | **Feature** | `kind`, closed (§3g): `furniture \| workstation \| container \| resource node` — each with state |
 | things | **Ground item** | item instances lying on a tile (the existing namespaced instances) |
 | living | **Actor** | named people and creatures: a position and a routine; crowds stay pooled (§5) |
 | identity | **Place** | the graph node (§3's province): name, holder, crowd, its hub map |
@@ -982,17 +985,185 @@ compression, which §4 needs.
 
 | stage | what | depends on | done means |
 |---|---|---|---|
-| W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed |
-| W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change |
-| W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding |
-| W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing |
-| W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field |
-| W6 | era bands share a map seed; loop reset clears overlays | W2 | two era floors of a band have the same ground |
-| W7 | combat on a window of the map; re-measure balance (`npm run fight`) | W3, W4 | the balance chart re-pinned |
+| W1 | travel time in minutes, weighted by kind and biome; `routeOf(a, b)` sized to the budget | — | a route's best-path cost equals its link's time, both ways, from the seed — **SHIPPED 2026-09-19** (`d9ed7b3`) |
+| W2 | the engine draws hub and field maps: terrain, obstacles carved to the slack, portals; stored on first entry | W1 | a map drawn twice is identical; a stored map survives a generator change — **SHIPPED 2026-09-19** (`07207b3`) |
+| W3 | position `{map, x, y}`, the walk event, the per-tick loop, stop conditions, the Director on stops | W2 | a walk replays to the same stop without pathfinding — **SHIPPED 2026-09-19** (`205c1bb`), the Director on stops deferred to W5 |
+| W4 | the centre grid view; the minimap, floor map and tower view | W3 | a player crosses a floor without typing — **split 2026-09-19 (user):** W4a, the centre grid, click-walking, doors and stairs, **SHIPPED** (`79be367`, verified live in session `2ffdec3b`); W4b, the minimap, floor map and tower view, **SHIPPED** (`4662106`, verified live) |
+| W5 | fields populated: crowds from both ends, journeys as figures, sightings in view | W3 | a grudge on the road is MET on a field — **SHIPPED 2026-09-20** (`b46586a`) |
+| W6 | era bands share a map seed; ~~loop reset clears overlays~~ (moved, below) | W2 | two era floors of a band have the same ground |
+| W7 | combat on a window of the map; ~~re-measure balance~~ (deferred, see the standing rule below) | W3, W4 | a fight is fought on the ground you stand on, and replays from its record — **SHIPPED 2026-09-20** (`53067fd`) |
 | W8 | zones, buildings and interiors in towns | W2 | a town's smithy is where its smith works |
 
 W1–W3 change no UI and each is testable alone; stopping after W3 still leaves real
 distances and a walk the model cannot refuse.
+
+**W1 as built (2026-09-19), and what it leaves for W2.** A link is 6–42 minutes:
+each end adds 3 (settlement, gate), 5 (landmark), 7 (dungeon) or 9 (wild), the
+seed adds 0–10, and the biome scales the sum ×1 / ×1.25 / ×1.5 by KEYWORD
+(`Region.biome` is free text; an unknown word is open ground) — a `ponytail:` until
+W2 gives tiles a closed terrain. The clock stays in 10-minute ticks: a link is
+charged `ceil(minutes / 10)`, so a 12-minute link reads 20 on the clock; moving the
+clock to minutes or seconds belongs to W3, which charges per tile. `routeOf` is
+blind to the season (winter stays in `travelTime` until tiles carry cost). As first
+built its shape was a SAWTOOTH — short vertical legs over a one-tile column — which
+could not be widened into a field without its legs merging; **W2 replaced it**:
+`routeOf` is now the best path across the drawn field. **Old sessions are not kept
+compatible** (user, 2026-09-19: still development): a session replayed without its
+snapshots re-derives its clock with the new link times.
+
+**W2 as built (2026-09-19), and what it leaves for W3.** Tiles: `.` open (1 s to
+enter), `,` rough (2 s), `#` wall; eight-way, like combat. A FIELD is a band five
+tiles wide around a square-wave centreline (legs six columns apart, one wall
+column between neighbours), ending on a straight run. Walking cuts the corners, so
+the band is measured with the walking pathfinder and the straight run takes up the
+difference — past its first tiles each one adds exactly a second — which makes the
+best path exact; rough ground the best path crossed is trodden open, so that path is
+one tile a second. Rough share is 5% / 20% / 35% by biome (W1's keywords). A HUB is
+a union of ellipses about one centre, radius by kind (settlement 24, wild 18,
+landmark and dungeon 14, gate 10): under a minute across. **Portals are not stored**:
+read off the place graph on every read, each at a bearing dealt from the seed, the
+place and its target, so a way `revealWay` adds after the hub was stored still gets
+a door and no other door moves. Maps live in their own `maps` table, one row per
+session and map, drawn on first ask by `mapFor` and never redrawn. **Not built:**
+nothing calls `mapFor` yet (W3 wires it into moves); side branches; a larger-scale
+wind (a field reads as a serpentine with one-tile walls, not open country — revisit
+when W4 shows one); two doors dealt the same bearing share a tile (**fixed in W4a**: on the stair hub a field door and the stair up shared one, so a click on the stair walked onto the field — each door now takes the first free edge tile from its bearing, placed links first and revealable ways last); interiors and
+dungeon maps. **For W3, answered (user, 2026-09-19, in W3's approved batch):** crossing
+a hub costs its seconds like any tile. Claude first said no, to keep journeys and the
+player equal; reversed because journeys already pay `ceil(minutes / 10)` ticks per
+link — up to ten minutes MORE than the player — which dwarfs a sub-minute hub.
+
+**W3 as built (2026-09-19), and what it leaves.** A typed "go to X" is walked by
+`walkAlong` (`play/walker.ts`): from where you stand, through each hub (door to door)
+and field (end to end), arriving on the door of X's hub; portals on the way do not
+stop it. Each tile is charged its seconds; at each tick crossed it stops on the FIRST
+of — a traveller arriving (`encounter`, the fight opens), food or rest falling to 3
+(`hungry`, `weary`, predicted with the fold's own drain), or night beginning while on
+a field or a wild or dungeon hub (`nightfall`). The record is `delta.walkTo` —
+where it stopped, the seconds, the places entered — and the fold applies exactly
+that, never a tile; `delta.walk` is gone. `World.at` is your tile (absent: the centre
+of your place's hub), `World.second` carries seconds inside the ten-minute tick. On a
+field you are still AT the place you left, for everything that reads it. A move the
+Director makes and a climb clear `at` — by REMOVING the key, since a snapshot is JSON
+and drops an undefined one (the snapshot test caught it). The server stores each map
+on the first walk across it (`mapFor`). **Not built:** the Director on stops (no stop
+needs it until W5 puts people in view); stopping on or walking onto a stair (still
+climbed by command, W4); the Director's `moveTo` still exists and is charged in
+ticks; journeys still round up to whole ticks per link; resuming a walk stopped on a
+field toward the place you left is refused by `walkRoute` (a name never means where
+you stand) and goes to the Director.
+
+**Decided with the user, 2026-09-19, while drafting W4b–W8 (Claude's picks, each a "yes"):**
+- **Tower view grudges are redacted:** only people you have MET who are on the road, and
+  never where they are. The journeys are the engine's secret; showing every pursuer
+  broke invariant 5.
+- **W6 "same ground" means a shared PLACE GRAPH:** the later era floors of a band reuse
+  the first era floor's places — ids, kinds, links — with new names and people each
+  era, and their maps are drawn from the band, not the floor. Sharing only a terrain
+  style was the alternative; it is not the same ground.
+- **W8 needs a closed TRADE catalogue** on named people (smith, innkeeper, merchant,
+  priest, guard, …), chosen by the floor generator from the list and checked by the
+  engine; "Ora the smith" is free text today, and a rule on words enforces nothing. A
+  person with no trade lives in a home.
+- **"Loop reset clears overlays" leaves W6** for whichever stage first WRITES an overlay
+  (likely W8): nothing edits a map today, so the test would pass with nothing built.
+- Also carried by the W5–W8 drafts: the Director on stops stays deferred — a sighting
+  is an engine line, and the person sighted becomes who your next words reach; a fight
+  RECORDS its arena (W7), as a climb records its floor, so replay never needs tiles.
+
+**W4b as built (2026-09-19).** The side column is information: a minimap of the whole
+map you stand on (shrunk to at most 60 cells; click to enlarge), a floor map of
+discovered places only that moves nobody (the old place map walked you on a click), and
+a tower view — strata, each floor with its year, what you hold, deepest floor, and
+grudges as above. **Found live, suspected not proven:** one render crash reading the
+tower of a view fetched before the server change (hot reload); gone on a fresh load.
+
+**W4a as built (2026-09-19), and what it leaves.** The play page shows a 41×25
+window of the map you stand on, drawn from the session's STORED map (`mapFor`, so
+what is shown is what is walked; looking at a map stores it). Clicking a tile walks
+there — the same engine walk, charges and stops, recorded as the same `walkTo`; a
+hub's door is walked through onto its field, a field's end into its place. Every
+door on the map is also a button ("→ The Tower Stair"), because a field's far end is
+hundreds of tiles out of view; a door's label is a name only when you could know it.
+A stair or a way out is walked to and then taken — up, and for the first time in
+the web app, DOWN. The click is checked at the route (`walkTarget`) and at the turn
+(your map, inside it, not a wall), refused with a reason. Every click writes a line
+(found live: a click onto a field had left an empty transcript entry). **Not built:**
+W4b; the old place-graph map still travels on a click (DESIGN says no — it becomes
+W4b's view-only floor map); no walk animation; no keyboard stepping; no automated
+test of the React grid (no UI test tooling in the repo — checked live instead).
+**Found live, not fixed:** screenshots of the pane timed out, so the grid was checked
+through the DOM, not by eye.
+
+**Debt from W1–W4, cleared 2026-09-20** (`fa0fd66`), each with its check: a walk
+stopped on a field can be turned back by NAME (either end of the field you stand on
+counts, even the one you set out from — it was going to the Director); a field's legs
+are three walls apart instead of one and one-tile SPURS run off the band as dead ends,
+so it reads as country rather than a maze and the best path is untouched; arrow keys
+and WASD step a tile; `canDescend` left the view (nothing read it once a stair door
+descends, closing that §14 deviation); a climb's world is checked to survive JSON (the
+invariant-1 bug W3 shipped); the tower panel tolerates a view fetched before a deploy.
+
+**Still deferred, with reasons:** the Director's `moveTo` still teleports and is charged
+in ticks (making it a walk respecifies a dozen tests; it should probably go once nothing
+needs it — W5 decides); NPC journeys still round each link up to whole ticks, so the
+player walks a little faster than they travel (the tick is the floor of a journey's
+grain; fixing it means fractional journey progress); a way up found AFTER a road was can
+still move that road's door (any order-independent rule can displace an older door; the
+only real fix is storing doors, which W2 deliberately did not); no walk animation; the
+React views have no automated tests (no UI tooling in the repo); `walkTarget`'s edge test
+was written with its code rather than before it.
+
+**Found 2026-09-20:** an UNPINNED test run failed one field test and then hung past two
+minutes; the same file pinned to the efficiency cores passed 12/12 in 3.6 s. The
+P-core fault is real and the pinning rule earns its place.
+
+**W5 as built (2026-09-20).** A journey between two places is a FIGURE on that
+link's field, as far along as its traveller has come (`onroad.ts`). A walk stops on
+`sighted` the moment somebody NEW is in view — twelve tiles, line of sight by the
+combat grid's own rule — and whoever was already visible when you set off never stops
+you again, or you could not walk at all. **Sighting is asked every TILE, not every
+tick:** a traveller crosses a two-tick link while the player is halfway over the same
+field, and tick sampling missed them passing entirely — the journey tick-rounding debt,
+biting. `WalkTo.met` records who, so the fold opens the same fight with no tiles: it
+ends that traveller's journey where you both stand and the existing arrival machinery
+does the rest. Out on a road `presentHere` is whoever you MET, not the people of the
+place you left (the Director and the redaction wall read it, so it stays tile-free);
+the game view shows whoever is in view on the field. A field's crowd is both ends'.
+**Respecified:** W3's "a traveller arriving mid-walk" test — the stop is `sighted`
+now, because out there you see them coming before they reach the place you left.
+**Not built:** the Director on stops (still deferred — a sighting is an engine line and
+the person becomes who your next words reach); resource nodes and sites on fields
+(§2d Q6); crowds as visible figures — only named travellers appear.
+
+**`moveTo` measured, 2026-09-20:** removing the Director's move touches 26 test uses
+and 24 in `src/`, including the Director's prompt vocabulary and the redaction view —
+too large to carry inside W5. It stays until a stage is given to it.
+
+**STANDING RULE — no rebalancing until the game is finished (user, 2026-09-20).**
+Combat is not to be tuned, and the balance instruments are not to be re-run or
+re-pinned (`npm run fight`, `npm run chart`, ARCHITECTURE §12b's numbers), until every
+part of this game is built. A test's job until then is to show that a system WORKS,
+not that its numbers are good — numbers measured against an unfinished game get
+measured again anyway. This retires W7's "re-measure balance" half: W7 builds fights
+on real ground and tests that they work and replay, and the pinned anchor is left
+exactly where it is so it stays comparable later. Whatever the new terrain does to win
+rates is a question for the balance pass at the end.
+
+**W7 as built (2026-09-20).** A fight's board is a 12-square window of the map you
+stand on (`play/arena.ts`), shifted to stay inside the map rather than shrunk: the
+map's `#` are walls, its `,` is difficult ground costing two to enter. `reachable`
+therefore walks cheapest-first rather than breadth-first — breadth-first would price a
+square reached the long way over open ground like the short way through a marsh.
+Nobody starts inside a wall: the player is nudged to the nearest open square, and so
+are the foes. The arena is RECORDED on the turn (`TurnRecord.arena`), the same trick a
+climb uses for the floor it built, so the fold fights on the same ground with no tiles;
+it is dropped from the stored record when no fight opened. A turn with no position on
+a map still gets the old bare arena. **Not done, on purpose:** no balance pass (the
+standing rule), and the pinned anchor is untouched — its harness fights on its own
+empty 12×12 board, so nothing it measures moved. **Not verified live:** floor 0 has no
+danger, and reaching a floor that does needs model-driven exploration to find the way
+up; the tests cover the ground, the record and the replay.
 
 ### 2d. Open, for the user
 1. ~~Typed "go to X"~~ — **answered 2026-09-19: yes**, walked by the engine with no
@@ -1000,7 +1171,8 @@ distances and a walk the model cannot refuse.
    one right answer never reaches the model (`4bd5344`, `2de335f`).
 2. The floor map — view-only, or click a far hub to auto-walk there (still walking,
    charged time, every stop applies)? Claude: later, as a convenience.
-3. Night — walk freely with less vision, or stop at nightfall on wild ground?
+3. Night — walk freely with less vision, or stop at nightfall on wild ground? **Answered for
+   now by W3 (2026-09-19): stop once, as night begins on wild ground, then walk on freely.**
 4. Named NPCs — fixed spots in their buildings now, daily routines with step 8?
 5. May you enter any house? Claude: yes, and entering a home uninvited is a DEED
    witnesses see.
@@ -1031,6 +1203,480 @@ distances and a walk the model cannot refuse.
 - **Objection: the two trees must never disagree.** A province belongs to exactly
   one floor, a floor to exactly one innermost stratum, checked at generation the
   way `validateRegion` checks a map.
+
+### 3b. LIFE CLASSES, and what runs a building (decided with the user, 2026-09-20)
+
+**Two kinds of class, and the old name moves.** What the game has today are **COMBAT
+CLASSES** — the stat-driven paths a climber walks, carried on the sheet. The new axis
+is **LIFE CLASSES**: the non-combat paths — smith, innkeeper, healer, farmer and the
+rest. In the end they are gameplay of their own (a whole non-combat path, Paradox- and
+simulation-game shaped). **For now they do one job: they say who can RUN a building.**
+
+- **The closed vocabulary is of BUILDINGS, not of people.** A building type names the
+  life class that runs it; a person holds a life class. Earlier drafts had a `trade`
+  on the person and derived the building from it, which had the dependency backwards:
+  what a town can hold is a property of the catalogue, not of whoever wandered in.
+- **A building needs people to run it.** A smithy with no smith is not a smithy the
+  town has — a building exists where somebody who can run it does. What an unstaffed
+  building becomes (closed, derelict, or never built) is for the stage that builds it.
+- **Hierarchy is wanted on all three — town, building and life class** — the way gear
+  has rarity and refinement and a species has its bands: a tier or level that says how
+  far a thing has come. **Not built now**, but every one of these gets its number later,
+  and §4's founding and upgrading is what will move it. Design so nothing has to be
+  unpicked: a building carries its type and its runner, and a tier is a field it has
+  not got yet.
+- **Not decided yet:** what a life class costs to take, whether a climber holds one,
+  how a class levels, and whether a town's tier is derived from its buildings or held
+  on the place. Answer these when the life-class path is built, not at W8.
+
+### 3c. Towns, buildings and themes — UNDER DISCUSSION (user, 2026-09-20)
+
+The user's shape, taken down as said and not yet approved in detail.
+
+**A building is run by SEVERAL people, not one.** A smithy wants a smith, a clerk and
+a transporter. No hierarchy among them yet. One of them may be the building's OWNER,
+or an outside INVESTOR / entrepreneur may hold it instead.
+
+**Buildings differ by world.** The outer world is modern; tower A is medieval; tower B
+is science fiction. The same probably goes for classes, gear and other mechanics.
+
+**Building types, by category:** government (hall, armoury), production (smithy),
+agriculture (pasture, rice farm), amenities (pub, theatre, inn), residential (home,
+mansion).
+
+**The generation flow the user wants:**
+`tier of this map → government (laws announced by the ruler, local laws), max
+population, max buildings, map shape → the ways in and out → paths → buildings →
+people.`
+
+**A settlement's TIER gives** its maximum population, its maximum buildings, and its
+ruler's title.
+
+**A BUILDING IS A STATION, not a label (user, 2026-09-20).** Claude had proposed a
+closed `category` plus a closed `function`; the user is right that those are one thing.
+What a building is:
+
+| part | what it holds |
+|---|---|
+| **tier** | maximum size, worker capacity, how many stations/machines it may hold |
+| **category** | government · production · agriculture · amenities · residential |
+| **input** | what it consumes |
+| **method** | how it turns input into output |
+| **output** | what it produces |
+| **workers** | slots, each with a life class it is BEST to have — not a requirement |
+| **policy** | how it is run: more output for more input, harder on the people, and so on |
+
+- **AMENITIES include shop and market** (with pub, theatre, inn) — an earlier draft had
+  no shop at all, which would have left a town nothing to buy in.
+- **The worker rule, which is the good part:** a slot names the life class that suits
+  it, and anyone may fill it. Off-class, the worker is judged on the STAT that class
+  works from, with a penalty on their part of the work; if their own class does not use
+  that stat at all, they are judged on the raw stat alone, worst to best. So a town
+  that has no smith is not stuck — it is worse off, by an amount the engine can say.
+- **This is not just a town's smithy.** The same station describes a farm, a theatre or
+  an armoury, and the outer world's factory.
+
+**Answered by the user, 2026-09-20** (Claude's five, all accepted): an unfillable
+building is BUILT AND CLOSED, not absent — a shuttered smithy is a reason to bring a
+smith; a settlement's tier is dealt at generation and moved later by §4's upgrading,
+not grown out of population; a player who holds a settlement hires into the same slots,
+and an investor is money only for now; the theme layer lands on BUILDINGS first and
+proves itself there before it touches gear or classes; life classes are NPC-only until
+the non-combat path is designed.
+
+**Claude's remaining objection, for the user:** input and output need a vocabulary of
+GOODS, and this game already has one — the item catalogue and its loot categories. If
+production invents a second list of things, the two drift and every recipe has to be
+mapped by hand. Whatever a station consumes and makes should be item categories from
+the start, even if the first stations only make one thing.
+
+### 3c-i. GOODS, and what a station still needs specified (2026-09-20/21)
+
+**Goods are the item catalogue, widened (user, 2026-09-21).** What a station consumes
+and makes are `LOOT_CATEGORIES` (`items/catalogue.ts:235`): today `rations · draught ·
+weapon · armour · pack · part · material · book`. **New: `seed`, `tool`, `ingredient`.**
+No second resource list — a recipe names item categories or it names nothing.
+- The user's list maps on: food is `rations`, bag is `pack`, skill book is `book`,
+  material is already there. **Accessory is a SLOT, not a category** — the world
+  declares its slots (`items/types.ts:28`) — so it must not become a good as well.
+- **`tool` pays for itself twice:** a station's tier caps how many stations/machines it
+  holds, and a machine is a tool ITEM installed in it. One vocabulary, two uses.
+
+**Confirmed by the user, 2026-09-21:** a settlement's TIER owns the size of its hub map
+(replacing W2's radius-by-place-kind), and the first thing built is the TOWN SKELETON —
+tier, caps, ruler title, shape, ways in, paths, plots — with no stations in it.
+
+**Answered by the user, 2026-09-21:**
+- **A TOOL is carried** — a pickaxe, a lantern. A **STATION is FURNITURE standing on the
+  floor** (an anvil, a forge), which is §2a's `Feature`, not an item in a pack. A
+  building's tier caps how many stations stand in it; tools are what a worker holds.
+- **Policy sets the WORK HOURS; the method says how long the work takes.** Output is
+  hours worked against the method's time, not a rate pulled from nowhere.
+- **Output has four homes, and the owner chooses:** stored in the building; stored in
+  ANOTHER building of the same owner; on shelves to sell where it was made; or on a
+  stall in the market.
+- **It is stored somewhere persistent** — its own table, as maps have.
+- **The minimum staff includes the OWNER.** A building is not manned by hired hands
+  alone; whoever holds it counts.
+- **A policy lands on the disposition and needs that exist**, and on each stakeholder's
+  relationship TOWARD THE OWNER — pressing people is something they hold against a
+  person, not an abstraction.
+- **Nobody overrides the staffing.** The engine fits classes to slots; a player who
+  wants more out of a building changes the POLICY, buys better TOOLS, or installs
+  better STATIONS — that is how the off-class penalty is bought down.
+- **No wages in v1.** Goods only.
+- **What the player does with a station in v1: buy, sell, steal.**
+
+**Still open, to define together:** the station catalogue itself — what a station is,
+what each one does, and how tier, method and stations multiply out.
+
+### 3c-ii. The settlement ladder (user, 2026-09-21)
+
+**Six rungs:** hamlet · village · town · city · **metropolis** · **megacity**.
+
+**A real curve, and the split it forces.** Real settlements go up by about ten times a
+rung — a hamlet is scores of people, a megacity is ten million. The game cannot field
+ten million bodies, and a hub map cannot hold a million buildings. So a tier carries
+TWO numbers and they are not the same kind of number:
+- **SOULS — the real curve**, dealt from the seed inside the rung's range. It is what
+  the place says it is, what its economy is scaled against, and what the Writer may
+  say. 20–100 · 100–1,000 · 1,000–20,000 · 20,000–100,000 · 100,000–1,000,000 ·
+  1,000,000+.
+- **What is SIMULATED — a flat curve**: how many bodies the crowd may field, how many
+  plots the map draws, how wide the hub is. These grow gently, because they are things
+  the engine walks over and fights.
+
+| tier | souls | crowd | plots | hub radius |
+|---|---|---|---|---|
+| hamlet | 20–100 | 6 | 3 | 12 |
+| village | 100–1,000 | 12 | 8 | 18 |
+| town | 1,000–20,000 | 20 | 16 | 26 |
+| city | 20,000–100,000 | 30 | 28 | 34 |
+| metropolis | 100,000–1,000,000 | 40 | 40 | 42 |
+| megacity | 1,000,000+ | 50 | 52 | 50 |
+
+**The consequence, for later:** past a city, one hub map is a lie — a real metropolis is
+DISTRICTS, which this design already has a shape for (§2a zones, §3's recursive
+provinces). A metropolis should eventually be several linked hubs, not one enormous one.
+Not now: the top two rungs exist in the ladder so upgrading and the outer world can
+reach them, but a tower floor only ever DEALS hamlet through city.
+
+**Ruler ranks** (plain English until the theme layer names them): elder · headman ·
+mayor · lord · governor · overlord.
+
+**The town skeleton as built (2026-09-23, `984bc8d`).** `world/settlement.ts` holds the
+ladder, the caps and the plan. A settlement's tier is stored on the place when it was
+dealt or upgraded and otherwise dealt from the seed, weighted small (35/30/20/15 over
+hamlet…city). Souls are dealt inside the rung. A hub is `2r+3` square with `r` from the
+tier, so ground follows what a place GREW into rather than what kind of place it is;
+untiered places keep their kind's radius. The crowd is trimmed to the tier's cap by
+`populationAt` — **which only bites where the caller holds a whole world**: the
+population derivation and the balance harness pass a narrow shape with no places in it,
+see no tier, and are untouched, which is what the standing no-rebalance rule wants. The
+PLAN (square, streets from every way in, plots along them) is DERIVED, not drawn: the
+ground is open, and a plot is where a footprint may go. Measured: seed 1 draws a city of
+22,469 souls, 71² of ground, 28 plots; seed 3 a village of 185 souls, 39², 8 plots.
+**Not built:** anything standing on a plot, and the district question the top two rungs
+raise.
+
+### 3d. Where a TIER belongs — the survey the user asked for (2026-09-20)
+
+**Three rules first, or tiers rot.**
+1. **A tier exists only where something READS it.** A stored number nothing reads is
+   this codebase's signature bug, and §12 is a whole section of them.
+2. **A tier is a SMALL closed ladder** — three to five rungs — with a table saying what
+   each rung permits. Gear's `RARITIES` (`items/instance.ts:30`) is the shape to copy.
+3. **One owner per outcome.** If two ladders both decide how good a sword is, they will
+   disagree. Derive a tier where it can be derived; store it only where it must move on
+   its own.
+
+| system | tier today | what a tier means there | verdict |
+|---|---|---|---|
+| **gear / items** | rarity `common→storied`, refine, enhance, condition | how good a specific object is | **has one** — the model for the rest |
+| **climber** | level, subclass at 3 | how far the combat path has come | **has one** |
+| **floors / regions** | danger, per stratum curve | how hard the ground is | **has one** — do not add a second |
+| **creatures** | depth bands, subspecies, scaled by danger | what lives how deep | **has one** |
+| **people, socially** | `status`, `station`, standing per place | rank among others | **has one** — a life-class rank is skill, not rank; keep them apart |
+| **settlements** | none — only a holder | max population, max buildings, ruler's title, and the SIZE of its hub map | **ADD** (decided) — W2's hub radius by place-kind should become radius by tier |
+| **buildings** | none | max size, worker capacity, how many stations | **ADD** (decided) |
+| **life classes** | none | apprentice→master: what a worker may run, and how well | **design the field now, build with the non-combat path** |
+| **methods / recipes** | none | — | **NO** — output is the building's tier times the worker's grade; a third dial would fight both |
+| **policies** | none | — | **NO** — a policy is a switch with a cost, not a rank |
+| **ownership** | player holds a place (O1) | plot → building → settlement → floor → stratum | **a LADDER of scopes, not a tier** — the `territory` law vocabulary already names the levels |
+| **themes** (medieval, sci-fi, modern) | none | — | **NEVER a tier.** If a theme implied power, a sci-fi tower would simply be better than a medieval one; a theme changes NAMES and flavour, never numbers |
+| **quests** (step 7) | none | difficulty | **derive from floor danger** — no new axis |
+| **goods / economy** | item rarity | how good what a station makes is | **reuse rarity** — do not invent a second quality ladder |
+| **needs, drift, beliefs, laws, journeys** | none | — | **NO** — these are states and scopes, not ranks |
+
+**So: three new tiers in total** — settlement, building, life class — and every other
+system either already has one or must not get one.
+
+### 3e. Provinces, wild ground, and the administrative layer (user, 2026-09-24/25)
+
+**Two orthogonal systems, not one — Claude first conflated them, corrected 2026-09-25.**
+- **Map Type (MT)** — physical, built ON tiles: `wild {forest, plain, ...}` and the
+  settlement ladder (`hamlet…megacity`, §3c-ii). What terrain is actually generated.
+- **Administrative Layer (AL)** — `state → province → district → subdistrict → village`,
+  a pure indicator OVER the same shared tile pool. Governs law scope and population
+  counting; blind to whether the tiles under it are wild or settled.
+- A **city-internal load zone** (§2's *"generated and pathfound in chunks"*) is a third,
+  separate thing again — a client streaming boundary inside one settlement's own hub
+  map, not an AL rung. Claude's earlier "split a city into several linked hub-Places"
+  idea is DROPPED; this was the actual ask instead.
+
+**Wild ground gets a Place id at generation**, not only when founded. Floor generation
+lays out every province — settled or not — at the *skeleton* stage (§2b: engine-only,
+no model call). Each province's actual tiles/buildings/people still wait for first
+arrival, exactly as §2b already timed it. A field map is therefore conceptually an
+unsettled province; §4's founding mechanic (*"turns the zone into a hub map carved from
+the field's own tiles"*) already matches this — no rework of shipped W1/W2 route code
+(`travel.ts`, `map.ts`, keyed by place-pair) is forced by this reading.
+
+**AL is an unbounded tree, not a fixed 5-rung ladder** — same shape §3 already gave
+strata (*"strata NEST... the tower plan is a TREE, not a list"*; `state = stratum`).
+No stored min or max on branching OR territorial size at any rung: a city-state's
+"state" can be barely bigger than its one settlement; an empire (Russia; the British
+Empire) is just a stratum whose children are other state-strata — reuses `region = a
+parent stratum` literally, no sixth rung invented.
+- **Skip rule:** an AL rung is skipped only when it is a pure single-child pass-through
+  with nothing of its own — no population, no law, no seat (§3d rule 1: a tier exists
+  only where something reads it). A rung with its own wild population or its own law,
+  even with no settlement seated in it, is NOT empty and stays.
+- **Seat rule:** each AL unit hosts at most one settlement of the tier tied to it —
+  `state↔megacity · province↔metropolis · district↔city · subdistrict↔town`. Smaller
+  settlements (village/hamlet-tier) scatter inside an AL unit without their own seat.
+- **Population aggregates UP the AL tree.** A settlement's souls figure is not the
+  population of its own hub map — it is read off its own AL unit: the settlement, plus
+  every wild tile, plus every smaller settlement nested beneath it. This is what
+  actually answers the density objection below, not an accepted abstraction: a
+  "city" of 22,469 is the district's count, not bodies standing on a 71² hub.
+- **A settlement's own hub CAN grow to equal its AL unit's full size**, for a dense
+  modern settlement that genuinely fills its province — a ceiling, never a requirement;
+  older/smaller tiers stay a small seed inside a mostly-wild AL unit.
+
+**Landmark test (2026-09-24):** can it become its own Place? Yes → `Site` (shrine,
+camp, ruin — §2a already has this). No, purely decorative/interactive → `Feature`.
+Not a blanket "landmark = Feature."
+
+**Settled 2026-09-26: no, an AL unit never needs its own ruler.** Every non-pass-through
+AL unit already has a working governance path without one:
+- **If it has a seat**, the seat settlement's already-derived ruler (§1: *"highest
+  standing"*) operates that settlement's hall, whose administrative-workstation scope
+  IS that AL unit's law (§3f/§3i). A ruler stored on the AL unit itself would duplicate
+  what the seat's ruler+hall already gives — the second-owner case §3d rule 3 forbids.
+- **If it has no seat** (a wild-only AL unit, kept as a real case above), it has no
+  hall to edit its own law, so it inherits up from its parent AL unit — reusing the
+  already-shipped rule (§3: *"Laws... resolve innermost-wins, else inherit up"*,
+  `world/strata.ts:13,:51`). No new mechanism.
+
+An AL unit's ruler is therefore fully derivable — the seat's ruler, or inherit up —
+and must not be stored separately; no `holder` field on the AL unit itself.
+
+### 3f. Buildings: modules, and tier as a derived indicator (2026-09-25)
+
+**A plot is an anchor, not a fixed footprint.** `townPlan` (`world/settlement.ts:89`)
+marks a door plus open space; the actual footprint is a combination of MODULES —
+geometric pieces, not the fixed 3×3 the shipped code stamps today — carved at
+founding/upgrade time from `(building type, building tier)`. This is a real change to
+where footprint-stamping happens (out of `townPlan`, into §4's founding step), not a
+rewrite of what a plot marks.
+- **A module typically holds 1–3 related workstations** (a "forge room" pairs anvil +
+  forge, not one module each).
+- **Footprint growth eats the settlement's plot budget** — real tension, not a new
+  dial: a building expanding consumes neighbouring plot anchors.
+- Worked once, smithy, 4 rungs (names are smithy's own, not yet confirmed as generic
+  across every type — **still open**): workshop (1 module, anvil) → smithy (+forge) →
+  forge hall (+trip-hammer, needs water nearby) → armory works (multiple linked
+  footprints, tech-gated later).
+
+**Building tier is a derived indicator, exactly like settlement tier.** Tile count,
+worker count and workstation count are read OFF the building, never a stored gate. The
+real gate is the runner's life-class rank (apprentice→master, §3b) — same principle
+§3d already applied to settlements, where the numeric tier is a read-out and the
+REAL gate is the ruler's rank.
+
+**No building is purely without a workstation.** A workstation is the general unit of
+"a building DOES something" — goods, a need, or an administrative edit — not only
+production; `Feature` already listed non-economic examples (doors, traps) before this
+session. Consequence: a building with literally zero workstations isn't a degenerate
+case, it IS pure scenery — footprint and flavour, no mechanical role. **This answers
+HANDOFF's long-standing "scenery buildings" open question**, not something decided
+fresh here.
+- **`hall`** — one administrative workstation, no new `palace` type. Its scope SCALES
+  by the settlement's AL-seat rank (§3e): a village hall writes only village law; a
+  metropolis hall, being a province seat, writes province law. Reuses one type instead
+  of inventing a second building for the same job at a bigger scope.
+- **`home`** — one service workstation (hearth/bed) targeting the `rest` need, same
+  mechanism as an inn's hearth (§3h) — plugs into the already-decided long-rest rule
+  (§1: *"a settlement you hold is a place you can long-rest"*).
+
+### 3g. Feature: a closed `kind` vocabulary (2026-09-25)
+
+§2a's Feature row was prose (*"furniture, workstations, containers, doors, resource
+nodes, light, traps"*), not a closed list, and it listed "doors" — which §2a's own
+table already gives a separate type, `Portal` (*"a door, a stair, a map edge"*). Same
+class of self-contradiction as the `dungeon` map-kind fix above.
+
+**Naming collision caught 2026-09-26: "station" is already a shipped, tested type**
+(`STATIONS`, `play/station.ts:16`) meaning a person's SOCIAL rank — noble, merchant,
+guard, adventurer, villager, beggar (§ grudge acts, shipped 2026-09-17). Unrelated to
+anything here. Renaming the unbuilt concept rather than the shipped one: **this
+building-machine concept is `workstation` from here on.** §3c through §3d (all dated
+before this session) still say "station" for it — read it as `workstation` there too;
+their history isn't rewritten, but the word going forward is this one.
+
+**`Feature.kind`, closed:** `furniture | workstation | container | resource node`.
+- `furniture` — presence only, no state to speak of (a light, a trap).
+- `container` — a goods pool, capacity read from the building's tier. **Absorbs
+  "storage module" as a special case** — storage is simply `kind: container`, nothing
+  new.
+- `resource node` — what it yields on interaction (§4's gathering); no runner.
+- `workstation` — see §3h.
+
+### 3h. Workstations: a method per workstation, not per building (2026-09-25)
+
+**"Method slot" is not a building-level abstraction.** Each `workstation`-kind Feature
+carries its own method directly; a building's behaviour is the SUM of its
+workstations', not a count of abstract slots on the building. This is deliberately
+more granular than Vic3's per-building production-method slots.
+
+**`workstation` sub-kinds, closed** — the three jobs a workstation can do do not share
+a shape:
+
+| subkind | state | runner | example |
+|---|---|---|---|
+| `economic` | purpose · technique · input(goods) · output(goods) · time · quality | a life class, off-class judged on the class's stat (§3c) | anvil, plough |
+| `service` | purpose · technique · output(a `need` axis, amount) · time | a life class, same off-class rule | hearth, healer's table |
+| `administrative` | scope (derived, §3e/§3f) · what law or policy it may edit | **none — the settlement's holder/ruler operates it directly** | hall's council table |
+
+- **`service` resolves the healer/inn-rest gap** flagged twice earlier: a
+  workstation's output is EITHER `{category: LootCategory, count}` OR `{need:
+  NeedAxis, amount}` — the second reuses the persona/needs substrate that already
+  exists (step 4), not a third invented vocabulary. §3c-i's rule (*"no second resource
+  list"*) is respected — this is the SECOND list that was already there, not a new one.
+- **Method is a category of sub-methods**; the sub-method is the executable unit,
+  unlocked today by `(building tier, required workstation present)`, later also gated
+  by a tech tree — same shape both times, no rework when tech lands.
+- **input/output** are lists of `{category, count}` pairs (`LOOT_CATEGORIES` +
+  `seed`/`tool`/`ingredient`, §3c-i); **time** is one scalar; **quality reuses item
+  rarity** — §3d already forbids a second quality ladder.
+- **Policy stays building-wide**, not per-workstation: sets work hours, lands on
+  stakeholder disposition and relationship toward the owner, and modulates output only
+  INDIRECTLY through that — never a second direct output dial. **Policy changes only
+  through a workstation** (an office/ledger, `economic` or bundled with the building's
+  primary workstation) — never a value edited with nothing in the world as its lever,
+  the same rule an administrative workstation enforces for law.
+- **Transport-in resolved.** Inside one building it is free — a workstation
+  reads/writes the building's own `container`. Crossing a building's boundary reuses
+  the already-decided NPC-journey mechanism (§2: *"NPC journeys — which never walk
+  tiles — stay consistent"* with the link's time budget) — a supply run between two
+  buildings' containers costs exactly the link's time, no literal goods-on-tiles
+  needed, no new system.
+
+**Tier rung names — settled 2026-09-26, reversed from this section's first draft.** A
+shared generic ladder (`basic→expanded→advanced→grand`) was tried first and dropped:
+it doesn't match this codebase's own precedent. Ruler ranks and the settlement ladder
+both use a DISTINCT plain-English word per rung, not a shared size adjective — so each
+building type names its own rungs too, same as the smithy example already did.
+
+### 3i. The building catalogue (2026-09-26)
+
+**The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
+list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
+building without a new hardcoded type. The tag can't be a `LootCategory` directly — the
+closed vocabulary's `material` is too coarse to tell ore-working from leatherworking
+apart — so it is a second, LIGHTER tag that exists only for naming, the same way
+`Region.biome` is free text (W1) beside the closed mechanical vocabulary underneath.
+The recipe itself still runs on `LOOT_CATEGORIES` regardless of the tag.
+
+**What the tag names is category-dependent — the defining concept of the building's
+primary workstation, whichever axis that workstation actually operates on:**
+
+| category shape | tag names | example |
+|---|---|---|
+| economic (production/agriculture) | the primary material | smithy `(production, ore)`, tannery `(production, hide)` |
+| service | the `NeedAxis` it targets | inn `(amenities, rest)`, home `(residential, rest)` — no collision, category is part of the key |
+| administrative | what it edits | hall `(government, law)` |
+| trade-only, no material or need | its own technique name | general store `(amenities, trade)` |
+
+**All ten types, tier names keyed on the building's OWN growth** (not settlement
+tier — see the exception below for `hall`):
+
+| type | key | tier 1 | tier 2 | tier 3 | tier 4 |
+|---|---|---|---|---|---|
+| smithy | `(production, ore)` | workshop | smithy | forge hall | armory works |
+| armoury | `(government, arms)` | rack-house | armoury | arsenal | ordnance works |
+| tannery | `(production, hide)` | tanning shed | tannery | tan-yard | leatherworks |
+| farmstead | `(agriculture, grain)` | croft | farmstead | grange | manor farm |
+| pasture | `(agriculture, wool)` | paddock | pasture | sheepfold | grazing hold |
+| inn | `(amenities, rest)` | alehouse | inn | tavern | coaching inn |
+| general store | `(amenities, trade)` | trading post | store | market house | merchant exchange |
+| home | `(residential, rest)` | cottage | house | townhouse | manor |
+
+Every type's tier 4 is reserved — nothing unlocks there yet, since the tech tree that
+would gate a further sub-method doesn't exist. A placeholder rung, not a skipped one.
+
+**`hall` is the one exception — its name tracks AL-seat rank (§3e), not its own
+building growth**, because its administrative workstation's SCOPE is what actually
+grows, not its footprint:
+
+| AL-seat rank | name |
+|---|---|
+| not a seat, any settlement tier | village hall / town hall (bare, local-only) |
+| subdistrict-seat | town hall |
+| district-seat | city hall |
+| province-seat | provincial hall |
+| state-seat | **palace** |
+
+**Per-type breakdown, the same shape as smithy's worked table in §3f** — module added
+per tier, the technique it unlocks, and that technique's input→output. `hall` and
+`home` are specified in §3f already (administrative scope-scaling; a `rest`-targeting
+service workstation) and aren't repeated here.
+
+- **armoury** `(government, arms)` — quartermaster. basic: rack (`requisition`:
+  material+part → weapon,armour, stock) → expanded: +workbench (`maintain`:
+  weapon,armour(damaged)+part → weapon,armour, restored) → advanced: +vault, bigger
+  container, second rack (`arsenal`: +tool → weapon,armour, faster/larger) → grand:
+  reserved.
+- **tannery** `(production, hide)` — tanner. basic: curing rack (`hand-cure`:
+  material → pack) → expanded: +vat (`tan-vats`: +ingredient → pack,part) → advanced:
+  +press (`leather-press`: +tool → pack,part, higher quality) → grand: reserved.
+- **farmstead** `(agriculture, grain)` — farmer. basic: rows, an abstracted field
+  (`subsistence`: seed → rations) → expanded: +barn, second workstation threshing
+  (`plough team`: +tool → rations,ingredient) → advanced: +irrigation (`irrigated
+  fields`: +ingredient → rations,ingredient, higher yield) → grand: reserved.
+- **pasture** `(agriculture, wool)` — shepherd. basic: pen (`graze`: no input →
+  rations,material) → expanded: +shearing (`herd&shear`: +tool →
+  rations,material,pack) → advanced: +breeding (`selective breeding`: +tool,ingredient
+  → higher yield and quality) → grand: reserved.
+- **inn** `(amenities, rest)` — innkeeper; the one type mixing `service` and
+  `economic`. basic: hearth (`service`: rest, no goods) → expanded: +counter
+  (`economic`, `trade`: rations,draught → draught, resale) → advanced: +cellar
+  (`tavern trade`: more volume) → grand: reserved.
+- **general store** `(amenities, trade)` — shopkeeper. basic: shelves (`economic`,
+  `trade`: buys others' output → resale) → expanded: +stall, a second sales point →
+  advanced: +ledger — **this is also the building's policy/office workstation**, the
+  physical lever §3h requires for changing policy → grand: reserved.
+
+**Settled 2026-09-26: `wall` is a settlement-level EDGE MODULE, not an eleventh
+catalogue type** (§4, 2026-09-19, had already named it as an example — *"a wall's,
+[tier caps] defence"* — before this session existed to fill it). Resolves with two
+mechanisms already decided, not a third:
+- **Ground level is impassable**, no different from any `#` wall tile already in W2's
+  terrain legend — no Feature needed there.
+- **Its walkable top is a STOREY**, reusing §2a's rule that upper storeys are drawn
+  from the ground footprint — a rampart is exactly that, one level above the
+  impassable core.
+- **A module's wall segment, narrow enough, has its storey tiles edge-adjacent to the
+  next module's** — so walking the rampart from one module to the next costs nothing,
+  no portal or stair, just ordinary tile adjacency at that storey. Not the same tower
+  FLOOR (that word stays reserved for depth) — the same storey.
+- Still has a **tier** (thickness/height caps defence) — but it belongs to the
+  settlement, not to any one building; no runner, no life class: `kind: furniture`.
+
+**The ten types above are a worked sample of the `(category, tag)` pattern, not the
+closed list** — any new pair is a valid building without a new hardcoded type; ten was
+enough to prove the pattern across every category, not a ceiling on it.
 
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
