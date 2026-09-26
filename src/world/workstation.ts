@@ -8,7 +8,11 @@ import type { LootCategory } from '../items/catalogue.ts';
 export type Good = { category: LootCategory; count: number };
 export type Container = Partial<Record<LootCategory, number>>;
 export type SubMethod = { input: Good[]; output: Good[]; time: number };
-export type Building = { id?: string; tier: number; container: Container };
+export const WORKSTATION_SUBKINDS = ['economic', 'service', 'administrative'] as const;
+export type WorkstationSubkind = (typeof WORKSTATION_SUBKINDS)[number];
+export type Workstation = { id?: string; subkind: WorkstationSubkind };
+
+export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[] };
 
 const sumOf = (goods: Good[]): number => goods.reduce((s, { count }) => s + count, 0);
 const totalOf = (container: Container): number => Object.values(container).reduce((s: number, n) => s + (n ?? 0), 0);

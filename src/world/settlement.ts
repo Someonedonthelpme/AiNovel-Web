@@ -6,6 +6,7 @@ import { pairDraw } from './travel.ts';
 import { isFull } from './types.ts';
 import type { Place, PlaceId, RegionId, World } from './types.ts';
 import type { Building } from './workstation.ts';
+import { modulesNeeded } from './building.ts';
 
 /**
  * How big a settlement is (DESIGN 6c §3c-ii), and everything that follows from it.
@@ -156,4 +157,9 @@ export function buildingAt(place: Place, id: string): Building | null {
 export function addBuilding(place: Place, building: Building): Place {
   if (building.id !== undefined && buildingAt(place, building.id)) return place;
   return { ...place, buildings: [...(place.buildings ?? []), building] };
+}
+
+/** How many modules every building standing on `place` occupies, summed — the real count `freePlotsOf` wants. */
+export function occupiedModulesOf(place: Place): number {
+  return (place.buildings ?? []).reduce((sum, b) => sum + modulesNeeded(b.workstations?.length ?? 0), 0);
 }

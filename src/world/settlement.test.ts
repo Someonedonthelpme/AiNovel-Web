@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addBuilding, buildingAt, CAPS, freePlotsOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
+import { addBuilding, buildingAt, CAPS, freePlotsOf, occupiedModulesOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan } from './settlement.ts';
+import { modulesNeeded } from './building.ts';
+import { WORKSTATION_SUBKINDS } from './workstation.ts';
 import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
 import { linkMinutes } from './travel.ts';
 import { groundFloor, place, world } from './fixtures.ts';
@@ -8,6 +10,7 @@ import { populationAt, sizeIn } from '../character/population.ts';
 import { speciesFor } from '../character/species.ts';
 import { PLAYER } from '../social/edge.ts';
 import type { Place, Region, World } from './types.ts';
+import type { Building } from './workstation.ts';
 
 /*
  * The town skeleton (DESIGN 6c §3c-ii): a settlement's TIER comes first, and its
@@ -154,4 +157,38 @@ test('adding a building with a taken id is a no-op', () => {
   const p1 = addBuilding(place('p1'), { id: 'x', tier: 1, container: {} });
   const p2 = addBuilding(p1, { id: 'x', tier: 2, container: {} });
   assert.equal(buildingAt(p2, 'x')!.tier, 1);
+});
+
+/*
+ * A building's workstation count is what modules/plots it actually occupies
+ * (DESIGN 6c §3f/§3h) - a real derivation now, not a hand-fed number.
+ */
+
+test('workstation subkinds are closed to three', () => {
+  assert.deepEqual([...WORKSTATION_SUBKINDS], ['economic', 'service', 'administrative']);
+});
+
+test('a building with no workstations occupies no modules', () => {
+  const b: Building = { tier: 1, container: {} };
+  assert.equal(modulesNeeded(b.workstations?.length ?? 0), 0);
+});
+
+test('occupiedModulesOf sums modules across every building on a place', () => {
+  const p1 = addBuilding(place('p1'), { id: 'a', tier: 1, container: {}, workstations: [{ subkind: 'economic' }, { subkind: 'economic' }] });
+  const p2 = addBuilding(p1, { id: 'b', tier: 1, container: {}, workstations: [{ subkind: 'service' }] });
+  assert.equal(occupiedModulesOf(p2), modulesNeeded(2) + modulesNeeded(1));
+});
+
+test("a settlement's free plots follow real building occupancy", () => {
+  const w = world({ seed: 5 });
+  const ground = w.regions['floor-0'] as Region;
+  const town = ground.places.find((p) => p.id === 'town')!;
+  const built = addBuilding(town, {
+    id: 'a',
+    tier: 1,
+    container: {},
+    workstations: [{ subkind: 'economic' }, { subkind: 'economic' }, { subkind: 'economic' }, { subkind: 'economic' }],
+  });
+  const plan = townPlan(w, 'floor-0', 'town')!;
+  assert.equal(freePlotsOf(w, 'floor-0', 'town', occupiedModulesOf(built)), plan.plots.length - modulesNeeded(4));
 });
