@@ -66,6 +66,9 @@ const deltaSchema = obj(
     revealWay: str,
     /** A settlement here the player BUYS from its holder. Whether they can is the engine's call. */
     acquirePlace: str,
+    /** WHICH workstation, on WHICH building, the player works this turn. Both or neither. */
+    workBuilding: str,
+    workStation: str,
     /** Whether a fight breaks out. What shows up is decided by depth, not here. */
     startCombat: { type: 'boolean' },
     /** Who attacked first, when a fight starts: the player, or something else. */
@@ -97,7 +100,7 @@ const deltaSchema = obj(
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
-    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace',
+    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation',
   ],
 );
 
@@ -146,6 +149,10 @@ export type FlatDelta = {
   revealWay: string;
   /** A settlement here the player buys. Empty on almost every turn. */
   acquirePlace: string;
+  /** A building here the player works a station in. Empty on almost every turn. */
+  workBuilding: string;
+  /** WHICH workstation on that building. The building decides what running it does. */
+  workStation: string;
   startCombat: boolean;
   /** 'them' when the player was attacked; 'player' when they struck first. */
   startedBy: string;
@@ -219,6 +226,9 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   if (revealWay) delta.revealWay = revealWay;
   const acquirePlace = meaningful(flat.acquirePlace);
   if (acquirePlace) delta.acquirePlace = acquirePlace;
+  const workBuilding = meaningful(flat.workBuilding);
+  const workStation = meaningful(flat.workStation);
+  if (workBuilding && workStation) delta.runWorkstation = { building: workBuilding, workstation: workStation };
   if (flat.learnFacts?.length) {
     const facts = flat.learnFacts.filter((f) => meaningful(f));
     if (facts.length) delta.learnFacts = facts;
@@ -325,6 +335,18 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
   const exits = place?.connections ?? [];
+
+  /*
+   * WORKSTATIONS HERE, by building.
+   *
+   * Only a workstation that HAS a method is offered: an administrative one has
+   * none to run, and naming it would be refused by `validateDelta` anyway — the
+   * same "the model cannot get a field wrong it is never shown" rule as `pack`.
+   */
+  const buildings = (place?.buildings ?? []).flatMap((b) => {
+    const stations = (b.workstations ?? []).filter((w) => w.method && w.id).map((w) => w.id as string);
+    return stations.length ? [`  - ${b.id}: ${stations.join(', ')}`] : [];
+  });
 
   const pack = state.pc.inventory.stacks.map((stack) => {
     const worn = Object.values(state.pc.inventory.equipped).includes(stack.item.id) ? ', worn' : '';
@@ -452,6 +474,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     // still must not — that boundary is unchanged. This is the side of the wall
     // that is allowed to know what the player is carrying.
     pack.length ? `Carrying (the ONLY legal useItem/equipItem ids):\n${pack.join('\n')}` : 'Carrying: nothing',
+    buildings.length ? `Workstations here (the ONLY legal workBuilding/workStation ids):\n${buildings.join('\n')}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -489,6 +512,11 @@ const SYSTEM = [
   'acquirePlace is for the player BUYING the settlement they stand in from the one',
   'who holds it, and only when the fiction is a deal struck. The engine checks the',
   'price, the trust and the law; name the place id and nothing else.',
+  '',
+  'workBuilding and workStation are for running a workstation the player stands at —',
+  'a smith at the anvil, a farmer in the field. Name the building id and the',
+  'workstation id exactly as listed below; the workstation decides what running it',
+  'does. Leave both empty on almost every turn.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson, deedPerson, addressedPerson',

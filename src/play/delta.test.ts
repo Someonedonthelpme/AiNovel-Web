@@ -7,13 +7,15 @@ import { activeRegion, clockOf, linkMinutes, stairCost, travelTime } from '../wo
 import { MINUTES_PER_TICK, TICKS_PER_DAY } from '../world/calendar.ts';
 import { takeRest } from './rest.ts';
 import { NEED_MAX } from '../character/persona.ts';
-import { playState } from './fixtures.ts';
+import { playState, emptyDelta, directorOutput } from './fixtures.ts';
 import { forbids, STANDARD } from '../rules/ruleset.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { addBuilding, buildingAt } from '../world/settlement.ts';
 import { isFull } from '../world/types.ts';
 import type { Building } from '../world/workstation.ts';
 import type { Region } from '../world/types.ts';
+import { runDirector, toWorldDelta } from '../llm/director.ts';
+import { FakeProvider } from '../llm/provider.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
   kind: 'turn', input: 'x', mode: 'conversation', classification: 'NEUTRAL',
@@ -463,4 +465,25 @@ test('the engine refuses working a station it should not, and says why', () => {
     assert.equal(v.delta.runWorkstation, undefined, why);
     assert.match(v.rejected.join(' '), reason, why);
   }
+});
+
+/* The Director's side: naming a workstation via workBuilding/workStation. */
+
+test('toWorldDelta turns workBuilding/workStation into a runWorkstation delta', () => {
+  const flat = { ...emptyDelta(), workBuilding: 'smithy-1', workStation: 'anvil' };
+  assert.deepEqual(toWorldDelta(flat).runWorkstation, { building: 'smithy-1', workstation: 'anvil' });
+});
+
+test('either field empty means no runWorkstation at all', () => {
+  assert.equal(toWorldDelta({ ...emptyDelta(), workBuilding: 'smithy-1' }).runWorkstation, undefined);
+  assert.equal(toWorldDelta({ ...emptyDelta(), workStation: 'anvil' }).runWorkstation, undefined);
+});
+
+test('the Director is told which workstations exist here, and cannot name one it was never shown', async () => {
+  const state = withWorkstation(playState());
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, 'work the forge', 'conversation', []);
+  assert.ok(provider.allSentText().includes('smithy-1'));
+  assert.ok(provider.allSentText().includes('anvil'));
+  assert.ok(!provider.allSentText().includes('hall-desk'), 'a methodless workstation is not offered');
 });
