@@ -943,7 +943,7 @@ to revisit):
 | space | **Zone** | a named or functional area of a map: a district, a plot, a room, a field |
 | space | **Portal** | a door, a stair, a map edge |
 | built | **Building** | a footprint on a zone; storeys, each an interior map; a TYPE from a closed catalogue; tier, condition, owner |
-| things | **Feature** | `kind`, closed (§3g): `furniture \| station \| container \| resource node` — each with state |
+| things | **Feature** | `kind`, closed (§3g): `furniture \| workstation \| container \| resource node` — each with state |
 | things | **Ground item** | item instances lying on a tile (the existing namespaced instances) |
 | living | **Actor** | named people and creatures: a position and a routine; crowds stay pooled (§5) |
 | identity | **Place** | the graph node (§3's province): name, holder, crowd, its hub map |
@@ -1458,10 +1458,19 @@ parent stratum` literally, no sixth rung invented.
 camp, ruin — §2a already has this). No, purely decorative/interactive → `Feature`.
 Not a blanket "landmark = Feature."
 
-**Still open:** does any AL unit (district, province, ...) ever need its own ruler or
-law independent of the settlements inside it? Not decided — the model above works
-whether the answer is yes or no, but the answer changes whether AL units need a
-`holder` field of their own.
+**Settled 2026-09-26: no, an AL unit never needs its own ruler.** Every non-pass-through
+AL unit already has a working governance path without one:
+- **If it has a seat**, the seat settlement's already-derived ruler (§1: *"highest
+  standing"*) operates that settlement's hall, whose administrative-workstation scope
+  IS that AL unit's law (§3f/§3i). A ruler stored on the AL unit itself would duplicate
+  what the seat's ruler+hall already gives — the second-owner case §3d rule 3 forbids.
+- **If it has no seat** (a wild-only AL unit, kept as a real case above), it has no
+  hall to edit its own law, so it inherits up from its parent AL unit — reusing the
+  already-shipped rule (§3: *"Laws... resolve innermost-wins, else inherit up"*,
+  `world/strata.ts:13,:51`). No new mechanism.
+
+An AL unit's ruler is therefore fully derivable — the seat's ruler, or inherit up —
+and must not be stored separately; no `holder` field on the AL unit itself.
 
 ### 3f. Buildings: modules, and tier as a derived indicator (2026-09-25)
 
@@ -1471,7 +1480,7 @@ geometric pieces, not the fixed 3×3 the shipped code stamps today — carved at
 founding/upgrade time from `(building type, building tier)`. This is a real change to
 where footprint-stamping happens (out of `townPlan`, into §4's founding step), not a
 rewrite of what a plot marks.
-- **A module typically holds 1–3 related stations** (a "forge room" pairs anvil +
+- **A module typically holds 1–3 related workstations** (a "forge room" pairs anvil +
   forge, not one module each).
 - **Footprint growth eats the settlement's plot budget** — real tension, not a new
   dial: a building expanding consumes neighbouring plot anchors.
@@ -1481,22 +1490,23 @@ rewrite of what a plot marks.
   footprints, tech-gated later).
 
 **Building tier is a derived indicator, exactly like settlement tier.** Tile count,
-worker count and station count are read OFF the building, never a stored gate. The
+worker count and workstation count are read OFF the building, never a stored gate. The
 real gate is the runner's life-class rank (apprentice→master, §3b) — same principle
 §3d already applied to settlements, where the numeric tier is a read-out and the
 REAL gate is the ruler's rank.
 
-**No building is purely stationless.** A station is the general unit of "a building
-DOES something" — goods, a need, or an administrative edit — not only production;
-`Feature` already listed non-economic examples (doors, traps) before this session.
-Consequence: a building with literally zero stations isn't a degenerate case, it IS
-pure scenery — footprint and flavour, no mechanical role. **This answers HANDOFF's
-long-standing "scenery buildings" open question**, not something decided fresh here.
-- **`hall`** — one administrative station, no new `palace` type. Its scope SCALES by
-  the settlement's AL-seat rank (§3e): a village hall writes only village law; a
+**No building is purely without a workstation.** A workstation is the general unit of
+"a building DOES something" — goods, a need, or an administrative edit — not only
+production; `Feature` already listed non-economic examples (doors, traps) before this
+session. Consequence: a building with literally zero workstations isn't a degenerate
+case, it IS pure scenery — footprint and flavour, no mechanical role. **This answers
+HANDOFF's long-standing "scenery buildings" open question**, not something decided
+fresh here.
+- **`hall`** — one administrative workstation, no new `palace` type. Its scope SCALES
+  by the settlement's AL-seat rank (§3e): a village hall writes only village law; a
   metropolis hall, being a province seat, writes province law. Reuses one type instead
   of inventing a second building for the same job at a bigger scope.
-- **`home`** — one service station (hearth/bed) targeting the `rest` need, same
+- **`home`** — one service workstation (hearth/bed) targeting the `rest` need, same
   mechanism as an inn's hearth (§3h) — plugs into the already-decided long-rest rule
   (§1: *"a settlement you hold is a place you can long-rest"*).
 
@@ -1507,23 +1517,31 @@ nodes, light, traps"*), not a closed list, and it listed "doors" — which §2a'
 table already gives a separate type, `Portal` (*"a door, a stair, a map edge"*). Same
 class of self-contradiction as the `dungeon` map-kind fix above.
 
-**`Feature.kind`, closed:** `furniture | station | container | resource node`.
+**Naming collision caught 2026-09-26: "station" is already a shipped, tested type**
+(`STATIONS`, `play/station.ts:16`) meaning a person's SOCIAL rank — noble, merchant,
+guard, adventurer, villager, beggar (§ grudge acts, shipped 2026-09-17). Unrelated to
+anything here. Renaming the unbuilt concept rather than the shipped one: **this
+building-machine concept is `workstation` from here on.** §3c through §3d (all dated
+before this session) still say "station" for it — read it as `workstation` there too;
+their history isn't rewritten, but the word going forward is this one.
+
+**`Feature.kind`, closed:** `furniture | workstation | container | resource node`.
 - `furniture` — presence only, no state to speak of (a light, a trap).
 - `container` — a goods pool, capacity read from the building's tier. **Absorbs
   "storage module" as a special case** — storage is simply `kind: container`, nothing
   new.
 - `resource node` — what it yields on interaction (§4's gathering); no runner.
-- `station` — see §3h.
+- `workstation` — see §3h.
 
-### 3h. Stations: a method per station, not per building (2026-09-25)
+### 3h. Workstations: a method per workstation, not per building (2026-09-25)
 
-**"Method slot" is not a building-level abstraction.** Each `station`-kind Feature
-carries its own method directly; a building's behaviour is the SUM of its stations',
-not a count of abstract slots on the building. This is deliberately more granular
-than Vic3's per-building production-method slots.
+**"Method slot" is not a building-level abstraction.** Each `workstation`-kind Feature
+carries its own method directly; a building's behaviour is the SUM of its
+workstations', not a count of abstract slots on the building. This is deliberately
+more granular than Vic3's per-building production-method slots.
 
-**`station` sub-kinds, closed** — the three jobs a station can do do not share a
-shape:
+**`workstation` sub-kinds, closed** — the three jobs a workstation can do do not share
+a shape:
 
 | subkind | state | runner | example |
 |---|---|---|---|
@@ -1531,26 +1549,26 @@ shape:
 | `service` | purpose · technique · output(a `need` axis, amount) · time | a life class, same off-class rule | hearth, healer's table |
 | `administrative` | scope (derived, §3e/§3f) · what law or policy it may edit | **none — the settlement's holder/ruler operates it directly** | hall's council table |
 
-- **`service` resolves the healer/inn-rest gap** flagged twice earlier: a station's
-  output is EITHER `{category: LootCategory, count}` OR `{need: NeedAxis, amount}` —
-  the second reuses the persona/needs substrate that already exists (step 4), not a
-  third invented vocabulary. §3c-i's rule (*"no second resource list"*) is respected —
-  this is the SECOND list that was already there, not a new one.
+- **`service` resolves the healer/inn-rest gap** flagged twice earlier: a
+  workstation's output is EITHER `{category: LootCategory, count}` OR `{need:
+  NeedAxis, amount}` — the second reuses the persona/needs substrate that already
+  exists (step 4), not a third invented vocabulary. §3c-i's rule (*"no second resource
+  list"*) is respected — this is the SECOND list that was already there, not a new one.
 - **Method is a category of sub-methods**; the sub-method is the executable unit,
-  unlocked today by `(building tier, required station present)`, later also gated by a
-  tech tree — same shape both times, no rework when tech lands.
+  unlocked today by `(building tier, required workstation present)`, later also gated
+  by a tech tree — same shape both times, no rework when tech lands.
 - **input/output** are lists of `{category, count}` pairs (`LOOT_CATEGORIES` +
   `seed`/`tool`/`ingredient`, §3c-i); **time** is one scalar; **quality reuses item
   rarity** — §3d already forbids a second quality ladder.
-- **Policy stays building-wide**, not per-station: sets work hours, lands on
+- **Policy stays building-wide**, not per-workstation: sets work hours, lands on
   stakeholder disposition and relationship toward the owner, and modulates output only
   INDIRECTLY through that — never a second direct output dial. **Policy changes only
-  through a station** (an office/ledger, `economic` or bundled with the building's
-  primary station) — never a value edited with nothing in the world as its lever, the
-  same rule an administrative station enforces for law.
-- **Transport-in resolved.** Inside one building it is free — a station reads/writes
-  the building's own `container`. Crossing a building's boundary reuses the
-  already-decided NPC-journey mechanism (§2: *"NPC journeys — which never walk
+  through a workstation** (an office/ledger, `economic` or bundled with the building's
+  primary workstation) — never a value edited with nothing in the world as its lever,
+  the same rule an administrative workstation enforces for law.
+- **Transport-in resolved.** Inside one building it is free — a workstation
+  reads/writes the building's own `container`. Crossing a building's boundary reuses
+  the already-decided NPC-journey mechanism (§2: *"NPC journeys — which never walk
   tiles — stay consistent"* with the link's time budget) — a supply run between two
   buildings' containers costs exactly the link's time, no literal goods-on-tiles
   needed, no new system.
@@ -1561,7 +1579,7 @@ it doesn't match this codebase's own precedent. Ruler ranks and the settlement l
 both use a DISTINCT plain-English word per rung, not a shared size adjective — so each
 building type names its own rungs too, same as the smithy example already did.
 
-### 3i. The station catalogue (2026-09-26)
+### 3i. The building catalogue (2026-09-26)
 
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
@@ -1572,7 +1590,7 @@ apart — so it is a second, LIGHTER tag that exists only for naming, the same w
 The recipe itself still runs on `LOOT_CATEGORIES` regardless of the tag.
 
 **What the tag names is category-dependent — the defining concept of the building's
-primary station, whichever axis that station actually operates on:**
+primary workstation, whichever axis that workstation actually operates on:**
 
 | category shape | tag names | example |
 |---|---|---|
@@ -1599,8 +1617,8 @@ Every type's tier 4 is reserved — nothing unlocks there yet, since the tech tr
 would gate a further sub-method doesn't exist. A placeholder rung, not a skipped one.
 
 **`hall` is the one exception — its name tracks AL-seat rank (§3e), not its own
-building growth**, because its administrative station's SCOPE is what actually grows,
-not its footprint:
+building growth**, because its administrative workstation's SCOPE is what actually
+grows, not its footprint:
 
 | AL-seat rank | name |
 |---|---|
@@ -1613,7 +1631,7 @@ not its footprint:
 **Per-type breakdown, the same shape as smithy's worked table in §3f** — module added
 per tier, the technique it unlocks, and that technique's input→output. `hall` and
 `home` are specified in §3f already (administrative scope-scaling; a `rest`-targeting
-service station) and aren't repeated here.
+service workstation) and aren't repeated here.
 
 - **armoury** `(government, arms)` — quartermaster. basic: rack (`requisition`:
   material+part → weapon,armour, stock) → expanded: +workbench (`maintain`:
@@ -1624,7 +1642,7 @@ service station) and aren't repeated here.
   material → pack) → expanded: +vat (`tan-vats`: +ingredient → pack,part) → advanced:
   +press (`leather-press`: +tool → pack,part, higher quality) → grand: reserved.
 - **farmstead** `(agriculture, grain)` — farmer. basic: rows, an abstracted field
-  (`subsistence`: seed → rations) → expanded: +barn, second station threshing
+  (`subsistence`: seed → rations) → expanded: +barn, second workstation threshing
   (`plough team`: +tool → rations,ingredient) → advanced: +irrigation (`irrigated
   fields`: +ingredient → rations,ingredient, higher yield) → grand: reserved.
 - **pasture** `(agriculture, wool)` — shepherd. basic: pen (`graze`: no input →
@@ -1637,8 +1655,15 @@ service station) and aren't repeated here.
   (`tavern trade`: more volume) → grand: reserved.
 - **general store** `(amenities, trade)` — shopkeeper. basic: shelves (`economic`,
   `trade`: buys others' output → resale) → expanded: +stall, a second sales point →
-  advanced: +ledger — **this is also the building's policy/office station**, the
+  advanced: +ledger — **this is also the building's policy/office workstation**, the
   physical lever §3h requires for changing policy → grand: reserved.
+
+**Gap flagged 2026-09-26, not filled: `wall`.** §4 (2026-09-19, predates this session)
+already names it as an example — *"a wall's, [tier caps] defence"* — but no `wall`
+type was ever added, and it may not fit this model at all: it has no goods, no runner,
+no life class, and its footprint is a settlement's whole perimeter, not one plot. Open
+whether it belongs in this catalogue as an eleventh type, or as a settlement-tier
+upgrade outside it entirely.
 
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
