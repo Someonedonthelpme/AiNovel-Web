@@ -1555,11 +1555,90 @@ shape:
   buildings' containers costs exactly the link's time, no literal goods-on-tiles
   needed, no new system.
 
-**Still open:** building tier's rung NAMES — one generic 4-rung ladder shared by every
-building type, or does each type name its own (as the smithy example did)? The
-catalogue itself is still only worked through one example (smithy) in this depth; the
-other nine types from the earlier draft table haven't been run through modules,
-stations and tier yet.
+**Tier rung names — settled 2026-09-26, reversed from this section's first draft.** A
+shared generic ladder (`basic→expanded→advanced→grand`) was tried first and dropped:
+it doesn't match this codebase's own precedent. Ruler ranks and the settlement ladder
+both use a DISTINCT plain-English word per rung, not a shared size adjective — so each
+building type names its own rungs too, same as the smithy example already did.
+
+### 3i. The station catalogue (2026-09-26)
+
+**The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
+list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
+building without a new hardcoded type. The tag can't be a `LootCategory` directly — the
+closed vocabulary's `material` is too coarse to tell ore-working from leatherworking
+apart — so it is a second, LIGHTER tag that exists only for naming, the same way
+`Region.biome` is free text (W1) beside the closed mechanical vocabulary underneath.
+The recipe itself still runs on `LOOT_CATEGORIES` regardless of the tag.
+
+**What the tag names is category-dependent — the defining concept of the building's
+primary station, whichever axis that station actually operates on:**
+
+| category shape | tag names | example |
+|---|---|---|
+| economic (production/agriculture) | the primary material | smithy `(production, ore)`, tannery `(production, hide)` |
+| service | the `NeedAxis` it targets | inn `(amenities, rest)`, home `(residential, rest)` — no collision, category is part of the key |
+| administrative | what it edits | hall `(government, law)` |
+| trade-only, no material or need | its own technique name | general store `(amenities, trade)` |
+
+**All ten types, tier names keyed on the building's OWN growth** (not settlement
+tier — see the exception below for `hall`):
+
+| type | key | tier 1 | tier 2 | tier 3 | tier 4 |
+|---|---|---|---|---|---|
+| smithy | `(production, ore)` | workshop | smithy | forge hall | armory works |
+| armoury | `(government, arms)` | rack-house | armoury | arsenal | ordnance works |
+| tannery | `(production, hide)` | tanning shed | tannery | tan-yard | leatherworks |
+| farmstead | `(agriculture, grain)` | croft | farmstead | grange | manor farm |
+| pasture | `(agriculture, wool)` | paddock | pasture | sheepfold | grazing hold |
+| inn | `(amenities, rest)` | alehouse | inn | tavern | coaching inn |
+| general store | `(amenities, trade)` | trading post | store | market house | merchant exchange |
+| home | `(residential, rest)` | cottage | house | townhouse | manor |
+
+Every type's tier 4 is reserved — nothing unlocks there yet, since the tech tree that
+would gate a further sub-method doesn't exist. A placeholder rung, not a skipped one.
+
+**`hall` is the one exception — its name tracks AL-seat rank (§3e), not its own
+building growth**, because its administrative station's SCOPE is what actually grows,
+not its footprint:
+
+| AL-seat rank | name |
+|---|---|
+| not a seat, any settlement tier | village hall / town hall (bare, local-only) |
+| subdistrict-seat | town hall |
+| district-seat | city hall |
+| province-seat | provincial hall |
+| state-seat | **palace** |
+
+**Per-type breakdown, the same shape as smithy's worked table in §3f** — module added
+per tier, the technique it unlocks, and that technique's input→output. `hall` and
+`home` are specified in §3f already (administrative scope-scaling; a `rest`-targeting
+service station) and aren't repeated here.
+
+- **armoury** `(government, arms)` — quartermaster. basic: rack (`requisition`:
+  material+part → weapon,armour, stock) → expanded: +workbench (`maintain`:
+  weapon,armour(damaged)+part → weapon,armour, restored) → advanced: +vault, bigger
+  container, second rack (`arsenal`: +tool → weapon,armour, faster/larger) → grand:
+  reserved.
+- **tannery** `(production, hide)` — tanner. basic: curing rack (`hand-cure`:
+  material → pack) → expanded: +vat (`tan-vats`: +ingredient → pack,part) → advanced:
+  +press (`leather-press`: +tool → pack,part, higher quality) → grand: reserved.
+- **farmstead** `(agriculture, grain)` — farmer. basic: rows, an abstracted field
+  (`subsistence`: seed → rations) → expanded: +barn, second station threshing
+  (`plough team`: +tool → rations,ingredient) → advanced: +irrigation (`irrigated
+  fields`: +ingredient → rations,ingredient, higher yield) → grand: reserved.
+- **pasture** `(agriculture, wool)` — shepherd. basic: pen (`graze`: no input →
+  rations,material) → expanded: +shearing (`herd&shear`: +tool →
+  rations,material,pack) → advanced: +breeding (`selective breeding`: +tool,ingredient
+  → higher yield and quality) → grand: reserved.
+- **inn** `(amenities, rest)` — innkeeper; the one type mixing `service` and
+  `economic`. basic: hearth (`service`: rest, no goods) → expanded: +counter
+  (`economic`, `trade`: rations,draught → draught, resale) → advanced: +cellar
+  (`tavern trade`: more volume) → grand: reserved.
+- **general store** `(amenities, trade)` — shopkeeper. basic: shelves (`economic`,
+  `trade`: buys others' output → resale) → expanded: +stall, a second sales point →
+  advanced: +ledger — **this is also the building's policy/office station**, the
+  physical lever §3h requires for changing policy → grand: reserved.
 
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
