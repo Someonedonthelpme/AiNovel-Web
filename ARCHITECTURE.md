@@ -206,6 +206,11 @@ places, a loop floor's, nor a floor where you hold a settlement's**, [lod.ts:61]
 not persuasion) · `layout.ts` (deterministic positions for the floor map) ·
 `settlement.ts` (what a settlement GREW into, and what follows from it,
 [settlement.ts:51](src/world/settlement.ts:51)) ·
+`workstation.ts` (a workstation runs its own recipe against a building's container,
+capped by tier-derived capacity and scaled by the runner's class fit — nothing in
+`play/` calls it yet, [workstation.ts:30](src/world/workstation.ts:30)) ·
+`building.ts` (packs workstations into modules, 1–3 each, and gates a building's
+growth on a settlement's free plots, [building.ts:11](src/world/building.ts:11)) ·
 `map.ts` (hub and field maps and 8-way pathfinding; doors read off the place graph,
 never stored, [map.ts:335](src/world/map.ts:335)) · `route.ts` (a link's best path across its field).
 
@@ -431,6 +436,12 @@ The crowd is trimmed to the tier's cap where it is read ([population.ts:121](src
 **and only where the caller holds a whole world.** The population derivation and the
 balance harness pass a narrow shape with no places in it, see no tier, and are
 untouched, which is what the standing no-rebalance rule (DESIGN 6c) wants.
+**`Place.buildings`** ([types.ts:64](src/world/types.ts:64)) — what stands on a
+settlement, each building addressable by a stable id ([settlement.ts:152](src/world/settlement.ts:152));
+optional, so no world stored before this needs migrating. Module and plot occupancy
+is read off each building's own workstation count
+([building.ts:11](src/world/building.ts:11), [settlement.ts:163](src/world/settlement.ts:163)),
+never a hand-fed number.
 **`Gazetteer`** (compressed) — geometry is *destroyed*; name, biome, summary and
 known people survive ([lod.ts:40](src/world/lod.ts:40)).
 
@@ -519,6 +530,17 @@ come from?"
 | `soulsOf` ([settlement.ts:64](src/world/settlement.ts:64)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
 | `rulerOf` ([settlement.ts:73](src/world/settlement.ts:73)) | the holder, the tier | who rules, and what a ruler of a place this size is called |
 | `townPlan` ([settlement.ts:89](src/world/settlement.ts:89)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
+| `freePlotsOf` ([settlement.ts:146](src/world/settlement.ts:146)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
+| `buildingAt` ([settlement.ts:152](src/world/settlement.ts:152)) | a place, a building id | the building standing there, or null |
+| `addBuilding` ([settlement.ts:157](src/world/settlement.ts:157)) | a place, a building | the place with it added — a no-op on a taken id, never a silent overwrite |
+| `occupiedModulesOf` ([settlement.ts:163](src/world/settlement.ts:163)) | every building on a place | modules occupied, summed |
+| `runMethod` ([workstation.ts:30](src/world/workstation.ts:30)) | a container, a sub-method, hours worked, an optional capacity | batches completed and the container after — capped by whichever of time, input or space runs out first |
+| `capacityOf` ([workstation.ts:41](src/world/workstation.ts:41)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
+| `runAt` ([workstation.ts:46](src/world/workstation.ts:46)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
+| `runWorkstation` ([workstation.ts:51](src/world/workstation.ts:51)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
+| `efficiencyOf` ([workstation.ts:65](src/world/workstation.ts:65)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
+| `modulesNeeded` ([building.ts:11](src/world/building.ts:11)) | a workstation count | modules needed to hold them, 1–3 each |
+| `canUpgrade` ([building.ts:16](src/world/building.ts:16)) | current modules, next modules, free plots | whether the DELTA fits — not the whole new total |
 | `holderOf` ([holding.ts:14](src/world/holding.ts:14)) | a place, `World.people` | who holds a settlement: the player if stored, else the highest standing present |
 | `signposted` / `walkRoute` ([travel.ts:277](src/world/travel.ts:277), [:302](src/world/travel.ts:302)) | a region, where you stand, typed text, and the ends of the field you are on | the place names you can know of — one rule, shared by the redaction wall and walking — and the fewest-step route a typed "go to" walks — including back to the place you set out from, when you are on its field |
 | `personRef` ([delta.ts:61](src/play/delta.ts:61)) | a name or id the model wrote | who it means: the id, else one name match ignoring case, spaces and punctuation, people here first; else refused, and never guessed |
@@ -1659,6 +1681,9 @@ Every balance number, and where it lives.
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:213](src/world/map.ts:213) |
 | hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
 | a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:19](src/world/settlement.ts:19), [:23](src/world/settlement.ts:23) |
+| a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:41](src/world/workstation.ts:41) |
+| workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
+| the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:8](src/world/workstation.ts:8) |
 | difficult ground | rough costs 2 movement to enter, open 1 | [grid.ts:102](src/combat/grid.ts:102) |
 | sight on the road | 12 tiles, and not through a wall | [onroad.ts:24](src/play/onroad.ts:24) |
 | the centre view | 41×25 tiles around you, clipped to the map | [grid.ts:8](src/server/grid.ts:8) |
@@ -1850,6 +1875,14 @@ every thrown error into `status: 500`, `POST /api/sessions` among them
 ([game.ts:641](src/server/game.ts:641)), reaches the client as a server fault. The
 only 400s are written by hand: a missing seed, a missing combat action, and a
 refused climb target.
+
+**`Building.tier` is stored, not derived, though §3f's own principle says tier
+should be a read-out from workstation and footprint counts.** No formula for that
+derivation is decided, and no-rebalance-until-feature-complete means it would be
+placeholder numbers regardless — `capacityOf` reads tier directly
+([workstation.ts:41](src/world/workstation.ts:41)) rather than computing it from
+`Building.workstations.length` ([workstation.ts:15](src/world/workstation.ts:15)).
+Flagged in DESIGN.md §3f and HANDOFF.md rather than fixed quietly.
 
 ---
 

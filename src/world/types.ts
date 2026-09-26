@@ -58,8 +58,8 @@ export type Place = {
    */
   holder?: PersonId;
   /**
-   * What stands here (DESIGN 6c §2a/§3f). Module/plot occupancy isn't wired
-   * to this yet — that waits on a building carrying its own workstation count.
+   * What stands here (DESIGN 6c §2a/§3f). Module/plot occupancy reads off each
+   * building's own workstation count (`occupiedModulesOf`, `settlement.ts:163`).
    */
   buildings?: import('./workstation.ts').Building[];
 };
