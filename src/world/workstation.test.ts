@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { capacityOf, runAt, runMethod, runWorkstation } from './workstation.ts';
+import { capacityOf, efficiencyOf, runAt, runMethod, runWorkstation } from './workstation.ts';
 import type { Building, SubMethod } from './workstation.ts';
 
 /*
@@ -108,4 +108,48 @@ test('two workstations on one building run independently by id', () => {
   };
   assert.equal(runWorkstation(b, 'forge', 1)!.container.weapon, 1);
   assert.equal(runWorkstation(b, 'anvil', 1)!.container.part, 1);
+});
+
+/*
+ * The runner off-class penalty (DESIGN 6c §3c): on-class is full efficiency;
+ * off-class is judged on the named class's stat, worse if the runner's own
+ * class doesn't use that stat at all - "worst to best." Exact magnitudes
+ * aren't decided (no-rebalance-until-feature-complete); only the ORDERING is.
+ */
+
+test('on-class is always at least as good as any off-class fit', () => {
+  const range = [1, 20] as const;
+  for (const stat of [1, 10, 20]) {
+    assert.ok(efficiencyOf('on-class', stat, range) >= efficiencyOf('shares-stat', stat, range));
+    assert.ok(efficiencyOf('on-class', stat, range) >= efficiencyOf('raw-stat', stat, range));
+  }
+});
+
+test('sharing the named stat off-class beats the raw stat alone, same value', () => {
+  const range = [1, 20] as const;
+  for (const stat of [1, 10, 20]) assert.ok(efficiencyOf('shares-stat', stat, range) >= efficiencyOf('raw-stat', stat, range));
+});
+
+test('efficiency scales worst to best with the stat, in both off-class fits', () => {
+  const range = [1, 20] as const;
+  for (const fit of ['shares-stat', 'raw-stat'] as const) {
+    assert.ok(efficiencyOf(fit, 20, range) >= efficiencyOf(fit, 10, range));
+    assert.ok(efficiencyOf(fit, 10, range) >= efficiencyOf(fit, 1, range));
+  }
+});
+
+test('efficiency never leaves (0, 1]', () => {
+  const range = [1, 20] as const;
+  for (const fit of ['on-class', 'shares-stat', 'raw-stat'] as const) {
+    for (const stat of [1, 10, 20]) {
+      const e = efficiencyOf(fit, stat, range);
+      assert.ok(e > 0 && e <= 1);
+    }
+  }
+});
+
+test("lower efficiency scales down a workstation's effective hours", () => {
+  const method: SubMethod = { input: [], output: [{ category: 'weapon', count: 1 }], time: 1 };
+  const b: Building = { tier: 1, container: {}, workstations: [{ id: 'w1', subkind: 'economic', method }] };
+  assert.ok(runWorkstation(b, 'w1', 10, 0.5)!.batches < runWorkstation(b, 'w1', 10, 1)!.batches);
 });
