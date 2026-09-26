@@ -234,6 +234,7 @@ export type LootProfile = {
 
 export const LOOT_CATEGORIES = [
   'rations', 'draught', 'weapon', 'armour', 'pack', 'part', 'material', 'book',
+  'seed', 'tool', 'ingredient',
 ] as const;
 export type LootCategory = (typeof LOOT_CATEGORIES)[number];
 

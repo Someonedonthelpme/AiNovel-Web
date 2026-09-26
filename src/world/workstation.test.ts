@@ -37,6 +37,11 @@ test('a container category never goes negative', () => {
   assert.ok(Object.values(out.container).every((n) => n! >= 0));
 });
 
+test('a recipe can use the three categories §3c-i decided but the code never had', () => {
+  const method: SubMethod = { input: [{ category: 'seed', count: 1 }], output: [{ category: 'ingredient', count: 1 }, { category: 'tool', count: 1 }], time: 1 };
+  assert.deepEqual(runMethod({ seed: 1 }, method, 1).container, { seed: 0, ingredient: 1, tool: 1 });
+});
+
 /*
  * A building's container has a capacity derived from its tier (DESIGN 6c §3g):
  * "a goods pool, capacity read from the building's tier." runAt wires a
