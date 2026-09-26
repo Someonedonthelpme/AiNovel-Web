@@ -1658,12 +1658,25 @@ service workstation) and aren't repeated here.
   advanced: +ledger — **this is also the building's policy/office workstation**, the
   physical lever §3h requires for changing policy → grand: reserved.
 
-**Gap flagged 2026-09-26, not filled: `wall`.** §4 (2026-09-19, predates this session)
-already names it as an example — *"a wall's, [tier caps] defence"* — but no `wall`
-type was ever added, and it may not fit this model at all: it has no goods, no runner,
-no life class, and its footprint is a settlement's whole perimeter, not one plot. Open
-whether it belongs in this catalogue as an eleventh type, or as a settlement-tier
-upgrade outside it entirely.
+**Settled 2026-09-26: `wall` is a settlement-level EDGE MODULE, not an eleventh
+catalogue type** (§4, 2026-09-19, had already named it as an example — *"a wall's,
+[tier caps] defence"* — before this session existed to fill it). Resolves with two
+mechanisms already decided, not a third:
+- **Ground level is impassable**, no different from any `#` wall tile already in W2's
+  terrain legend — no Feature needed there.
+- **Its walkable top is a STOREY**, reusing §2a's rule that upper storeys are drawn
+  from the ground footprint — a rampart is exactly that, one level above the
+  impassable core.
+- **A module's wall segment, narrow enough, has its storey tiles edge-adjacent to the
+  next module's** — so walking the rampart from one module to the next costs nothing,
+  no portal or stair, just ordinary tile adjacency at that storey. Not the same tower
+  FLOOR (that word stays reserved for depth) — the same storey.
+- Still has a **tier** (thickness/height caps defence) — but it belongs to the
+  settlement, not to any one building; no runner, no life class: `kind: furniture`.
+
+**The ten types above are a worked sample of the `(category, tag)` pattern, not the
+closed list** — any new pair is a valid building without a new hardcoded type; ten was
+enough to prove the pattern across every category, not a ceiling on it.
 
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
