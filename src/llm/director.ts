@@ -368,6 +368,9 @@ function echoesTold(world: PlayState['world'], floor: number): string[] {
       + `${eraOf(world, floor) - eraOf(world, e.floor)} years ago`);
 }
 
+// Thai repeal cues (DESIGN 6c 3k-ii). Left out on purpose: ล้มเลิก (give up), ยก alone (too broad), ยกเว้น (exempt).
+const REPEAL_CUES_TH = ['ยกเลิก', 'เพิกถอน', 'ไม่ผิดกฎหมายอีก', 'ไม่เป็นความผิดอีก'];
+
 export function directorContext(state: PlayState, canonFacts: string[], input = ''): string {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
@@ -412,8 +415,10 @@ export function directorContext(state: PlayState, canonFacts: string[], input = 
   const ownLaws = (alScope && region?.alUnits?.[alScope]?.laws) || [];
   // Repeal is the destructive verb, and a live run repealed the player's law on 3 of 20 remarks whenever it was
   // offered; an option that is not shown never fires. So it is offered only on the player's OWN repeal words
-  // (English only for now: a false negative costs a retry, a false positive cost the law). DESIGN 6c 3k-ii.
-  const repealCue = /\b(repeal|revoke|lift|abolish|rescind|overturn|no longer)/i.test(input);
+  // (English and a first-draft Thai list: a false negative costs a retry, a false positive cost the law). DESIGN 6c 3k-ii.
+  // Thai has no word boundaries, so `\b` never matches there and its cues are plain substrings.
+  const repealCue = /\b(repeal|revoke|lift|abolish|rescind|overturn|no longer)/i.test(input)
+    || REPEAL_CUES_TH.some((cue) => input.includes(cue));
   const inForce = region && alScope ? lawsBindingAt(region, alScope) : [];
 
   const pack = state.pc.inventory.stacks.map((stack) => {
