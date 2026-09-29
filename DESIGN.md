@@ -2051,6 +2051,21 @@ tests for `isBoundBy` and `rulerSeatOf` — two more entries off `ARCHITECTURE.m
 §12's dead-field ledger. `theft`/`trespass` enforcement, and literal detention,
 remain explicitly deferred, not decided here.
 
+**Respecified 2026-09-29 (user): one hall decree per turn, and a collect block the
+Director can copy.** A live run on the local 35B (50 clean trials) showed the Director
+answers a decree with the right verb, then fills the other verb fields with plausible
+values: on repeal/adopt decrees 3/5 and 2/5 carried a stray second verb, and on plain
+remarks 3 of ~30 fired hall verbs that the engine would have applied (a repeal, a
+`setSuccession` overwrite). Every verb field is in the schema's `required` list, so the
+model must write something in each. **New requirement:** the three hall verbs (`adoptLaw`,
+`repealLaw`, `setSuccession`) become ONE decree — `hallAction` plus `hallValue` — so two
+cannot be carried in one turn; the `WorldDelta` fields, `validateDelta` and the fold are
+unchanged. And `collect`'s brief block now mirrors the workstation block (building id and
+category together, both field names in the header), because only 1 of 9 valid trials
+completed a building-plus-category pair when the building was tucked inside the category
+line. **Not decided here:** a quote guard (the decree's exact words must appear in the
+player's input) for a remark that fires one verb — a separate approval.
+
 ---
 
 # THE ORDER — authoritative, re-derived 2026-09-05

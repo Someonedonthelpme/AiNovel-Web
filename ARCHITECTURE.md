@@ -683,8 +683,8 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:651](src/llm/director.ts:651)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:71](src/play/delta.ts:71)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:716](src/llm/director.ts:716)) | `PARLEY_SCHEMA` ([:689](src/llm/director.ts:689)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:425](src/play/turn.ts:425)); an answer outside the list is a refusal ([director.ts:713](src/llm/director.ts:713)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Director** ([director.ts:652](src/llm/director.ts:652)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:71](src/play/delta.ts:71)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
+| **Parley** ([director.ts:717](src/llm/director.ts:717)) | `PARLEY_SCHEMA` ([:690](src/llm/director.ts:690)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:425](src/play/turn.ts:425)); an answer outside the list is a refusal ([director.ts:714](src/llm/director.ts:714)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:368](src/world/floorgen.ts:368)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture (at least the budget minimum of people, [floorgen.ts:129](src/world/floorgen.ts:129); shown the last four floors, [:298](src/world/floorgen.ts:298); a name per place, [:324](src/world/floorgen.ts:324)) — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:141](src/world/floorgen.ts:141)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:593](src/world/floorgen.ts:593)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:143](src/world/floorgen.ts:143)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:145](src/world/floorgen.ts:145)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:660](src/world/floorgen.ts:660), [:666](src/world/floorgen.ts:666)) | **yes, in full** — inside `ClimbRecord.built` |
@@ -1072,7 +1072,7 @@ it DOES carry are not stat math:
 | **body plan** | which of the world's slots this shape has: `beastly` has no hands or feet, `winged` has no back (wings fill it, so no pack), `serpentine` no legs | [bodyplan.ts:24](src/character/bodyplan.ts:24), narrowed for a creature at [body.ts:19](src/play/body.ts:19) |
 | **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
 | **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:604](src/session/genesis.ts:604)): a generated floor's arrivals get plain opening edges ([floorgen.ts:530](src/world/floorgen.ts:530)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
-| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:347](src/rules/ruleset.ts:347)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:287](src/llm/director.ts:287)) | [ruleset.ts:259](src/rules/ruleset.ts:259) |
+| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:347](src/rules/ruleset.ts:347)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:285](src/llm/director.ts:285)) | [ruleset.ts:259](src/rules/ruleset.ts:259) |
 | **prey** | about one group in three hunts one other, of another type; a hunter attacks its quarry with ADVANTAGE — 46% to 79% between otherwise identical fighters, which is more than any template can say | [prey.ts:22](src/character/prey.ts:22), read at [conditions.ts:117](src/combat/conditions.ts:117) |
 
 A species below it gets one signature skill from `composeSkill`, and a subspecies
@@ -1279,19 +1279,22 @@ actually carried ([director.ts:540](src/llm/director.ts:540)), and only
 `workBuilding`/`workStation` ids naming a workstation that HAS a method to run
 ([director.ts:383](src/llm/director.ts:383)-[385](src/llm/director.ts:385),
 [:541](src/llm/director.ts:541)) — an `administrative` workstation, which never has
-one, is silently absent rather than validated and refused later. `adoptLaw` AND
-`setSuccession` options are listed behind the same single gate: only when the
-player holds the settlement, a real hall stands there, and its AL unit has scope
-([director.ts:408](src/llm/director.ts:408)-[409](src/llm/director.ts:409),
-[:542](src/llm/director.ts:542)-[543](src/llm/director.ts:543)) — every condition
-`hallAuthorityHere` would otherwise refuse either verb for. `repealLaw` is offered
-under the same gate AND only when the unit has laws of its own
-([director.ts:548](src/llm/director.ts:548)) — an inherited law would be refused, so it
-is never shown. The same gate also shows what is IN FORCE, own and inherited, and the
-effective succession law ([director.ts:546](src/llm/director.ts:546)-[547](src/llm/director.ts:547)).
-`collect` ids are offered only where the player holds the place and the category is in
-`COLLECTABLE` ([director.ts:545](src/llm/director.ts:545)); what is STORED is stated whether
-held or not ([director.ts:391](src/llm/director.ts:391)), since seeing it is harmless.
+one, is silently absent rather than validated and refused later. `adoptLaw`, `repealLaw` AND
+`setSuccession` are ONE decree, `hallAction` plus `hallValue`, listed as a single "Hall decrees
+here" block behind one gate: only when the player holds the settlement, a real hall stands
+there, and its AL unit has scope ([director.ts:408](src/llm/director.ts:408)-[409](src/llm/director.ts:409),
+the block [:545](src/llm/director.ts:545)-[548](src/llm/director.ts:548)) — every condition
+`hallAuthorityHere` would otherwise refuse the verbs for. The `repealLaw` pair is listed only
+when the unit has laws of its own ([director.ts:547](src/llm/director.ts:547)) — an inherited law
+would be refused, so it is never shown. One pair, not three fields, so two hall verbs cannot
+ride one turn; `toWorldDelta` maps it ([director.ts:296](src/llm/director.ts:296)-[302](src/llm/director.ts:302))
+and drops a value that does not belong to its action. The same gate also shows what is IN FORCE,
+own and inherited, and the effective succession law
+([director.ts:554](src/llm/director.ts:554)-[555](src/llm/director.ts:555)). `collect` is its own
+block in the workstation shape, both field names in the header and the building beside its goods
+([director.ts:553](src/llm/director.ts:553)), offered only where the player holds the place and the
+category is in `COLLECTABLE`; what is STORED is stated whether held or not
+([director.ts:391](src/llm/director.ts:391)), since seeing it is harmless.
 
 **13. A delta merge spreads fields, never lists them.** `mergeDeltas` folds the
 unconditional and dice-selected halves with `...base, ...outcome`
@@ -1379,10 +1382,10 @@ calls `hallScopeOf` ([al.ts:73](src/world/al.ts:73)). `adoptLaw`
 ([al.ts:122](src/world/al.ts:122)) are each wired through `validateDelta`
 ([delta.ts:442](src/play/delta.ts:442), [:462](src/play/delta.ts:462)), the fold
 ([delta.ts:691](src/play/delta.ts:691), [:695](src/play/delta.ts:695)) and the
-Director (schema [director.ts:105](src/llm/director.ts:105),
-[:107](src/llm/director.ts:107); brief gate — one `alScope` check offers both —
-[:409](src/llm/director.ts:409), [:542](src/llm/director.ts:542)-
-[543](src/llm/director.ts:543)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
+Director (schema — the one decree pair, [director.ts:108](src/llm/director.ts:108),
+[:109](src/llm/director.ts:109); brief gate — one `alScope` check offers the block —
+[:409](src/llm/director.ts:409), [:545](src/llm/director.ts:545)-
+[548](src/llm/director.ts:548)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
 ([al.ts:58](src/world/al.ts:58)) are called by `lawEnforcementAfter`
 ([delta.ts:968](src/play/delta.ts:968), [:969](src/play/delta.ts:969)), wired into
 the fold at [delta.ts:1036](src/play/delta.ts:1036) (DESIGN 6c §3k-ii).
@@ -1396,9 +1399,13 @@ engine can detect — a law with a writer and no trigger, deferred by DESIGN 6c
 §3k-ii, not an oversight. Adopted laws were invisible to everyone — the Director's
 brief listed what could be adopted but never what already was, and no view reads
 `AlUnit.laws` — until `repealLaw`'s stage added the "in force" line
-([director.ts:546](src/llm/director.ts:546)); found when a live run on the local 35B model adopted a
+([director.ts:554](src/llm/director.ts:554)); found when a live run on the local 35B model adopted a
 law from a mere remark 2 times in 5 and nothing could show or undo it. Still true: no
-player-facing view shows them (a decision, not an oversight). `successionOf`
+player-facing view shows them (a decision, not an oversight). A remark can still fire ONE hall
+verb: the `hallAction`/`hallValue` pair (DESIGN 6c §3k-ii, respecified 2026-09-29) stops three
+riding one turn — a live run on the old three-field contract saw a stray extra verb on about half
+of the decrees and hall verbs on 3 of ~30 remarks — but nothing yet checks that the player's words
+were a decree; a quote guard is undecided. `successionOf`
 ([al.ts:135](src/world/al.ts:135)) was test-only until `holderUnder` ([succession.ts:17](src/play/succession.ts:17)) read
 it, so the choice `setSuccession` writes now governs who holds a settlement that
 nobody bought. `holderUnder` replaced `holderOf` at the play callers that needed a
