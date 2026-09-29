@@ -1472,7 +1472,127 @@ AL unit already has a working governance path without one:
 An AL unit's ruler is therefore fully derivable — the seat's ruler, or inherit up —
 and must not be stored separately; no `holder` field on the AL unit itself.
 
-### 3f. Buildings: modules, and tier as a derived indicator (2026-09-25)
+### 3e-i. The ladder gets three rungs above `state` (user, 2026-09-27)
+
+**The full AL ladder:** `planet → continent → sub-continent → state → province →
+district → subdistrict → village`. Still unbounded (§3e) — nesting a `state` inside
+another `state` already covers an arbitrarily large polity mechanically, so these
+three new names add no new capability, only readability: a distinct plain-English
+word per rung, the same reason §3h gave buildings their own per-type tier names
+instead of a shared `basic→expanded→advanced→grand` ladder.
+
+**"Region" was the user's original word for the third rung — renamed to
+`sub-continent` before it was ever built.** It collided with the shipped `Region`
+type (`world/types.ts` — one floor's own data, keyed `RegionId` like `floor-0`) —
+same word, two unrelated meanings, the exact self-contradiction §3g's
+`station`→`workstation` rename and the `dungeon` map-kind fix both existed to
+catch. Caught before any code was written this time.
+
+**AL is scoped per-`Region` (one floor), confirmed 2026-09-27.** `World.regions:
+Record<RegionId, RegionRecord>` is one entry per TOWER FLOOR — `RegionRecord =
+Region | Gazetteer`, full detail while nearby, compressed to a `Gazetteer` once
+left (geometry destroyed, name/biome/summary/known-people survive). A `Region`
+already carries its own `biome`/`culture` as one cohesive setting (§3c: *"the
+outer world is modern; tower A is medieval; tower B is science fiction"* — each
+FLOOR can be an entirely different world). So one `Region`'s own AL tree, topped
+by its own `planet`, is the right scope — AL does not span floors, matching how
+§3e already said it sits "OVER the same shared tile pool" (one floor's tiles, not
+several).
+
+**Stratum and AL confirmed separate, not one reusing the other (user, 2026-09-27).**
+`Stratum` (`world/strata.ts`) is specifically about smooth floor-to-floor
+continuity during floor CREATION — `static`/`dynamic` regeneration behaviour, and
+passing down the law that governs how a floor gets built (danger curves, era/loop
+resets). AL is a different axis: administrative/law scope over settlements and
+wild ground, layered on top of one region's already-generated tiles. §3e's
+`state = stratum` phrasing was read too literally in Claude's first pass at this —
+it meant "the same TREE-WITH-INHERITANCE shape already proven by `Stratum`," not
+"AL units live in `World.strata`." AL gets its own type.
+
+**Four mechanics checked against "one floor can be a whole planet" (user asked,
+2026-09-27) — none block the type-level slice, all are real tensions for whenever
+AL actually gets wired into floor generation and travel:**
+
+- **Generation budgets stay as they are.** `placeBudget`/`settlementBudget`
+  (`world/budget.ts`) cap a region at 24 places and 3 settlements — `placeBudget`'s
+  own comment names the exact fear AL now makes literal: *"floor 200 would try to
+  generate a continent... far past what anyone explores in one visit."* Resolved,
+  not just noted: an `AlUnit` is `{id, kind, parent, seat?}` — no geometry, no
+  tiles — so a planet-scale AL tree costs almost nothing to represent. §3e already
+  says a province's *"actual tiles/buildings/people still wait for first
+  arrival"* — most AL units, especially ones the player never reaches, stay pure
+  labels and never claim a `Place` at all. The budgets keep gating what actually
+  gets generated, same as today; AL only changes how much *unvisited* territory a
+  label can imply.
+- **`biome`/`culture` are one word for the whole floor — a real contradiction,
+  not just a looseness.** Both come from the same model call at genesis
+  (`genesis.ts:477`) as free text for the *entire* region. This was already known
+  to be too loose for mechanics — habitat deliberately does not match against it,
+  *"`Region.biome` is a word the model invented for one floor, so matching it
+  would be matching prose"* (promoted to `ARCHITECTURE.md:1044`) — but that was a
+  tolerable looseness when a floor was one dungeon level. At planet scale it stops
+  being loose and starts being wrong: one word can't describe a planet with
+  several states. Natural fix, not built: `biome`/`culture` move to per-`AlUnit`
+  (probably `continent` or `state` grain — roughly where a real place's biome and
+  culture actually do stay coherent), `Region` keeps its own as the fallback an
+  AL-less dungeon floor still uses unchanged.
+- **The travel model has no notion of distance past "which floor."** Two
+  connected places on one floor are 6–42 minutes apart, always —
+  `KIND_MINUTES` plus a seeded draw plus a ×1/1.25/1.5 biome multiplier
+  (`world/travel.ts:36`,`:59`-`:61`), nothing else. Crossing FLOORS gets its own,
+  much longer mechanism (`stairCost`, `world/travel.ts:82`, 1–3 *hours*,
+  deliberately a different order of magnitude) — nothing analogous exists for a
+  large distance on the SAME floor, because until AL there wasn't one: every place
+  on a floor was implicitly nearby by construction. This is the one that actually
+  decides whether AL's big rungs are ordinarily walkable at all, or need their own
+  longer-form travel the way stairs already are. Settled below, §3e-ii.
+- **Danger and creature habitat are floor-uniform, not AL-aware.** `Region.danger`
+  is one number for the whole floor, no variance by AL unit (a warzone state and a
+  peaceful one score identically). Creature/species habitat is picked by
+  TOWER-DEPTH BAND, *"spread across the whole tower"* (`ARCHITECTURE.md:1044`),
+  not by anything about a floor's own internal geography — so a planet's entire
+  creature roster is fixed by depth, uniform across every continent on it. Same
+  root cause as biome: floor-wide values that predate AL's internal structure.
+
+### 3e-ii. Crossing an AL unit costs like a stair, not like a step (user, 2026-09-27)
+
+**What.** §3e-i left one tension genuinely undecided: two places on the same floor
+are always 6–42 minutes apart under the existing travel model (`linkMinutes`,
+`world/travel.ts:59`-`:61`), regardless of what they represent — a real problem
+once a floor can hold a whole planet's worth of AL structure.
+
+**Decided: AL crossing gets its own cost tier, reusing `stairCost`'s exact
+mechanism, not a new curve.**
+- **Threshold.** Two places are "local" — the existing minutes-scale model,
+  unchanged — when their LOWEST COMMON AL ancestor is `district` or deeper
+  (subdistrict, village): everyday, walkable scale. When the lowest common
+  ancestor is `province` or higher (state, continent, planet), it is
+  "long-distance": a seeded 1–3 hour draw, the same formula `stairCost` already
+  uses for crossing FLOORS (`pairDraw(seed, salt, a, b)`, `world/travel.ts:87` —
+  already generic on any string id, not only `RegionId`), just a different salt
+  and flat regardless of how many rungs are actually crossed.
+- **Why reuse the formula rather than build a graduated curve.** Matches this
+  codebase's own placeholder convention — `capacityOf`, `efficiencyOf` — decide
+  the ORDERING (local < long-distance), not the magnitude, until
+  no-rebalance-until-feature-complete lifts. A `ponytail:` comment marks the
+  ceiling this leaves: a planet-hop costs the same as a province-hop today: no
+  scaling with how far the crossing actually is.
+- **`district` as the cutoff is a judgment call, not a derivation** — DESIGN never
+  said where "walkable" stops. Picked to match the seat rule's own city-scale
+  (`district↔city`, §3e) as the point where "somewhere else" starts feeling real;
+  `province` or `state` would be equally defensible.
+- **Mechanism, not travel-system wiring.** This is a pure cost function, reusing
+  `ancestorsOf` (§3e-i) to find the lowest common AL unit. `alUnitsFor`
+  (`world/al.ts`) now generates real `alUnits` on every floor (2026-09-27,
+  wired into `genesis.ts`/`floorgen.ts`), but `alCrossingCost` is still NOT
+  wired into the live `travelTime`/`linkMinutes` callers — that is a further,
+  later stage.
+
+**Still genuinely open, not decided here:** whether a distant AL unit is even
+directly reachable via the ordinary `Place.connections` graph at all, or whether
+crossing one should work more like the existing NPC-journey mechanism (a
+separate "make the trip" step, not a walkable edge). Bigger than a cost number;
+deliberately not bundled into this decision.
 
 **A plot is an anchor, not a fixed footprint.** `townPlan` (`world/settlement.ts:89`)
 marks a door plus open space; the actual footprint is a combination of MODULES —
@@ -1678,6 +1798,14 @@ mechanisms already decided, not a third:
 closed list** — any new pair is a valid building without a new hardcoded type; ten was
 enough to prove the pattern across every category, not a ceiling on it.
 
+### 3j. LifeClass: the stat a worker is judged on
+
+Shipped 2026-09-27 — documented in ARCHITECTURE.md §4, §12, §13, §14.
+
+### 3j-i. Who counts as "the worker"?
+
+Shipped 2026-09-27 — documented in ARCHITECTURE.md §4, §12, §13, §14.
+
 ### 4. Building — founding and upgrading (redesigned 2026-09-19)
 
 **Kept from 2026-09-11:** a closed, law-gated verb, paid in coin and materials; built
@@ -1737,6 +1865,189 @@ A graph-topology structure, not `floor-0` — already decided in *Tower decision
 ### 7. The 3D map
 A view. The engine only knows the graph and the grids; 3D is a height map of
 tiles with floors stacked. Last.
+
+### 3k. Territorial law: a Paradox-style closed vocabulary, seeded with one axis (user, 2026-09-28)
+
+**What an `administrative` workstation edits, finally given a real shape.** §3h left
+it as a table header (*"scope · what law or policy it may edit"*); §3e's own claim
+that this "reuses the already-shipped rule" (`world/strata.ts:13,:51`) doesn't
+actually hold — `Stratum.laws` is a closed 2-field struct (`reset`, `time`) about
+floor-generation bands, and the separate `amendLaw`/`Rules` system
+(`rules/ruleset.ts`) is scoped by WHO a law binds (a group), not WHERE. Neither is a
+territorial law. This is a third, new, small vocabulary — not a fourth: it borrows
+`ancestorsOf`'s inherit-up MECHANISM from AL (§3e), not either existing law's data.
+
+**Three axes, Paradox-game shaped (CK/EU4/Vic's own law-screen split), only one built:**
+
+| axis | shape | status |
+|---|---|---|
+| `criminal` | a SET — a hall independently adopts/repeals each entry | seeded: `theft` |
+| `civil` | a single mutually-exclusive CHOICE per AL unit (a slider, like a tax-rate law) | named, unseeded — no property/tax-rate mechanic exists to read it |
+| `succession` | a single mutually-exclusive CHOICE per AL unit | named, unseeded — **no heir/death/title-transfer mechanic exists in this codebase at all** |
+
+`civil` and `succession` are reserved so the eventual shape has somewhere to land,
+but neither gets a real vocabulary or code yet — building one now, with nothing to
+check it against, is exactly the dead-field pattern `ARCHITECTURE.md` §12 already
+tracks, and the same principle `CONSTRAINTS` itself states (`rules/ruleset.ts`): a
+law grows the closed list only when it gains a checker, never before.
+
+**Hierarchy: "imperial palace bigger than town hall"** — a lower AL tier
+automatically inherits every ancestor's adopted law, derived at query time via
+`ancestorsOf` (never copied down into storage, same "derived, never stored" rule
+§3e-i already applied to an AL unit's ruler). A town cannot un-adopt what its state
+adopted; it can only adopt more on top.
+
+**Only a seat's hall has scope.** `hallScopeOf` resolves to the AL unit a
+settlement's hall may adopt law for — real only when that settlement IS the unit's
+own seat (§3e's seat rule); every other settlement inside the unit is the "bare,
+local-only" hall the §3i tier-name table already named, because the unit's
+law-editing authority belongs to whichever hall the ruler actually sits in.
+
+**Built:** `AlLawId` (`CRIMINAL_LAWS = ['theft']`), `AlUnit.laws?: AlLawId[]`,
+`hallScopeOf`, `adoptLaw`, `lawsBindingAt`, `isBoundBy` — all in `world/al.ts`, pure
+engine functions, no Director/delta wiring yet (mirrors how `economic`/`service`
+workstations shipped their mechanism before their play verb). 7 tests,
+`world/al.test.ts`.
+
+**Deliberately deferred, not decided here:** the arrest/consequence mechanic for
+breaking an adopted law — needs a real design pass of its own (what "arrested" does
+to a person, who/what checks for a violation and triggers it) once there is an
+actual act to check `theft` against. Whether adoption itself needs a Director-facing
+verb, or stays engine-only until something calls it, is the same open question
+`runWorkstation` answered in a later, separate stage.
+
+### 3k-i. Scoping every axis against what actually exists (user, 2026-09-28)
+
+**Criminal grows to three.** `trespass` and `assault` join `theft`.
+
+- `trespass` — entering a building or settlement uninvited. DESIGN already decided
+  *"entering a home uninvited is a DEED witnesses see"* (§2d answer 5); adopting
+  `trespass` makes that already-witnessed act illegal-with-consequence where it's
+  adopted, rather than inventing a new one.
+- `assault` — initiating a fight against a resident. Combat already knows who
+  counts as a resident of a place (`{kind: 'resident', ...groupFor(...)}`, the same
+  shape `forbids` already reads in `play/journey.ts:162`), so "the player or an NPC
+  opens a fight on a resident where `assault` is adopted" is a real, checkable
+  trigger — not a stretch either.
+
+All three share the same bar theft was seeded on: a real, nameable act the engine
+can already recognize, even though nothing calls `isBoundBy` to enforce any of them
+yet (arrest is still its own deferred stage). Stops at three — nothing else in the
+codebase clears that bar today; a fourth law waits for a fourth real act.
+
+**Civil stays exactly where it was: fully blocked, no candidate vocabulary.**
+Checked the whole `Ruleset` (`rules/ruleset.ts`) for anything a civil law could
+plausibly read — body, combat, persona, knowledge, gear, rest, world, laws. No tax
+rate, no trade rate, no sub-settlement property concept anywhere. Naming plausible
+options (`lowTax`/`highTax`) now would be pure fiction — nothing would ever read
+them. `civil` stays a bare axis name in prose until an economy mechanic exists to
+found it on; no type, no field, no placeholder enum.
+
+**Succession gets a real, narrower shape than the Paradox names suggest.**
+`holderOf` (`world/holding.ts:14`) is a genuine, tested mechanic — *"a dead holder
+passes it on"* (`holding.test.ts:59`) — but it ranks by `Status`
+(`character/persona.ts:15`: `superior/peer/inferior`, **relative to the player**),
+not an absolute social rank. A better-fitting vocabulary already exists and goes
+unused for this: `Station` (`play/station.ts:16`:
+`noble/merchant/guard/adventurer/villager/beggar`), the same one grudge acts key
+off.
+
+Three succession options are buildable today, all reading data that already
+exists — none is built yet, this stage only scopes them:
+- **`standing`** — today's actual behaviour, formalised as a named option instead
+  of the only one. Default when nothing is set, so adopting nothing changes
+  nothing.
+- **`stationRank`** — highest `Station` present inherits (an absolute rank,
+  unlike `standing`'s player-relative one).
+- **`elective`** — whoever the settlement's people collectively trust most
+  (`social/edge.ts` trust edges).
+
+**`primogeniture` and `gavelkind` are named here and explicitly excluded, not
+deferred to a "someday" enum entry.** Both are real Paradox terms and both need a
+specific named heir to mean anything — a parent/child record this codebase does
+not have. `character/kinship.ts` only knows SPECIES-group kinship (*"same group is
+kin"*), never one person's individual lineage. Writing either name into
+`SuccessionLawId` now, with zero possible checker, is precisely the dead-field
+pattern `CONSTRAINTS`'s own comment and `ARCHITECTURE.md` §12 both exist to catch —
+so they are named and ruled out here, not silently dropped, and stay OUT of the
+type until a real family-tree feature is designed as its own prerequisite stage.
+
+**Resolution shape differs from `criminal`'s, and that's a deliberate, separate
+call.** `criminal` UNIONS every ancestor's adopted set — everyone under a
+jurisdiction is bound by everything above it, "imperial palace bigger than town
+hall." `succession` is the opposite shape: **innermost-wins, else inherit up** —
+the same rule `lawFrom` already applies to `Stratum.laws` (`world/strata.ts:71`).
+Reasoning: a specific settlement's inheritance rule is one answer, not a stack —
+a state adopting `stationRank` for its OWN seat's succession should not silently
+force every district under it into `stationRank` too, any more than a kingdom's
+own succession law binds how its vassals' titles pass in the games this borrows
+from. A non-seat settlement (no hall of its own, per `hallScopeOf`) still needs
+*some* answer, so it inherits the nearest ancestor's choice, `standing` if none in
+the chain ever set one.
+
+**Scoped to build next:** `CRIMINAL_LAWS` gains `trespass` and `assault`; new
+`SuccessionLawId` (`standing | stationRank | elective`), `AlUnit.succession?`,
+`successionOf` (innermost-wins-else-inherit), `setSuccessionLaw` (replaces, not
+appends — a single choice, not a set). `civil` remains untouched, no code.
+
+**Built (2026-09-29):** `holderUnder` (`play/succession.ts`) is `successionOf`'s
+first reader — see `ARCHITECTURE.md` §3/§12. `elective` was settled as the SUM of
+trust toward each candidate (user, 2026-09-29), not the mean; a tie falls back to
+`standing`.
+
+### 3k-ii. Arrest and consequence: a grudge, not a jail (user, 2026-09-28)
+
+**"Arrest" means the AL unit's ruler holds a grudge and hunts you through the
+already-shipped grudge machinery — not a literal detention.** Checked first: a
+captured/jailed state has zero infrastructure anywhere in this codebase.
+`ARCHITECTURE.md`'s own dead-field ledger already states *"`captured` is not
+built — nothing would read a captive until step 9"* (companions). Building
+detention from scratch is a real feature on its own, not part of this pass.
+
+**Scoped to `assault` only.** `theft` needs a "take from a container you don't
+hold" verb; `trespass` needs "entered a building" tracking. Neither exists
+anywhere in the engine. `assault` alone has a real, already-detectable trigger:
+`startCombat`/`startedBy: 'player'`, the same signal `drewOn` already reads.
+Enforcing `theft`/`trespass` waits until each has its own real verb to check
+against — the same bar `theft` itself was originally seeded on.
+
+**Checked and rejected: reusing `drewOn`'s deed.** `drewOn`
+(`social/deed.ts:140`) fires on the exact same trigger already, but its own
+`Mark` carries no `resentment` at all, and `deedsIn` never sets a `toward` —
+the whole point of `drewOn` is that it can be swung at a mass foe, so it has
+nobody specific to resent it. Extending `drewOn`'s mark or forcing it a target
+would bend an existing mechanic to mean something it doesn't.
+
+**Decided: a direct resentment nudge on the ruler, bypassing the witness/
+belief/spread system entirely.** Ordinary deeds propagate because somebody SAW
+them and the story travels through who-knows-whom (`social/deed.ts`'s whole
+design). Law enforcement is a different claim: the ruler need not have
+witnessed the act, or even be nearby — the law itself is what reaches them, not
+gossip about it. Forcing the ruler into a deed's witness list to make the
+existing pipeline fire would be bending that pipeline to mean something it
+doesn't. The grudge system itself needs nothing new to act on this: `setOut`
+(`play/journey.ts:67`) already reads raw `Edges.resentment` and nothing else —
+`hostileToward`, the grudge threshold check, is unmodified. One `nudge` call is
+the whole mechanism.
+
+**Who the ruler is:** `rulerSeatOf` on the current place's AL unit — the same
+derivation §3e already settled (an AL unit's ruler is never stored, only its
+seat, inherited up if the unit itself has none) — then `holderOf` on that
+seat's Place. If nobody holds the seat, there is nobody to nudge; a no-op, not
+an error.
+
+**Magnitude: a flat 3, matching `humiliated`'s one-shot `onToward.resentment`**
+— the biggest existing single-deed resentment bump, chosen so one unlawful
+assault crosses `GRUDGE_THRESHOLD` (3) outright rather than needing repeats.
+`ponytail:` placeholder ordering only; real numbers wait on
+no-rebalance-until-feature-complete, same as every other magnitude this
+session touched.
+
+**Built:** `lawEnforcementAfter` (`play/delta.ts`), wired into `applyTurn`
+after the existing deed/traffic fold. First real callers outside their own
+tests for `isBoundBy` and `rulerSeatOf` — two more entries off `ARCHITECTURE.md`
+§12's dead-field ledger. `theft`/`trespass` enforcement, and literal detention,
+remain explicitly deferred, not decided here.
 
 ---
 
