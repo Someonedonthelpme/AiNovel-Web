@@ -101,12 +101,12 @@ const deltaSchema = obj(
      * world holds. Set with `amendLaw`; it overrides `amendBinds`.
      */
     amendGroup: { type: 'string' },
-    /** A territorial law the player's own hall adopts here, from the closed criminal-law list (DESIGN 6c §3k). Almost always 'none'. */
-    adoptLaw: { type: 'string', enum: ['none', ...CRIMINAL_LAWS] },
-    /** The same hall REPLACES its succession choice, from the closed list (DESIGN 6c §3k-i). Almost always 'none'. */
-    setSuccession: { type: 'string', enum: ['none', ...SUCCESSION_LAWS] },
-    /** The same hall repeals one of its OWN laws, from the closed criminal-law list (DESIGN 6c §3k). Almost always 'none'. */
-    repealLaw: { type: 'string', enum: ['none', ...CRIMINAL_LAWS] },
+    /**
+     * ONE hall decree per turn (DESIGN 6c §3k-ii, respecified 2026-09-29): which act, and its value.
+     * Three separate fields let the model fill all three; one pair cannot carry two verbs.
+     */
+    hallAction: { type: 'string', enum: ['none', 'adoptLaw', 'repealLaw', 'setSuccession'] },
+    hallValue: { type: 'string', enum: ['none', ...CRIMINAL_LAWS, ...SUCCESSION_LAWS] },
     /** WHICH building's stored goods the holder takes out, and WHICH category of them (DESIGN 6c §3c-i). Both or neither. */
     collectBuilding: str,
     collectGoods: { type: 'string', enum: ['none', ...COLLECTABLE] },
@@ -114,8 +114,8 @@ const deltaSchema = obj(
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
-    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation', 'adoptLaw',
-    'setSuccession', 'repealLaw', 'collectBuilding', 'collectGoods',
+    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation',
+    'hallAction', 'hallValue', 'collectBuilding', 'collectGoods',
   ],
 );
 
@@ -179,12 +179,10 @@ export type FlatDelta = {
   /** Whom it now binds — or 'none' to lift it entirely. */
   amendBinds: string;
   amendGroup: string;
-  /** A criminal law the player's own hall adopts here. Empty on almost every turn. */
-  adoptLaw: string;
-  /** The same hall's succession choice, replaced. Empty on almost every turn. */
-  setSuccession: string;
-  /** One of the same hall's own laws, repealed. Empty on almost every turn. */
-  repealLaw: string;
+  /** ONE hall decree: which act (adoptLaw | repealLaw | setSuccession) ... */
+  hallAction: string;
+  /** ... and its value, a law or succession id. Both empty on almost every turn. */
+  hallValue: string;
   /** A building the holder takes stored goods out of, and which category. Both or neither. */
   collectBuilding: string;
   collectGoods: string;
@@ -293,14 +291,16 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
     };
   }
 
-  const adoptLaw = meaningful(flat.adoptLaw) ? flat.adoptLaw : null;
-  if (adoptLaw) delta.adoptLaw = adoptLaw as AlLawId;
-
-  const setSuccession = meaningful(flat.setSuccession) ? flat.setSuccession : null;
-  if (setSuccession) delta.setSuccession = setSuccession as SuccessionLawId;
-
-  const repealLaw = meaningful(flat.repealLaw) ? flat.repealLaw : null;
-  if (repealLaw) delta.repealLaw = repealLaw as AlLawId;
+  // One decree pair, so two hall verbs cannot ride one turn. A value that does not belong to its
+  // action is nothing — never a guess at which verb was meant.
+  const hallAction = meaningful(flat.hallAction);
+  const hallValue = meaningful(flat.hallValue);
+  const isCriminal = hallValue !== null && (CRIMINAL_LAWS as readonly string[]).includes(hallValue);
+  if (hallAction === 'adoptLaw' && isCriminal) delta.adoptLaw = hallValue as AlLawId;
+  else if (hallAction === 'repealLaw' && isCriminal) delta.repealLaw = hallValue as AlLawId;
+  else if (hallAction === 'setSuccession' && hallValue !== null && (SUCCESSION_LAWS as readonly string[]).includes(hallValue)) {
+    delta.setSuccession = hallValue as SuccessionLawId;
+  }
 
   const collectBuilding = meaningful(flat.collectBuilding);
   const collectGoods = meaningful(flat.collectGoods);
@@ -539,13 +539,20 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     // that is allowed to know what the player is carrying.
     pack.length ? `Carrying (the ONLY legal useItem/equipItem ids):\n${pack.join('\n')}` : 'Carrying: nothing',
     buildings.length ? `Workstations here (the ONLY legal workBuilding/workStation ids):\n${buildings.join('\n')}` : '',
-    alScope ? `Law here (the ONLY legal adoptLaw ids): ${CRIMINAL_LAWS.join(', ')}` : '',
-    alScope ? `Succession law here (the ONLY legal setSuccession ids): ${SUCCESSION_LAWS.join(', ')}` : '',
+    // ONE block of hall decrees; repeal is listed only for the unit's OWN laws (an inherited one is refused).
+    alScope
+      ? [
+        'Hall decrees here (name hallAction and hallValue; the ONLY legal pairs):',
+        `  - adoptLaw: ${CRIMINAL_LAWS.join(', ')}`,
+        ...(ownLaws.length ? [`  - repealLaw: ${ownLaws.join(', ')}`] : []),
+        `  - setSuccession: ${SUCCESSION_LAWS.join(', ')}`,
+      ].join('\n')
+      : '',
     ...stored,
-    collectable.length ? `Collectable here (the ONLY legal collectGoods ids): ${collectable.join('; ')}` : '',
+    // The workstation-block shape: both field names in the header, the building beside its goods.
+    collectable.length ? `Collectable here (the ONLY legal collectBuilding/collectGoods ids):\n${collectable.map((l) => `  - ${l}`).join('\n')}` : '',
     alScope ? `Laws in force here: ${inForce.map((l) => `${l} (${ownLaws.includes(l) ? 'own' : 'inherited'})`).join(', ') || 'none'}` : '',
     alScope && region ? `Succession in force here: ${successionOf(region, alScope)}` : '',
-    ownLaws.length ? `Repealable here (the ONLY legal repealLaw ids): ${ownLaws.join(', ')}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -589,17 +596,11 @@ const SYSTEM = [
   'workstation id exactly as listed below; the workstation decides what running it',
   'does. Leave both empty on almost every turn.',
   '',
-  'adoptLaw is for the player, standing in a settlement they hold with a working',
-  'hall, making an act illegal there — a decree read out, not a description of',
-  'what already is. Only offered when listed below; empty on almost every turn.',
-  '',
-  'setSuccession is the same hall REPLACING how this settlement picks its next',
-  'holder — a decree, not a description. Only offered when listed below; empty',
-  'on almost every turn.',
-  '',
-  'repealLaw is the same hall lifting one of its OWN laws — a decree, not a',
-  'remark that a law is old or unfair. Only offered when listed below; empty',
-  'on almost every turn.',
+  'hallAction and hallValue are ONE decree, for the player standing in a settlement',
+  'they hold with a working hall: adoptLaw makes an act illegal there, repealLaw lifts',
+  'one of the hall\'s OWN laws, setSuccession replaces how the settlement picks its next',
+  'holder. A decree read out — never a remark, an opinion, or a memory of a law. Give',
+  'one listed pair or leave both empty, which is almost every turn.',
   '',
   'collectBuilding and collectGoods are for the holder taking a whole category of goods',
   'out of a building they hold — what a workstation made. Name the building id and the',

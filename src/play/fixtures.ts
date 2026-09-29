@@ -33,7 +33,7 @@ export const emptyDelta = (): FlatDelta => ({
   revealExit: '',
   startCombat: false, startedBy: 'player', useItem: '', equipItem: '', rest: 'none',
   amendLaw: 'none', amendBinds: 'none', amendGroup: '', revealWay: '', acquirePlace: '',
-  workBuilding: '', workStation: '', adoptLaw: 'none', setSuccession: 'none', repealLaw: 'none', collectBuilding: '', collectGoods: 'none',
+  workBuilding: '', workStation: '', hallAction: 'none', hallValue: 'none', collectBuilding: '', collectGoods: 'none',
 });
 
 export const outcome = (narrate: string, over: Partial<FlatDelta> = {}): Outcome => ({
