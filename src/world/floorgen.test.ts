@@ -436,3 +436,17 @@ test('inside a themed band the recent floors are context, never an instruction t
   await generateFloor(q, eraBanded(eraLand), 22, pc);
   assert.doesNotMatch(q.allSentText(), /unlike/i);
 });
+
+test('a generated floor gives its settlement a hall too, engine-only (no extra model call)', async () => {
+  const withCamp = generated({ places: [
+    { id: 'landing', name: 'the landing', kind: 'gate', description: '', connections: ['camp'], people: [], affordances: ['catch your breath'] },
+    { id: 'camp', name: 'the camp', kind: 'settlement', description: '', connections: ['landing', 'rise'], people: ['kell'], affordances: ['ask around'] },
+    { id: 'rise', name: 'the second stair', kind: 'gate', description: '', connections: ['camp'], people: [], affordances: ['climb'] },
+  ] });
+  const p = provider(withCamp);
+  const r = await generateFloor(p, world(), 1, pc);
+  const camp = r.region.places.find((q) => q.id === 'camp')!;
+  assert.ok(camp.buildings?.some((b) => b.workstations?.some((w) => w.subkind === 'administrative')), 'a hall stands in the camp');
+  assert.equal(r.region.places.find((q) => q.id === 'landing')!.buildings, undefined);
+  assert.equal(p.calls.length, 1, 'still one structured call for the floor');
+});

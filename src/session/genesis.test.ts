@@ -18,6 +18,15 @@ import { dominantOf, groupOf, leavesOf, speciesFor, speciesIdFor, TYPES } from '
 import { axisOf, PLAYER } from '../social/edge.ts';
 import { withKin } from '../character/kinship.ts';
 import { eraOf, isLoop, isStatic } from '../world/strata.ts';
+import { tierOf } from '../world/settlement.ts';
+import { initialPlayState } from '../play/state.ts';
+import type { PlayState } from '../play/state.ts';
+import { applyDelta } from '../play/delta.ts';
+import { runDirector } from '../llm/director.ts';
+import { directorOutput } from '../play/fixtures.ts';
+import { clockOf } from '../world/travel.ts';
+import { TICKS_PER_HOUR } from '../world/calendar.ts';
+import type { Region } from '../world/types.ts';
 
 function completed(language: 'th' | 'en' = 'en'): Interview {
   let iv = startInterview(language);
@@ -561,4 +570,58 @@ test('a forged class from the client keeps its words and loses its numbers', asy
   const r = await runGenesis(wholeGenesis(), completedWith({ classId: shapes[0].id, classSpec: forged }), 42);
   assert.equal(r.sheet.hitDie, shapes[0].hitDie, "the die is the seed's");
   assert.equal(r.sheet.classSpec?.name.en, 'Forged', 'the words are theirs');
+});
+
+/*
+ * Building generation (DESIGN 6c §3i, smallest slice). Nothing generated ever had a building,
+ * so the station system only ran on hand-built fixtures. These run on REAL generated worlds.
+ */
+
+const REACH_SEEDS = Array.from({ length: 60 }, (_, i) => i + 1);
+/** A generated world whose ground-floor settlement holds a seat (town or above), or one that does not. */
+const bornWith = async (seat: boolean) => {
+  for (const seed of REACH_SEEDS) {
+    const r = await runGenesis(wholeGenesis(), completed(), seed);
+    const tier = tierOf(r.world, 'floor-0', 'square');
+    if ((tier === 'town' || tier === 'city') === seat) return r;
+  }
+  throw new Error(`no seed in ${REACH_SEEDS.length} deals a ground floor with seat=${seat}`);
+};
+const heldSquare = (r: Awaited<ReturnType<typeof bornWith>>): PlayState => {
+  const s = initialPlayState(r.world, r.sheet);
+  const region = s.world.regions['floor-0'] as Region;
+  return { ...s, world: { ...s.world, regions: { ...s.world.regions, 'floor-0': { ...region, places: region.places.map((p) => (p.id === 'square' ? { ...p, holder: PLAYER } : p)) } } } };
+};
+
+test('the generated ground floor gives its settlement a hall, and only its settlement', async () => {
+  const sheet = (await generateCharacter(provider(), completed())).sheet;
+  const { region } = await generateGroundFloor(new FakeProvider({ structured: [ground()] }), completed(), sheet);
+  const square = region.places.find((p) => p.id === 'square')!;
+  assert.ok(square.buildings?.some((b) => b.workstations?.some((w) => w.subkind === 'administrative')), 'a hall stands in the square');
+  for (const p of region.places.filter((q) => q.kind !== 'settlement')) assert.equal(p.buildings, undefined, p.id);
+});
+
+test('a real generated world reaches catch-up: hold the town, come back later, and goods have been made', async () => {
+  const born = await bornWith(false);
+  const goods = (s: PlayState) => (buildingsOf(s) ?? []).reduce((n, b) => n + Object.values(b.container).reduce((a, c) => a + (c ?? 0), 0), 0);
+  const buildingsOf = (s: PlayState) => ((s.world.regions['floor-0'] as Region).places.find((p) => p.id === 'square')!).buildings;
+  const wait = (s: PlayState, hours: number): PlayState => ({ ...s, world: { ...s.world, clock: clockOf(s.world) + hours * TICKS_PER_HOUR } });
+  const hop = (s: PlayState, to: string) => applyDelta(s, { moveTo: to });
+  const start = heldSquare(born);
+  const before = goods(start);
+  // leave, wait, ARRIVE (first sighting: only stamped), wait, leave, come back (the catch-up)
+  let s = wait(hop(start, 'gate'), 48);
+  s = wait(hop(s, 'square'), 48);
+  s = hop(hop(s, 'gate'), 'square');
+  assert.ok(goods(s) > before, `the square's buildings made something (${before} -> ${goods(s)})`);
+});
+
+test('a seat settlement the player holds shows the hall-decree lines in the brief; a hamlet or village hall does not', async () => {
+  const brief = async (seat: boolean) => {
+    const provider = new FakeProvider({ structured: [directorOutput()] });
+    await runDirector(provider, heldSquare(await bornWith(seat)), 'look around', 'conversation', []);
+    return provider.allSentText();
+  };
+  assert.match(await brief(true), /Law here \(the ONLY legal adoptLaw ids\)/);
+  assert.doesNotMatch(await brief(false), /Law here \(the ONLY legal adoptLaw ids\)/);
 });
