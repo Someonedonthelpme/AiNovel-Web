@@ -2093,6 +2093,20 @@ retry; a false positive cost the player's law. Kept only if the live A/B shows t
 remarks 3/20 -> 0/20, the repeal decree itself 5/5 -> 5/5, the adopt-theft decree's stray repeal 2/5 -> 1/5
 (not removed: `Laws in force` still names the law). Still open: stray extra verbs on a decree, Thai cues.
 
+**Adopt and succession are offered only on their own cue (user, 2026-09-29) — an experiment until a live A/B says it works.**
+The live station A/B (real town, held seat, 69 non-decree trials per arm) showed `adopt` firing on plain
+remarks 3-5 times and `succession=standing` 5-6 times, on the old and the new station list alike, and
+`validateDelta` gates them only on hall authority — it never sees the player's words — so a stray `adopt`
+enacts a law silently. Same remedy as repeal: an option that is not shown never fires. The `Law here` line now
+appears only when the player's OWN words carry a decree cue — decree, declare, proclaim, edict, outlaw, forbid,
+prohibit, illegal, unlawful, crime, criminal, ban (bare "law" is left out: it would unlock adopt on an opinion
+about a law) — and the `Succession law here` line only on a succession cue — succession, successor, inherit,
+heir, elect, or "next holder / ruler / lord / mayor / headman / elder". Each cue gates only its own line, on top
+of the existing seat-and-hall gate; `Laws in force` and the repeal gate do not move. English cues only, so a Thai
+player gets neither option until Thai cues are added and reviewed. A false negative costs a reworded decree; a
+false positive cost a law nobody asked for. Not gated: `collect` (3 of 69 stray complete pairs, too few to act on).
+Kept only if the live A/B shows the strays fall and a clear decree still fires 5 of 5.
+
 ---
 
 # THE ORDER — authoritative, re-derived 2026-09-05
