@@ -368,7 +368,7 @@ function echoesTold(world: PlayState['world'], floor: number): string[] {
       + `${eraOf(world, floor) - eraOf(world, e.floor)} years ago`);
 }
 
-export function directorContext(state: PlayState, canonFacts: string[]): string {
+export function directorContext(state: PlayState, canonFacts: string[], input = ''): string {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
   const exits = place?.connections ?? [];
@@ -410,6 +410,10 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
   // What is already in force, so a law passed by mistake can be SEEN and repealed. Only the
   // unit's OWN laws are offered for repeal: an inherited one is refused, so it is never shown.
   const ownLaws = (alScope && region?.alUnits?.[alScope]?.laws) || [];
+  // Repeal is the destructive verb, and a live run repealed the player's law on 3 of 20 remarks whenever it was
+  // offered; an option that is not shown never fires. So it is offered only on the player's OWN repeal words
+  // (English only for now: a false negative costs a retry, a false positive cost the law). DESIGN 6c 3k-ii.
+  const repealCue = /\b(repeal|revoke|lift|abolish|rescind|overturn|no longer)/i.test(input);
   const inForce = region && alScope ? lawsBindingAt(region, alScope) : [];
 
   const pack = state.pc.inventory.stacks.map((stack) => {
@@ -546,7 +550,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     collectable.length ? `Collectable here (the ONLY legal collectBuilding/collectGoods ids):\n${collectable.map((l) => `  - ${l}`).join('\n')}` : '',
     alScope ? `Laws in force here: ${inForce.map((l) => `${l} (${ownLaws.includes(l) ? 'own' : 'inherited'})`).join(', ') || 'none'}` : '',
     alScope && region ? `Succession in force here: ${successionOf(region, alScope)}` : '',
-    ownLaws.length ? `Repealable here (the ONLY legal repealLaw ids): ${ownLaws.join(', ')}` : '',
+    ownLaws.length && repealCue ? `Repealable here (the ONLY legal repealLaw ids): ${ownLaws.join(', ')}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -665,7 +669,7 @@ export async function runDirector(
       {
         role: 'user',
         content: [
-          directorContext(state, canonFacts),
+          directorContext(state, canonFacts, input),
           '',
           `Mode: ${mode}`,
           `Player: ${input}`,
