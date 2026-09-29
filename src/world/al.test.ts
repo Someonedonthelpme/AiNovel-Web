@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adoptLaw, ancestorsOf, alUnitsFor, CRIMINAL_LAWS, hallScopeOf, isBoundBy, isLocalCrossing, lawsBindingAt, lowestCommonAlUnit, rulerSeatOf, setSuccessionLaw, successionOf } from './al.ts';
+import { adoptLaw, ancestorsOf, alUnitsFor, CRIMINAL_LAWS, hallScopeOf, isBoundBy, isLocalCrossing, lawsBindingAt, lowestCommonAlUnit, repealLaw, rulerSeatOf, setSuccessionLaw, successionOf } from './al.ts';
 import type { AlLawId, SuccessionLawId } from './al.ts';
 import { groundFloor, place } from './fixtures.ts';
 import type { Place, World } from './types.ts';
@@ -191,6 +191,30 @@ test('isBoundBy is true only for a law actually adopted somewhere up the chain',
   const region = { alUnits: { s: { id: 's', kind: 'state' as const, laws: ['theft'] as AlLawId[] } } };
   assert.equal(isBoundBy(region, 's', 'theft'), true);
   assert.equal(isBoundBy({ alUnits: { v: { id: 'v', kind: 'village' as const } } }, 'v', 'theft'), false);
+});
+
+/*
+ * repealLaw (DESIGN 6c §3k): the OWN set only. A law inherited from an ancestor
+ * is not this unit's to repeal, and adopting then repealing leaves no trace.
+ */
+
+test('adopting then repealing restores the original units exactly', () => {
+  const units = { d1: { id: 'd1', kind: 'district' as const, seat: 'town' } };
+  assert.deepEqual(repealLaw(adoptLaw(units, 'd1', 'theft'), 'd1', 'theft'), units);
+});
+
+test('repealing keeps the unit\'s other laws', () => {
+  const units = { d1: { id: 'd1', kind: 'district' as const, laws: ['theft', 'assault'] as AlLawId[] } };
+  assert.deepEqual(repealLaw(units, 'd1', 'theft').d1.laws, ['assault']);
+});
+
+test('repealing a law that is only inherited changes nothing and it still binds', () => {
+  const region = { alUnits: {
+    s: { id: 's', kind: 'state' as const, laws: ['assault'] as AlLawId[] },
+    d: { id: 'd', kind: 'district' as const, parent: 's' },
+  } };
+  assert.equal(repealLaw(region.alUnits, 'd', 'assault'), region.alUnits);
+  assert.ok(lawsBindingAt(region, 'd').includes('assault'));
 });
 
 test('CRIMINAL_LAWS covers theft, trespass and assault — a real act each, still no fourth', () => {

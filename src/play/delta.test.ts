@@ -14,8 +14,9 @@ import { addBuilding, buildingAt } from '../world/settlement.ts';
 import { isFull } from '../world/types.ts';
 import type { Building } from '../world/workstation.ts';
 import type { Region } from '../world/types.ts';
-import { runDirector, toWorldDelta } from '../llm/director.ts';
+import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
+import { CRIMINAL_LAWS } from '../world/al.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
@@ -720,4 +721,79 @@ test('being attacked, not attacking, is never unlawful assault', () => {
 test('an unlawful assault crosses the grudge threshold — hostileToward agrees, unmodified', () => {
   const done = applyTurn(withAssaultLaw(playState()), record({ startCombat: true, startedBy: 'player' })).state;
   assert.ok(hostileToward(done.world.edges, 'warden'));
+});
+
+/*
+ * repealLaw and law visibility (DESIGN 6c §3k): the same hall authority as
+ * adoptLaw, the unit's OWN set only, and the Director is told what is in force
+ * so a law passed by mistake can be seen and repealed.
+ */
+
+const withUnits = (state: PlayState, alUnits: Region['alUnits']): PlayState => {
+  const r = state.world.regions['floor-0'] as Region;
+  return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, alUnits } } } };
+};
+const ownLaws = (laws: AlLawId[]): PlayState =>
+  withUnits(withHall(playState()), { d1: { id: 'd1', kind: 'district' as const, seat: 'town', laws } });
+const inheritedAssault = (): PlayState =>
+  withUnits(withHall(playState()), {
+    s: { id: 's', kind: 'state' as const, laws: ['assault'] as AlLawId[] },
+    d1: { id: 'd1', kind: 'district' as const, seat: 'town', parent: 's' },
+  });
+const release = (state: PlayState): PlayState => {
+  const r = state.world.regions['floor-0'] as Region;
+  return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? { ...p, holder: undefined } : p)) } } } };
+};
+
+test('the engine accepts repealing an own adopted law and refuses the rest, saying why', () => {
+  assert.equal(validateDelta(ownLaws(['assault']), { repealLaw: 'assault' }).delta.repealLaw, 'assault');
+  const cases: [string, PlayState, string, RegExp][] = [
+    ['never adopted', ownLaws([]), 'assault', /not adopted here/],
+    ['only inherited from above', inheritedAssault(), 'assault', /inherited/],
+    ['not held by the player', release(ownLaws(['assault'])), 'assault', /hold/],
+    ['a law the engine does not know', ownLaws(['assault']), 'loitering', /no such law/],
+  ];
+  for (const [why, state, law, reason] of cases) {
+    const v = validateDelta(state, { repealLaw: law as AlLawId });
+    assert.equal(v.delta.repealLaw, undefined, why);
+    assert.match(v.rejected.join(' '), reason, why);
+  }
+});
+
+test('adopt then repeal across two turns leaves the law unbound and enforcement stops', () => {
+  const adopted = applyTurn(withHall(playState()), record({ adoptLaw: 'assault' })).state;
+  const drawFirst = (s: PlayState) => applyTurn(release(s), record({ startCombat: true, startedBy: 'player' })).state;
+  // Control: the law stands, the ruler (no longer the player) resents the first blow.
+  assert.ok(axisOf(drawFirst(adopted).world.edges, 'warden', PLAYER, 'resentment') >= GRUDGE_THRESHOLD);
+  const repealed = applyTurn(adopted, record({ repealLaw: 'assault' })).state;
+  assert.deepEqual((repealed.world.regions['floor-0'] as Region).alUnits!.d1.laws, undefined);
+  assert.equal(axisOf(drawFirst(repealed).world.edges, 'warden', PLAYER, 'resentment'), 0);
+});
+
+test('the Director is told which laws are in force, and which are its own to repeal', async () => {
+  const sentFor = async (state: PlayState) => {
+    const provider = new FakeProvider({ structured: [directorOutput()] });
+    await runDirector(provider, state, 'look around', 'conversation', []);
+    return provider.allSentText();
+  };
+  const both = await sentFor(withUnits(withHall(playState()), {
+    s: { id: 's', kind: 'state' as const, laws: ['assault'] as AlLawId[] },
+    d1: { id: 'd1', kind: 'district' as const, seat: 'town', parent: 's', laws: ['theft'] as AlLawId[], succession: 'stationRank' as SuccessionLawId },
+  }));
+  assert.match(both, /Laws in force here:[^\n]*theft \(own\)/);
+  assert.match(both, /Laws in force here:[^\n]*assault \(inherited\)/);
+  assert.match(both, /Succession in force here: stationRank/);
+  assert.equal(both.match(/the ONLY legal repealLaw ids\): ([^\n]*)/)?.[1], 'theft', 'only the OWN law is offered for repeal');
+  const none = await sentFor(ownLaws([]));
+  assert.match(none, /Laws in force here: none/);
+  assert.ok(!none.includes('the ONLY legal repealLaw ids'), 'nothing to repeal, so it is never offered');
+  assert.ok(!(await sentFor(inheritedAssault())).includes('the ONLY legal repealLaw ids'), 'an inherited law is not offered');
+});
+
+test('repealLaw is a Director schema field and toWorldDelta reads it, "none" meaning nothing', () => {
+  const deltaSchema = (DIRECTOR_SCHEMA as any).properties.delta;
+  assert.deepEqual(deltaSchema.properties.repealLaw.enum, ['none', ...CRIMINAL_LAWS]);
+  assert.ok(deltaSchema.required.includes('repealLaw'));
+  assert.equal(toWorldDelta({ ...emptyDelta(), repealLaw: 'assault' } as never).repealLaw, 'assault');
+  assert.equal(toWorldDelta({ ...emptyDelta(), repealLaw: 'none' } as never).repealLaw, undefined);
 });
