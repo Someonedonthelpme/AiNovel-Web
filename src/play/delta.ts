@@ -28,7 +28,10 @@ import type { Ability } from '../combat/types.ts';
 import { MAX_ABILITY, playerSubject } from './signetbook.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
-import { findItem, equip } from '../items/types.ts';
+import { addItem, findItem, equip } from '../items/types.ts';
+import { LOOT_CATEGORIES } from '../items/catalogue.ts';
+import { COLLECTABLE, itemsFor } from './collect.ts';
+import type { Collectable } from './collect.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
 import { advanceJourneys, fadeGrudges, setOut } from './journey.ts';
@@ -162,6 +165,41 @@ function worked(state: PlayState, req: { building: string; workstation: string }
   const nextPlace = withBuilding(place, { ...building, container: result.container });
   return {
     ...state,
+    world: {
+      ...state.world,
+      regions: { ...state.world.regions, [region.id]: { ...region, places: region.places.map((p) => (p.id === place.id ? nextPlace : p)) } },
+    },
+  };
+}
+
+/** Why the player may NOT collect this category out of this building, or null when they may (DESIGN 6c §3c-i). */
+function refusalToCollect(state: PlayState, req: { building: string; category: string }): string | null {
+  const region = activeRegion(state.world);
+  const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  if (!region || !place) return 'not here';
+  if (!heldByPlayer(place)) return 'you do not hold this settlement';
+  const building = buildingAt(place, req.building);
+  if (!building) return `no such building "${req.building}" here`;
+  if (!(LOOT_CATEGORIES as readonly string[]).includes(req.category)) return `no such goods category "${req.category}"`;
+  if (!(COLLECTABLE as readonly string[]).includes(req.category)) return `the game cannot make ${req.category} into an item yet`;
+  if (!building.container[req.category as Collectable]) return `nothing stored: no ${req.category} in ${req.building}`;
+  return null;
+}
+
+/** The collecting, once `validateDelta` has allowed it: the whole category leaves the container and enters the pack as items. */
+function collected(state: PlayState, req: { building: string; category: Collectable }): PlayState {
+  const region = activeRegion(state.world);
+  const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  const building = place && buildingAt(place, req.building);
+  const count = building?.container[req.category];
+  if (!region || !place || !building || !count) return state;
+  const { [req.category]: _taken, ...rest } = building.container;
+  const drops = itemsFor(req.category, count, state.world.seed, state.world.turn, req.building, region.floor);
+  const inventory = drops.reduce((inv, drop) => addItem(inv, drop.item, drop.count), state.pc.inventory);
+  const nextPlace = withBuilding(place, { ...building, container: rest });
+  return {
+    ...state,
+    pc: { ...state.pc, inventory },
     world: {
       ...state.world,
       regions: { ...state.world.regions, [region.id]: { ...region, places: region.places.map((p) => (p.id === place.id ? nextPlace : p)) } },
@@ -393,6 +431,12 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     const why = refusalToWork(state, proposed.runWorkstation);
     if (why) rejected.push(`runWorkstation "${proposed.runWorkstation.workstation}": ${why}`);
     else delta.runWorkstation = proposed.runWorkstation;
+  }
+
+  if (proposed.collect !== undefined) {
+    const why = refusalToCollect(state, proposed.collect);
+    if (why) rejected.push(`collect "${proposed.collect.category}": ${why}`);
+    else delta.collect = proposed.collect;
   }
 
   if (proposed.adoptLaw !== undefined) {
@@ -641,6 +685,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   if (delta.acquirePlace) next = bought(next, delta.acquirePlace);
 
   if (delta.runWorkstation) next = worked(next, delta.runWorkstation);
+
+  if (delta.collect) next = collected(next, delta.collect);
 
   if (delta.adoptLaw) next = adopted(next, delta.adoptLaw);
 

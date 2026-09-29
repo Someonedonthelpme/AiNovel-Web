@@ -24,6 +24,8 @@ import { heldByPlayer } from '../world/holding.ts';
 import { holderUnder } from '../play/succession.ts';
 import { CRIMINAL_LAWS, hallScopeOf, lawsBindingAt, successionOf, SUCCESSION_LAWS } from '../world/al.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
+import { COLLECTABLE } from '../play/collect.ts';
+import type { Collectable } from '../play/collect.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -105,12 +107,15 @@ const deltaSchema = obj(
     setSuccession: { type: 'string', enum: ['none', ...SUCCESSION_LAWS] },
     /** The same hall repeals one of its OWN laws, from the closed criminal-law list (DESIGN 6c §3k). Almost always 'none'. */
     repealLaw: { type: 'string', enum: ['none', ...CRIMINAL_LAWS] },
+    /** WHICH building's stored goods the holder takes out, and WHICH category of them (DESIGN 6c §3c-i). Both or neither. */
+    collectBuilding: str,
+    collectGoods: { type: 'string', enum: ['none', ...COLLECTABLE] },
   },
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
     'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation', 'adoptLaw',
-    'setSuccession', 'repealLaw',
+    'setSuccession', 'repealLaw', 'collectBuilding', 'collectGoods',
   ],
 );
 
@@ -180,6 +185,9 @@ export type FlatDelta = {
   setSuccession: string;
   /** One of the same hall's own laws, repealed. Empty on almost every turn. */
   repealLaw: string;
+  /** A building the holder takes stored goods out of, and which category. Both or neither. */
+  collectBuilding: string;
+  collectGoods: string;
 };
 
 export type Outcome = { narrate: string; delta: FlatDelta };
@@ -294,6 +302,10 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   const repealLaw = meaningful(flat.repealLaw) ? flat.repealLaw : null;
   if (repealLaw) delta.repealLaw = repealLaw as AlLawId;
 
+  const collectBuilding = meaningful(flat.collectBuilding);
+  const collectGoods = meaningful(flat.collectGoods);
+  if (collectBuilding && collectGoods) delta.collect = { building: collectBuilding, category: collectGoods as Collectable };
+
   return delta;
 }
 
@@ -372,6 +384,20 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     const stations = (b.workstations ?? []).filter((w) => (w.method || w.serviceMethod) && w.id).map((w) => w.id as string);
     return stations.length ? [`  - ${b.id}: ${stations.join(', ')}`] : [];
   });
+
+  // What the buildings here have STORED, so the goods a workstation made can be seen (DESIGN 6c §3c-i).
+  const stored = (place?.buildings ?? []).flatMap((b) => {
+    const goods = Object.entries(b.container ?? {}).filter(([, n]) => n);
+    return goods.length && b.id ? [`Stored in ${b.id}: ${goods.map(([c, n]) => `${c} x${n}`).join(', ')}`] : [];
+  });
+  // Collectable only where the player holds the place and an item can be made of the category —
+  // the same "never shown a field it would be refused for" rule as everything above.
+  const collectable = place && heldByPlayer(place)
+    ? (place.buildings ?? []).flatMap((b) => {
+      const cats = COLLECTABLE.filter((c) => (b.container ?? {})[c]);
+      return cats.length && b.id ? [`${b.id}: ${cats.join(', ')}`] : [];
+    })
+    : [];
 
   /*
    * ADOPTABLE LAW HERE (DESIGN 6c §3k). Offered only when every legality check
@@ -515,6 +541,8 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     buildings.length ? `Workstations here (the ONLY legal workBuilding/workStation ids):\n${buildings.join('\n')}` : '',
     alScope ? `Law here (the ONLY legal adoptLaw ids): ${CRIMINAL_LAWS.join(', ')}` : '',
     alScope ? `Succession law here (the ONLY legal setSuccession ids): ${SUCCESSION_LAWS.join(', ')}` : '',
+    ...stored,
+    collectable.length ? `Collectable here (the ONLY legal collectGoods ids): ${collectable.join('; ')}` : '',
     alScope ? `Laws in force here: ${inForce.map((l) => `${l} (${ownLaws.includes(l) ? 'own' : 'inherited'})`).join(', ') || 'none'}` : '',
     alScope && region ? `Succession in force here: ${successionOf(region, alScope)}` : '',
     ownLaws.length ? `Repealable here (the ONLY legal repealLaw ids): ${ownLaws.join(', ')}` : '',
@@ -572,6 +600,10 @@ const SYSTEM = [
   'repealLaw is the same hall lifting one of its OWN laws — a decree, not a',
   'remark that a law is old or unfair. Only offered when listed below; empty',
   'on almost every turn.',
+  '',
+  'collectBuilding and collectGoods are for the holder taking a whole category of goods',
+  'out of a building they hold — what a workstation made. Name the building id and the',
+  'category exactly as listed below. Only offered when listed; empty on almost every turn.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson, deedPerson, addressedPerson',

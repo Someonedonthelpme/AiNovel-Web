@@ -14,6 +14,7 @@ import type { CharacterSheet } from '../session/sheet.ts';
 import { derive } from '../session/sheet.ts';
 import type { PersonId, World } from '../world/types.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
+import type { Collectable } from './collect.ts';
 
 /**
  * The state the play loop folds over.
@@ -175,6 +176,12 @@ export type WorldDelta = {
    * hall authority as `adoptLaw`; what makes a law passed by mistake undoable.
    */
   repealLaw?: AlLawId;
+  /**
+   * Take a WHOLE category of goods out of a building the player holds, as items
+   * (DESIGN 6c §3c-i). The model names WHICH building and category; the engine decides
+   * what items they become. Own building only — stealing is a separate verb, unbuilt.
+   */
+  collect?: { building: string; category: Collectable };
 };
 
 /** Why a walk stopped (W3). Closed. */
