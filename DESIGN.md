@@ -2093,6 +2093,15 @@ retry; a false positive cost the player's law. Kept only if the live A/B shows t
 remarks 3/20 -> 0/20, the repeal decree itself 5/5 -> 5/5, the adopt-theft decree's stray repeal 2/5 -> 1/5
 (not removed: `Laws in force` still names the law). Still open: stray extra verbs on a decree, Thai cues.
 
+**Thai repeal cues (user, 2026-09-29) — an experiment until a live Thai run says it works.** The repeal gate
+above was English-only, so a Thai player got no repeal option at all, silently. Thai has no word boundaries
+(`\b` never matches between Thai letters — checked), so the Thai cues are matched as substrings, beside the
+English regex: `ยกเลิก` (cancel, repeal), `เพิกถอน` (revoke), `ไม่ผิดกฎหมายอีก` and `ไม่เป็นความผิดอีก` (no longer
+illegal, no longer an offence). Left out on purpose: `ล้มเลิก` (give up — a personal intention), `ยก` alone
+(raise, lift — too broad) and `ยกเว้น` (exempt). `ยกเลิก` also means "cancel an appointment", so it can unlock the
+option on an unrelated remark; unlocking only SHOWS the option, and the live English run says showing is what
+fires it, so a false positive is the known cost. The list is a first draft to be reviewed by a Thai speaker.
+
 **Adopt and succession are offered only on their own cue (user, 2026-09-29) — an experiment until a live A/B says it works.**
 The live station A/B (real town, held seat, 69 non-decree trials per arm) showed `adopt` firing on plain
 remarks 3-5 times and `succession=standing` 5-6 times, on the old and the new station list alike, and
