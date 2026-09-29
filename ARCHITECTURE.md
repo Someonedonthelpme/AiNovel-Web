@@ -249,7 +249,7 @@ on each of the five axes** ([ruleset.ts:210](src/rules/ruleset.ts:210)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:236](src/world/travel.ts:236)) and the panel's way down ([climb.ts:329](src/play/climb.ts:329)) |
-| `crossFloors` | movement | the Director brief ([director.ts:482](src/llm/director.ts:482)), and whether a journey may take a stair ([journey.ts:162](src/play/journey.ts:162)) — see §12 |
+| `crossFloors` | movement | the Director brief ([director.ts:487](src/llm/director.ts:487)), and whether a journey may take a stair ([journey.ts:162](src/play/journey.ts:162)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:293](src/play/climb.ts:293), [combat.ts:968](src/play/combat.ts:968)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:976](src/play/combat.ts:976)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:283](src/play/climb.ts:283)) |
@@ -687,8 +687,8 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:656](src/llm/director.ts:656)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:721](src/llm/director.ts:721)) | `PARLEY_SCHEMA` ([:694](src/llm/director.ts:694)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:425](src/play/turn.ts:425)); an answer outside the list is a refusal ([director.ts:718](src/llm/director.ts:718)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Director** ([director.ts:661](src/llm/director.ts:661)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
+| **Parley** ([director.ts:726](src/llm/director.ts:726)) | `PARLEY_SCHEMA` ([:699](src/llm/director.ts:699)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:425](src/play/turn.ts:425)); an answer outside the list is a refusal ([director.ts:723](src/llm/director.ts:723)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:369](src/world/floorgen.ts:369)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture (at least the budget minimum of people, [floorgen.ts:130](src/world/floorgen.ts:130); shown the last four floors, [:299](src/world/floorgen.ts:299); a name per place, [:325](src/world/floorgen.ts:325)) — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:142](src/world/floorgen.ts:142)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:596](src/world/floorgen.ts:596)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:144](src/world/floorgen.ts:144)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:146](src/world/floorgen.ts:146)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:663](src/world/floorgen.ts:663), [:669](src/world/floorgen.ts:669)) | **yes, in full** — inside `ClimbRecord.built` |
@@ -990,7 +990,7 @@ The clock reads as a date from the world's start
 given the hour, the dark, the season and the date in the world's words — the floor's
 own year on an era floor, "N years before" the reckoning behind year 1
 ([calendar.ts:184](src/world/calendar.ts:184), [:191](src/world/calendar.ts:191); passed
-the floor at [director.ts:516](src/llm/director.ts:516) and
+the floor at [director.ts:521](src/llm/director.ts:521) and
 [redact.ts:141](src/llm/redact.ts:141)) — which genesis asks for last, so the
 game does without them ([calendar.ts:131](src/world/calendar.ts:131)). Needs drain
 by the hour marks a turn crossed ([delta.ts:735](src/play/delta.ts:735)), faster in
@@ -1012,7 +1012,7 @@ ABOVE it in the same band, the five most recent, with the years between
 its future. When an era floor above the band's first is built, one or two of its new
 people are dealt a `line`: an ancestor among the LIVING people of the era floor below
 ([floorgen.ts:553](src/world/floorgen.ts:553)); the Director is told whose line
-somebody is ([director.ts:437](src/llm/director.ts:437)).
+somebody is ([director.ts:442](src/llm/director.ts:442)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
 ([types.ts:183](src/combat/types.ts:183)), set where it is built
@@ -1278,26 +1278,26 @@ refuses unless the player stands there AND holds the settlement.
 
 **12. A verb the model cannot legally use is a verb the model never sees.** The
 brief lists only `moveTo` values that are real exits
-([director.ts:519](src/llm/director.ts:519)), only `useItem`/`equipItem` ids
-actually carried ([director.ts:544](src/llm/director.ts:544)), and only
+([director.ts:524](src/llm/director.ts:524)), only `useItem`/`equipItem` ids
+actually carried ([director.ts:549](src/llm/director.ts:549)), and only
 `workBuilding`/`workStation` ids naming a workstation that HAS a method to run
-([director.ts:383](src/llm/director.ts:383)-[385](src/llm/director.ts:385),
-[:545](src/llm/director.ts:545)) — an `administrative` workstation, which never has
+([director.ts:386](src/llm/director.ts:386)-[388](src/llm/director.ts:388),
+[:550](src/llm/director.ts:550)) — an `administrative` workstation, which never has
 one, is silently absent rather than validated and refused later. `adoptLaw` AND
 `setSuccession` options are listed behind the same single gate: only when the
 player holds the settlement, a real hall stands there, and its AL unit has scope
-([director.ts:408](src/llm/director.ts:408)-[409](src/llm/director.ts:409),
-[:546](src/llm/director.ts:546)-[547](src/llm/director.ts:547)) — every condition
+([director.ts:411](src/llm/director.ts:411)-[412](src/llm/director.ts:412),
+[:551](src/llm/director.ts:551)-[552](src/llm/director.ts:552)) — every condition
 `hallAuthorityHere` would otherwise refuse either verb for. `repealLaw` is offered
 under the same gate AND only when the unit has laws of its own AND the player's own words carry a
 repeal cue — repeal, revoke, lift, abolish, rescind, overturn, "no longer", English only
-([director.ts:416](src/llm/director.ts:416), the line at [:553](src/llm/director.ts:553)) — an
+([director.ts:420](src/llm/director.ts:420), the line at [:558](src/llm/director.ts:558)) — an
 inherited law would be refused, so it is never shown, and an option that is not shown never fires. The same gate also shows what is IN FORCE, own and inherited, and the
-effective succession law ([director.ts:551](src/llm/director.ts:551)-[552](src/llm/director.ts:552)).
+effective succession law ([director.ts:556](src/llm/director.ts:556)-[557](src/llm/director.ts:557)).
 `collect` is its own block in the workstation shape — both field names in the header, the
 building beside its goods — offered only where the player holds the place and the category is
-in `COLLECTABLE` ([director.ts:550](src/llm/director.ts:550)); what is STORED is stated whether
-held or not ([director.ts:391](src/llm/director.ts:391)), since seeing it is harmless.
+in `COLLECTABLE` ([director.ts:555](src/llm/director.ts:555)); what is STORED is stated whether
+held or not ([director.ts:394](src/llm/director.ts:394)), since seeing it is harmless.
 
 **13. A delta merge spreads fields, never lists them.** `mergeDeltas` folds the
 unconditional and dice-selected halves with `...base, ...outcome`
@@ -1387,8 +1387,8 @@ calls `hallScopeOf` ([al.ts:73](src/world/al.ts:73)). `adoptLaw`
 ([delta.ts:692](src/play/delta.ts:692), [:696](src/play/delta.ts:696)) and the
 Director (schema [director.ts:105](src/llm/director.ts:105),
 [:107](src/llm/director.ts:107); brief gate — one `alScope` check offers both —
-[:409](src/llm/director.ts:409), [:546](src/llm/director.ts:546)-
-[547](src/llm/director.ts:547)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
+[:412](src/llm/director.ts:412), [:551](src/llm/director.ts:551)-
+[552](src/llm/director.ts:552)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
 ([al.ts:58](src/world/al.ts:58)) are called by `lawEnforcementAfter`
 ([delta.ts:970](src/play/delta.ts:970), [:971](src/play/delta.ts:971)), wired into
 the fold at [delta.ts:1038](src/play/delta.ts:1038) (DESIGN 6c §3k-ii).
@@ -1402,7 +1402,7 @@ engine can detect — a law with a writer and no trigger, deferred by DESIGN 6c
 §3k-ii, not an oversight. Adopted laws were invisible to everyone — the Director's
 brief listed what could be adopted but never what already was, and no view reads
 `AlUnit.laws` — until `repealLaw`'s stage added the "in force" line
-([director.ts:551](src/llm/director.ts:551)); found when a live run on the local 35B model adopted a
+([director.ts:556](src/llm/director.ts:556)); found when a live run on the local 35B model adopted a
 law from a mere remark 2 times in 5 and nothing could show or undo it. Still true: no
 player-facing view shows them (a decision, not an oversight). A remark can still fire a hall verb, and a
 decree can carry a stray second one: on the three flat fields a live run saw a stray extra verb on about
@@ -1436,7 +1436,7 @@ computes it, the fold stores it ([delta.ts:166](src/play/delta.ts:166)) — and 
 2026-09-29 nothing read it: no verb took from it, the Director's brief did not show it, no
 view did, so `runWorkstation` produced goods nobody could see or collect. Found before any
 off-screen production was built on top of it. Now the brief states what each building has
-stored ([director.ts:391](src/llm/director.ts:391)) and the holder can `collect` a whole
+stored ([director.ts:394](src/llm/director.ts:394)) and the holder can `collect` a whole
 category as items (`refusalToCollect`/`collected`, [delta.ts:177](src/play/delta.ts:177),
 [:191](src/play/delta.ts:191); items from `itemsFor`, [collect.ts:21](src/play/collect.ts:21)).
 **Still open:** a container holds category COUNTS, and only six categories have an item to
@@ -1692,7 +1692,7 @@ did not forbid them. Since 7.1b NPCs MOVE (journeys), and that movement asks the
 law: a traveller takes a stair only where it allows
 ([journey.ts:162](src/play/journey.ts:162)). For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
-and the Director brief ([director.ts:482](src/llm/director.ts:482)) is the only
+and the Director brief ([director.ts:487](src/llm/director.ts:487)) is the only
 check on what gets narrated.
 
 **`Person.line` is always a real id** ([types.ts:266](src/world/types.ts:266)) — by
@@ -1720,7 +1720,7 @@ rather than on the nose.
 **Per-NPC rule knowledge** has no writer for the same reason. The only
 `ruleClaim` writer is the player's refused crossing
 ([climb.ts:116](src/play/climb.ts:116)); the Director is shown the PLAYER's
-beliefs about the law ([director.ts:491](src/llm/director.ts:491)).
+beliefs about the law ([director.ts:496](src/llm/director.ts:496)).
 
 ---
 
@@ -2021,7 +2021,7 @@ would be a word with no reader — the signature bug, introduced on purpose. It
 arrives with quests (DESIGN step 7).
 
 *Echoes reach the Director, not the Writer.* The Director's context carries them
-([director.ts:517](src/llm/director.ts:517)); the Writer's view gets the era's time line
+([director.ts:522](src/llm/director.ts:522)); the Writer's view gets the era's time line
 ([redact.ts:141](src/llm/redact.ts:141)) and no echoes. Add when the prose never mentions one.
 
 *A descendant outlives an ancestor killed after you met them.* Lines are dealt when a
