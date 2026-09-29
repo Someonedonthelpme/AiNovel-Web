@@ -1290,7 +1290,8 @@ player holds the settlement, a real hall stands there, and its AL unit has scope
 [:551](src/llm/director.ts:551)-[552](src/llm/director.ts:552)) — every condition
 `hallAuthorityHere` would otherwise refuse either verb for. `repealLaw` is offered
 under the same gate AND only when the unit has laws of its own AND the player's own words carry a
-repeal cue — repeal, revoke, lift, abolish, rescind, overturn, "no longer", English only
+repeal cue — repeal, revoke, lift, abolish, rescind, overturn, "no longer", or one of four Thai substrings
+(`REPEAL_CUES_TH`, [director.ts:372](src/llm/director.ts:372); Thai has no word boundaries, so `\b` cannot see them)
 ([director.ts:420](src/llm/director.ts:420), the line at [:558](src/llm/director.ts:558)) — an
 inherited law would be refused, so it is never shown, and an option that is not shown never fires. The same gate also shows what is IN FORCE, own and inherited, and the
 effective succession law ([director.ts:556](src/llm/director.ts:556)-[557](src/llm/director.ts:557)).
@@ -1412,7 +1413,8 @@ on 13 of 20 remarks, so the three fields were restored. A repeal-cue gate then c
 a real lawed seat, with repeal always offered, 3 of 20 remarks repealed the player's law and an adopt-theft
 decree also repealed it 2 of 5; with repeal offered only on a repeal cue, 0 of 20 remarks did and the
 repeal decree itself still worked 5 of 5 (the theft decree still produced 1 stray repeal in 5, because
-`Laws in force` names the law). Thai has no cues yet. A quote guard (the decree's exact words must
+`Laws in force` names the law). Thai has four repeal cues (live, 9 of 10 repeal decrees; a remark that merely
+contains `ยกเลิก`, "cancel", repealed the law 1 of 5), unreviewed by a Thai speaker. A quote guard (the decree's exact words must
 appear in the player's input) is proposed, undecided, and now low priority. `successionOf`
 ([al.ts:135](src/world/al.ts:135)) was test-only until `holderUnder` ([succession.ts:17](src/play/succession.ts:17)) read
 it, so the choice `setSuccession` writes now governs who holds a settlement that
