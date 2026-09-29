@@ -120,7 +120,7 @@ config ─┐
   be created on demand.
 - **The play layer owns the trust boundary.** *"The Director PROPOSES changes;
   this module decides which are legal and applies only those."*
-  ([delta.ts:50](src/play/delta.ts:50)). Refusing one field never discards the
+  ([delta.ts:51](src/play/delta.ts:51)). Refusing one field never discards the
   rest of the turn.
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
@@ -208,7 +208,7 @@ not persuasion) · `layout.ts` (deterministic positions for the floor map) ·
 [settlement.ts:53](src/world/settlement.ts:53)) ·
 `workstation.ts` (a workstation runs its own recipe against a building's container,
 capped by tier-derived capacity and scaled by the runner's class fit — wired into
-play via `worked()`, [delta.ts:150](src/play/delta.ts:150)) ·
+play via `worked()`, [delta.ts:151](src/play/delta.ts:151)) ·
 `building.ts` (packs workstations into modules, 1–3 each, and gates a building's
 growth on a settlement's free plots, [building.ts:11](src/world/building.ts:11)) ·
 `map.ts` (hub and field maps and 8-way pathfinding; doors read off the place graph,
@@ -253,7 +253,7 @@ on each of the five axes** ([ruleset.ts:210](src/rules/ruleset.ts:210)), and
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:293](src/play/climb.ts:293), [combat.ts:968](src/play/combat.ts:968)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:976](src/play/combat.ts:976)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:283](src/play/climb.ts:283)) |
-| `holdSettlement` | territory | `validateDelta`, refusing a purchase (`acquirePlace`, [delta.ts:100](src/play/delta.ts:100)); HARSH is born forbidding it to the player ([ruleset.ts:397](src/rules/ruleset.ts:397)) |
+| `holdSettlement` | territory | `validateDelta`, refusing a purchase (`acquirePlace`, [delta.ts:101](src/play/delta.ts:101)); HARSH is born forbidding it to the player ([ruleset.ts:397](src/rules/ruleset.ts:397)) |
 
 The `gainLevels` guard lives INSIDE `grantXp`
 ([progress.ts:94](src/play/progress.ts:94)) because a law some callers check and
@@ -355,7 +355,7 @@ anything derives from the seed alone.
   reach into a run already under way. It carries `laws` alongside its dials
   ([world/types.ts:316](src/world/types.ts:316)), which is why a law can change
   mid-run when a generation-time value could not — and `applyDelta` is its only
-  mid-run writer ([delta.ts:521](src/play/delta.ts:521)).
+  mid-run writer ([delta.ts:522](src/play/delta.ts:522)).
 - `species` — the kinds of thing that live here, dealt from the seed at genesis
   ([genesis.ts:753](src/session/genesis.ts:753)). Stored for the same reason
   `subjects` is.
@@ -380,7 +380,7 @@ anything derives from the seed alone.
   `stairCost` ([travel.ts:82](src/world/travel.ts:82)), an hour per rest turn
   ([rest.ts:120](src/play/rest.ts:120)), and at least one tick otherwise. A WALK is
   the exception: it is charged its seconds, and `second` carries what is left inside
-  the tick ([types.ts:355](src/world/types.ts:355), [delta.ts:640](src/play/delta.ts:640)),
+  the tick ([types.ts:355](src/world/types.ts:355), [delta.ts:641](src/play/delta.ts:641)),
   so a short walk may cover no whole tick.
 - `journeys` — grudges on the road ([types.ts:360](src/world/types.ts:360),
   [journey.ts:21](src/play/journey.ts:21)): who travels, for whom, where they have
@@ -388,7 +388,7 @@ anything derives from the seed alone.
   replay; advanced only by the fold.
 - `echoes` — weighty deeds done on an era floor ([types.ts:362](src/world/types.ts:362)):
   the engine keeps the `ECHOING` ones only ([deed.ts:63](src/social/deed.ts:63)), in the
-  fold ([delta.ts:929](src/play/delta.ts:929)), as NAMES rather than ids since they are
+  fold ([delta.ts:931](src/play/delta.ts:931)), as NAMES rather than ids since they are
   history; the Director on a higher era floor of the same band hears them with how many
   years back they were ([director.ts:360](src/llm/director.ts:360)). Absent is none.
 - `calendar` — the world's WORDS for its reckoning, days, months and seasons
@@ -440,8 +440,10 @@ untouched, which is what the standing no-rebalance rule (DESIGN 6c) wants.
 settlement, each building addressable by a stable id ([settlement.ts:152](src/world/settlement.ts:152));
 optional, so no world stored before this needs migrating. Within it, `Building.id`,
 `Building.workstations` and `Workstation.method` are themselves all optional
-([workstation.ts:21](src/world/workstation.ts:21), [:23](src/world/workstation.ts:23))
-— the same migration-safety reasoning, one level down. Module and plot occupancy
+([workstation.ts:21](src/world/workstation.ts:21), [:24](src/world/workstation.ts:24))
+— the same migration-safety reasoning, one level down. `Building.workedAt`
+([workstation.ts:24](src/world/workstation.ts:24)) is optional for it too: absent until a building
+is first seen, then the clock tick of its last catch-up (`caughtUp`, below). Module and plot occupancy
 is read off each building's own workstation count
 ([building.ts:11](src/world/building.ts:11), [settlement.ts:163](src/world/settlement.ts:163)),
 never a hand-fed number.
@@ -564,20 +566,21 @@ come from?"
 | `addBuilding` ([settlement.ts:157](src/world/settlement.ts:157)) | a place, a building | the place with it added — a no-op on a taken id, never a silent overwrite |
 | `withBuilding` ([settlement.ts:163](src/world/settlement.ts:163)) | a place, a building | the place with that building's id replaced by it — a no-op if no building there has that id |
 | `occupiedModulesOf` ([settlement.ts:163](src/world/settlement.ts:163)) | every building on a place | modules occupied, summed |
-| `runMethod` ([workstation.ts:37](src/world/workstation.ts:37)) | a container, a sub-method, hours worked, an optional capacity | batches completed and the container after — capped by whichever of time, input or space runs out first |
-| `capacityOf` ([workstation.ts:48](src/world/workstation.ts:48)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
-| `runAt` ([workstation.ts:54](src/world/workstation.ts:54)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
-| `runWorkstation` ([workstation.ts:59](src/world/workstation.ts:59)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
-| `efficiencyOf` ([workstation.ts:72](src/world/workstation.ts:72)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
-| `statFor` ([workstation.ts:91](src/world/workstation.ts:91)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
-| `classFitOf` ([workstation.ts:96](src/world/workstation.ts:96)) | two `LifeClass` values | same id → on-class; same stat, different id → shares-stat; else → raw-stat. No caller yet outside its own tests — see §12 |
+| `runMethod` ([workstation.ts:38](src/world/workstation.ts:38)) | a container, a sub-method, hours worked, an optional capacity | batches completed and the container after — capped by whichever of time, input or space runs out first |
+| `capacityOf` ([workstation.ts:49](src/world/workstation.ts:49)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
+| `runAt` ([workstation.ts:55](src/world/workstation.ts:55)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
+| `runWorkstation` ([workstation.ts:60](src/world/workstation.ts:60)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
+| `caughtUp` ([catchup.ts:31](src/play/catchup.ts:31)) | the world before a turn, the world after it | the world with the place the player just ARRIVED at caught up: a building first seen is only stamped (`workedAt`); after that its economic workstations run for the hours since, staffed by the living people there who are not on the road — one person, one station, best fit first, a sheetless NPC judged at a flat placeholder ability (10). Fold-only, from state alone, so a replay makes the same goods (DESIGN 6c §3h, §3j-i) |
+| `efficiencyOf` ([workstation.ts:73](src/world/workstation.ts:73)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
+| `statFor` ([workstation.ts:92](src/world/workstation.ts:92)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
+| `classFitOf` ([workstation.ts:97](src/world/workstation.ts:97)) | two `LifeClass` values | same id → on-class; same stat, different id → shares-stat; else → raw-stat. No caller yet outside its own tests — see §12 |
 | `modulesNeeded` ([building.ts:11](src/world/building.ts:11)) | a workstation count | modules needed to hold them, 1–3 each |
 | `canUpgrade` ([building.ts:16](src/world/building.ts:16)) | current modules, next modules, free plots | whether the DELTA fits — not the whole new total |
 | `holderOf` ([holding.ts:14](src/world/holding.ts:14)) | a place, `World.people` | who holds a settlement: the player if stored, else the highest standing present — the `standing` law; play calls `holderUnder` below, which delegates here for it |
 | `itemsFor` / `COLLECTABLE` ([collect.ts:21](src/play/collect.ts:21), [:12](src/play/collect.ts:12)) | a collectable category, a count, the seed, the turn, a building, a floor | that many goods as real items — one catalogue builder per category, the rng a function of seed, turn, building and category so a replay makes the same items; the closed list is the six categories an item exists for (DESIGN 6c §3c-i) |
 | `holderUnder` ([succession.ts:16](src/play/succession.ts:16)) | a world, a region, a place | who holds a settlement under its AL unit's succession law (`successionOf`, [succession.ts:17](src/play/succession.ts:17)): `standing` is `holderOf`; `stationRank` the highest `Station` present; `elective` the SUMMED trust of everyone else present toward each; a tie falls back to `standing` among the tied; a stored holder is never overridden and the dead never inherit (DESIGN 6c §3k-i) |
 | `signposted` / `walkRoute` ([travel.ts:287](src/world/travel.ts:287), [:312](src/world/travel.ts:312)) | a region, where you stand, typed text, and the ends of the field you are on | the place names you can know of — one rule, shared by the redaction wall and walking — and the fewest-step route a typed "go to" walks — including back to the place you set out from, when you are on its field |
-| `personRef` ([delta.ts:71](src/play/delta.ts:71)) | a name or id the model wrote | who it means: the id, else one name match ignoring case, spaces and punctuation, people here first; else refused, and never guessed |
+| `personRef` ([delta.ts:72](src/play/delta.ts:72)) | a name or id the model wrote | who it means: the id, else one name match ignoring case, spaces and punctuation, people here first; else refused, and never guessed |
 | `lawFrom` ([strata.ts:71](src/world/strata.ts:71)) | `World.strata`, floor, a law | the innermost stratum that STATES that law — how a wing inside a band keeps the band's laws |
 | `eraOf` → `dateOf` / `timeLine` ([strata.ts:100](src/world/strata.ts:100), [calendar.ts:74](src/world/calendar.ts:74), [:184](src/world/calendar.ts:184)) | seed, strata, floor | how many years an era floor lies behind the world's, and the date read on that floor — only the year moves |
 | `linksFrom` ([travel.ts:203](src/world/travel.ts:203)) | a region | its ways out: its own `exits`, or up/down derived from depth |
@@ -629,7 +632,7 @@ Who is what kind keys the same way, on the world seed and the person's id
 ([species.ts:275](src/character/species.ts:275)), weighted 4:1 toward the world's
 DOMINANT kind — its own ordinary people, PEOPLE where a world has any, since a
 town of beasts is a bestiary ([species.ts:258](src/character/species.ts:258)). And a way out found in play is NAMED from the seed, the region and the
-place it leaves from ([delta.ts:508](src/play/delta.ts:508)) rather than drawn,
+place it leaves from ([delta.ts:509](src/play/delta.ts:509)) rather than drawn,
 so the live turn and every replay mint the same destination without it being
 logged.
 An era floor's year and a family line key the same way, on the seed, the band's id and
@@ -683,7 +686,7 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:652](src/llm/director.ts:652)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:71](src/play/delta.ts:71)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
+| **Director** ([director.ts:652](src/llm/director.ts:652)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
 | **Parley** ([director.ts:717](src/llm/director.ts:717)) | `PARLEY_SCHEMA` ([:690](src/llm/director.ts:690)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:425](src/play/turn.ts:425)); an answer outside the list is a refusal ([director.ts:714](src/llm/director.ts:714)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
@@ -762,7 +765,7 @@ rations, because a short rest spends one.
        traveller, somebody NEW in view on the road, a need at its line or
        night on wild ground; the record
        holds where it stopped and WHO it met, so a replay never pathfinds
-       and never reads a tile (delta.ts:531, delta.ts:539);
+       and never reads a tile (delta.ts:532, delta.ts:540);
        "rest"/"sleep", "hunt"
        and "buy X" go through validateDelta as if proposed (turn.ts:341);
        a hunt that would open no fight says why (turn.ts:365). One record
@@ -786,14 +789,14 @@ rations, because a short rest spends one.
        danger is 0 · using what you do not carry · resting when you may not ·
        a law outside the vocabulary · a way out from a place not here ·
        a walk the model proposed · a purchase O1 forbids
-       (a person the model NAMES is first resolved to an id, delta.ts:71)
+       (a person the model NAMES is first resolved to an id, delta.ts:72)
        (clamps: trust ±3, time 0..3)
  5  applyTurn ───────────────────── the fold
        applyDelta → combat (live or replayed; a finished live fight is
        re-folded by settleFight) → deeds and traffic → lawEnforcementAfter
-       (an adopted assault law broken → the ruler's resentment, delta.ts:1036)
+       (an adopted assault law broken → the ruler's resentment, delta.ts:1038)
        → drift causes derived FROM THE RECORD → traits awarded LAST
-       drift runs by THIS world's rules and each person's kind (delta.ts:1031)
+       drift runs by THIS world's rules and each person's kind (delta.ts:1033)
  6  toWriterView + assertNoLeak ─── the wall
  7  WRITER ─────────────────────────────────────── model call #2 (+1 retry)
        sees only the redacted view and what already happened
@@ -952,7 +955,7 @@ bearer holds ([journey.ts:96](src/play/journey.ts:96)): the cheapest route throu
 a region, no further than the entrance of one where fighting is refused, and one
 stair at a time where `crossFloors` allows ([journey.ts:148](src/play/journey.ts:148)).
 ARRIVING opens the fight, decided from state so a replay opens the same one
-([delta.ts:995](src/play/delta.ts:995)). Only an arrived traveller fights, and
+([delta.ts:997](src/play/delta.ts:997)). Only an arrived traveller fights, and
 only while the bearer's grudge is worth a chase
 ([combat.ts:347](src/play/combat.ts:347)): 2 or more
 ([edge.ts:106](src/social/edge.ts:106)), one below what it takes to set out, so a
@@ -964,7 +967,7 @@ not the surer ([sighting.ts:37](src/play/sighting.ts:37)). Each turn word passes
 hop along people's edges ([sighting.ts:90](src/play/sighting.ts:90)), then
 whoever is where the player stands sees them firsthand
 ([sighting.ts:81](src/play/sighting.ts:81), in the fold at
-[delta.ts:1051](src/play/delta.ts:1051)). WHO IS OUT is one function
+[delta.ts:1053](src/play/delta.ts:1053)). WHO IS OUT is one function
 ([sighting.ts:55](src/play/sighting.ts:55)): the place's people, less any away on
 the road, plus arrived travellers, and at night only guards and night kinds — but OUT
 ON A ROAD it is only whoever you MET, since the people of the place you set out from
@@ -989,8 +992,8 @@ own year on an era floor, "N years before" the reckoning behind year 1
 the floor at [director.ts:512](src/llm/director.ts:512) and
 [redact.ts:141](src/llm/redact.ts:141)) — which genesis asks for last, so the
 game does without them ([calendar.ts:131](src/world/calendar.ts:131)). Needs drain
-by the hour marks a turn crossed ([delta.ts:733](src/play/delta.ts:733)), faster in
-winter outside a settlement ([delta.ts:742](src/play/delta.ts:742)); winter
+by the hour marks a turn crossed ([delta.ts:735](src/play/delta.ts:735)), faster in
+winter outside a settlement ([delta.ts:744](src/play/delta.ts:744)); winter
 ([calendar.ts:29](src/world/calendar.ts:29)) also slows a wild link. About one
 group in six keeps night hours and one in six keeps to some seasons
 ([habitat.ts:110](src/character/habitat.ts:110)); a group out of season is left
@@ -1002,7 +1005,7 @@ thinned to nothing still stays gone. A hunter by trade fights at night with the
 advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
 
 **Eras** (6c). The deeds `ECHOING` names — helped, killed, spared — done on an era floor
-are kept as echoes ([delta.ts:929](src/play/delta.ts:929)) and told on the era floors
+are kept as echoes ([delta.ts:931](src/play/delta.ts:931)) and told on the era floors
 ABOVE it in the same band, the five most recent, with the years between
 ([director.ts:360](src/llm/director.ts:360)); never below — the past does not remember
 its future. When an era floor above the band's first is built, one or two of its new
@@ -1034,8 +1037,8 @@ only options are `kill` and `spare` ([:525](src/play/combat.ts:525)), and both a
 ([game.ts:771](src/server/game.ts:771)) and shows it as not over, so the choice
 appears in the ordinary option chips. Killed is killed — thinned, written dead
 ([play/combat.ts:849](src/play/combat.ts:849)); spared writes the `spared` deed,
-toward the person if it was one ([delta.ts:868](src/play/delta.ts:868)), and whoever
-was spared is counted present to feel it ([delta.ts:890](src/play/delta.ts:890)).
+toward the person if it was one ([delta.ts:870](src/play/delta.ts:870)), and whoever
+was spared is counted present to feel it ([delta.ts:892](src/play/delta.ts:892)).
 Fled and spared foes are not thinned. Every foe BEATEN pays XP, not only the dead
 ([play/combat.ts:967](src/play/combat.ts:967)). Losing or drawing decides nothing:
 a yielded foe walks away. `captured` is not built — nothing would read a captive
@@ -1101,7 +1104,7 @@ them for every fight until `d579b42`.
 
 The state saved is not the fight as it stands: `settleFight` re-folds the
 finished record from the state before the turn
-([delta.ts:1074](src/play/delta.ts:1074)), because the live turn ran drift, deeds
+([delta.ts:1076](src/play/delta.ts:1076)), because the live turn ran drift, deeds
 and traits when the fight OPENED and replay runs them after it ends. Live and
 replay agree by construction.
 
@@ -1192,7 +1195,7 @@ migration 0001), once by climbing (fixed by making the climb an event).
 **It does not hold across a change to the fight rules, and nothing guards it**
 (promoted from HANDOFF 2026-09-14). A fight event stores decisions, not outcomes —
 a parley's verdict is the one outcome it stores, because a fold holds no provider
-([play/combat.ts:502](src/play/combat.ts:502)) — and a fold re-resolves them with today's code ([delta.ts:1003](src/play/delta.ts:1003)).
+([play/combat.ts:502](src/play/combat.ts:502)) — and a fold re-resolves them with today's code ([delta.ts:1005](src/play/delta.ts:1005)).
 Loading folds from the latest snapshot or from origin
 ([sessions.ts:189](src/db/sessions.ts:189)), and a fight is appended and
 snapshotted back to back ([game.ts:778](src/server/game.ts:778)), so normal play
@@ -1250,26 +1253,26 @@ walls under a save; its doors are derived from the place graph on every read
 
 **9a. A meeting on the road is RECORDED, not recomputed.** A walk stores who came
 into view ([walker.ts:152](src/play/walker.ts:152)); the fold ends that traveller's
-journey where you both stand ([delta.ts:546](src/play/delta.ts:546)) and the ordinary
+journey where you both stand ([delta.ts:547](src/play/delta.ts:547)) and the ordinary
 arrival machinery opens the fight — so the log still never depends on a tile.
 
 **10. A position is removed, never set to undefined.** A snapshot is JSON and drops an
 undefined key, so a fold that wrote `at: undefined` disagreed with its own snapshot —
 the snapshot test caught it in W3. `unplaced` removes the key
-([map.ts:67](src/world/map.ts:67); [delta.ts:556](src/play/delta.ts:556), [climb.ts:266](src/play/climb.ts:266)).
+([map.ts:67](src/world/map.ts:67); [delta.ts:557](src/play/delta.ts:557), [climb.ts:266](src/play/climb.ts:266)).
 
 **11. A place-scoped verb requires standing there.** `acquirePlace` refuses off-site
-with `refusalToSell` ([delta.ts:92](src/play/delta.ts:92), the check at
-[:95](src/play/delta.ts:95)); `runWorkstation` follows the same rule via
-`refusalToWork` ([delta.ts:127](src/play/delta.ts:127), the check at
-[:130](src/play/delta.ts:130)) — not a new rule invented for the station system, the
+with `refusalToSell` ([delta.ts:93](src/play/delta.ts:93), the check at
+[:96](src/play/delta.ts:96)); `runWorkstation` follows the same rule via
+`refusalToWork` ([delta.ts:128](src/play/delta.ts:128), the check at
+[:131](src/play/delta.ts:131)) — not a new rule invented for the station system, the
 existing one applied a second time. `adoptLaw`, `setSuccession` and `repealLaw` share
 ONE authority check instead of drawing it a third, fourth and fifth time by hand:
-`hallAuthorityHere` ([delta.ts:217](src/play/delta.ts:217)), extracted the moment
+`hallAuthorityHere` ([delta.ts:218](src/play/delta.ts:218)), extracted the moment
 a second administrative verb needed the identical rule `adoptLaw` already had.
-`repealLaw` ([delta.ts:249](src/play/delta.ts:249)) adds one refusal of its own — the
+`repealLaw` ([delta.ts:250](src/play/delta.ts:250)) adds one refusal of its own — the
 law must be in the unit's OWN set, and says whether it was inherited or never adopted.
-`collect` ([delta.ts:176](src/play/delta.ts:176)) is a place-scoped verb of the same kind: it
+`collect` ([delta.ts:177](src/play/delta.ts:177)) is a place-scoped verb of the same kind: it
 refuses unless the player stands there AND holds the settlement.
 
 **12. A verb the model cannot legally use is a verb the model never sees.** The
@@ -1353,8 +1356,8 @@ climber today, and not a field pretending to be a mechanic.
 or caller yet, by decision, not oversight (DESIGN 6c §3j-i, 2026-09-27): the only
 actor who can currently trigger `runWorkstation` is the PLAYER, who structurally
 cannot hold a `LifeClass` (§3b: life classes are NPC-only) — so `workerEfficiency`
-([delta.ts:144](src/play/delta.ts:144)) always resolves `raw-stat` directly and
-never needs `classFitOf` ([workstation.ts:96](src/world/workstation.ts:96)) or a
+([delta.ts:145](src/play/delta.ts:145)) always resolves `raw-stat` directly and
+never needs `classFitOf` ([workstation.ts:97](src/world/workstation.ts:97)) or a
 `Person`'s own `lifeClass` ([types.ts:276](src/world/types.ts:276)). Both wait on a
 real staffing/ownership answer — three other candidates §3j-i laid out and did not
 pick.
@@ -1371,27 +1374,27 @@ later stage to wire it in, not an oversight — DESIGN 6c §3e-ii says so explic
 **`hallScopeOf`/`adoptLaw`/`setSuccessionLaw`/`isBoundBy`/`rulerSeatOf` now have real
 callers, and so does `successionOf`; `theft`/`trespass` still have a writer and no
 trigger.** Both administrative play verbs share one authority check,
-`hallAuthorityHere` ([delta.ts:217](src/play/delta.ts:217)) — extracted once
+`hallAuthorityHere` ([delta.ts:218](src/play/delta.ts:218)) — extracted once
 `setSuccession` needed the identical rule `adoptLaw` already had, rather than a
-second hand-copy. `refusalToAdoptLaw`/`adopted` (`delta.ts:229`, `:235`) and
-`refusalToSetSuccession`/`succeeded` (`delta.ts:274`, `:280`) all call it, and it
+second hand-copy. `refusalToAdoptLaw`/`adopted` (`delta.ts:230`, `:236`) and
+`refusalToSetSuccession`/`succeeded` (`delta.ts:275`, `:281`) all call it, and it
 calls `hallScopeOf` ([al.ts:73](src/world/al.ts:73)). `adoptLaw`
 ([al.ts:84](src/world/al.ts:84)) and `setSuccessionLaw`
 ([al.ts:122](src/world/al.ts:122)) are each wired through `validateDelta`
-([delta.ts:442](src/play/delta.ts:442), [:462](src/play/delta.ts:462)), the fold
-([delta.ts:691](src/play/delta.ts:691), [:695](src/play/delta.ts:695)) and the
+([delta.ts:443](src/play/delta.ts:443), [:463](src/play/delta.ts:463)), the fold
+([delta.ts:692](src/play/delta.ts:692), [:696](src/play/delta.ts:696)) and the
 Director (schema [director.ts:105](src/llm/director.ts:105),
 [:107](src/llm/director.ts:107); brief gate — one `alScope` check offers both —
 [:409](src/llm/director.ts:409), [:542](src/llm/director.ts:542)-
 [543](src/llm/director.ts:543)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
 ([al.ts:58](src/world/al.ts:58)) are called by `lawEnforcementAfter`
-([delta.ts:968](src/play/delta.ts:968), [:969](src/play/delta.ts:969)), wired into
-the fold at [delta.ts:1036](src/play/delta.ts:1036) (DESIGN 6c §3k-ii).
+([delta.ts:970](src/play/delta.ts:970), [:971](src/play/delta.ts:971)), wired into
+the fold at [delta.ts:1038](src/play/delta.ts:1038) (DESIGN 6c §3k-ii).
 `lawsBindingAt` ([al.ts:110](src/world/al.ts:110)) is live only through `isBoundBy`
 ([al.ts:118](src/world/al.ts:118)); nothing calls it directly. Enforcement is
 `assault` ONLY: the trigger is "the player drew first" (`startCombat` and not
-`startedBy: 'them'`, [delta.ts:964](src/play/delta.ts:964)) and the law checked is
-the literal `'assault'` ([delta.ts:968](src/play/delta.ts:968)). `theft` and
+`startedBy: 'them'`, [delta.ts:966](src/play/delta.ts:966)) and the law checked is
+the literal `'assault'` ([delta.ts:970](src/play/delta.ts:970)). `theft` and
 `trespass` can be adopted through `adoptLaw` and then never broken by anything the
 engine can detect — a law with a writer and no trigger, deferred by DESIGN 6c
 §3k-ii, not an oversight. Adopted laws were invisible to everyone — the Director's
@@ -1408,8 +1411,8 @@ appear in the player's input) is proposed and undecided. `successionOf`
 ([al.ts:135](src/world/al.ts:135)) was test-only until `holderUnder` ([succession.ts:17](src/play/succession.ts:17)) read
 it, so the choice `setSuccession` writes now governs who holds a settlement that
 nobody bought. `holderUnder` replaced `holderOf` at the play callers that needed a
-governed holder (`refusalToSell`, [delta.ts:97](src/play/delta.ts:97); the ruler
-`lawEnforcementAfter` nudges, [delta.ts:971](src/play/delta.ts:971); the Director
+governed holder (`refusalToSell`, [delta.ts:98](src/play/delta.ts:98); the ruler
+`lawEnforcementAfter` nudges, [delta.ts:973](src/play/delta.ts:973); the Director
 brief; `engineAct`'s purchase). It does not reach the player's OWN seat — that
 holding is stored (`place.holder`), so no law is consulted — only settlements the
 player does not hold, under a seat they do, by `successionOf`'s inheritance.
@@ -1422,19 +1425,30 @@ wires it into play must go through `holderUnder`, or it will name a different ru
 than the fold nudges. Found while wiring `holderUnder`, not from this stage's brief.
 
 **Cleared: `Building.container` had writers and no reader.** What a workstation makes
-lands in the building's `container` — `runMethod` ([workstation.ts:38](src/world/workstation.ts:38))
-computes it, the fold stores it ([delta.ts:165](src/play/delta.ts:165)) — and until
+lands in the building's `container` — `runMethod` ([workstation.ts:39](src/world/workstation.ts:39))
+computes it, the fold stores it ([delta.ts:166](src/play/delta.ts:166)) — and until
 2026-09-29 nothing read it: no verb took from it, the Director's brief did not show it, no
 view did, so `runWorkstation` produced goods nobody could see or collect. Found before any
 off-screen production was built on top of it. Now the brief states what each building has
 stored ([director.ts:391](src/llm/director.ts:391)) and the holder can `collect` a whole
-category as items (`refusalToCollect`/`collected`, [delta.ts:176](src/play/delta.ts:176),
-[:190](src/play/delta.ts:190); items from `itemsFor`, [collect.ts:21](src/play/collect.ts:21)).
+category as items (`refusalToCollect`/`collected`, [delta.ts:177](src/play/delta.ts:177),
+[:191](src/play/delta.ts:191); items from `itemsFor`, [collect.ts:21](src/play/collect.ts:21)).
 **Still open:** a container holds category COUNTS, and only six categories have an item to
 become (`COLLECTABLE`, [collect.ts:12](src/play/collect.ts:12)) — `seed`, `tool` and
 `ingredient` have no item at all and `part`/`book` need more than a count, so goods of those
 kinds can be made and never collected (refused with a reason, not faked). And `DESIGN.md`
 §3c-i's other v1 verbs, buy, sell and steal, are still unbuilt.
+
+**`Place.buildings` has a writer and no generator — the whole station system is unreachable in a
+real world.** `addBuilding` ([settlement.ts:157](src/world/settlement.ts:157)) has no caller outside
+tests, and neither genesis nor floorgen ever sets `Place.buildings`, so no generated place has a
+building or a workstation. Everything that needs one works only on a hand-built state:
+`runWorkstation`, the hall verbs (`adoptLaw`/`setSuccession`/`repealLaw` — their brief gate needs a
+hall), `collect`, the `Stored in` line, and `caughtUp`. Found 2026-09-29 while checking whether
+catch-up on arrival would do anything in real play; every earlier "reachable from play" claim for
+these verbs meant wired to the Director and the fold, not reachable in a generated world, and the live
+Director checks all ran on hand-built fixtures. The remedy is generation (DESIGN 6c §3i's catalogue,
+§4's founding), not another verb.
 
 **Cleared: `Stratum.laws` had readers and no writer.** — *"no world is born with a
 law"* was true until `bfa0f66`: genesis writes a loop band when asked
@@ -1631,7 +1645,7 @@ written as `[]` by **every** generator. A reader with no writer.
 
 **Cleared: `CharacterSheet.species`.** — *"read for the player every turn and
 written by nothing … the player is always the ordinary kind"* was true until
-`50ef7c7`. Drift still reads it ([delta.ts:1029](src/play/delta.ts:1029)); genesis
+`50ef7c7`. Drift still reads it ([delta.ts:1031](src/play/delta.ts:1031)); genesis
 now writes it from the player's choice — a kind picked, a kind described and
 mapped by the character call, or the seeded draw villagers get
 ([genesis.ts:326](src/session/genesis.ts:326),
@@ -1842,24 +1856,24 @@ Every balance number, and where it lives.
 | trust range / max swing per turn | −3..+4 / ±3 | [social/edge.ts:56](src/social/edge.ts:56), [delta.ts](src/play/delta.ts) |
 | grudge threshold | resentment ≥ 3, and fear below the resentment | [social/edge.ts:101](src/social/edge.ts:101) |
 | survivor grudge | fled at or under half the break line → a person, resentment 2 + 1 | [play/combat.ts:1029](src/play/combat.ts:1029) |
-| breaking an adopted assault law | ruler's resentment toward the player +3 — one breach equals exactly `GRUDGE_THRESHOLD`, flat placeholder awaiting no-rebalance | [delta.ts:974](src/play/delta.ts:974), [social/edge.ts:101](src/social/edge.ts:101) |
+| breaking an adopted assault law | ruler's resentment toward the player +3 — one breach equals exactly `GRUDGE_THRESHOLD`, flat placeholder awaiting no-rebalance | [delta.ts:976](src/play/delta.ts:976), [social/edge.ts:101](src/social/edge.ts:101) |
 | clock tick | 10 minutes; a day is 144 ticks | [calendar.ts:13](src/world/calendar.ts:13) |
 | a place link / a stair | 6–42 min (each end by kind 3/5/7/9, seed 0–10, biome ×1/×1.25/×1.5 by keyword), charged in whole ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:36](src/world/travel.ts:36), [:45](src/world/travel.ts:45), [:82](src/world/travel.ts:82), [:73](src/world/travel.ts:73) |
 | a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:176](src/world/map.ts:176), [:178](src/world/map.ts:178), [:181](src/world/map.ts:181) | [map.ts:176](src/world/map.ts:176), [:181](src/world/map.ts:181) |
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:213](src/world/map.ts:213) |
 | hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
 | a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:25](src/world/settlement.ts:25), [:23](src/world/settlement.ts:23) |
-| a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:48](src/world/workstation.ts:48) |
-| a workstation worker's efficiency range | flat placeholder `[1, MAX_ABILITY]` (1–20) — ordering decided, magnitudes await no-rebalance | [delta.ts:146](src/play/delta.ts:146), [signetbook.ts:59](src/play/signetbook.ts:59) |
+| a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:49](src/world/workstation.ts:49) |
+| a workstation worker's efficiency range | flat placeholder `[1, MAX_ABILITY]` (1–20) — ordering decided, magnitudes await no-rebalance | [delta.ts:147](src/play/delta.ts:147), [signetbook.ts:59](src/play/signetbook.ts:59) |
 | workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
 | the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:11](src/world/workstation.ts:11) |
-| hours a workstation runs per turn | flat placeholder, 1 — no tick-to-hours conversion for labour is decided; real pacing waits until it matters | [delta.ts:124](src/play/delta.ts:124) |
+| hours a workstation runs per turn | flat placeholder, 1 — no tick-to-hours conversion for labour is decided; real pacing waits until it matters | [delta.ts:125](src/play/delta.ts:125) |
 | difficult ground | rough costs 2 movement to enter, open 1 | [grid.ts:102](src/combat/grid.ts:102) |
 | sight on the road | 12 tiles, and not through a wall | [onroad.ts:24](src/play/onroad.ts:24) |
 | the centre view | 41×25 tiles around you, clipped to the map | [grid.ts:8](src/server/grid.ts:8) |
 | the minimap | at most 60 cells wide | [views.ts:17](src/server/views.ts:17) |
 | a walk's stop line | food or rest at 3 or under — the level the game calls "starving" | [walker.ts:17](src/play/walker.ts:17) |
-| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:740](src/play/delta.ts:740) |
+| needs by the hour | −1 food every 4 h, −1 rest every 2 waking h; ×1.5 in winter outside a settlement | [delta.ts:742](src/play/delta.ts:742) |
 | night | 20:00–06:00 | [calendar.ts:175](src/world/calendar.ts:175) |
 | grudge fade | a point per 1–5 days by temper, ×2 if owed; chase continues at 2 | [journey.ts:218](src/play/journey.ts:218), [edge.ts:106](src/social/edge.ts:106) |
 | recovery after fleeing | one day | [journey.ts:36](src/play/journey.ts:36) |
@@ -1917,7 +1931,7 @@ Every balance number, and where it lives.
 from §4's function table since before this session, never actually written up
 until now). `on-class > shares-stat > raw-stat`, both off-class tiers scaling with
 the stat, is decided; the exact multipliers are a placeholder
-([workstation.ts:71](src/world/workstation.ts:71), ponytail-marked) pending
+([workstation.ts:72](src/world/workstation.ts:72), ponytail-marked) pending
 no-rebalance-until-feature-complete. Concretely harsh at today's numbers: raw-stat
 tops out at 0.5 efficiency, which cannot clear a `time: 1` recipe in one
 `WORK_HOURS_PER_TURN`-hour turn regardless of stat — proven by test, not asserted
@@ -1968,11 +1982,11 @@ deed's own mark decides what it costs, who felt it and how far it went — the
 they are outcomes the engine resolves, and a model able to name one could report
 a killing that never happened. `drewOn` is charged only when the player struck
 first: the Director says who did (`startedBy`, [state.ts:120](src/play/state.ts:120)),
-and being jumped is no deed ([delta.ts:860](src/play/delta.ts:860)). A fight
+and being jumped is no deed ([delta.ts:862](src/play/delta.ts:862)). A fight
 with any kill is one `killed` deed, charged even in an ambush
-([delta.ts:864](src/play/delta.ts:864)). `spared` — *"has no writer until 6b stage
+([delta.ts:866](src/play/delta.ts:866)). `spared` — *"has no writer until 6b stage
 6"* — is written when the player spares a foe who yielded
-([delta.ts:868](src/play/delta.ts:868)).
+([delta.ts:870](src/play/delta.ts:870)).
 
 Six of the original ten (`moveTo`, `revealExit`, `startCombat`, `useItem`,
 `equipItem`, `rest`) are COMMANDS rather than consequences and were never
@@ -2016,7 +2030,7 @@ walks there and descends ([game.ts:704](src/server/game.ts:704)). **Closed 2026-
 **A world that is not a stack can only GROW sideways — nothing authors one.**
 Genesis still writes `floor-0` and a tower
 ([genesis.ts:762](src/session/genesis.ts:762)); the only writer of
-`Region.exits` is a way out found in play ([delta.ts:599](src/play/delta.ts:599)).
+`Region.exits` is a way out found in play ([delta.ts:600](src/play/delta.ts:600)).
 An outer world designed as a graph from the first turn is not yet expressible.
 
 **Determinism holes** — the *record* is deterministic; its *production* is not.
@@ -2066,8 +2080,8 @@ refused climb target.
 should be a read-out from workstation and footprint counts.** No formula for that
 derivation is decided, and no-rebalance-until-feature-complete means it would be
 placeholder numbers regardless — `capacityOf` reads tier directly
-([workstation.ts:48](src/world/workstation.ts:48)) rather than computing it from
-`Building.workstations.length` ([workstation.ts:23](src/world/workstation.ts:23)).
+([workstation.ts:49](src/world/workstation.ts:49)) rather than computing it from
+`Building.workstations.length` ([workstation.ts:24](src/world/workstation.ts:24)).
 Flagged in DESIGN.md §3f and HANDOFF.md rather than fixed quietly.
 
 ---
