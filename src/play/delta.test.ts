@@ -17,6 +17,7 @@ import type { Region } from '../world/types.ts';
 import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { CRIMINAL_LAWS } from '../world/al.ts';
+import { COLLECTABLE } from './collect.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
@@ -796,4 +797,88 @@ test('repealLaw is a Director schema field and toWorldDelta reads it, "none" mea
   assert.ok(deltaSchema.required.includes('repealLaw'));
   assert.equal(toWorldDelta({ ...emptyDelta(), repealLaw: 'assault' } as never).repealLaw, 'assault');
   assert.equal(toWorldDelta({ ...emptyDelta(), repealLaw: 'none' } as never).repealLaw, undefined);
+});
+
+/*
+ * Collecting what a workstation made (DESIGN 6c §3c-i): a building's container held
+ * goods nothing could read. The Director is told what is stored, and the holder may
+ * take a whole category out as items. Own building only; stealing stays unbuilt.
+ */
+
+const withStored = (state: PlayState, stored: Building['container'], holder: string | null = PLAYER): PlayState => {
+  const r = state.world.regions['floor-0'] as Region;
+  const store: Building = { id: 'smithy-1', tier: 1, container: stored, workstations: [{ id: 'anvil', subkind: 'economic', method: { input: [], output: [{ category: 'weapon', count: 1 }], time: 0.3 } }] };
+  return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? { ...addBuilding(p, store), holder: holder ?? undefined } : p)) } } } };
+};
+const heldStored = (stored: Building['container']) => withStored(playState(), stored);
+const notHeldStored = (stored: Building['container']) => withStored(playState(), stored, null);
+const storedIn = (s: PlayState) => buildingAt((s.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!, 'smithy-1')!.container;
+const carried = (s: PlayState, kind: string) =>
+  s.pc.inventory.held.filter((h) => h.item.kind === kind).length
+  + s.pc.inventory.stacks.filter((k) => k.item.kind === kind).reduce((n, k) => n + k.count, 0);
+const collecting = (category: string, building = 'smithy-1') => record({ collect: { building, category } } as never);
+const sentFor = async (state: PlayState) => {
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, 'look around', 'conversation', []);
+  return provider.allSentText();
+};
+
+test('the Director is told what a building has stored, and nothing when it is empty', async () => {
+  assert.match(await sentFor(heldStored({ weapon: 1, material: 2 })), /Stored in smithy-1: weapon x1, material x2/);
+  assert.doesNotMatch(await sentFor(heldStored({})), /Stored in/);
+});
+
+test('collect is offered only for a place the player holds and a category an item can be made of', async () => {
+  const offered = (await sentFor(heldStored({ weapon: 1, seed: 2 }))).match(/the ONLY legal collectGoods ids\): ([^\n]*)/)?.[1];
+  assert.equal(offered, 'smithy-1: weapon', 'seed has no item yet, so it is never offered');
+  assert.ok(!(await sentFor(notHeldStored({ weapon: 1 }))).includes('the ONLY legal collectGoods ids'), 'not held');
+  assert.ok(!(await sentFor(heldStored({}))).includes('the ONLY legal collectGoods ids'), 'nothing stored');
+});
+
+test('the engine accepts collecting held goods and refuses the rest, saying why', () => {
+  const ok = validateDelta(heldStored({ weapon: 1 }), { collect: { building: 'smithy-1', category: 'weapon' } } as never);
+  assert.deepEqual((ok.delta as { collect?: unknown }).collect, { building: 'smithy-1', category: 'weapon' });
+  const cases: [string, PlayState, string, string, RegExp][] = [
+    ['not held', notHeldStored({ weapon: 1 }), 'smithy-1', 'weapon', /hold/],
+    ['no such building', heldStored({ weapon: 1 }), 'forge-9', 'weapon', /no such building/],
+    ['none stored', heldStored({ material: 1 }), 'smithy-1', 'weapon', /nothing stored/],
+    ['no item for the category yet', heldStored({ seed: 2 }), 'smithy-1', 'seed', /into an item yet/],
+    ['a category the engine does not know', heldStored({ weapon: 1 }), 'smithy-1', 'gold', /no such/],
+  ];
+  for (const [why, state, building, category, reason] of cases) {
+    const v = validateDelta(state, { collect: { building, category } } as never);
+    assert.equal((v.delta as { collect?: unknown }).collect, undefined, why);
+    assert.match(v.rejected.join(' '), reason, why);
+  }
+});
+
+test('collecting takes the WHOLE category out as items and touches nothing else', () => {
+  const before = heldStored({ weapon: 2, material: 1 });
+  const done = applyTurn(before, collecting('weapon')).state;
+  assert.deepEqual(storedIn(done), { material: 1 });
+  assert.equal(carried(done, 'equipment') - carried(before, 'equipment'), 2);
+});
+
+test('collecting is deterministic: the same record from the same state gives the same pack', () => {
+  const state = heldStored({ weapon: 2 });
+  assert.deepEqual(applyTurn(state, collecting('weapon')).state.pc.inventory, applyTurn(state, collecting('weapon')).state.pc.inventory);
+});
+
+test('what a workstation makes can now be collected: run it, then take the goods', () => {
+  const held = withStored(playState(), {});
+  const made = applyTurn(held, record({ runWorkstation: { building: 'smithy-1', workstation: 'anvil' } })).state;
+  assert.deepEqual(storedIn(made), { weapon: 1 });
+  const taken = applyTurn(made, collecting('weapon')).state;
+  assert.deepEqual(storedIn(taken), {});
+  assert.equal(carried(taken, 'equipment') - carried(held, 'equipment'), 1);
+});
+
+test('collect is a Director schema field pair, and toWorldDelta needs both halves', () => {
+  const props = ((DIRECTOR_SCHEMA as any).properties.delta).properties;
+  assert.deepEqual(props.collectGoods?.enum, ['none', ...COLLECTABLE]);
+  assert.equal(props.collectBuilding?.type, 'string');
+  const flat = (b: string, g: string) => toWorldDelta({ ...emptyDelta(), collectBuilding: b, collectGoods: g } as never) as { collect?: unknown };
+  assert.deepEqual(flat('smithy-1', 'weapon').collect, { building: 'smithy-1', category: 'weapon' });
+  assert.equal(flat('', 'weapon').collect, undefined);
+  assert.equal(flat('smithy-1', 'none').collect, undefined);
 });
