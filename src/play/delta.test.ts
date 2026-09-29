@@ -1026,13 +1026,63 @@ test('repealLaw is NOT offered on a remark, an opinion, or a decree about someth
   ]) assert.doesNotMatch(await briefFor(ownLaws(['assault']), said), REPEAL_OFFER, said);
 });
 
+// Respecified: this asked with 'I repeal the law' and 'I look around' and expected the adopt and succession
+// lines both times. Those two are now gated on their OWN cues too (DESIGN 6c 3k-ii, 2026-09-29), so the
+// intent — one cue gates one line, and `Laws in force` never moves — is asked with a cue for each.
 test('the input gates the repeal line and nothing else: adopt, succession and laws-in-force stay', async () => {
-  for (const said of ['I repeal the law', 'I look around']) {
-    const sent = await briefFor(ownLaws(['assault']), said);
-    assert.match(sent, /Law here \(the ONLY legal adoptLaw ids\)/, said);
-    assert.match(sent, /Succession law here \(the ONLY legal setSuccession ids\)/, said);
-    assert.match(sent, /Laws in force here: assault \(own\)/, said);
+  const all = await briefFor(ownLaws(['assault']), 'I repeal the law, decree a ban and name a successor');
+  assert.match(all, /Law here \(the ONLY legal adoptLaw ids\)/);
+  assert.match(all, /Succession law here \(the ONLY legal setSuccession ids\)/);
+  for (const said of ['I repeal the law and decree a ban and name a successor', 'I repeal the law', 'I look around']) {
+    assert.match(await briefFor(ownLaws(['assault']), said), /Laws in force here: assault \(own\)/, said);
   }
+});
+
+/*
+ * Adopt and succession are each offered only on their own cue (DESIGN 6c 3k-ii, 2026-09-29): a live A/B on a real
+ * held seat fired `adopt` on plain remarks in 3-5 of 69 trials, and `validateDelta` never sees the player's words.
+ */
+
+const ADOPT_OFFER = /Law here \(the ONLY legal adoptLaw ids\)/;
+const SUCC_OFFER = /Succession law here \(the ONLY legal setSuccession ids\)/;
+
+test('adoptLaw is offered when the player\'s words carry a decree cue, in any case', async () => {
+  for (const said of [
+    'From the hall I decree theft a crime', 'I DECLARE it illegal', 'I outlaw brawling',
+    'I forbid the carrying of blades', 'by edict, assault is unlawful', 'I proclaim a ban on theft',
+  ]) assert.match(await briefFor(ownLaws([]), said), ADOPT_OFFER, said);
+});
+
+test('adoptLaw is NOT offered on a remark, an opinion, an admiring or a remembering line', async () => {
+  for (const said of [
+    'I look around the square and ask a passer-by how the harvest went',
+    'I mutter that the assault law seems unfair to the poor',
+    'I admire the leather goods the tanner has on display',
+    'I remember that my grandmother once kept sheep',
+    'I change how the town picks its next holder', // a succession cue is not a decree cue
+  ]) assert.doesNotMatch(await briefFor(ownLaws([]), said), ADOPT_OFFER, said);
+});
+
+test('setSuccession is offered on a succession cue and not on a decree or a remark', async () => {
+  for (const said of ['I name a successor', 'let the town elect its mayor', 'the heir inherits', 'change who is the next holder']) {
+    assert.match(await briefFor(ownLaws([]), said), SUCC_OFFER, said);
+  }
+  for (const said of ['I decree theft a crime', 'I ask how business has been', 'I admire the goods stored in the smithy']) {
+    assert.doesNotMatch(await briefFor(ownLaws([]), said), SUCC_OFFER, said);
+  }
+});
+
+test('a cue is not enough: without a real seat hall neither line is offered', async () => {
+  const sent = await briefFor(withWorkstation(playState()), 'I decree theft a crime and name a successor');
+  assert.doesNotMatch(sent, ADOPT_OFFER);
+  assert.doesNotMatch(sent, SUCC_OFFER);
+});
+
+test('the cue gates only its own line: repeal, laws-in-force and stored goods do not move', async () => {
+  const sent = await briefFor(ownLaws(['assault']), 'I repeal the law'); // no adopt or succession cue
+  assert.match(sent, /the ONLY legal repealLaw ids/);
+  assert.match(sent, /Laws in force here: assault \(own\)/);
+  assert.doesNotMatch(sent, ADOPT_OFFER);
 });
 
 test('with no law of its own the repeal is never offered, cue or not', async () => {

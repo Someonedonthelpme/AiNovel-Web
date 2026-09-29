@@ -619,7 +619,8 @@ test('a real generated world reaches catch-up: hold the town, come back later, a
 test('a seat settlement the player holds shows the hall-decree lines in the brief; a hamlet or village hall does not', async () => {
   const brief = async (seat: boolean) => {
     const provider = new FakeProvider({ structured: [directorOutput()] });
-    await runDirector(provider, heldSquare(await bornWith(seat)), 'look around', 'conversation', []);
+    // Respecified: this asked 'look around'. Adopt is now offered only on a decree cue (DESIGN 6c 3k-ii, 2026-09-29).
+    await runDirector(provider, heldSquare(await bornWith(seat)), 'I decree theft a crime', 'conversation', []);
     return provider.allSentText();
   };
   assert.match(await brief(true), /Law here \(the ONLY legal adoptLaw ids\)/);
