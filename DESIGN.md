@@ -2101,6 +2101,15 @@ illegal, no longer an offence). Left out on purpose: `ล้มเลิก` (gi
 (raise, lift — too broad) and `ยกเว้น` (exempt). `ยกเลิก` also means "cancel an appointment", so it can unlock the
 option on an unrelated remark; unlocking only SHOWS the option, and the live English run says showing is what
 fires it, so a false positive is the known cost. The list is a first draft to be reviewed by a Thai speaker.
+**Result (same day): KEPT, with a measured false-positive cost.** Live, Thai input, already-lawed real seat (assault
+law in force), local 35B, 35 trials, no errors. Repeal decrees (`ยกเลิก…`, `เพิกถอน…`): `repealLaw=assault` 9/10; the
+tenth carried only a no-op `adopt=assault`. Three of the nine also carried `adopt=assault`, which nets a repeal
+(the fold applies adopt, then repeal; `adoptLaw` is idempotent). The Thai adopt-theft decree: adopt 5/5, stray
+repeal 0/5. Three plain Thai remarks: repeal 0/15. **The false positive is real:** a remark that merely CONTAINS a
+cue ("I cancel my appointment with the smith", `ยกเลิกนัด`) unlocked the option and repealed the player's law 1/5.
+That is the price of `ยกเลิก`; the alternatives are dropping it (losing the most natural repeal word) or requiring
+it beside a law word (a Thai law-word list, unreviewed). Unchanged and still open: a plain Thai remark can carry the
+same stray hall verbs as an English one (1/5 on an admiring line: adopt, succession and a smithy collect all set).
 
 **Adopt and succession are offered only on their own cue (user, 2026-09-29) — an experiment until a live A/B says it works.**
 The live station A/B (real town, held seat, 69 non-decree trials per arm) showed `adopt` firing on plain
