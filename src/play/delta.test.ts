@@ -775,9 +775,12 @@ test('adopt then repeal across two turns leaves the law unbound and enforcement 
 });
 
 test('the Director is told which laws are in force, and which are its own to repeal', async () => {
-  const sentFor = async (state: PlayState) => {
+  // Respecified: this asked with the input 'look around' and expected the repeal line. Repeal is now
+  // offered only when the player's own words carry a repeal cue (DESIGN 6c 3k-ii, 2026-09-29), so every
+  // question here that is about WHICH laws are offered for repeal is asked with one.
+  const sentFor = async (state: PlayState, said = 'I repeal it') => {
     const provider = new FakeProvider({ structured: [directorOutput()] });
-    await runDirector(provider, state, 'look around', 'conversation', []);
+    await runDirector(provider, state, said, 'conversation', []);
     return provider.allSentText();
   };
   const both = await sentFor(withUnits(withHall(playState()), {
@@ -992,4 +995,47 @@ test('service and administrative workstations are ignored and do not use up a wo
 test('a building the player holds is worked by the people present, unpaid (v1: no wages)', () => {
   const done = arrive(awayFromTown({ holder: PLAYER }));
   assert.equal(smithyOf(done).container.weapon, Math.floor(hoursAway(done) * NPC_PLACEHOLDER));
+});
+
+/*
+ * Repeal is offered only on a repeal cue (DESIGN 6c 3k-ii, 2026-09-29): in a live run on a real lawed seat the
+ * Director repealed the player's law on 3 of 20 remarks, and an option that is not shown never fires.
+ */
+
+const REPEAL_OFFER = /the ONLY legal repealLaw ids/;
+const briefFor = async (state: PlayState, said: string) => {
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, said, 'conversation', []);
+  return provider.allSentText();
+};
+
+test('repealLaw is offered when the player\'s own words carry a repeal cue, in any case', async () => {
+  for (const said of [
+    'I decree the law against assault is repealed', 'By my word the ban is lifted', 'I revoke the edict',
+    'I abolish it', 'I rescind that law', 'the assault law is overturned', 'it is no longer a crime', 'I REPEAL the law',
+  ]) assert.match(await briefFor(ownLaws(['assault']), said), REPEAL_OFFER, said);
+});
+
+test('repealLaw is NOT offered on a remark, an opinion, or a decree about something else', async () => {
+  for (const said of [
+    'I look around the hall and ask the smith how business has been',
+    'I mutter that the assault law seems unfair to the poor',
+    'From the hall, I decree that theft within this town is now a crime',
+    'I admire the goods stored in the smithy and ask who made them',
+    'I remember that in the old kingdom nobody ever changed a law',
+  ]) assert.doesNotMatch(await briefFor(ownLaws(['assault']), said), REPEAL_OFFER, said);
+});
+
+test('the input gates the repeal line and nothing else: adopt, succession and laws-in-force stay', async () => {
+  for (const said of ['I repeal the law', 'I look around']) {
+    const sent = await briefFor(ownLaws(['assault']), said);
+    assert.match(sent, /Law here \(the ONLY legal adoptLaw ids\)/, said);
+    assert.match(sent, /Succession law here \(the ONLY legal setSuccession ids\)/, said);
+    assert.match(sent, /Laws in force here: assault \(own\)/, said);
+  }
+});
+
+test('with no law of its own the repeal is never offered, cue or not', async () => {
+  assert.doesNotMatch(await briefFor(ownLaws([]), 'I repeal every law'), REPEAL_OFFER);
+  assert.doesNotMatch(await briefFor(inheritedAssault(), 'I repeal the law'), REPEAL_OFFER);
 });
