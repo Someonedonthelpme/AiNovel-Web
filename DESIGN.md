@@ -24,7 +24,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 and W7 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`, `53067fd`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
-| 8 | NPC agency | **barely started** | slice 1 built 2026-09-29: `play/catchup.ts` catches a building's workstations up when the player ARRIVES (no scheduler; unreachable in a generated world until buildings are generated — `ARCHITECTURE.md` §12). `world/agenda.ts` is a pure function nothing imports (`play/rest.ts:66` only mentions agendas in a comment; `Person.agenda` has no writer — `ARCHITECTURE.md` §12); no scheduler |
+| 8 | NPC agency | **barely started** | slice 1 built 2026-09-29: `play/catchup.ts` catches a building's workstations up when the player ARRIVES (no scheduler; reachable in a generated world since `buildingsFor` deals buildings, but only where the player holds the settlement — `ARCHITECTURE.md` §12). `world/agenda.ts` is a pure function nothing imports (`play/rest.ts:66` only mentions agendas in a comment; `Person.agenda` has no writer — `ARCHITECTURE.md` §12); no scheduler |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module; **unblocks the rest of 6b stage 3o** (combat balance, deferred 2026-09-13) |
 | 10 | The creation page | **partial** | `app/new/page.tsx` has point buy and the interview; not the two-phase redesign with presets and a rules view |
 | 11 | The long tail | **not started** | — |
@@ -1702,6 +1702,8 @@ both use a DISTINCT plain-English word per rung, not a shared size adjective —
 building type names its own rungs too, same as the smithy example already did.
 
 ### 3i. The building catalogue (2026-09-26)
+
+**Smallest slice BUILT 2026-09-29** (`world/buildinggen.ts`): three of the types below — hall, smithy, pasture — dealt by settlement tier at generation, tier 1 only, no randomness. The other types and tiers are data to add.
 
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
