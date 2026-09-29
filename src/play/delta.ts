@@ -20,7 +20,7 @@ import { amend, BINDINGS, CONSTRAINTS, forbids, rulesOf } from '../rules/ruleset
 import { heldByPlayer, priceOf, TRUST_TO_SELL } from '../world/holding.ts';
 import { holderUnder } from './succession.ts';
 import { buildingAt, withBuilding } from '../world/settlement.ts';
-import { adoptLaw, CRIMINAL_LAWS, hallScopeOf, isBoundBy, rulerSeatOf, setSuccessionLaw, SUCCESSION_LAWS } from '../world/al.ts';
+import { adoptLaw, CRIMINAL_LAWS, hallScopeOf, isBoundBy, lawsBindingAt, repealLaw, rulerSeatOf, setSuccessionLaw, SUCCESSION_LAWS } from '../world/al.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 import { efficiencyOf, runService, runWorkstation, statFor, statForService } from '../world/workstation.ts';
 import { finalAbilities } from '../session/sheet.ts';
@@ -207,6 +207,31 @@ function adopted(state: PlayState, law: AlLawId): PlayState {
   };
 }
 
+/** Why the player may NOT repeal this law here, or null when they may: the hall's authority, and the law must be the unit's OWN. */
+function refusalToRepealLaw(state: PlayState, law: AlLawId): string | null {
+  const authority = hallAuthorityHere(state);
+  if ('refusal' in authority) return authority.refusal;
+  const region = activeRegion(state.world);
+  if (region?.alUnits?.[authority.alUnitId]?.laws?.includes(law)) return null;
+  return lawsBindingAt(region ?? {}, authority.alUnitId).includes(law)
+    ? 'that law is inherited from above — only the unit that adopted it can repeal it'
+    : 'that law is not adopted here';
+}
+
+/** The repeal, once `validateDelta` has allowed it: the law leaves this AL unit's own set. */
+function repealed(state: PlayState, law: AlLawId): PlayState {
+  const region = activeRegion(state.world);
+  const authority = hallAuthorityHere(state);
+  if (!region || 'refusal' in authority) return state;
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      regions: { ...state.world.regions, [region.id]: { ...region, alUnits: repealLaw(region.alUnits ?? {}, authority.alUnitId, law) } },
+    },
+  };
+}
+
 /** Why the player may NOT set this settlement's succession law, or null when they may. */
 function refusalToSetSuccession(state: PlayState): string | null {
   const authority = hallAuthorityHere(state);
@@ -377,6 +402,16 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
       const why = refusalToAdoptLaw(state, proposed.adoptLaw);
       if (why) rejected.push(`adoptLaw "${proposed.adoptLaw}": ${why}`);
       else delta.adoptLaw = proposed.adoptLaw;
+    }
+  }
+
+  if (proposed.repealLaw !== undefined) {
+    if (!(CRIMINAL_LAWS as readonly string[]).includes(proposed.repealLaw)) {
+      rejected.push(`repealLaw "${proposed.repealLaw}": no such law in this engine`);
+    } else {
+      const why = refusalToRepealLaw(state, proposed.repealLaw);
+      if (why) rejected.push(`repealLaw "${proposed.repealLaw}": ${why}`);
+      else delta.repealLaw = proposed.repealLaw;
     }
   }
 
@@ -608,6 +643,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   if (delta.runWorkstation) next = worked(next, delta.runWorkstation);
 
   if (delta.adoptLaw) next = adopted(next, delta.adoptLaw);
+
+  if (delta.repealLaw) next = repealed(next, delta.repealLaw);
 
   if (delta.setSuccession) next = succeeded(next, delta.setSuccession);
 

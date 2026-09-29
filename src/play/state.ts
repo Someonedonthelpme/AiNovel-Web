@@ -169,6 +169,12 @@ export type WorldDelta = {
    * way `adoptLaw` does. Same legality as `adoptLaw`, the same hall's authority.
    */
   setSuccession?: SuccessionLawId;
+  /**
+   * The same hall repeals a law from its OWN AL unit's set (DESIGN 6c §3k) — never
+   * one inherited from an ancestor, which is not this unit's to repeal. Same
+   * hall authority as `adoptLaw`; what makes a law passed by mistake undoable.
+   */
+  repealLaw?: AlLawId;
 };
 
 /** Why a walk stopped (W3). Closed. */

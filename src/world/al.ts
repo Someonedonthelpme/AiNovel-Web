@@ -88,6 +88,20 @@ export function adoptLaw(alUnits: Record<AlUnitId, AlUnit>, alUnitId: AlUnitId, 
 }
 
 /**
+ * Repeal `law` from `alUnitId`'s OWN set, idempotent — an inherited law is not
+ * this unit's to repeal, so it is untouched. The `laws` field is dropped when it
+ * empties, so adopting then repealing leaves the unit exactly as it was. Pure;
+ * legality is the play layer's job, same division as `adoptLaw`.
+ */
+export function repealLaw(alUnits: Record<AlUnitId, AlUnit>, alUnitId: AlUnitId, law: AlLawId): Record<AlUnitId, AlUnit> {
+  const unit = alUnits[alUnitId];
+  if (!unit?.laws?.includes(law)) return alUnits;
+  const { laws, ...rest } = unit;
+  const left = laws.filter((l) => l !== law);
+  return { ...alUnits, [alUnitId]: left.length ? { ...rest, laws: left } : rest };
+}
+
+/**
  * Every law binding at `alUnitId`: its own adopted set, plus every ancestor's
  * (DESIGN 6c §3k) — a lower tier automatically inherits its overlord's law,
  * "imperial palace bigger than town hall." Never stored on the unit itself;

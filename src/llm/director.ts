@@ -22,7 +22,7 @@ import { eraOf, lawFrom, stratumAt } from '../world/strata.ts';
 import { FOLK } from '../character/species.ts';
 import { heldByPlayer } from '../world/holding.ts';
 import { holderUnder } from '../play/succession.ts';
-import { CRIMINAL_LAWS, hallScopeOf, SUCCESSION_LAWS } from '../world/al.ts';
+import { CRIMINAL_LAWS, hallScopeOf, lawsBindingAt, successionOf, SUCCESSION_LAWS } from '../world/al.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
 /**
@@ -103,12 +103,14 @@ const deltaSchema = obj(
     adoptLaw: { type: 'string', enum: ['none', ...CRIMINAL_LAWS] },
     /** The same hall REPLACES its succession choice, from the closed list (DESIGN 6c §3k-i). Almost always 'none'. */
     setSuccession: { type: 'string', enum: ['none', ...SUCCESSION_LAWS] },
+    /** The same hall repeals one of its OWN laws, from the closed criminal-law list (DESIGN 6c §3k). Almost always 'none'. */
+    repealLaw: { type: 'string', enum: ['none', ...CRIMINAL_LAWS] },
   },
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
     'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation', 'adoptLaw',
-    'setSuccession',
+    'setSuccession', 'repealLaw',
   ],
 );
 
@@ -176,6 +178,8 @@ export type FlatDelta = {
   adoptLaw: string;
   /** The same hall's succession choice, replaced. Empty on almost every turn. */
   setSuccession: string;
+  /** One of the same hall's own laws, repealed. Empty on almost every turn. */
+  repealLaw: string;
 };
 
 export type Outcome = { narrate: string; delta: FlatDelta };
@@ -287,6 +291,9 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
   const setSuccession = meaningful(flat.setSuccession) ? flat.setSuccession : null;
   if (setSuccession) delta.setSuccession = setSuccession as SuccessionLawId;
 
+  const repealLaw = meaningful(flat.repealLaw) ? flat.repealLaw : null;
+  if (repealLaw) delta.repealLaw = repealLaw as AlLawId;
+
   return delta;
 }
 
@@ -374,6 +381,10 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
    */
   const hasHall = Boolean(place?.buildings?.some((b) => b.workstations?.some((w) => w.subkind === 'administrative')));
   const alScope = region && place && heldByPlayer(place) && hasHall ? hallScopeOf(region, place) : null;
+  // What is already in force, so a law passed by mistake can be SEEN and repealed. Only the
+  // unit's OWN laws are offered for repeal: an inherited one is refused, so it is never shown.
+  const ownLaws = (alScope && region?.alUnits?.[alScope]?.laws) || [];
+  const inForce = region && alScope ? lawsBindingAt(region, alScope) : [];
 
   const pack = state.pc.inventory.stacks.map((stack) => {
     const worn = Object.values(state.pc.inventory.equipped).includes(stack.item.id) ? ', worn' : '';
@@ -504,6 +515,9 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     buildings.length ? `Workstations here (the ONLY legal workBuilding/workStation ids):\n${buildings.join('\n')}` : '',
     alScope ? `Law here (the ONLY legal adoptLaw ids): ${CRIMINAL_LAWS.join(', ')}` : '',
     alScope ? `Succession law here (the ONLY legal setSuccession ids): ${SUCCESSION_LAWS.join(', ')}` : '',
+    alScope ? `Laws in force here: ${inForce.map((l) => `${l} (${ownLaws.includes(l) ? 'own' : 'inherited'})`).join(', ') || 'none'}` : '',
+    alScope && region ? `Succession in force here: ${successionOf(region, alScope)}` : '',
+    ownLaws.length ? `Repealable here (the ONLY legal repealLaw ids): ${ownLaws.join(', ')}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -553,6 +567,10 @@ const SYSTEM = [
   '',
   'setSuccession is the same hall REPLACING how this settlement picks its next',
   'holder — a decree, not a description. Only offered when listed below; empty',
+  'on almost every turn.',
+  '',
+  'repealLaw is the same hall lifting one of its OWN laws — a decree, not a',
+  'remark that a law is old or unfair. Only offered when listed below; empty',
   'on almost every turn.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
