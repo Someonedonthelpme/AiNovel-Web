@@ -62,6 +62,8 @@ export type Place = {
    * building's own workstation count (`occupiedModulesOf`, `settlement.ts:163`).
    */
   buildings?: import('./workstation.ts').Building[];
+  /** Which AL unit this place belongs to (DESIGN 6c §3e/§3e-i). Absent means the region declares no AL. */
+  alUnit?: import('./al.ts').AlUnitId;
 };
 
 export type StratumId = string;
@@ -178,6 +180,14 @@ export type Region = {
    * so a floor rebuilt from its gazetteer finds its holder again — dead or alive.
    */
   boss?: PersonId;
+  /**
+   * The Administrative Layer, one tree per region (DESIGN 6c §3e/§3e-i):
+   * `planet` down to `village`, unbounded, law scope and population counting —
+   * blind to whether the ground under it is wild or settled. Destroyed on
+   * compression along with the rest of this region's geometry, same as
+   * `buildings`; rebuilt from the gazetteer when the region is regenerated.
+   */
+  alUnits?: Record<import('./al.ts').AlUnitId, import('./al.ts').AlUnit>;
 };
 
 /**
@@ -262,6 +272,8 @@ export type Person = Persona & {
   sheet?: CharacterSheet;
   recruited?: boolean;
   stance?: Stance;
+  /** Life classes are NPC-only for now (DESIGN 6c §3b/§3j) — not gated on `sheet`. */
+  lifeClass?: import('./workstation.ts').LifeClass;
 };
 
 /** Someone who can actually take the field. */

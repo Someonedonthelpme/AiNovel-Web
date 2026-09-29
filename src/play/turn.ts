@@ -19,7 +19,8 @@ import { walkAlong, walkToTile } from './walker.ts';
 import { arenaAt } from './arena.ts';
 import type { Arena } from './arena.ts';
 import type { Then } from './walker.ts';
-import { holderOf, priceOf } from '../world/holding.ts';
+import { priceOf } from '../world/holding.ts';
+import { holderUnder } from './succession.ts';
 import { applyTurn, personRef, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
@@ -328,7 +329,7 @@ function buyAct(state: PlayState, input: string): EngineAct | null {
     : region.places.find((p) => (p.discovered || known.has(p.id) || p.id === state.world.currentPlace)
       && plainName(p.name) === plainName(said));
   if (!target) return null;
-  const holder = holderOf(target, state.world.people);
+  const holder = holderUnder(state.world, region, target);
   const from = holder ? state.world.people[holder]?.name ?? holder : '';
   const price = priceOf(region.floor);
   return {

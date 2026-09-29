@@ -19,6 +19,7 @@ import { classShapesFor } from '../character/classgen.ts';
 import type { ClassShape } from '../character/classgen.ts';
 import { buildClass, namingOf } from '../character/classbuild.ts';
 import { humanisePlaces, pruneDangling } from '../world/naming.ts';
+import { alUnitsFor } from '../world/al.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
 import { validateRegion } from '../world/validate.ts';
@@ -584,6 +585,12 @@ export async function generateGroundFloor(
   if (!check.ok) {
     throw new Error(`generated ground floor is unplayable: ${check.errors.map((e) => e.message).join('; ')}`);
   }
+
+  // The Administrative Layer (DESIGN 6c §3e-i/§3e-ii), engine-only: one seat
+  // per settlement whose tier justifies one, no model call involved.
+  const al = alUnitsFor({ seed, regions: { [region.id]: region } }, region.id, region.places);
+  region.alUnits = al.alUnits;
+  region.places = al.places;
 
   /*
    * The bonds, applied last — after the cast is settled, so a bond naming

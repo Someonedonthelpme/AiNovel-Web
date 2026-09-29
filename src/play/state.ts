@@ -13,6 +13,7 @@ import { namesTheSameThing, rations, weaponFromAttack } from '../items/catalogue
 import type { CharacterSheet } from '../session/sheet.ts';
 import { derive } from '../session/sheet.ts';
 import type { PersonId, World } from '../world/types.ts';
+import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
 /**
  * The state the play loop folds over.
@@ -153,6 +154,21 @@ export type WorldDelta = {
    * duration the model invents, the same line `useItem` draws.
    */
   runWorkstation?: { building: string; workstation: string };
+  /**
+   * A hall's council adopts a territorial law onto its own AL unit (DESIGN 6c
+   * §3k). The model names WHICH law; the engine checks the hall is real, has
+   * scope (a seat, never "bare, local-only"), and that the player holds the
+   * settlement — the administrative workstation has no runner, so only the
+   * holder may operate it (§3h).
+   */
+  adoptLaw?: AlLawId;
+  /**
+   * The same hall REPLACES its own AL unit's succession choice (DESIGN 6c
+   * §3k-i) — who inherits a settlement's `holder` when it is vacated. A single
+   * choice, not a set: setting it again overwrites, it never accumulates the
+   * way `adoptLaw` does. Same legality as `adoptLaw`, the same hall's authority.
+   */
+  setSuccession?: SuccessionLawId;
 };
 
 /** Why a walk stopped (W3). Closed. */

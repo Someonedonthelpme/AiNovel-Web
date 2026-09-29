@@ -42,7 +42,7 @@ const WEIGHTS = [0.35, 0.3, 0.2, 0.15];
 
 export type TownPlan = { square: Cell; streets: Cell[]; plots: { door: Cell; footprint: Cell[] }[] };
 
-const placeIn = (world: World, region: RegionId, place: PlaceId): Place | null => {
+const placeIn = (world: Pick<World, 'regions'>, region: RegionId, place: PlaceId): Place | null => {
   // Callers that hold only part of a world — the population reader is one — have no
   // places to look in, and a place nobody can see has no tier.
   const record = (world.regions ?? {})[region];
@@ -50,7 +50,7 @@ const placeIn = (world: World, region: RegionId, place: PlaceId): Place | null =
 };
 
 /** What this settlement grew into. Stored when it was dealt or upgraded; otherwise dealt now. */
-export function tierOf(world: World, region: RegionId, place: PlaceId): SettlementTier | null {
+export function tierOf(world: Pick<World, 'seed' | 'regions'>, region: RegionId, place: PlaceId): SettlementTier | null {
   const here = placeIn(world, region, place);
   if (!here || here.kind !== 'settlement') return null;
   if (here.tier) return here.tier;

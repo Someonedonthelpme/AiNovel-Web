@@ -20,7 +20,10 @@ import type { Binding, Constraint } from '../rules/ruleset.ts';
 import { believes } from '../character/belief.ts';
 import { eraOf, lawFrom, stratumAt } from '../world/strata.ts';
 import { FOLK } from '../character/species.ts';
-import { holderOf } from '../world/holding.ts';
+import { heldByPlayer } from '../world/holding.ts';
+import { holderUnder } from '../play/succession.ts';
+import { CRIMINAL_LAWS, hallScopeOf, SUCCESSION_LAWS } from '../world/al.ts';
+import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
 /**
  * The Director decides what happens; it never decides whether you succeed.
@@ -96,11 +99,16 @@ const deltaSchema = obj(
      * world holds. Set with `amendLaw`; it overrides `amendBinds`.
      */
     amendGroup: { type: 'string' },
+    /** A territorial law the player's own hall adopts here, from the closed criminal-law list (DESIGN 6c §3k). Almost always 'none'. */
+    adoptLaw: { type: 'string', enum: ['none', ...CRIMINAL_LAWS] },
+    /** The same hall REPLACES its succession choice, from the closed list (DESIGN 6c §3k-i). Almost always 'none'. */
+    setSuccession: { type: 'string', enum: ['none', ...SUCCESSION_LAWS] },
   },
   [
     'moveTo', 'learnFacts', 'trustPerson', 'trustChange', 'deed', 'deedPerson',
     'timeSpent', 'revealExit', 'startCombat', 'startedBy', 'useItem', 'equipItem', 'rest',
-    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation',
+    'amendLaw', 'amendBinds', 'amendGroup', 'revealWay', 'acquirePlace', 'workBuilding', 'workStation', 'adoptLaw',
+    'setSuccession',
   ],
 );
 
@@ -164,6 +172,10 @@ export type FlatDelta = {
   /** Whom it now binds — or 'none' to lift it entirely. */
   amendBinds: string;
   amendGroup: string;
+  /** A criminal law the player's own hall adopts here. Empty on almost every turn. */
+  adoptLaw: string;
+  /** The same hall's succession choice, replaced. Empty on almost every turn. */
+  setSuccession: string;
 };
 
 export type Outcome = { narrate: string; delta: FlatDelta };
@@ -269,6 +281,12 @@ export function toWorldDelta(flat: FlatDelta): WorldDelta {
     };
   }
 
+  const adoptLaw = meaningful(flat.adoptLaw) ? flat.adoptLaw : null;
+  if (adoptLaw) delta.adoptLaw = adoptLaw as AlLawId;
+
+  const setSuccession = meaningful(flat.setSuccession) ? flat.setSuccession : null;
+  if (setSuccession) delta.setSuccession = setSuccession as SuccessionLawId;
+
   return delta;
 }
 
@@ -344,9 +362,18 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
    * same "the model cannot get a field wrong it is never shown" rule as `pack`.
    */
   const buildings = (place?.buildings ?? []).flatMap((b) => {
-    const stations = (b.workstations ?? []).filter((w) => w.method && w.id).map((w) => w.id as string);
+    const stations = (b.workstations ?? []).filter((w) => (w.method || w.serviceMethod) && w.id).map((w) => w.id as string);
     return stations.length ? [`  - ${b.id}: ${stations.join(', ')}`] : [];
   });
+
+  /*
+   * ADOPTABLE LAW HERE (DESIGN 6c §3k). Offered only when every legality check
+   * `validateDelta` will make already holds: the player holds this settlement,
+   * a hall stands here, and that hall's AL unit is a real seat — the same
+   * "never shown a field it would be refused for" rule as `buildings` above.
+   */
+  const hasHall = Boolean(place?.buildings?.some((b) => b.workstations?.some((w) => w.subkind === 'administrative')));
+  const alScope = region && place && heldByPlayer(place) && hasHall ? hallScopeOf(region, place) : null;
 
   const pack = state.pc.inventory.stacks.map((stack) => {
     const worn = Object.values(state.pc.inventory.equipped).includes(stack.item.id) ? ', worn' : '';
@@ -417,7 +444,7 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
 
   const here = region ? stratumAt(state.world, region.floor) : null;
   const echoes = region ? echoesTold(state.world, region.floor) : [];
-  const holder = place ? holderOf(place, state.world.people) : null;
+  const holder = place && region ? holderUnder(state.world, region, place) : null;
   const heldBy = holder === PLAYER ? 'the player' : holder ? state.world.people[holder]?.name : undefined;
 
   const workedOut = CONSTRAINTS
@@ -475,6 +502,8 @@ export function directorContext(state: PlayState, canonFacts: string[]): string 
     // that is allowed to know what the player is carrying.
     pack.length ? `Carrying (the ONLY legal useItem/equipItem ids):\n${pack.join('\n')}` : 'Carrying: nothing',
     buildings.length ? `Workstations here (the ONLY legal workBuilding/workStation ids):\n${buildings.join('\n')}` : '',
+    alScope ? `Law here (the ONLY legal adoptLaw ids): ${CRIMINAL_LAWS.join(', ')}` : '',
+    alScope ? `Succession law here (the ONLY legal setSuccession ids): ${SUCCESSION_LAWS.join(', ')}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -517,6 +546,14 @@ const SYSTEM = [
   'a smith at the anvil, a farmer in the field. Name the building id and the',
   'workstation id exactly as listed below; the workstation decides what running it',
   'does. Leave both empty on almost every turn.',
+  '',
+  'adoptLaw is for the player, standing in a settlement they hold with a working',
+  'hall, making an act illegal there — a decree read out, not a description of',
+  'what already is. Only offered when listed below; empty on almost every turn.',
+  '',
+  'setSuccession is the same hall REPLACING how this settlement picks its next',
+  'holder — a decree, not a description. Only offered when listed below; empty',
+  'on almost every turn.',
   '',
   'moveTo must be one of the connected places, or empty. Never invent a place,',
   'a person, or an exit that is not listed. trustPerson, deedPerson, addressedPerson',

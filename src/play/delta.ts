@@ -17,10 +17,15 @@ import { firsthand } from '../character/belief.ts';
 import type { Deed, Echo } from '../social/deed.ts';
 import { lawFrom } from '../world/strata.ts';
 import { amend, BINDINGS, CONSTRAINTS, forbids, rulesOf } from '../rules/ruleset.ts';
-import { holderOf, priceOf, TRUST_TO_SELL } from '../world/holding.ts';
+import { heldByPlayer, priceOf, TRUST_TO_SELL } from '../world/holding.ts';
+import { holderUnder } from './succession.ts';
 import { buildingAt, withBuilding } from '../world/settlement.ts';
-import { runWorkstation } from '../world/workstation.ts';
-import { playerSubject } from './signetbook.ts';
+import { adoptLaw, CRIMINAL_LAWS, hallScopeOf, isBoundBy, rulerSeatOf, setSuccessionLaw, SUCCESSION_LAWS } from '../world/al.ts';
+import type { AlLawId, SuccessionLawId } from '../world/al.ts';
+import { efficiencyOf, runService, runWorkstation, statFor, statForService } from '../world/workstation.ts';
+import { finalAbilities } from '../session/sheet.ts';
+import type { Ability } from '../combat/types.ts';
+import { MAX_ABILITY, playerSubject } from './signetbook.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { findItem, equip } from '../items/types.ts';
@@ -86,7 +91,7 @@ function refusalToSell(state: PlayState, placeId: string): string | null {
   const place = region?.places.find((p) => p.id === placeId);
   if (!region || !place || placeId !== state.world.currentPlace) return 'not here';
   if (place.kind !== 'settlement') return 'not a settlement';
-  const holder = holderOf(place, state.world.people);
+  const holder = holderUnder(state.world, region, place);
   if (!holder) return 'no holder is here to deal with';
   if (holder === PLAYER) return 'already yours';
   if (forbids(state.world, playerSubject(state), 'holdSettlement')) return 'the law forbids you holding a settlement';
@@ -124,8 +129,18 @@ function refusalToWork(state: PlayState, req: { building: string; workstation: s
   if (!building) return `no such building "${req.building}" here`;
   const ws = building.workstations?.find((w) => w.id === req.workstation);
   if (!ws) return `no such workstation "${req.workstation}"`;
-  if (!ws.method) return `"${req.workstation}" has no method to run`;
+  if (!ws.method && !ws.serviceMethod) return `"${req.workstation}" has no method to run`;
   return null;
+}
+
+/**
+ * The player's own efficiency at a given stat (DESIGN 6c §3j-i): they can never hold
+ * a `LifeClass` (NPC-only, §3b), so `ClassFit` is always `raw-stat`, scored on their
+ * real ability for the stat the workstation's output calls for (§3j).
+ */
+function workerEfficiency(state: PlayState, stat: Ability): number {
+  const value = finalAbilities(state.sheet, state.pc.inventory)[stat];
+  return efficiencyOf('raw-stat', value, [1, MAX_ABILITY]);
 }
 
 /** The work, once `validateDelta` has allowed it: the workstation's own method, run for the turn's hours. */
@@ -135,7 +150,14 @@ function worked(state: PlayState, req: { building: string; workstation: string }
   const place = region.places.find((p) => p.id === state.world.currentPlace);
   const building = place && buildingAt(place, req.building);
   if (!place || !building) return state;
-  const result = runWorkstation(building, req.workstation, WORK_HOURS_PER_TURN);
+  const ws = building.workstations?.find((w) => w.id === req.workstation);
+  if (ws?.serviceMethod) {
+    const efficiency = workerEfficiency(state, statForService(ws.serviceMethod));
+    const needs = runService(state.sheet.needs, ws.serviceMethod, WORK_HOURS_PER_TURN * efficiency);
+    return { ...state, sheet: { ...state.sheet, needs } };
+  }
+  const method = ws?.method;
+  const result = method && runWorkstation(building, req.workstation, WORK_HOURS_PER_TURN, workerEfficiency(state, statFor(method)));
   if (!result) return state;
   const nextPlace = withBuilding(place, { ...building, container: result.container });
   return {
@@ -143,6 +165,64 @@ function worked(state: PlayState, req: { building: string; workstation: string }
     world: {
       ...state.world,
       regions: { ...state.world.regions, [region.id]: { ...region, places: region.places.map((p) => (p.id === place.id ? nextPlace : p)) } },
+    },
+  };
+}
+
+/**
+ * The AL unit whose hall the player may legislate through here, or why not
+ * (DESIGN 6c §3k/§3k-i). Shared by every administrative-law verb: the
+ * workstation has no runner (§3h) — only the settlement's own holder operates
+ * its hall, and only when that hall's AL unit actually has scope (its
+ * settlement is a real seat, never "bare, local-only").
+ */
+function hallAuthorityHere(state: PlayState): { alUnitId: string } | { refusal: string } {
+  const region = activeRegion(state.world);
+  const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  if (!region || !place) return { refusal: 'not here' };
+  if (!heldByPlayer(place)) return { refusal: 'you do not hold this settlement' };
+  const hasHall = (place.buildings ?? []).some((b) => b.workstations?.some((w) => w.subkind === 'administrative'));
+  if (!hasHall) return { refusal: 'there is no hall here to adopt law through' };
+  const alUnitId = hallScopeOf(region, place);
+  return alUnitId ? { alUnitId } : { refusal: "this hall has no scope to legislate — it is not a seat's hall" };
+}
+
+/** Why the player may NOT adopt this law here, or null when they may. */
+function refusalToAdoptLaw(state: PlayState, law: AlLawId): string | null {
+  const authority = hallAuthorityHere(state);
+  return 'refusal' in authority ? authority.refusal : null;
+}
+
+/** The adoption, once `validateDelta` has allowed it: the law joins this AL unit's own set. */
+function adopted(state: PlayState, law: AlLawId): PlayState {
+  const region = activeRegion(state.world);
+  const authority = hallAuthorityHere(state);
+  if (!region || 'refusal' in authority) return state;
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      regions: { ...state.world.regions, [region.id]: { ...region, alUnits: adoptLaw(region.alUnits ?? {}, authority.alUnitId, law) } },
+    },
+  };
+}
+
+/** Why the player may NOT set this settlement's succession law, or null when they may. */
+function refusalToSetSuccession(state: PlayState): string | null {
+  const authority = hallAuthorityHere(state);
+  return 'refusal' in authority ? authority.refusal : null;
+}
+
+/** The change, once `validateDelta` has allowed it: this AL unit's OWN succession choice is replaced. */
+function succeeded(state: PlayState, law: SuccessionLawId): PlayState {
+  const region = activeRegion(state.world);
+  const authority = hallAuthorityHere(state);
+  if (!region || 'refusal' in authority) return state;
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      regions: { ...state.world.regions, [region.id]: { ...region, alUnits: setSuccessionLaw(region.alUnits ?? {}, authority.alUnitId, law) } },
     },
   };
 }
@@ -288,6 +368,26 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     const why = refusalToWork(state, proposed.runWorkstation);
     if (why) rejected.push(`runWorkstation "${proposed.runWorkstation.workstation}": ${why}`);
     else delta.runWorkstation = proposed.runWorkstation;
+  }
+
+  if (proposed.adoptLaw !== undefined) {
+    if (!(CRIMINAL_LAWS as readonly string[]).includes(proposed.adoptLaw)) {
+      rejected.push(`adoptLaw "${proposed.adoptLaw}": no such law in this engine`);
+    } else {
+      const why = refusalToAdoptLaw(state, proposed.adoptLaw);
+      if (why) rejected.push(`adoptLaw "${proposed.adoptLaw}": ${why}`);
+      else delta.adoptLaw = proposed.adoptLaw;
+    }
+  }
+
+  if (proposed.setSuccession !== undefined) {
+    if (!(SUCCESSION_LAWS as readonly string[]).includes(proposed.setSuccession)) {
+      rejected.push(`setSuccession "${proposed.setSuccession}": no such succession law in this engine`);
+    } else {
+      const why = refusalToSetSuccession(state);
+      if (why) rejected.push(`setSuccession "${proposed.setSuccession}": ${why}`);
+      else delta.setSuccession = proposed.setSuccession;
+    }
   }
 
   if (proposed.useItem !== undefined) {
@@ -506,6 +606,10 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
   if (delta.acquirePlace) next = bought(next, delta.acquirePlace);
 
   if (delta.runWorkstation) next = worked(next, delta.runWorkstation);
+
+  if (delta.adoptLaw) next = adopted(next, delta.adoptLaw);
+
+  if (delta.setSuccession) next = succeeded(next, delta.setSuccession);
 
   if (delta.useItem) {
     const used = useItem(next, delta.useItem);
@@ -764,6 +868,29 @@ function afterTraffic(world: World, rules: Ruleset): World {
   };
 }
 
+/**
+ * Unlawful assault reaches the AL unit's ruler directly (DESIGN 6c §3k-ii) —
+ * not through the ordinary witness/spread system: law enforcement is
+ * systemic, not gossip. A resentment nudge is exactly what the grudge system
+ * already keys off (`setOut`, journey.ts:67), so breaking an adopted law
+ * becomes a real grudge with no new state machine, deed kind, or belief
+ * entry. Scoped to `assault` only — `theft`/`trespass` have no
+ * engine-detectable trigger yet.
+ */
+function lawEnforcementAfter(world: World, record: TurnRecord): Edges {
+  const unlawful = record.delta.startCombat && record.delta.startedBy !== 'them';
+  if (!unlawful) return world.edges ?? {};
+  const region = activeRegion(world);
+  const place = region?.places.find((p) => p.id === world.currentPlace);
+  if (!region || !place?.alUnit || !isBoundBy(region, place.alUnit, 'assault')) return world.edges ?? {};
+  const seat = rulerSeatOf(region, place.alUnit);
+  const seatPlace = seat && region.places.find((p) => p.id === seat);
+  const ruler = seatPlace && holderUnder(world, region, seatPlace);
+  if (!ruler || ruler === PLAYER) return world.edges ?? {};
+  // ponytail: flat placeholder, same magnitude as `humiliated`'s one-shot resentment — real numbers wait on no-rebalance-until-feature-complete.
+  return nudge(world.edges, ruler, PLAYER, 'resentment', 3);
+}
+
 export type TurnOutcome = {
   state: PlayState;
   /** Dispositions that actually shifted. Worth narrating; most turns have none. */
@@ -823,6 +950,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
     afterDeeds({ ...moved.world, edges: edgesAfter(moved, record) }, deedsIn(moved, record, killed, spared), rules),
     rules,
   );
+  world = { ...world, edges: lawEnforcementAfter(world, record) };
   let shifts: AxisChange[] = [];
 
   const person = record.addressed ? world.people[record.addressed] : undefined;

@@ -83,6 +83,16 @@ export function stairCost(world: Pick<World, 'seed'>, a: RegionId, b: RegionId):
   return TICKS_PER_HOUR + Math.floor(pairDraw(world.seed, 0x5a1, a, b) * (2 * TICKS_PER_HOUR + 1));
 }
 
+/**
+ * How long crossing a large AL boundary takes, in ticks (DESIGN 6c §3e-ii): the
+ * same seeded 1-3 hours as a stair, for any crossing `isLocalCrossing` (`al.ts`)
+ * says isn't local — a province, a continent or a planet apart all cost the same.
+ */
+// ponytail: flat reuse of stairCost's magnitude, doesn't scale with how far the crossing actually is; upgrade when it matters.
+export function alCrossingCost(seed: number, a: PlaceId, b: PlaceId): number {
+  return TICKS_PER_HOUR + Math.floor(pairDraw(seed, 0x41c, a, b) * (2 * TICKS_PER_HOUR + 1));
+}
+
 /** A draw in [0, 1) for an unordered pair, so both directions agree. */
 export function pairDraw(seed: number, salt: number, a: string, b: string): number {
   const pair = a < b ? `${a}|${b}` : `${b}|${a}`;

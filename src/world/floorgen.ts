@@ -36,6 +36,7 @@ import { clampTemperament, neutralTemperament, metNeeds } from '../character/per
 import { repairRegion, repairVoice } from '../session/repair.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { humanisePlaces, pruneDangling } from './naming.ts';
+import { alUnitsFor } from './al.ts';
 import { peopleBudget, placeBudget, settlementBudget } from './budget.ts';
 import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, RegionId, World } from './types.ts';
@@ -513,6 +514,12 @@ export async function generateFloor(
   if (!check.ok) {
     throw new Error(`generated floor ${floor} is unplayable: ${check.errors.map((e) => e.message).join('; ')}`);
   }
+
+  // The Administrative Layer (DESIGN 6c §3e-i/§3e-ii), engine-only: one seat
+  // per settlement whose tier justifies one, no model call involved.
+  const al = alUnitsFor({ seed: world.seed, regions: { [regionId]: region } }, regionId, region.places);
+  region.alUnits = al.alUnits;
+  region.places = al.places;
 
   const wing = wingOf(generated, floor, region, stratum, world);
   const band = bandLandOf(world, floor, region);
