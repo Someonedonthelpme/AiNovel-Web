@@ -2079,6 +2079,20 @@ STANDS from this note: `collect`'s brief block in the workstation shape, which c
 building-plus-category pair 3 times in 10 (was 1 in 9). Still open: a remark can fire one hall
 verb on either contract, and a decree can carry a stray second verb on the three-field one.
 
+**Repeal is offered only on a repeal cue (user, 2026-09-29) — an experiment until a live A/B says it works.**
+On an already-lawed seat in a REAL generated world (30 trials, no errors) the Director repealed the player's
+law on 3 of 20 remarks and, on an adopt-theft decree, ALSO repealed the assault law in 2 of 5; making the
+verb fields optional did not help (remark firing 2/20 against 3/20, repeal-decree recall fell 5/5 to 3/5).
+What did work: an option that is not shown never fires (a bare hall, 0/5 on a clear decree). So the
+`Repealable here` line now appears only when the player's OWN words contain a repeal cue — repeal, revoke,
+lift, abolish, rescind, overturn, "no longer" — in addition to the unit having laws of its own. The Director
+still decides what happens; the engine decides only whether the field is in the brief. English cues only for
+now: a Thai player gets no repeal option until Thai cues are added and reviewed. A false negative costs a
+retry; a false positive cost the player's law. Kept only if the live A/B shows the strays fall.
+**Result (same day): KEPT.** Same lawed real seat, same six cases, 5 trials each, no errors: repeals on
+remarks 3/20 -> 0/20, the repeal decree itself 5/5 -> 5/5, the adopt-theft decree's stray repeal 2/5 -> 1/5
+(not removed: `Laws in force` still names the law). Still open: stray extra verbs on a decree, Thai cues.
+
 ---
 
 # THE ORDER — authoritative, re-derived 2026-09-05
