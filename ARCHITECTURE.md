@@ -570,7 +570,7 @@ come from?"
 | `capacityOf` ([workstation.ts:49](src/world/workstation.ts:49)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
 | `runAt` ([workstation.ts:55](src/world/workstation.ts:55)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
 | `runWorkstation` ([workstation.ts:60](src/world/workstation.ts:60)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
-| `buildingsFor` ([buildinggen.ts:69](src/world/buildinggen.ts:69)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture from hamlet, smithy from village; deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
+| `buildingsFor` ([buildinggen.ts:69](src/world/buildinggen.ts:69)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture and home from hamlet, smithy, farmstead and inn from village, tannery from town (the table is `DEALT`, [buildinggen.ts:51](src/world/buildinggen.ts:51)); deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
 | `caughtUp` ([catchup.ts:31](src/play/catchup.ts:31)) | the world before a turn, the world after it | the world with the place the player just ARRIVED at caught up: a building first seen is only stamped (`workedAt`); after that its economic workstations run for the hours since, staffed by the living people there who are not on the road — one person, one station, best fit first, a sheetless NPC judged at a flat placeholder ability (10). Fold-only, from state alone, so a replay makes the same goods (DESIGN 6c §3h, §3j-i) |
 | `efficiencyOf` ([workstation.ts:73](src/world/workstation.ts:73)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
 | `statFor` ([workstation.ts:92](src/world/workstation.ts:92)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
@@ -1454,12 +1454,15 @@ on arrival would do anything in real play; every earlier "reachable from play" m
 Director and the fold, and the live Director checks all ran on hand-built fixtures. Now `buildingsFor`
 ([buildinggen.ts:69](src/world/buildinggen.ts:69)) deals them, called after `alUnitsFor` on the ground
 floor ([genesis.ts:596](src/session/genesis.ts:596)) and on every generated floor
-([floorgen.ts:525](src/world/floorgen.ts:525)): a hall in every settlement, a pasture from hamlet up, a
-smithy from village up. **Still narrow, on purpose:** only three of the catalogue's ten types exist;
+([floorgen.ts:525](src/world/floorgen.ts:525)): a hall in every settlement, a pasture and a home from hamlet up, a
+smithy, farmstead and inn from village up, a tannery from town up (`DEALT`,
+[buildinggen.ts:51](src/world/buildinggen.ts:51); every tier fits its plot budget). The home and inn are
+`service` stations (rest), the rest `economic`. **Still narrow, on purpose:** only seven of the catalogue's
+types exist — no general store or armoury, since buy/sell and `part` items are unbuilt — and each is tier 1;
 nobody but the holder can collect or legislate, and holding means buying — `50 × floor` coin and the
 holder's trust of 2 or more; and only about 35% of settlements are a seat (town or city, dealt 20% and
 15%), so a hall with legislative scope is the minority case — the rest are bare, local-only halls. The
-starting smithy stock is a placeholder, since containers do not move goods between buildings.
+starting smithy, farmstead (`seed`, [buildinggen.ts:37](src/world/buildinggen.ts:37)) and tannery stock is a placeholder, since containers do not move goods between buildings.
 
 **Cleared: `Stratum.laws` had readers and no writer.** — *"no world is born with a
 law"* was true until `bfa0f66`: genesis writes a loop band when asked
@@ -1877,7 +1880,7 @@ Every balance number, and where it lives.
 | a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:49](src/world/workstation.ts:49) |
 | a workstation worker's efficiency range | flat placeholder `[1, MAX_ABILITY]` (1–20) — ordering decided, magnitudes await no-rebalance | [delta.ts:147](src/play/delta.ts:147), [signetbook.ts:59](src/play/signetbook.ts:59) |
 | workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
-| the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:11](src/world/workstation.ts:11) |
+| the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat — a generated farmstead consumes `seed` but is born stocked with it, nothing yields any | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:11](src/world/workstation.ts:11) |
 | hours a workstation runs per turn | flat placeholder, 1 — no tick-to-hours conversion for labour is decided; real pacing waits until it matters | [delta.ts:125](src/play/delta.ts:125) |
 | difficult ground | rough costs 2 movement to enter, open 1 | [grid.ts:102](src/combat/grid.ts:102) |
 | sight on the road | 12 tiles, and not through a wall | [onroad.ts:24](src/play/onroad.ts:24) |

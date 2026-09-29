@@ -1703,7 +1703,7 @@ building type names its own rungs too, same as the smithy example already did.
 
 ### 3i. The building catalogue (2026-09-26)
 
-**Smallest slice BUILT 2026-09-29** (`world/buildinggen.ts`): three of the types below — hall, smithy, pasture — dealt by settlement tier at generation, tier 1 only, no randomness. The other types and tiers are data to add.
+**Smallest slice BUILT 2026-09-29** (`world/buildinggen.ts`): seven of the types below — hall, pasture, smithy, farmstead, inn, home, tannery — dealt by settlement tier at generation, tier 1 only, no randomness. Not dealt: general store and armoury (buy/sell and `part` items unbuilt); tiers 2–4 wait on upgrading.
 
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
