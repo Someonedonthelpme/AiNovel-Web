@@ -30,6 +30,7 @@ import type { Ruleset } from '../rules/ruleset.ts';
 import type { Edges } from '../social/edge.ts';
 import { addItem, findItem, equip } from '../items/types.ts';
 import { LOOT_CATEGORIES } from '../items/catalogue.ts';
+import { caughtUp } from './catchup.ts';
 import { COLLECTABLE, itemsFor } from './collect.ts';
 import type { Collectable } from './collect.ts';
 import { gearRulesFor } from './body.ts';
@@ -712,7 +713,8 @@ export function applyDelta(state: PlayState, delta: WorldDelta): PlayState {
     }
   }
 
-  return next;
+  // Last, once every clock advance of the turn has landed: a building you have just ARRIVED at is caught up.
+  return { ...next, world: caughtUp(state.world, next.world) };
 }
 
 /**

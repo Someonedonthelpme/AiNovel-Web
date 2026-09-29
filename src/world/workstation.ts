@@ -20,7 +20,8 @@ export const WORKSTATION_SUBKINDS = ['economic', 'service', 'administrative'] as
 export type WorkstationSubkind = (typeof WORKSTATION_SUBKINDS)[number];
 export type Workstation = { id?: string; subkind: WorkstationSubkind; method?: SubMethod; serviceMethod?: ServiceMethod };
 
-export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[] };
+/** `workedAt` is the clock tick the building was last caught up on (DESIGN 6c §3h): absent until first seen. */
+export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[]; workedAt?: number };
 
 const sumOf = (goods: Good[]): number => goods.reduce((s, { count }) => s + count, 0);
 const totalOf = (container: Container): number => Object.values(container).reduce((s: number, n) => s + (n ?? 0), 0);
