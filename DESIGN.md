@@ -2106,6 +2106,19 @@ of the existing seat-and-hall gate; `Laws in force` and the repeal gate do not m
 player gets neither option until Thai cues are added and reviewed. A false negative costs a reworded decree; a
 false positive cost a law nobody asked for. Not gated: `collect` (3 of 69 stray complete pairs, too few to act on).
 Kept only if the live A/B shows the strays fall and a clear decree still fires 5 of 5.
+**Result (same day): NOT KEPT — reverted, requirement withdrawn.** Same held real seat, ungated against gated, same
+inputs and model, 94 calls, no errors. Clear decrees fired 15/15 either way (gated: one wrong law, `theft` on a
+trespass decree); succession phrasings 5/5 and 5/5 either way. But the strays did NOT fall: `adopt` on four plain
+remarks 0/24 -> 1/24 (an opinion about the assault law, with the option HIDDEN), `succession=standing` on inputs
+with no succession cue 7/44 -> 10/44, and a decree with no cue ("thieves in this town will be hanged") fell 5/5 ->
+2/5. Why repeal worked and this does not: repeal is also refused unless the law is the unit's own, so hiding its
+line removed the only case that did harm; `adopt` and `setSuccession` are refused on hall authority alone, and the
+model fills a required field with its default whether or not the line is shown. Hiding a brief line therefore
+gives no protection here. **Still open:** a stray `adopt` enacts a law silently on ~4-7% of plain remarks in a held
+seat (see the station A/B above). The fix that would work is engine-side — drop `adopt`/`setSuccession` from the
+validated delta unless the player's words carry the cue, with a visible refusal note so a dropped decree is not
+silent — needing the input passed to `validateDelta`; deferred with the Thai cues, because it makes an English-only
+cue list the only way to adopt a law.
 
 ---
 
