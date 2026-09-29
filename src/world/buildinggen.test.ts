@@ -24,11 +24,37 @@ test('every settlement gets exactly one hall with an administrative workstation;
   for (const id of ['w', 'g', 'l']) assert.equal(dealt.find((p) => p.id === id)!.buildings, undefined, `${id} is not a settlement`);
 });
 
-test('economic buildings come by tier and never exceed the tier\'s plot budget', () => {
-  for (const tier of SETTLEMENT_TIERS.filter((t) => t !== 'metropolis' && t !== 'megacity')) {
+// respecified: the catalogue grew by home, inn, farmstead and tannery (DESIGN 6c §3i). Intent is unchanged —
+// buildings come by tier and never exceed the plot budget — only the expected lists moved.
+const IDS_BY_TIER: Record<(typeof SETTLEMENT_TIERS)[number], string[]> = {
+  hamlet: ['hall-1', 'home-1', 'pasture-1'],
+  village: ['farmstead-1', 'hall-1', 'home-1', 'inn-1', 'pasture-1', 'smithy-1'],
+  town: ['farmstead-1', 'hall-1', 'home-1', 'inn-1', 'pasture-1', 'smithy-1', 'tannery-1'],
+  city: ['farmstead-1', 'hall-1', 'home-1', 'inn-1', 'pasture-1', 'smithy-1', 'tannery-1'],
+  metropolis: ['farmstead-1', 'hall-1', 'home-1', 'inn-1', 'pasture-1', 'smithy-1', 'tannery-1'],
+  megacity: ['farmstead-1', 'hall-1', 'home-1', 'inn-1', 'pasture-1', 'smithy-1', 'tannery-1'],
+};
+
+test('buildings come by tier and never exceed the tier\'s plot budget', () => {
+  for (const tier of SETTLEMENT_TIERS) {
     const built = deal([settlementOf(tier)])[0];
-    assert.deepEqual(idsOf(built), tier === 'hamlet' ? ['hall-1', 'pasture-1'] : ['hall-1', 'pasture-1', 'smithy-1'], tier);
+    assert.deepEqual(idsOf(built), IDS_BY_TIER[tier], tier);
     assert.ok(occupiedModulesOf(built) <= CAPS[tier].plots, `${tier} fits its plots`);
+  }
+});
+
+test('the service buildings serve a need and the economic ones start supplied', () => {
+  const built = deal([settlementOf('town')])[0].buildings ?? [];
+  const station = (b: string, w: string) => built.find((x) => x.id === b)?.workstations?.find((x) => x.id === w);
+  assert.equal(station('home-1', 'bed')?.subkind, 'service');
+  assert.deepEqual(station('inn-1', 'hearth')?.serviceMethod?.output, [{ need: 'rest', amount: 3 }]);
+  assert.deepEqual(built.find((b) => b.id === 'farmstead-1')?.container, { seed: 4 });
+  assert.deepEqual(built.find((b) => b.id === 'tannery-1')?.container, { material: 4 });
+});
+
+test('every dealt workstation can be run: a method, a serviceMethod, or the hall\'s desk', () => {
+  for (const w of deal([settlementOf('town')])[0].buildings!.flatMap((b) => b.workstations ?? [])) {
+    assert.ok(w.method || w.serviceMethod || w.subkind === 'administrative', `${w.id} is runnable`);
   }
 });
 
