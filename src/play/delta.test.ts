@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
 import { FOLK } from '../character/species.ts';
 import { activeRegion, clockOf, linkMinutes, stairCost, travelTime } from '../world/travel.ts';
-import { MINUTES_PER_TICK, TICKS_PER_DAY } from '../world/calendar.ts';
+import { MINUTES_PER_TICK, TICKS_PER_DAY, TICKS_PER_HOUR } from '../world/calendar.ts';
 import { takeRest } from './rest.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState, emptyDelta, directorOutput } from './fixtures.ts';
@@ -12,8 +12,11 @@ import { forbids, STANDARD } from '../rules/ruleset.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { addBuilding, buildingAt } from '../world/settlement.ts';
 import { isFull } from '../world/types.ts';
-import type { Building } from '../world/workstation.ts';
-import type { Region } from '../world/types.ts';
+import type { Building, Workstation } from '../world/workstation.ts';
+import { capacityOf, efficiencyOf, statFor } from '../world/workstation.ts';
+import { finalAbilities } from '../session/sheet.ts';
+import { MAX_ABILITY } from './signetbook.ts';
+import type { Place, Region } from '../world/types.ts';
 import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { CRIMINAL_LAWS } from '../world/al.ts';
@@ -884,4 +887,109 @@ test('collect is a Director schema field pair, and toWorldDelta needs both halve
   assert.deepEqual(flat('smithy-1', 'weapon').collect, { building: 'smithy-1', category: 'weapon' });
   assert.equal(flat('', 'weapon').collect, undefined);
   assert.equal(flat('smithy-1', 'none').collect, undefined);
+});
+
+/*
+ * Step 8 slice 1 (DESIGN 6c §3h, §3j-i): a building keeps working while you are away, and is
+ * caught up when you ARRIVE. Staffing is the living, non-player people at the place who are not
+ * out on the road: one person, one economic workstation, best fit first, in building order.
+ */
+
+const ANVIL = { id: 'anvil', subkind: 'economic', method: { input: [], output: [{ category: 'weapon', count: 1 }], time: 1 } } as Workstation;
+const FORGE = { id: 'forge', subkind: 'economic', method: { input: [], output: [{ category: 'armour', count: 1 }], time: 1 } } as Workstation;
+const FAST_ANVIL = { id: 'anvil', subkind: 'economic', method: { input: [], output: [{ category: 'weapon', count: 1 }], time: 0.05 } } as Workstation;
+const BED = { id: 'bed', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 1 }], time: 1 } } as Workstation;
+const HALL_DESK = { id: 'hall-desk', subkind: 'administrative' } as Workstation;
+const WORKED_AT = 100;
+const NPC_PLACEHOLDER = efficiencyOf('raw-stat', 10, [1, MAX_ABILITY]);
+
+type Away = { workers?: string[]; stations?: Workstation[]; workedAt?: number | null; tier?: number; holder?: string; dead?: string[]; onRoad?: string[]; sheets?: Record<string, PlayState['sheet']> };
+
+/** The player stands in the market; the town's smithy was last worked at WORKED_AT. Moving to 'town' is the arrival. */
+const awayFromTown = (over: Away = {}): PlayState => {
+  const base = playState();
+  const r = base.world.regions['floor-0'] as Region;
+  const workedAt = over.workedAt === undefined ? WORKED_AT : over.workedAt;
+  const smithy = { id: 'smithy-1', tier: over.tier ?? 1, container: {}, workstations: over.stations ?? [ANVIL], ...(workedAt === null ? {} : { workedAt }) } as Building;
+  const people = Object.fromEntries(Object.entries(base.world.people).map(([id, p]) => [id, {
+    ...p, alive: !(over.dead ?? []).includes(id), ...(over.sheets?.[id] ? { sheet: over.sheets[id] } : {}),
+  }]));
+  const town = (p: Place): Place => ({ ...addBuilding(p, smithy), people: over.workers ?? ['smith'], ...(over.holder ? { holder: over.holder } : {}) });
+  return {
+    ...base,
+    world: {
+      ...base.world,
+      people,
+      currentPlace: 'market',
+      clock: 200,
+      journeys: (over.onRoad ?? []).map((who) => ({ who, for: who, region: 'floor-2', place: 'town', progress: 0, departs: 0 })),
+      regions: { ...base.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? town(p) : p)) } },
+    } as PlayState['world'],
+  };
+};
+const arrive = (s: PlayState): PlayState => applyDelta(s, { moveTo: 'town' });
+const smithyOf = (s: PlayState) => buildingAt((s.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!, 'smithy-1')! as Building & { workedAt?: number };
+const hoursAway = (s: PlayState) => (clockOf(s.world) - WORKED_AT) / TICKS_PER_HOUR;
+
+test('the first time a building is seen it is stamped and produces nothing', () => {
+  const done = arrive(awayFromTown({ workedAt: null }));
+  assert.equal(smithyOf(done).workedAt, clockOf(done.world));
+  assert.deepEqual(smithyOf(done).container, {});
+});
+
+test('arriving after a long absence, one person present, catches up floor(hours x efficiency) batches', () => {
+  const done = arrive(awayFromTown());
+  assert.equal(smithyOf(done).container.weapon, Math.floor(hoursAway(done) * NPC_PLACEHOLDER));
+  assert.equal(smithyOf(done).workedAt, clockOf(done.world), 'and the visit is stamped');
+});
+
+test('nobody at the place: nothing is produced, but the visit is still stamped (a closed shop banks no hours)', () => {
+  const done = arrive(awayFromTown({ workers: [] }));
+  assert.deepEqual(smithyOf(done).container, {});
+  assert.equal(smithyOf(done).workedAt, clockOf(done.world));
+});
+
+test('one person staffs ONE economic workstation, the first in order; two people staff two', () => {
+  const stations = [ANVIL, FORGE];
+  const one = smithyOf(arrive(awayFromTown({ stations, workers: ['smith'] }))).container;
+  assert.ok((one.weapon ?? 0) > 0);
+  assert.equal(one.armour, undefined, 'the second station has nobody');
+  const two = smithyOf(arrive(awayFromTown({ stations, workers: ['smith', 'warden'] }))).container;
+  assert.ok((two.weapon ?? 0) > 0 && (two.armour ?? 0) > 0);
+});
+
+test('the best fit gets the station: a worker with a real STR beats one with no sheet', () => {
+  const strong = { ...playState().sheet, baseAbilities: { ...playState().sheet.baseAbilities, str: 20 } };
+  const done = arrive(awayFromTown({ workers: ['smith', 'warden'], sheets: { warden: strong } }));
+  const ability = finalAbilities(strong)[statFor(ANVIL.method!)];
+  const expected = Math.floor(hoursAway(done) * efficiencyOf('raw-stat', ability, [1, MAX_ABILITY]));
+  assert.equal(smithyOf(done).container.weapon, expected);
+  assert.ok(expected > Math.floor(hoursAway(done) * NPC_PLACEHOLDER), 'so the strong worker really did do better');
+});
+
+test('the dead, and people away on the road, do not work', () => {
+  const done = arrive(awayFromTown({ workers: ['smith', 'warden'], dead: ['smith'], onRoad: ['warden'] }));
+  assert.deepEqual(smithyOf(done).container, {});
+});
+
+test('what is made is capped by the building tier', () => {
+  const done = arrive(awayFromTown({ stations: [FAST_ANVIL] }));
+  assert.equal(smithyOf(done).container.weapon, capacityOf(1));
+});
+
+test('a turn that does not change place catches nothing up, however long the gap', () => {
+  const standing = { ...awayFromTown(), world: { ...awayFromTown().world, currentPlace: 'town' } } as PlayState;
+  const done = applyDelta(standing, { timeSpent: 1 });
+  assert.deepEqual(smithyOf(done).container, {});
+  assert.equal(smithyOf(done).workedAt, WORKED_AT, 'not even the stamp moves');
+});
+
+test('service and administrative workstations are ignored and do not use up a worker', () => {
+  const done = arrive(awayFromTown({ stations: [HALL_DESK, BED, ANVIL], workers: ['smith'] }));
+  assert.equal(smithyOf(done).container.weapon, Math.floor(hoursAway(done) * NPC_PLACEHOLDER));
+});
+
+test('a building the player holds is worked by the people present, unpaid (v1: no wages)', () => {
+  const done = arrive(awayFromTown({ holder: PLAYER }));
+  assert.equal(smithyOf(done).container.weapon, Math.floor(hoursAway(done) * NPC_PLACEHOLDER));
 });
