@@ -2066,6 +2066,17 @@ completed a building-plus-category pair when the building was tucked inside the 
 line. **Not decided here:** a quote guard (the decree's exact words must appear in the
 player's input) for a remark that fires one verb — a separate approval.
 
+**REVERSED the same day (user, 2026-09-29) — the hall half only.** A clean live rerun (55 trials,
+no errors) on the one-pair contract fixed what it aimed at — stray second hall verbs 0/15, down
+from about half — and made the other failure much worse: a hall verb on a plain remark in 13 of
+20 trials, against 2 of 15 on the three-field contract (chat 4/5, opinion 3/5, a remembered law
+5/5). Most turns are remarks, so the pair was worse in expectation, and the three separate
+fields are restored. A guess, unverified: one `hallAction` enum makes the model pick a real
+value (the first listed, `adoptLaw`) where three fields let it write `none` three times. What
+STANDS from this note: `collect`'s brief block in the workstation shape, which completed a
+building-plus-category pair 3 times in 10 (was 1 in 9). Still open: a remark can fire one hall
+verb on either contract, and a decree can carry a stray second verb on the three-field one.
+
 ---
 
 # THE ORDER — authoritative, re-derived 2026-09-05
