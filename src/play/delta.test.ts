@@ -1039,3 +1039,31 @@ test('with no law of its own the repeal is never offered, cue or not', async () 
   assert.doesNotMatch(await briefFor(ownLaws([]), 'I repeal every law'), REPEAL_OFFER);
   assert.doesNotMatch(await briefFor(inheritedAssault(), 'I repeal the law'), REPEAL_OFFER);
 });
+
+/*
+ * Thai repeal cues (DESIGN 6c 3k-ii, 2026-09-29). Thai has no word boundaries, so `\b` never matches
+ * between Thai letters and the cues are matched as substrings. The list is a first draft for a Thai speaker to review.
+ */
+
+test('repealLaw is offered on a Thai repeal cue mid-sentence (no word boundary in Thai)', async () => {
+  for (const said of [
+    'ข้าพเจ้าขอยกเลิกกฎหมายนี้', // I repeal this law
+    'ข้าพเจ้าเพิกถอนกฎห้ามทำร้ายร่างกาย', // I revoke the ban on assault
+    'ตั้งแต่วันนี้การทำร้ายผู้อื่นไม่เป็นความผิดอีก', // from today assault is no longer an offence
+    'ตั้งแต่วันนี้การขโมยไม่ผิดกฎหมายอีก', // from today theft is no longer illegal
+    'ฉันขอ repeal กฎนี้', // a mixed English cue still works
+  ]) assert.match(await briefFor(ownLaws(['assault']), said), REPEAL_OFFER, said);
+});
+
+test('repealLaw is NOT offered on Thai remarks, an opinion, an admiring line or a decree', async () => {
+  for (const said of [
+    'ข้าพเจ้าเดินดูรอบๆ จัตุรัสแล้วถามคนแถวนั้นว่าเก็บเกี่ยวเป็นอย่างไรบ้าง', // looks around, asks about the harvest
+    'ข้าพเจ้าบ่นว่ากฎห้ามทำร้ายร่างกายไม่ยุติธรรมกับคนจน', // grumbles the law is unfair to the poor
+    'ข้าพเจ้าชื่นชมสินค้าในโรงตีเหล็กแล้วถามว่าใครทำ', // admires the goods in the smithy
+    'ข้าพเจ้าประกาศว่าการขโมยในเมืองนี้เป็นความผิด', // decrees theft an offence (holds เป็นความผิด, not the cue)
+  ]) assert.doesNotMatch(await briefFor(ownLaws(['assault']), said), REPEAL_OFFER, said);
+});
+
+test('a Thai cue is not enough: with no law of its own the repeal is still never offered', async () => {
+  assert.doesNotMatch(await briefFor(ownLaws([]), 'ข้าพเจ้าขอยกเลิกกฎหมายนี้'), REPEAL_OFFER);
+});
