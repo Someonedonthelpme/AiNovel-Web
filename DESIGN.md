@@ -24,7 +24,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 and W7 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`, `53067fd`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
-| 8 | NPC agency | **partial** | `world/agenda.ts` exists and is imported by `play/rest.ts`; no scheduler |
+| 8 | NPC agency | **not started** | `world/agenda.ts` is a pure function nothing imports (`play/rest.ts:66` only mentions agendas in a comment; `Person.agenda` has no writer — `ARCHITECTURE.md` §12); no scheduler |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module; **unblocks the rest of 6b stage 3o** (combat balance, deferred 2026-09-13) |
 | 10 | The creation page | **partial** | `app/new/page.tsx` has point buy and the interview; not the two-phase redesign with presets and a rules view |
 | 11 | The long tail | **not started** | — |
