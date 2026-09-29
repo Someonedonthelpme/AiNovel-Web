@@ -16,7 +16,7 @@ import type { Building } from '../world/workstation.ts';
 import type { Region } from '../world/types.ts';
 import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
-import { CRIMINAL_LAWS } from '../world/al.ts';
+import { CRIMINAL_LAWS, SUCCESSION_LAWS } from '../world/al.ts';
 import { COLLECTABLE } from './collect.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
@@ -614,9 +614,20 @@ test('a law the engine does not know is refused, not silently accepted', () => {
   assert.equal(v.delta.adoptLaw, undefined);
 });
 
-test('toWorldDelta turns adoptLaw into a WorldDelta field, "none" means nothing', () => {
-  assert.equal(toWorldDelta({ ...emptyDelta(), adoptLaw: 'theft' }).adoptLaw, 'theft');
-  assert.equal(toWorldDelta({ ...emptyDelta(), adoptLaw: 'none' }).adoptLaw, undefined);
+// The three hall verbs are ONE decree, hallAction + hallValue (DESIGN 6c §3k-ii, respecified 2026-09-29):
+// a live run showed the Director fills every verb field it is given, so two could ride one turn.
+// Only the three hall fields are compared: emptyDelta() also carries an unrelated timeSpent.
+const hallOf = (action: string, value: string) => {
+  const delta = toWorldDelta({ ...emptyDelta(), hallAction: action, hallValue: value } as never);
+  return Object.fromEntries((['adoptLaw', 'repealLaw', 'setSuccession'] as const).filter((k) => delta[k] !== undefined).map((k) => [k, delta[k]]));
+};
+
+// Respecified: was "toWorldDelta turns the flat adoptLaw field into a WorldDelta field, 'none' means
+// nothing" (asserted `{ adoptLaw: 'theft' }` -> 'theft' and `{ adoptLaw: 'none' }` -> undefined).
+// The intent stands; the decree now arrives as hallAction 'adoptLaw' + hallValue.
+test('toWorldDelta turns an adoptLaw decree into a WorldDelta field, "none" means nothing', () => {
+  assert.deepEqual(hallOf('adoptLaw', 'theft'), { adoptLaw: 'theft' });
+  assert.deepEqual(hallOf('adoptLaw', 'none'), {});
 });
 
 test('the Director is offered adoptLaw only where a real seat hall exists', async () => {
@@ -630,7 +641,10 @@ test('adoptLaw is never offered without a real seat hall', async () => {
   const state = withWorkstation(playState()); // a hall stands here, but nobody holds it and it seats no unit
   const provider = new FakeProvider({ structured: [directorOutput()] });
   await runDirector(provider, state, 'look around', 'conversation', []);
+  // Respecified: this asserted the absence of the old "Law here" line, which the one
+  // "Hall decrees here" block replaced. Kept, and the new heading asserted too.
   assert.ok(!provider.allSentText().includes('Law here'));
+  assert.ok(!provider.allSentText().includes('Hall decrees here'));
 });
 
 /*
@@ -667,9 +681,11 @@ test('a succession choice the engine does not know is refused, not silently acce
   assert.equal(v.delta.setSuccession, undefined);
 });
 
-test('toWorldDelta turns setSuccession into a WorldDelta field, "none" means nothing', () => {
-  assert.equal(toWorldDelta({ ...emptyDelta(), setSuccession: 'stationRank' }).setSuccession, 'stationRank');
-  assert.equal(toWorldDelta({ ...emptyDelta(), setSuccession: 'none' }).setSuccession, undefined);
+// Respecified: was the flat `setSuccession` field asserting 'stationRank' -> 'stationRank' and
+// 'none' -> undefined; same intent through the one decree (hallAction 'setSuccession').
+test('toWorldDelta turns a setSuccession decree into a WorldDelta field, "none" means nothing', () => {
+  assert.deepEqual(hallOf('setSuccession', 'stationRank'), { setSuccession: 'stationRank' });
+  assert.deepEqual(hallOf('setSuccession', 'none'), {});
 });
 
 test('the Director is offered setSuccession under the same gate as adoptLaw', async () => {
@@ -784,19 +800,47 @@ test('the Director is told which laws are in force, and which are its own to rep
   assert.match(both, /Laws in force here:[^\n]*theft \(own\)/);
   assert.match(both, /Laws in force here:[^\n]*assault \(inherited\)/);
   assert.match(both, /Succession in force here: stationRank/);
-  assert.equal(both.match(/the ONLY legal repealLaw ids\): ([^\n]*)/)?.[1], 'theft', 'only the OWN law is offered for repeal');
+  // Respecified: was /the ONLY legal repealLaw ids\): (...)/ on its own line; repeal is now one pair
+  // inside the single "Hall decrees here" block, still offered for OWN laws only.
+  assert.equal(both.match(/  - repealLaw: ([^\n]*)/)?.[1], 'theft', 'only the OWN law is offered for repeal');
   const none = await sentFor(ownLaws([]));
   assert.match(none, /Laws in force here: none/);
-  assert.ok(!none.includes('the ONLY legal repealLaw ids'), 'nothing to repeal, so it is never offered');
-  assert.ok(!(await sentFor(inheritedAssault())).includes('the ONLY legal repealLaw ids'), 'an inherited law is not offered');
+  assert.ok(!none.includes('  - repealLaw:'), 'nothing to repeal, so it is never offered');
+  assert.ok(!(await sentFor(inheritedAssault())).includes('  - repealLaw:'), 'an inherited law is not offered');
 });
 
-test('repealLaw is a Director schema field and toWorldDelta reads it, "none" meaning nothing', () => {
+// Respecified: was "repealLaw is a Director schema field" (a flat enum ['none', ...CRIMINAL_LAWS] in
+// `required`, read by toWorldDelta with 'none' meaning nothing). The schema field is now the one
+// decree pair; the repeal half of the intent is here, the pair's shape in the next test.
+test('a repealLaw decree reads through toWorldDelta, "none" meaning nothing', () => {
+  assert.deepEqual(hallOf('repealLaw', 'assault'), { repealLaw: 'assault' });
+  assert.deepEqual(hallOf('repealLaw', 'none'), {});
+});
+
+test('the hall verbs are ONE decree in the schema: hallAction + hallValue, the three flat fields gone', () => {
   const deltaSchema = (DIRECTOR_SCHEMA as any).properties.delta;
-  assert.deepEqual(deltaSchema.properties.repealLaw.enum, ['none', ...CRIMINAL_LAWS]);
-  assert.ok(deltaSchema.required.includes('repealLaw'));
-  assert.equal(toWorldDelta({ ...emptyDelta(), repealLaw: 'assault' } as never).repealLaw, 'assault');
-  assert.equal(toWorldDelta({ ...emptyDelta(), repealLaw: 'none' } as never).repealLaw, undefined);
+  assert.deepEqual(deltaSchema.properties.hallAction?.enum, ['none', 'adoptLaw', 'repealLaw', 'setSuccession']);
+  assert.deepEqual(deltaSchema.properties.hallValue?.enum, ['none', ...CRIMINAL_LAWS, ...SUCCESSION_LAWS]);
+  for (const gone of ['adoptLaw', 'repealLaw', 'setSuccession']) assert.equal(deltaSchema.properties[gone], undefined, gone);
+  assert.ok(deltaSchema.required.includes('hallAction') && deltaSchema.required.includes('hallValue'));
+});
+
+test('a decree value that does not belong to its action is nothing, never a guess', () => {
+  assert.deepEqual(hallOf('adoptLaw', 'stationRank'), {});
+  assert.deepEqual(hallOf('setSuccession', 'theft'), {});
+  assert.deepEqual(hallOf('none', 'theft'), {});
+  assert.deepEqual(hallOf('repealLaw', 'elective'), {});
+});
+
+test('the brief gives ONE gated "Hall decrees here" block, repeal listed only for own laws', async () => {
+  const sent = async (s: PlayState) => {
+    const provider = new FakeProvider({ structured: [directorOutput()] });
+    await runDirector(provider, s, 'look around', 'conversation', []);
+    return provider.allSentText();
+  };
+  assert.match(await sent(ownLaws(['assault'])), /Hall decrees here \(name hallAction and hallValue; the ONLY legal pairs\):\n  - adoptLaw: theft, trespass, assault\n  - repealLaw: assault\n  - setSuccession: standing, stationRank, elective/);
+  assert.doesNotMatch(await sent(ownLaws([])), /  - repealLaw:/);
+  assert.doesNotMatch(await sent(withWorkstation(playState())), /Hall decrees here/);
 });
 
 /*
@@ -829,10 +873,13 @@ test('the Director is told what a building has stored, and nothing when it is em
 });
 
 test('collect is offered only for a place the player holds and a category an item can be made of', async () => {
-  const offered = (await sentFor(heldStored({ weapon: 1, seed: 2 }))).match(/the ONLY legal collectGoods ids\): ([^\n]*)/)?.[1];
+  const offered = (await sentFor(heldStored({ weapon: 1, seed: 2 }))).match(/the ONLY legal collectBuilding\/collectGoods ids\):\n  - ([^\n]*)/)?.[1];
+  // Respecified: was the header "...legal collectGoods ids): smithy-1: weapon" on one line, which left the
+  // model to work out that smithy-1 also belongs in collectBuilding (1 complete pair in 9 live trials);
+  // now the workstation-block shape: both field names in the header, the building beside its goods.
   assert.equal(offered, 'smithy-1: weapon', 'seed has no item yet, so it is never offered');
-  assert.ok(!(await sentFor(notHeldStored({ weapon: 1 }))).includes('the ONLY legal collectGoods ids'), 'not held');
-  assert.ok(!(await sentFor(heldStored({}))).includes('the ONLY legal collectGoods ids'), 'nothing stored');
+  assert.ok(!(await sentFor(notHeldStored({ weapon: 1 }))).includes('collectBuilding/collectGoods ids'), 'not held');
+  assert.ok(!(await sentFor(heldStored({}))).includes('collectBuilding/collectGoods ids'), 'nothing stored');
 });
 
 test('the engine accepts collecting held goods and refuses the rest, saying why', () => {
