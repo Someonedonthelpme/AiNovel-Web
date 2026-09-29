@@ -20,6 +20,7 @@ import type { ClassShape } from '../character/classgen.ts';
 import { buildClass, namingOf } from '../character/classbuild.ts';
 import { humanisePlaces, pruneDangling } from '../world/naming.ts';
 import { alUnitsFor } from '../world/al.ts';
+import { buildingsFor } from '../world/buildinggen.ts';
 import type { Person, Place, PlaceKind, Region, World } from '../world/types.ts';
 import { PLACE_KINDS } from '../world/types.ts';
 import { validateRegion } from '../world/validate.ts';
@@ -591,6 +592,8 @@ export async function generateGroundFloor(
   const al = alUnitsFor({ seed, regions: { [region.id]: region } }, region.id, region.places);
   region.alUnits = al.alUnits;
   region.places = al.places;
+  // And its buildings (DESIGN 6c §3i), engine-only too: every settlement gets a hall, economic ones by tier.
+  region.places = buildingsFor({ seed, regions: { [region.id]: region } }, region.id, region.places);
 
   /*
    * The bonds, applied last — after the cast is settled, so a bond naming

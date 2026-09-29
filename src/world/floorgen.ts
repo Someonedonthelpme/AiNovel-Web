@@ -37,6 +37,7 @@ import { repairRegion, repairVoice } from '../session/repair.ts';
 import type { CharacterSheet } from '../session/sheet.ts';
 import { humanisePlaces, pruneDangling } from './naming.ts';
 import { alUnitsFor } from './al.ts';
+import { buildingsFor } from './buildinggen.ts';
 import { peopleBudget, placeBudget, settlementBudget } from './budget.ts';
 import { rehydrationBrief } from './lod.ts';
 import type { Gazetteer, Person, Place, PlaceKind, Region, RegionId, World } from './types.ts';
@@ -520,6 +521,8 @@ export async function generateFloor(
   const al = alUnitsFor({ seed: world.seed, regions: { [regionId]: region } }, regionId, region.places);
   region.alUnits = al.alUnits;
   region.places = al.places;
+  // And its buildings (DESIGN 6c §3i), engine-only too: every settlement gets a hall, economic ones by tier.
+  region.places = buildingsFor({ seed: world.seed, regions: { [regionId]: region } }, regionId, region.places);
 
   const wing = wingOf(generated, floor, region, stratum, world);
   const band = bandLandOf(world, floor, region);
