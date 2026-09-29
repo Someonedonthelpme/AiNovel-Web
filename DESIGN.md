@@ -1325,7 +1325,9 @@ tier, caps, ruler title, shape, ways in, paths, plots — with no stations in it
   wants more out of a building changes the POLICY, buys better TOOLS, or installs
   better STATIONS — that is how the off-class penalty is bought down.
 - **No wages in v1.** Goods only.
-- **What the player does with a station in v1: buy, sell, steal.**
+- **What the player does with a station in v1: buy, sell, steal.** *Built 2026-09-29: `collect`
+  from a building you hold (a whole category, as items — `play/collect.ts`); see
+  `ARCHITECTURE.md` §12. Buy, sell and steal are still unbuilt.*
 
 **Still open, to define together:** the station catalogue itself — what a station is,
 what each one does, and how tier, method and stations multiply out.
