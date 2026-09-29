@@ -4,10 +4,9 @@ import type { Place, RegionId, World } from './types.ts';
 import type { Building } from './workstation.ts';
 
 /*
- * The smallest slice of DESIGN 6c §3i's catalogue: three building types, dealt by tier.
- * Nothing generated ever had a building, so the station system only ran on hand-built
- * fixtures; this makes it reachable in a real world. The other seven types are data to add
- * once the loop is proven.
+ * A slice of DESIGN 6c §3i's catalogue: seven building types, dealt by tier. Nothing generated
+ * ever had a building, so the station system only ran on hand-built fixtures; this makes it
+ * reachable in a real world. Not dealt: the general store and armoury (nothing to run yet).
  */
 
 const HALL: Building = { id: 'hall-1', tier: 1, container: {}, workstations: [{ id: 'hall-desk', subkind: 'administrative' }] };
@@ -24,14 +23,38 @@ const SMITHY: Building = {
   workstations: [{ id: 'anvil', subkind: 'economic', method: { input: [{ category: 'material', count: 1 }], output: [{ category: 'weapon', count: 1 }], time: 1 } }],
 };
 
+const HOME: Building = {
+  id: 'home-1', tier: 1, container: {},
+  workstations: [{ id: 'bed', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 1 }], time: 1 } }],
+};
+
+const INN: Building = {
+  id: 'inn-1', tier: 1, container: {},
+  workstations: [{ id: 'hearth', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 3 }], time: 0.3 } }],
+};
+
+// ponytail: seed has no source yet (no item, unreachable from combat), so the field starts stocked like the smithy.
+const FARMSTEAD: Building = {
+  id: 'farmstead-1', tier: 1, container: { seed: 4 },
+  workstations: [{ id: 'subsistence', subkind: 'economic', method: { input: [{ category: 'seed', count: 1 }], output: [{ category: 'rations', count: 1 }], time: 2 } }],
+};
+
+const TANNERY: Building = {
+  id: 'tannery-1', tier: 1, container: { material: 4 },
+  workstations: [{ id: 'hand-cure', subkind: 'economic', method: { input: [{ category: 'material', count: 1 }], output: [{ category: 'pack', count: 1 }], time: 1 } }],
+};
+
+const VILLAGE = [HALL, PASTURE, SMITHY, FARMSTEAD, INN, HOME] as const;
+const TOWN = [...VILLAGE, TANNERY] as const;
+
 /** What a settlement of each tier is dealt. Every settlement has a hall (bare unless it is a seat, §3e). */
 const DEALT: Record<SettlementTier, readonly Building[]> = {
-  hamlet: [HALL, PASTURE],
-  village: [HALL, PASTURE, SMITHY],
-  town: [HALL, PASTURE, SMITHY],
-  city: [HALL, PASTURE, SMITHY],
-  metropolis: [HALL, PASTURE, SMITHY],
-  megacity: [HALL, PASTURE, SMITHY],
+  hamlet: [HALL, PASTURE, HOME],
+  village: VILLAGE,
+  town: TOWN,
+  city: TOWN,
+  metropolis: TOWN,
+  megacity: TOWN,
 };
 
 const fresh = (b: Building): Building => ({
