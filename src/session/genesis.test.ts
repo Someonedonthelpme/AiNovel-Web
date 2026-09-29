@@ -246,6 +246,14 @@ test('a reference to a person the model never defined is dropped, not fatal', as
   assert.equal(validateRegion(result.region, result.people).ok, true);
 });
 
+test('the ground floor gets an AL tree, engine-only, and every place belongs to a unit', async () => {
+  const sheet = (await generateCharacter(provider(), completed())).sheet;
+  const result = await generateGroundFloor(new FakeProvider({ structured: [ground()] }), completed(), sheet);
+
+  assert.ok(Object.keys(result.region.alUnits ?? {}).length > 0);
+  for (const p of result.region.places) assert.ok(p.alUnit, `${p.id} has no alUnit`);
+});
+
 test('people from the ground floor land in the registry', async () => {
   const result = await runGenesis(wholeGenesis(), completed());
   assert.equal(result.world.people['ora'].name, 'Ora');

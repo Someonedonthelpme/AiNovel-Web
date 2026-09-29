@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activeRegion, ascend, currentPlace, descend, exitsFrom, installRegion, linkMinutes, linksFrom, moveWithinRegion, traverse } from './travel.ts';
+import { activeRegion, alCrossingCost, ascend, currentPlace, descend, exitsFrom, installRegion, linkMinutes, linksFrom, moveWithinRegion, traverse } from './travel.ts';
 import { compressRegion } from './lod.ts';
 import { firstFloor, groundFloor, link, place, world } from './fixtures.ts';
 import { isFull, regionIdFor } from './types.ts';
 import { STANDARD } from '../rules/ruleset.ts';
+import { TICKS_PER_HOUR } from './calendar.ts';
 import type { PlaceKind, Region, World } from './types.ts';
 
 const atGround = (over: Partial<World> = {}) => world({ currentPlace: 'gate', ...over });
@@ -316,4 +317,12 @@ test('a place the region does not hold weighs as a landmark', () => {
   // The fixture's market IS a landmark, so losing it must change nothing.
   assert.equal(linkMinutes(w, 'town', 'market', without('market')), linkMinutes(w, 'town', 'market', groundFloor()));
   assert.equal(linkMinutes(w, 'town', 'market', without('town', 'market')), linkMinutes(w, 'town', 'market', withKinds('landmark')));
+});
+
+/* Crossing an AL unit costs like a stair, not like a step (DESIGN 6c §3e-ii). */
+
+test('alCrossingCost is one to three hours, the same both ways', () => {
+  const c = alCrossingCost(7, 'a', 'b');
+  assert.ok(c >= TICKS_PER_HOUR && c <= 3 * TICKS_PER_HOUR, `${c}`);
+  assert.equal(c, alCrossingCost(7, 'b', 'a'), 'the same both ways');
 });

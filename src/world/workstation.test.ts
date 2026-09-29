@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { capacityOf, efficiencyOf, runAt, runMethod, runWorkstation } from './workstation.ts';
-import type { Building, SubMethod } from './workstation.ts';
+import { capacityOf, classFitOf, efficiencyOf, runAt, runMethod, runService, runWorkstation, statFor, statForService } from './workstation.ts';
+import type { Building, ServiceMethod, SubMethod } from './workstation.ts';
+import { metNeeds } from '../character/persona.ts';
 
 /*
  * A workstation runs a sub-method against a building's container (DESIGN 6c §3h):
@@ -152,4 +153,53 @@ test("lower efficiency scales down a workstation's effective hours", () => {
   const method: SubMethod = { input: [], output: [{ category: 'weapon', count: 1 }], time: 1 };
   const b: Building = { tier: 1, container: {}, workstations: [{ id: 'w1', subkind: 'economic', method }] };
   assert.ok(runWorkstation(b, 'w1', 10, 0.5)!.batches < runWorkstation(b, 'w1', 10, 1)!.batches);
+});
+
+/*
+ * A LifeClass's stat is derived from what its workstation actually produces
+ * (DESIGN 6c §3j), not hand-authored per trade name or per building category.
+ */
+
+test("statFor reads the stat off the method's primary output good", () => {
+  const method: SubMethod = { input: [], output: [{ category: 'weapon', count: 1 }], time: 1 };
+  assert.equal(statFor(method), 'str');
+});
+
+test('statFor uses only the first output when a method makes more than one good', () => {
+  const method: SubMethod = { input: [], output: [{ category: 'rations', count: 1 }, { category: 'weapon', count: 1 }], time: 1 };
+  assert.equal(statFor(method), 'vit');
+});
+
+test('classFitOf: same life class id is on-class regardless of stat', () => {
+  assert.equal(classFitOf({ id: 'smith', stat: 'str' }, { id: 'smith', stat: 'str' }), 'on-class');
+});
+
+test('classFitOf: different id, same stat, is shares-stat', () => {
+  assert.equal(classFitOf({ id: 'tanner', stat: 'str' }, { id: 'smith', stat: 'str' }), 'shares-stat');
+});
+
+test('classFitOf: different id, different stat, is raw-stat', () => {
+  assert.equal(classFitOf({ id: 'farmer', stat: 'vit' }, { id: 'smith', stat: 'str' }), 'raw-stat');
+});
+
+/*
+ * A `service` workstation has no input and no capacity constraint - it drains
+ * time and raises a Need instead of touching a building's container (DESIGN 6c
+ * §3h/§3j).
+ */
+
+test('runService raises a need by amount per batch, clamped at NEED_MAX', () => {
+  const method: ServiceMethod = { output: [{ need: 'rest', amount: 3 }], time: 1 };
+  const needs = runService({ ...metNeeds(), rest: 4 }, method, 1);
+  assert.equal(needs.rest, 7);
+});
+
+test('runService does nothing below the time threshold', () => {
+  const method: ServiceMethod = { output: [{ need: 'rest', amount: 3 }], time: 2 };
+  const needs = runService({ ...metNeeds(), rest: 4 }, method, 1);
+  assert.equal(needs.rest, 4);
+});
+
+test('statForService reads the stat off the output need', () => {
+  assert.equal(statForService({ output: [{ need: 'rest', amount: 1 }], time: 1 }), 'vit');
 });

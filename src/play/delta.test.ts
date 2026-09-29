@@ -1,4 +1,4 @@
-import { axisOf, PLAYER, trustToward } from '../social/edge.ts';
+import { axisOf, GRUDGE_THRESHOLD, hostileToward, PLAYER, trustToward } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
@@ -16,6 +16,7 @@ import type { Building } from '../world/workstation.ts';
 import type { Region } from '../world/types.ts';
 import { runDirector, toWorldDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
+import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
 const record = (delta: WorldDelta): TurnRecord => ({
   kind: 'turn', input: 'x', mode: 'conversation', classification: 'NEUTRAL',
@@ -446,10 +447,56 @@ const withWorkstation = (state: PlayState): PlayState => {
   return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? addBuilding(p, smithy) : p)) } } } };
 };
 
-test('a workstation runs its own method for the turn, updating the building in place', () => {
+// Respecifies the prior version of this test: it asserted a full batch always
+// completes, which only held because efficiency was hardcoded to 1 — the exact bug
+// DESIGN 6c §3j-i's wiring fixes. New intent: efficiency is real (raw-stat, §3j-i),
+// and at these placeholder numbers a str-13 worker (eff ~=0.389) can't clear the
+// anvil's time:1 recipe in one turn.
+test("a workstation runs at the worker's real efficiency, not always full", () => {
   const done = applyTurn(withWorkstation(playState()), record({ runWorkstation: { building: 'smithy-1', workstation: 'anvil' } })).state;
   const town = (done.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!;
-  assert.deepEqual(buildingAt(town, 'smithy-1')?.container, { material: 0, weapon: 1 });
+  assert.deepEqual(buildingAt(town, 'smithy-1')?.container, { material: 2 });
+});
+
+const withFastWorkstation = (state: PlayState): PlayState => {
+  const r = state.world.regions['floor-0'];
+  if (!isFull(r)) throw new Error('fixture: floor-0 must be full detail');
+  const forge: Building = { id: 'forge-1', tier: 1, container: {}, workstations: [{ id: 'anvil', subkind: 'economic', method: { input: [], output: [{ category: 'weapon', count: 1 }], time: 0.3 } }] };
+  return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? addBuilding(p, forge) : p)) } } } };
+};
+const withStr = (s: PlayState, str: number): PlayState => ({ ...s, sheet: { ...s.sheet, baseAbilities: { ...s.sheet.baseAbilities, str } } });
+
+test('a weak worker (raw STR 1) clears nothing from a 0.3-hour recipe', () => {
+  const done = applyTurn(withStr(withFastWorkstation(playState()), 1), record({ runWorkstation: { building: 'forge-1', workstation: 'anvil' } })).state;
+  const town = (done.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!;
+  assert.deepEqual(buildingAt(town, 'forge-1')?.container, {});
+});
+
+test('a strong worker (raw STR 20) clears the recipe the weak one could not', () => {
+  const done = applyTurn(withStr(withFastWorkstation(playState()), 20), record({ runWorkstation: { building: 'forge-1', workstation: 'anvil' } })).state;
+  const town = (done.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!;
+  assert.deepEqual(buildingAt(town, 'forge-1')?.container, { weapon: 1 });
+});
+
+/*
+ * A `service` workstation (DESIGN 6c §3h): no input, no container touched -
+ * it raises the worker's own Need instead. Same off-class rule as economic.
+ */
+
+const withServiceWorkstation = (state: PlayState): PlayState => {
+  const r = state.world.regions['floor-0'];
+  if (!isFull(r)) throw new Error('fixture: floor-0 must be full detail');
+  const inn: Building = { id: 'inn-1', tier: 1, container: {}, workstations: [{ id: 'hearth', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 3 }], time: 0.3 } }] };
+  return { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? addBuilding(p, inn) : p)) } } } };
+};
+
+test("a service workstation raises the worker's need instead of touching goods", () => {
+  const s = withServiceWorkstation(playState());
+  const low = { ...s, sheet: { ...s.sheet, needs: { ...s.sheet.needs, rest: 4 } } };
+  const done = applyTurn(low, record({ runWorkstation: { building: 'inn-1', workstation: 'hearth' } })).state;
+  assert.ok(done.sheet.needs.rest > 4);
+  const town = (done.world.regions['floor-0'] as Region).places.find((p) => p.id === 'town')!;
+  assert.deepEqual(buildingAt(town, 'inn-1')?.container, {});
 });
 
 test('the engine refuses working a station it should not, and says why', () => {
@@ -486,4 +533,191 @@ test('the Director is told which workstations exist here, and cannot name one it
   assert.ok(provider.allSentText().includes('smithy-1'));
   assert.ok(provider.allSentText().includes('anvil'));
   assert.ok(!provider.allSentText().includes('hall-desk'), 'a methodless workstation is not offered');
+});
+
+test('a service workstation is also offered to the Director, not just economic ones', async () => {
+  const state = withServiceWorkstation(playState());
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, 'rest at the hearth', 'conversation', []);
+  assert.ok(provider.allSentText().includes('inn-1'));
+  assert.ok(provider.allSentText().includes('hearth'));
+});
+
+/*
+ * Adopting a territorial law through a hall (DESIGN 6c §3k/§3k-i): the
+ * administrative workstation has no runner (§3h) - only the settlement's own
+ * holder may operate it, and only when its AL unit actually has scope (a
+ * seat, never "bare, local-only").
+ */
+
+const withHall = (state: PlayState): PlayState => {
+  const s = withWorkstation(state);
+  const r = s.world.regions['floor-0'];
+  if (!isFull(r)) throw new Error('fixture: floor-0 must be full detail');
+  return {
+    ...s,
+    world: {
+      ...s.world,
+      regions: {
+        ...s.world.regions,
+        'floor-0': {
+          ...r,
+          alUnits: { d1: { id: 'd1', kind: 'district' as const, seat: 'town' } },
+          places: r.places.map((p) => (p.id === 'town' ? { ...p, alUnit: 'd1', holder: PLAYER } : p)),
+        },
+      },
+    },
+  };
+};
+
+test('the player adopts a law through a seat settlement they hold', () => {
+  const done = applyTurn(withHall(playState()), record({ adoptLaw: 'theft' })).state;
+  const region = done.world.regions['floor-0'] as Region;
+  assert.deepEqual(region.alUnits!.d1.laws, ['theft']);
+});
+
+test('the engine refuses adopting a law it should not, and says why', () => {
+  const notHeld = (): PlayState => {
+    const s = withHall(playState());
+    const r = s.world.regions['floor-0'] as Region;
+    return { ...s, world: { ...s.world, regions: { ...s.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? { ...p, holder: undefined } : p)) } } } };
+  };
+  const noHallBuilding = (): PlayState => {
+    const s = playState();
+    const r = s.world.regions['floor-0'] as Region;
+    return { ...s, world: { ...s.world, regions: { ...s.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? { ...p, holder: PLAYER } : p)) } } } };
+  };
+  const bareHall = (): PlayState => {
+    const s = withWorkstation(playState());
+    const r = s.world.regions['floor-0'] as Region;
+    return { ...s, world: { ...s.world, regions: { ...s.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? { ...p, holder: PLAYER } : p)) } } } };
+  };
+  // Standing elsewhere (e.g. the market) is not a distinct refusal path: the
+  // player genuinely does not hold that place either, so it surfaces through
+  // the same "you do not hold this settlement" check as `notHeld` below.
+  const cases: [string, PlayState, RegExp][] = [
+    ['not held by the player', notHeld(), /hold/],
+    ['no hall on any building', noHallBuilding(), /hall/],
+    ['a hall with no AL scope — bare, local-only', bareHall(), /scope/],
+  ];
+  for (const [why, state, reason] of cases) {
+    const v = validateDelta(state, { adoptLaw: 'theft' });
+    assert.equal(v.delta.adoptLaw, undefined, why);
+    assert.match(v.rejected.join(' '), reason, why);
+  }
+});
+
+test('a law the engine does not know is refused, not silently accepted', () => {
+  const v = validateDelta(withHall(playState()), { adoptLaw: 'loitering' as AlLawId });
+  assert.equal(v.delta.adoptLaw, undefined);
+});
+
+test('toWorldDelta turns adoptLaw into a WorldDelta field, "none" means nothing', () => {
+  assert.equal(toWorldDelta({ ...emptyDelta(), adoptLaw: 'theft' }).adoptLaw, 'theft');
+  assert.equal(toWorldDelta({ ...emptyDelta(), adoptLaw: 'none' }).adoptLaw, undefined);
+});
+
+test('the Director is offered adoptLaw only where a real seat hall exists', async () => {
+  const state = withHall(playState());
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, 'declare theft illegal here', 'conversation', []);
+  assert.ok(provider.allSentText().includes('theft'));
+});
+
+test('adoptLaw is never offered without a real seat hall', async () => {
+  const state = withWorkstation(playState()); // a hall stands here, but nobody holds it and it seats no unit
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, 'look around', 'conversation', []);
+  assert.ok(!provider.allSentText().includes('Law here'));
+});
+
+/*
+ * Setting a settlement's succession law (DESIGN 6c §3k-i): the same hall
+ * authority as adoptLaw, but a single CHOICE, replaced rather than
+ * unioned - setting it again overwrites instead of accumulating.
+ */
+
+test('the player sets a succession law through a seat settlement they hold', () => {
+  const done = applyTurn(withHall(playState()), record({ setSuccession: 'stationRank' })).state;
+  const region = done.world.regions['floor-0'] as Region;
+  assert.equal(region.alUnits!.d1.succession, 'stationRank');
+});
+
+test('setting succession again REPLACES the choice, unlike adoptLaw which unions', () => {
+  const first = applyTurn(withHall(playState()), record({ setSuccession: 'stationRank' })).state;
+  const second = applyTurn(first, record({ setSuccession: 'elective' })).state;
+  assert.equal((second.world.regions['floor-0'] as Region).alUnits!.d1.succession, 'elective');
+});
+
+test('the engine refuses setting succession without the same hall authority adoptLaw requires', () => {
+  const notHeld = (): PlayState => {
+    const s = withHall(playState());
+    const r = s.world.regions['floor-0'] as Region;
+    return { ...s, world: { ...s.world, regions: { ...s.world.regions, 'floor-0': { ...r, places: r.places.map((p) => (p.id === 'town' ? { ...p, holder: undefined } : p)) } } } };
+  };
+  const v = validateDelta(notHeld(), { setSuccession: 'stationRank' });
+  assert.equal(v.delta.setSuccession, undefined);
+  assert.match(v.rejected.join(' '), /hold/);
+});
+
+test('a succession choice the engine does not know is refused, not silently accepted', () => {
+  const v = validateDelta(withHall(playState()), { setSuccession: 'primogeniture' as SuccessionLawId });
+  assert.equal(v.delta.setSuccession, undefined);
+});
+
+test('toWorldDelta turns setSuccession into a WorldDelta field, "none" means nothing', () => {
+  assert.equal(toWorldDelta({ ...emptyDelta(), setSuccession: 'stationRank' }).setSuccession, 'stationRank');
+  assert.equal(toWorldDelta({ ...emptyDelta(), setSuccession: 'none' }).setSuccession, undefined);
+});
+
+test('the Director is offered setSuccession under the same gate as adoptLaw', async () => {
+  const state = withHall(playState());
+  const provider = new FakeProvider({ structured: [directorOutput()] });
+  await runDirector(provider, state, 'change how the town picks its next holder', 'conversation', []);
+  assert.ok(provider.allSentText().includes('stationRank'));
+});
+
+/*
+ * Arrest and consequence (DESIGN 6c §3k-ii): unlawful assault reaches the AL
+ * unit's ruler directly, as a resentment nudge - not through the ordinary
+ * witness/spread system. No new deed kind, no belief entry: the existing,
+ * unmodified grudge machinery (setOut/hostileToward) is the whole mechanism.
+ */
+
+const withAssaultLaw = (state: PlayState): PlayState => {
+  const r = state.world.regions['floor-0'] as Region;
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      regions: {
+        ...state.world.regions,
+        'floor-0': {
+          ...r,
+          alUnits: { d1: { id: 'd1', kind: 'district' as const, seat: 'town', laws: ['assault'] as AlLawId[] } },
+          places: r.places.map((p) => (p.id === 'town' ? { ...p, alUnit: 'd1' } : p)),
+        },
+      },
+    },
+  };
+};
+
+test('striking first where assault is unlawful gives the ruler a real grudge', () => {
+  const done = applyTurn(withAssaultLaw(playState()), record({ startCombat: true, startedBy: 'player' })).state;
+  assert.ok(axisOf(done.world.edges, 'warden', PLAYER, 'resentment') >= GRUDGE_THRESHOLD);
+});
+
+test('striking first where assault was never adopted gives no grudge at all', () => {
+  const done = applyTurn(playState(), record({ startCombat: true, startedBy: 'player' })).state;
+  assert.equal(axisOf(done.world.edges, 'warden', PLAYER, 'resentment'), 0);
+});
+
+test('being attacked, not attacking, is never unlawful assault', () => {
+  const done = applyTurn(withAssaultLaw(playState()), record({ startCombat: true, startedBy: 'them' })).state;
+  assert.equal(axisOf(done.world.edges, 'warden', PLAYER, 'resentment'), 0);
+});
+
+test('an unlawful assault crosses the grudge threshold — hostileToward agrees, unmodified', () => {
+  const done = applyTurn(withAssaultLaw(playState()), record({ startCombat: true, startedBy: 'player' })).state;
+  assert.ok(hostileToward(done.world.edges, 'warden'));
 });
