@@ -1405,7 +1405,9 @@ brief listed what could be adopted but never what already was, and no view reads
 `AlUnit.laws` — until `repealLaw`'s stage added the "in force" line
 ([director.ts:556](src/llm/director.ts:556)); found when a live run on the local 35B model adopted a
 law from a mere remark 2 times in 5 and nothing could show or undo it. Still true: no
-player-facing view shows them (a decision, not an oversight). A remark can still fire a hall verb, and a
+STANDING view shows them (a decision, not an oversight). Since 2026-09-29 a turn that adopts, repeals or changes
+succession ANNOUNCES it (`lawNotices`, [delta.ts:296](src/play/delta.ts:296); `TurnResult.notices`,
+[turn.ts:62](src/play/turn.ts:62)), so a stray one is seen the turn it happens, though not prevented. A remark can still fire a hall verb, and a
 decree can carry a stray second one: on the three flat fields a live run saw a stray extra verb on about
 half of the decrees and a hall verb on 2 of 15 remarks. One `hallAction`/`hallValue` pair was TRIED
 (2026-09-29, DESIGN 6c §3k-ii) and REVERSED: it removed the stray verbs (0/15) but a hall verb then fired
