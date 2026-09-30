@@ -559,7 +559,7 @@ come from?"
 | `alUnitsFor` ([al.ts:174](src/world/al.ts:174)) | a region's seed, id, places | the AL tree those places justify — one seat per settlement tier that maps to a rung (DESIGN 6c §3e-i/§3e-ii), chained biggest to smallest; a tower floor never deals past `city`-tier (see `tierOf` above), so this never climbs past `district` today |
 | `alCrossingCost` ([travel.ts:92](src/world/travel.ts:92)) | a seed, two place ids | the same seeded 1–3 hour draw as `stairCost` — no caller yet, see §12 |
 | `soulsOf` ([settlement.ts:65](src/world/settlement.ts:65)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
-| `rulerOf` ([settlement.ts:75](src/world/settlement.ts:75)) | the holder, the tier | who rules, and what a ruler of a place this size is called |
+| `CAPS[tier].ruler` ([settlement.ts:24](src/world/settlement.ts:24)) | the tier | the title a ruler of a place this size bears, elder to overlord (DESIGN 6c §3c-ii); no reader since `rulerOf` was deleted, see §12 |
 | `townPlan` ([settlement.ts:79](src/world/settlement.ts:79)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
 | `freePlotsOf` ([settlement.ts:136](src/world/settlement.ts:136)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
 | `buildingAt` ([settlement.ts:142](src/world/settlement.ts:142)) | a place, a building id | the building standing there, or null |
@@ -1431,12 +1431,13 @@ brief; `engineAct`'s purchase). It does not reach the player's OWN seat — that
 holding is stored (`place.holder`), so no law is consulted — only settlements the
 player does not hold, under a seat they do, by `successionOf`'s inheritance.
 
-**`rulerOf` has no caller outside its own tests.** `rulerOf`
-([settlement.ts:75](src/world/settlement.ts:75)) still reads `holderOf`
-([settlement.ts:79](src/world/settlement.ts:79)), and `world/` cannot import
-`holderUnder` from `play/`. Nothing calls it today, so nothing disagrees yet; whoever
-wires it into play must go through `holderUnder`, or it will name a different ruler
-than the fold nudges. Found while wiring `holderUnder`, not from this stage's brief.
+**Deleted: `rulerOf`** (2026-09-30) — *listed here as having no caller outside its own tests.* It
+read `holderOf`, where the fold nudges through `holderUnder`, and `world/` cannot import
+`holderUnder` from `play/`, so it could not be rewired without a layering break; nothing called
+it, so it was deleted rather than left to name a different ruler than the fold. That leaves its
+only output beyond the holder, the title `CAPS[tier].ruler`
+([settlement.ts:25](src/world/settlement.ts:25) onward), with **no reader**: dead until a brief or
+a view names a ruler by rank. Found while wiring `holderUnder`, not from that stage's brief.
 
 **Cleared: `Building.container` had writers and no reader.** What a workstation makes
 lands in the building's `container` — `runMethod` ([workstation.ts:39](src/world/workstation.ts:39))
