@@ -205,7 +205,7 @@ places, a loop floor's, nor a floor where you hold a settlement's**, [lod.ts:61]
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic positions for the floor map) ·
 `settlement.ts` (what a settlement GREW into, and what follows from it,
-[settlement.ts:53](src/world/settlement.ts:53)) ·
+[settlement.ts:52](src/world/settlement.ts:52)) ·
 `workstation.ts` (a workstation runs its own recipe against a building's container,
 capped by tier-derived capacity and scaled by the runner's class fit — wired into
 play via `worked()`, [delta.ts:151](src/play/delta.ts:151)) ·
@@ -422,11 +422,11 @@ region because holding is a fact about the floor, with the person themselves in
 because danger and budgets have to answer before that region exists.
 **`Place.tier`** ([types.ts:53](src/world/types.ts:53)) — what a settlement GREW into, one
 of six rungs, stored when it was dealt or upgraded and otherwise dealt from the seed
-([settlement.ts:53](src/world/settlement.ts:53)). It carries TWO kinds of number and they must not be made
+([settlement.ts:52](src/world/settlement.ts:52)). It carries TWO kinds of number and they must not be made
 one: SOULS on the real curve — ten times a rung, up to millions, which is what the
 place says it is — and what the engine actually simulates, which grows gently: the
 crowd it may field, the plots its ground holds, how wide that ground is
-([settlement.ts:23](src/world/settlement.ts:23)). Ten million people cannot be walked past.
+([settlement.ts:22](src/world/settlement.ts:22)). Ten million people cannot be walked past.
 **`Place.holder`** ([types.ts:59](src/world/types.ts:59)) — set only when the PLAYER holds a
 settlement; anybody else's holding is DERIVED from who is there, the highest standing
 first ([holding.ts:14](src/world/holding.ts:14)), so a world stored before ownership has holders and a dead
@@ -437,7 +437,7 @@ The crowd is trimmed to the tier's cap where it is read ([population.ts:121](src
 balance harness pass a narrow shape with no places in it, see no tier, and are
 untouched, which is what the standing no-rebalance rule (DESIGN 6c) wants.
 **`Place.buildings`** ([types.ts:64](src/world/types.ts:64)) — what stands on a
-settlement, each building addressable by a stable id ([settlement.ts:152](src/world/settlement.ts:152));
+settlement, each building addressable by a stable id ([settlement.ts:142](src/world/settlement.ts:142));
 optional, so no world stored before this needs migrating — and, since 2026-09-29, DEALT at generation by `buildingsFor` (§3), not only added by tests, so a newly generated world has them and an older stored one does not. Within it, `Building.id`,
 `Building.workstations` and `Workstation.method` are themselves all optional
 ([workstation.ts:21](src/world/workstation.ts:21), [:24](src/world/workstation.ts:24))
@@ -445,7 +445,7 @@ optional, so no world stored before this needs migrating — and, since 2026-09-
 ([workstation.ts:24](src/world/workstation.ts:24)) is optional for it too: absent until a building
 is first seen, then the clock tick of its last catch-up (`caughtUp`, below). Module and plot occupancy
 is read off each building's own workstation count
-([building.ts:11](src/world/building.ts:11), [settlement.ts:163](src/world/settlement.ts:163)),
+([building.ts:11](src/world/building.ts:11), [settlement.ts:153](src/world/settlement.ts:153)),
 never a hand-fed number.
 **`Region.alUnits`** ([types.ts:190](src/world/types.ts:190)) and **`Place.alUnit`**
 ([types.ts:66](src/world/types.ts:66)) — the Administrative Layer, one tree per
@@ -546,7 +546,7 @@ come from?"
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:14](src/world/strata.ts:14), [:52](src/world/strata.ts:52)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
-| `tierOf` ([settlement.ts:53](src/world/settlement.ts:53)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:37](src/world/settlement.ts:37)) |
+| `tierOf` ([settlement.ts:52](src/world/settlement.ts:52)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:36](src/world/settlement.ts:36)) |
 | `ancestorsOf` ([al.ts:41](src/world/al.ts:41)) | a region, an AL unit id | the chain from that unit up to its root, itself first |
 | `rulerSeatOf` ([al.ts:58](src/world/al.ts:58)) | a region, an AL unit id | the nearest ancestor's seat `PlaceId` — an AL unit's ruler is never stored, only derived (DESIGN 6c §3e) |
 | `hallScopeOf` ([al.ts:73](src/world/al.ts:73)) | a region, a place | the AL unit that place's hall may adopt law for — null unless the place IS that unit's own seat; every other settlement inside the unit is "bare, local-only" (DESIGN 6c §3f/§3k) |
@@ -558,14 +558,14 @@ come from?"
 | `lowestCommonAlUnit` / `isLocalCrossing` ([al.ts:143](src/world/al.ts:143), [:151](src/world/al.ts:151)) | a region, two AL unit ids | the nearest shared ancestor, and whether it is `district` or deeper — the ordinary walkable scale (DESIGN 6c §3e-ii) |
 | `alUnitsFor` ([al.ts:174](src/world/al.ts:174)) | a region's seed, id, places | the AL tree those places justify — one seat per settlement tier that maps to a rung (DESIGN 6c §3e-i/§3e-ii), chained biggest to smallest; a tower floor never deals past `city`-tier (see `tierOf` above), so this never climbs past `district` today |
 | `alCrossingCost` ([travel.ts:92](src/world/travel.ts:92)) | a seed, two place ids | the same seeded 1–3 hour draw as `stairCost` — no caller yet, see §12 |
-| `soulsOf` ([settlement.ts:66](src/world/settlement.ts:66)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
+| `soulsOf` ([settlement.ts:65](src/world/settlement.ts:65)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
 | `rulerOf` ([settlement.ts:75](src/world/settlement.ts:75)) | the holder, the tier | who rules, and what a ruler of a place this size is called |
-| `townPlan` ([settlement.ts:89](src/world/settlement.ts:89)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
-| `freePlotsOf` ([settlement.ts:146](src/world/settlement.ts:146)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
-| `buildingAt` ([settlement.ts:152](src/world/settlement.ts:152)) | a place, a building id | the building standing there, or null |
-| `addBuilding` ([settlement.ts:157](src/world/settlement.ts:157)) | a place, a building | the place with it added — a no-op on a taken id, never a silent overwrite |
-| `withBuilding` ([settlement.ts:163](src/world/settlement.ts:163)) | a place, a building | the place with that building's id replaced by it — a no-op if no building there has that id |
-| `occupiedModulesOf` ([settlement.ts:163](src/world/settlement.ts:163)) | every building on a place | modules occupied, summed |
+| `townPlan` ([settlement.ts:79](src/world/settlement.ts:79)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
+| `freePlotsOf` ([settlement.ts:136](src/world/settlement.ts:136)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
+| `buildingAt` ([settlement.ts:142](src/world/settlement.ts:142)) | a place, a building id | the building standing there, or null |
+| `addBuilding` ([settlement.ts:147](src/world/settlement.ts:147)) | a place, a building | the place with it added — a no-op on a taken id, never a silent overwrite |
+| `withBuilding` ([settlement.ts:153](src/world/settlement.ts:153)) | a place, a building | the place with that building's id replaced by it — a no-op if no building there has that id |
+| `occupiedModulesOf` ([settlement.ts:153](src/world/settlement.ts:153)) | every building on a place | modules occupied, summed |
 | `runMethod` ([workstation.ts:38](src/world/workstation.ts:38)) | a container, a sub-method, hours worked, an optional capacity | batches completed and the container after — capped by whichever of time, input or space runs out first |
 | `capacityOf` ([workstation.ts:49](src/world/workstation.ts:49)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
 | `runAt` ([workstation.ts:55](src/world/workstation.ts:55)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
@@ -1454,7 +1454,7 @@ kinds can be made and never collected (refused with a reason, not faked). And `D
 §3c-i's other v1 verbs, buy, sell and steal, are still unbuilt.
 
 **Cleared: `Place.buildings` had a writer and no generator — the whole station system was unreachable
-in a real world.** Until 2026-09-29 `addBuilding` ([settlement.ts:157](src/world/settlement.ts:157)) had
+in a real world.** Until 2026-09-29 `addBuilding` ([settlement.ts:147](src/world/settlement.ts:147)) had
 no caller outside tests and neither genesis nor floorgen set `Place.buildings`, so no generated place had
 a building or a workstation, and everything that needs one (`runWorkstation`, the hall verbs, `collect`,
 the `Stored in` line, `caughtUp`) ran only on a hand-built state. Found while checking whether catch-up
@@ -1891,8 +1891,8 @@ Every balance number, and where it lives.
 | a place link / a stair | 6–42 min (each end by kind 3/5/7/9, seed 0–10, biome ×1/×1.25/×1.5 by keyword), charged in whole ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:36](src/world/travel.ts:36), [:45](src/world/travel.ts:45), [:82](src/world/travel.ts:82), [:73](src/world/travel.ts:73) |
 | a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:176](src/world/map.ts:176), [:178](src/world/map.ts:178), [:181](src/world/map.ts:181) | [map.ts:176](src/world/map.ts:176), [:181](src/world/map.ts:181) |
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:213](src/world/map.ts:213) |
-| hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
-| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:25](src/world/settlement.ts:25), [:23](src/world/settlement.ts:23) |
+| hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:22](src/world/settlement.ts:22), [map.ts:298](src/world/map.ts:298) |
+| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:24](src/world/settlement.ts:24), [:22](src/world/settlement.ts:22) |
 | a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:49](src/world/workstation.ts:49) |
 | a workstation worker's efficiency range | flat placeholder `[1, MAX_ABILITY]` (1–20) — ordering decided, magnitudes await no-rebalance | [delta.ts:147](src/play/delta.ts:147), [signetbook.ts:59](src/play/signetbook.ts:59) |
 | workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
