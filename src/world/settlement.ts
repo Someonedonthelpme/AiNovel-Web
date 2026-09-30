@@ -1,5 +1,4 @@
 import { mulberry32 } from '../engine/roll.ts';
-import { holderOf } from './holding.ts';
 import { drawMap, hubId, portalsOf } from './map.ts';
 import type { Cell } from './map.ts';
 import { pairDraw } from './travel.ts';
@@ -69,15 +68,6 @@ export function soulsOf(world: World, region: RegionId, place: PlaceId): number 
   const [low, high] = CAPS[tier].souls;
   const rng = mulberry32(Math.floor(pairDraw(world.seed, 0x5015, region, place) * 2 ** 32));
   return low + Math.floor(rng() * (high - low + 1));
-}
-
-/** Who rules here, and what a ruler of a place this size is called. */
-export function rulerOf(world: World, region: RegionId, place: PlaceId): { who: string; rank: string } | null {
-  const here = placeIn(world, region, place);
-  const tier = tierOf(world, region, place);
-  if (!here || !tier) return null;
-  const who = holderOf(here, world.people);
-  return who ? { who, rank: CAPS[tier].ruler } : null;
 }
 
 /**

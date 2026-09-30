@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addBuilding, buildingAt, CAPS, freePlotsOf, occupiedModulesOf, rulerOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan, withBuilding } from './settlement.ts';
+import { addBuilding, buildingAt, CAPS, freePlotsOf, occupiedModulesOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan, withBuilding } from './settlement.ts';
 import { modulesNeeded } from './building.ts';
 import { WORKSTATION_SUBKINDS } from './workstation.ts';
 import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
@@ -8,7 +8,6 @@ import { linkMinutes } from './travel.ts';
 import { groundFloor, place, world } from './fixtures.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { speciesFor } from '../character/species.ts';
-import { PLAYER } from '../social/edge.ts';
 import type { Place, Region, World } from './types.ts';
 import type { Building } from './workstation.ts';
 
@@ -24,10 +23,6 @@ function townOfTier(tier: (typeof SETTLEMENT_TIERS)[number], over: Partial<Place
   const places = ground.places.map((p) => (p.id === 'town' ? { ...p, tier, ...over } : p));
   return { ...base, species: speciesFor(11), regions: { 'floor-0': { ...ground, places } } };
 }
-const held = (w: World): World => {
-  const ground = w.regions['floor-0'] as Region;
-  return { ...w, regions: { 'floor-0': { ...ground, places: ground.places.map((p) => (p.id === 'town' ? { ...p, holder: PLAYER } : p)) } } };
-};
 
 test('the tier ladder is closed, and each rung allows more than the one below', () => {
   assert.deepEqual([...SETTLEMENT_TIERS], ['hamlet', 'village', 'town', 'city', 'metropolis', 'megacity']);
@@ -92,13 +87,6 @@ test('the crowd a settlement fields is capped by its tier', () => {
   assert.ok(hamlet > 0 && hamlet <= CAPS.hamlet.crowd, `hamlet crowd ${hamlet}`);
   assert.ok(city <= CAPS.city.crowd);
   assert.ok(city > hamlet, 'a city holds more people than a hamlet');
-});
-
-test('the ruler is ranked by the tier, and a place nobody holds has none', () => {
-  assert.equal(rulerOf(held(townOfTier('city')), 'floor-0', 'town')?.rank, 'lord');
-  assert.equal(rulerOf(held(townOfTier('hamlet')), 'floor-0', 'town')?.rank, 'elder');
-  const empty = townOfTier('city', { people: [] });
-  assert.equal(rulerOf(empty, 'floor-0', 'town'), null, 'nobody there to hold it');
 });
 
 test('the same values draw the same town, and a bigger tier draws a different one', () => {
