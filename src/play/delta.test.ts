@@ -1,4 +1,5 @@
-import { axisOf, GRUDGE_THRESHOLD, hostileToward, PLAYER, trustToward } from '../social/edge.ts';
+import { axisOf, GRUDGE_THRESHOLD, hostileToward, nudge, PLAYER, trustToward } from '../social/edge.ts';
+import type { Edges } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyDelta, applyTurn, foldPlay, lawNotices, validateDelta } from './delta.ts';
@@ -21,7 +22,7 @@ import type { Place, Region } from '../world/types.ts';
 import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
 import type { FlatDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
-import { CRIMINAL_LAWS } from '../world/al.ts';
+import { CRIMINAL_LAWS, setSuccessionLaw } from '../world/al.ts';
 import { COLLECTABLE } from './collect.ts';
 import type { AlLawId, SuccessionLawId } from '../world/al.ts';
 
@@ -727,6 +728,38 @@ test('being attacked, not attacking, is never unlawful assault', () => {
 test('an unlawful assault crosses the grudge threshold — hostileToward agrees, unmodified', () => {
   const done = applyTurn(withAssaultLaw(playState()), record({ startCombat: true, startedBy: 'player' })).state;
   assert.ok(hostileToward(done.world.edges, 'warden'));
+});
+
+/*
+ * The succession law decides WHO the grudge lands on (DESIGN 6c §3k-i/§3k-ii). `lawEnforcementAfter` reads the ruler
+ * through `holderUnder`; without this, swapping it back to `holderOf` — or drifting the field `setSuccessionLaw` writes
+ * away from the one `successionOf` reads — would leave every test green and put the grudge on the wrong person.
+ * The law is written by the REAL writer, so writer and reader are tested together. It cannot go through the
+ * player's own `setSuccession` verb: the hall's holder is then the player, and a player ruler is never nudged.
+ */
+
+const wardenTrustsSmith = (): Edges => nudge({}, 'warden', 'smith', 'trust', 3); // elective: smith 3, warden 0
+const withEdges = (state: PlayState, edges: Edges): PlayState => ({ ...state, world: { ...state.world, edges } });
+const underSuccession = (state: PlayState, law: SuccessionLawId): PlayState => {
+  const r = state.world.regions['floor-0'] as Region;
+  return {
+    ...state,
+    world: { ...state.world, regions: { ...state.world.regions, 'floor-0': { ...r, alUnits: setSuccessionLaw(r.alUnits ?? {}, 'd1', law) } } },
+  };
+};
+
+test('an elective succession law moves the assault grudge to the person the town would elect', () => {
+  const state = withEdges(underSuccession(withAssaultLaw(playState()), 'elective'), wardenTrustsSmith());
+  const done = applyTurn(state, record({ startCombat: true, startedBy: 'player' })).state;
+  assert.ok(axisOf(done.world.edges, 'smith', PLAYER, 'resentment') >= GRUDGE_THRESHOLD);
+  assert.equal(axisOf(done.world.edges, 'warden', PLAYER, 'resentment'), 0);
+});
+
+test('the same town under the standing law still resents through the warden (control)', () => {
+  const state = withEdges(withAssaultLaw(playState()), wardenTrustsSmith());
+  const done = applyTurn(state, record({ startCombat: true, startedBy: 'player' })).state;
+  assert.ok(axisOf(done.world.edges, 'warden', PLAYER, 'resentment') >= GRUDGE_THRESHOLD);
+  assert.equal(axisOf(done.world.edges, 'smith', PLAYER, 'resentment'), 0);
 });
 
 /*
