@@ -2153,6 +2153,20 @@ validated delta unless the player's words carry the cue, with a visible refusal 
 silent — needing the input passed to `validateDelta`; deferred with the Thai cues, because it makes an English-only
 cue list the only way to adopt a law.
 
+**Applied hall verbs are ANNOUNCED (user, 2026-09-29) — chosen over the engine-side cue drop.** A stray `adopt` is
+harmful only while it is silent, and the fold gives the player no sign a law changed. So when a turn's validated
+delta carries `adoptLaw`, `repealLaw` or `setSuccession`, the turn result carries one plain sentence per verb that TOOK
+EFFECT ("Theft is now a crime here."; "The law against theft is repealed here."; "Succession here now runs by
+election."), in the player's language, shown in the same notice line the refusals already use. It states what the
+engine did, never what was asked: a refused verb is announced by its refusal only. It needs no cue list, so a decree
+without a cue word still works and a Thai player is not locked out; it does not PREVENT a stray, it makes one visible
+the turn it happens, and the player can then repeal it. This does not reopen "no player-facing view of adopted laws" —
+that was a standing view, this is a per-turn notice. **Wrong seam, corrected:** `TurnResult.shifts` is personality-axis
+story text (`describeChanges`, [drift.ts:197]), not a channel for world changes, so the sentence rides a NEW
+`notices` list beside `rejected` ([turn.ts:58]), passed through `TurnOutcomeView` ([game.ts:524]) and shown by
+[Game.tsx:276]. The Thai sentences are a first draft for a Thai speaker. Kept only if a held-seat turn shows the
+sentence and a refused or absent verb shows none.
+
 ---
 
 # THE ORDER — authoritative, re-derived 2026-09-05
