@@ -2166,6 +2166,12 @@ story text (`describeChanges`, [drift.ts:197]), not a channel for world changes,
 `notices` list beside `rejected` ([turn.ts:58]), passed through `TurnOutcomeView` ([game.ts:524]) and shown by
 [Game.tsx:276]. The Thai sentences are a first draft for a Thai speaker. Kept only if a held-seat turn shows the
 sentence and a refused or absent verb shows none.
+**Result (same day): BUILT, KEPT.** `lawNotices` (`play/delta.ts`) turns the VALIDATED delta into sentences; `playTurn`
+returns them as `notices`; 9 tests pass, including a held-seat turn that announces exactly one sentence, an
+unheld hall and a repeal of a law the unit does not own that announce none (the refusal reaches `rejected`), and a
+Thai world that announces in Thai. **Not seen in the app:** a held seat with a hall takes a long setup to reach in the
+browser, so the pass-through to `Game.tsx` is checked by `tsc` only. **Not done:** the stray still happens (about 4-7%
+of held-seat remarks) — it is now visible, not prevented; a player who does not read the notice line can still miss it.
 
 ---
 
