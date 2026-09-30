@@ -1705,6 +1705,13 @@ building type names its own rungs too, same as the smithy example already did.
 
 **Smallest slice BUILT 2026-09-29** (`world/buildinggen.ts`): seven of the types below — hall, pasture, smithy, farmstead, inn, home, tannery — dealt by settlement tier at generation, tier 1 only, no randomness. Not dealt: general store and armoury (buy/sell and `part` items unbuilt); tiers 2–4 wait on upgrading.
 
+**Live check of the seven (2026-09-29; real held town, old station list against new, local 35B, N=5–8):** no
+regression. A full building-plus-station pair fired smithy 4/5 -> 3/5, pasture 0/5 -> 1/5, farmstead 2/5, tannery 2/5
+(both new); the same malformed shapes as before (the building id in the station field, one half left empty) are dropped,
+not run. The inn `hearth` and home `bed` were never named (0/26): sleep goes to the basic `rest` action (home 8/8, inn
+6/8), which is right — a service station is for an NPC innkeeper to work (step 8), not for the player. The general
+store and armoury stay undealt.
+
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
 building without a new hardcoded type. The tag can't be a `LootCategory` directly — the
@@ -2078,6 +2085,14 @@ value (the first listed, `adoptLaw`) where three fields let it write `none` thre
 STANDS from this note: `collect`'s brief block in the workstation shape, which completed a
 building-plus-category pair 3 times in 10 (was 1 in 9). Still open: a remark can fire one hall
 verb on either contract, and a decree can carry a stray second verb on the three-field one.
+
+**Decision (2026-09-29): never infer `collectBuilding` from `collectGoods`.** In a live run on a real generated seat the
+model filled `collectGoods` right (material, 9/10) and omitted `collectBuilding` (9/10; it was not put in `workBuilding`
+either). Inferring the building from the goods would complete the pair — but on a remark ("I admire the goods stored in
+the smithy and ask who made them") the model fills `collectGoods=material` 4 of 5 times, so inference would collect on
+remarks. The half-pair guard, which drops a `collect` missing either half, is what protects the player; leave it. Junk
+`collectGoods` (draught, weapon, armour — not stored there) filled about 15 of 40 non-collect trials and is harmless for
+the same reason.
 
 **Repeal is offered only on a repeal cue (user, 2026-09-29) — an experiment until a live A/B says it works.**
 On an already-lawed seat in a REAL generated world (30 trials, no errors) the Director repealed the player's

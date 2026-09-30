@@ -1414,7 +1414,11 @@ a real lawed seat, with repeal always offered, 3 of 20 remarks repealed the play
 decree also repealed it 2 of 5; with repeal offered only on a repeal cue, 0 of 20 remarks did and the
 repeal decree itself still worked 5 of 5 (the theft decree still produced 1 stray repeal in 5, because
 `Laws in force` names the law). Thai has four repeal cues (live, 9 of 10 repeal decrees; a remark that merely
-contains `ยกเลิก`, "cancel", repealed the law 1 of 5), unreviewed by a Thai speaker. A quote guard (the decree's exact words must
+contains `ยกเลิก`, "cancel", repealed the law 1 of 5), unreviewed by a Thai speaker. An adopt/succession cue gate was TRIED the same way and REVERSED: hiding the
+brief line did not stop the model filling the field (stray `succession=standing` 7 of 44 -> 10 of 44; a decree with
+no cue 5 of 5 -> 2 of 5), because `adoptLaw` and `setSuccession` are refused on hall authority alone
+([delta.ts:230](src/play/delta.ts:230), [:275](src/play/delta.ts:275)), whereas repeal also needs the law to be the
+unit's own ([delta.ts:250](src/play/delta.ts:250)). A quote guard (the decree's exact words must
 appear in the player's input) is proposed, undecided, and now low priority. `successionOf`
 ([al.ts:135](src/world/al.ts:135)) was test-only until `holderUnder` ([succession.ts:17](src/play/succession.ts:17)) read
 it, so the choice `setSuccession` writes now governs who holds a settlement that
@@ -1459,7 +1463,7 @@ floor ([genesis.ts:596](src/session/genesis.ts:596)) and on every generated floo
 ([floorgen.ts:525](src/world/floorgen.ts:525)): a hall in every settlement, a pasture and a home from hamlet up, a
 smithy, farmstead and inn from village up, a tannery from town up (`DEALT`,
 [buildinggen.ts:51](src/world/buildinggen.ts:51); every tier fits its plot budget). The home and inn are
-`service` stations (rest), the rest `economic`. **Still narrow, on purpose:** only seven of the catalogue's
+`service` stations (rest) that nothing drives yet (see the ledger, §12), the rest `economic`. **Still narrow, on purpose:** only seven of the catalogue's
 types exist — no general store or armoury, since buy/sell and `part` items are unbuilt — and each is tier 1;
 nobody but the holder can collect or legislate, and holding means buying — `50 × floor` coin and the
 holder's trust of 2 or more; and only about 35% of settlements are a seat (town or city, dealt 20% and
@@ -1506,6 +1510,14 @@ read it as where a person IS, to decide whether a grudge was on your floor. Sinc
 7.1b it is where a traveller sets out from when no loaded place lists them
 ([journey.ts:49](src/play/journey.ts:49)). Still written only at generation;
 see `crossFloors` under *Enforced by construction*.
+
+**Dealt but not driven: the `service` stations.** `buildingsFor` gives every hamlet and up a home (`bed`,
+[buildinggen.ts:27](src/world/buildinggen.ts:27)) and every village and up an inn (`hearth`,
+[buildinggen.ts:32](src/world/buildinggen.ts:32)). The Director is offered them like any station
+([director.ts:387](src/llm/director.ts:387)) and `worked` would run one ([delta.ts:158](src/play/delta.ts:158)), but the
+model never names them: live, 0 of 26 trials. It sets the basic `rest` action instead (home 8 of 8, inn 6 of 8;
+[director.ts:581](src/llm/director.ts:581), [delta.ts:706](src/play/delta.ts:706)). That is correct, not a fault: a
+service station only earns its place worked by an NPC innkeeper, which is step 8. Until then nothing drives them.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
 `Signet.hint` · `Gazetteer.openThreads` (read by the rehydration prompt, written
