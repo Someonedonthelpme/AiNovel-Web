@@ -58,6 +58,8 @@ export type TurnResult = {
   rejected: string[];
   /** Dispositions that shifted this turn. Usually empty; a story beat when not. */
   shifts: AxisChange[];
+  /** One sentence per hall verb that TOOK EFFECT this turn, in the world's language (DESIGN 6c 3k-ii). */
+  notices: string[];
 };
 
 /** Cheap default: the most recently established facts, no network needed. */
@@ -215,7 +217,7 @@ export async function playTurn(
 
   const record = asStored({ ...draft, prose: written.prose }, Boolean(next.combat));
 
-  return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts };
+  return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts, notices: [] };
 }
 
 /**
@@ -295,6 +297,7 @@ async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mod
     writer: { prose, checks: [], regenerated: false },
     rejected: [],
     shifts: applied.shifts,
+    notices: [],
   };
 }
 
@@ -398,6 +401,7 @@ async function acted(deps: TurnDeps, state: PlayState, input: string, mode: Mode
     writer: { prose, checks: [], regenerated: false },
     rejected: validated.rejected,
     shifts: applied.shifts,
+    notices: [],
   };
 }
 

@@ -1,7 +1,8 @@
 import { axisOf, GRUDGE_THRESHOLD, hostileToward, PLAYER, trustToward } from '../social/edge.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyDelta, applyTurn, foldPlay, validateDelta } from './delta.ts';
+import { applyDelta, applyTurn, foldPlay, lawNotices, validateDelta } from './delta.ts';
+import { playTurn } from './turn.ts';
 import { FOLK } from '../character/species.ts';
 import { activeRegion, clockOf, linkMinutes, stairCost, travelTime } from '../world/travel.ts';
 import { MINUTES_PER_TICK, TICKS_PER_DAY, TICKS_PER_HOUR } from '../world/calendar.ts';
@@ -18,6 +19,7 @@ import { finalAbilities } from '../session/sheet.ts';
 import { MAX_ABILITY } from './signetbook.ts';
 import type { Place, Region } from '../world/types.ts';
 import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
+import type { FlatDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { CRIMINAL_LAWS } from '../world/al.ts';
 import { COLLECTABLE } from './collect.ts';
@@ -1066,4 +1068,73 @@ test('repealLaw is NOT offered on Thai remarks, an opinion, an admiring line or 
 
 test('a Thai cue is not enough: with no law of its own the repeal is still never offered', async () => {
   assert.doesNotMatch(await briefFor(ownLaws([]), 'ข้าพเจ้าขอยกเลิกกฎหมายนี้'), REPEAL_OFFER);
+});
+
+/*
+ * Applied hall verbs are ANNOUNCED (DESIGN 6c 3k-ii, 2026-09-29): a stray `adopt` on a plain remark is harmful only
+ * while it is silent, so a verb that TOOK EFFECT gets one sentence in the turn result, in the world's language.
+ * It states what the engine did, never what was asked. The Thai wording is a first draft for a Thai speaker.
+ */
+
+test('lawNotices names each law that took effect, in English', () => {
+  for (const law of ['theft', 'trespass', 'assault'] as const) {
+    assert.match(lawNotices({ adoptLaw: law }, 'en')[0], new RegExp(`${law}.*crime`, 'i'), law);
+  }
+  assert.match(lawNotices({ repealLaw: 'theft' }, 'en')[0], /theft.*repealed|repealed.*theft/i);
+  assert.match(lawNotices({ setSuccession: 'elective' }, 'en')[0], /elect/i);
+  assert.match(lawNotices({ setSuccession: 'stationRank' }, 'en')[0], /rank/i);
+  assert.match(lawNotices({ setSuccession: 'standing' }, 'en')[0], /hold|stand/i);
+});
+
+test('lawNotices speaks Thai on a Thai world, and different laws read differently', () => {
+  const th = lawNotices({ adoptLaw: 'theft' }, 'th')[0];
+  assert.match(th, /[฀-๿]/);
+  assert.notEqual(th, lawNotices({ adoptLaw: 'theft' }, 'en')[0]);
+  assert.notEqual(th, lawNotices({ adoptLaw: 'assault' }, 'th')[0]);
+});
+
+test('lawNotices says nothing for a delta with no hall verb', () => {
+  assert.deepEqual(lawNotices({}, 'en'), []);
+  assert.deepEqual(lawNotices({ moveTo: 'town', learnFacts: ['x'] }, 'en'), []);
+});
+
+test('several verbs in one turn give one sentence each', () => {
+  assert.equal(lawNotices({ adoptLaw: 'theft', setSuccession: 'elective' }, 'en').length, 2);
+});
+
+// The fixture world is Thai; the English assertions below ask for English explicitly.
+const inEnglish = (state: PlayState): PlayState => ({ ...state, world: { ...state.world, language: 'en' } });
+const turnWith = (state: PlayState, delta: Partial<FlatDelta>) => playTurn(
+  {
+    director: new FakeProvider({ structured: [directorOutput({ delta: { ...emptyDelta(), ...delta } })] }),
+    writer: new FakeProvider({ text: ['You raise your voice.'] }),
+    rng: () => 0,
+  },
+  state, 'I speak', 'exploration', [],
+);
+
+test('a hall verb that takes effect is announced in the turn result', async () => {
+  const r = await turnWith(inEnglish(withHall(playState())), { adoptLaw: 'theft' });
+  assert.equal(r.notices.length, 1);
+  assert.match(r.notices[0], /theft/i);
+});
+
+test('the announcement follows the world\'s language', async () => {
+  const r = await turnWith(withHall(playState()), { adoptLaw: 'theft' }); // the fixture world is Thai
+  assert.match(r.notices[0] ?? '', /[฀-๿]/);
+});
+
+test('a refused hall verb is announced by its refusal only, never as a notice', async () => {
+  const r = await turnWith(inEnglish(playState()), { adoptLaw: 'theft' }); // no hall, nobody holds it
+  assert.deepEqual(r.notices, []);
+  assert.match(r.rejected.join(' '), /adoptLaw/);
+});
+
+test('repealing a law the unit does not own is refused and announces nothing', async () => {
+  const r = await turnWith(inEnglish(ownLaws([])), { repealLaw: 'theft' });
+  assert.deepEqual(r.notices, []);
+});
+
+test('a turn with no hall verb has no notices', async () => {
+  assert.deepEqual((await turnWith(inEnglish(withHall(playState())), { learnFacts: ['x'] })).notices, []);
 });

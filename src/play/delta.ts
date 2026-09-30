@@ -277,6 +277,11 @@ function refusalToSetSuccession(state: PlayState): string | null {
   return 'refusal' in authority ? authority.refusal : null;
 }
 
+/** One sentence per hall verb that TOOK EFFECT, for the player (DESIGN 6c 3k-ii). Stub: filled in by the next commit. */
+export function lawNotices(_delta: WorldDelta, _language: 'th' | 'en'): string[] {
+  return [];
+}
+
 /** The change, once `validateDelta` has allowed it: this AL unit's OWN succession choice is replaced. */
 function succeeded(state: PlayState, law: SuccessionLawId): PlayState {
   const region = activeRegion(state.world);
