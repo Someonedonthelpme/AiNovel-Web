@@ -277,9 +277,38 @@ function refusalToSetSuccession(state: PlayState): string | null {
   return 'refusal' in authority ? authority.refusal : null;
 }
 
-/** One sentence per hall verb that TOOK EFFECT, for the player (DESIGN 6c 3k-ii). Stub: filled in by the next commit. */
-export function lawNotices(_delta: WorldDelta, _language: 'th' | 'en'): string[] {
-  return [];
+const LAW_NAME: Record<AlLawId, { en: string; th: string }> = {
+  theft: { en: 'Theft', th: 'การลักขโมย' },
+  trespass: { en: 'Trespass', th: 'การบุกรุก' },
+  assault: { en: 'Assault', th: 'การทำร้ายร่างกาย' },
+};
+const SUCCESSION_LINE: Record<SuccessionLawId, { en: string; th: string }> = {
+  standing: { en: 'goes to whoever already holds the seat', th: 'ตกเป็นของผู้ที่ครองอยู่เดิม' },
+  stationRank: { en: 'runs by station rank', th: 'เป็นไปตามลำดับชั้น' },
+  elective: { en: 'runs by election', th: 'เป็นไปโดยการเลือกตั้ง' },
+};
+
+/**
+ * One sentence per hall verb that TOOK EFFECT, for the player (DESIGN 6c 3k-ii): a stray `adopt` on a plain remark is
+ * harmful only while it is silent. Fed the VALIDATED delta, so it states what the engine did, never what was asked.
+ * The Thai wording is a first draft for a Thai speaker.
+ */
+export function lawNotices(delta: WorldDelta, language: 'th' | 'en'): string[] {
+  const th = language === 'th';
+  const notices: string[] = [];
+  if (delta.adoptLaw) {
+    const name = LAW_NAME[delta.adoptLaw][language];
+    notices.push(th ? `${name}เป็นความผิดที่นี่แล้ว` : `${name} is now a crime here.`);
+  }
+  if (delta.repealLaw) {
+    const name = LAW_NAME[delta.repealLaw][language];
+    notices.push(th ? `ยกเลิกกฎห้าม${name}ที่นี่แล้ว` : `The law against ${name.toLowerCase()} is repealed here.`);
+  }
+  if (delta.setSuccession) {
+    const how = SUCCESSION_LINE[delta.setSuccession][language];
+    notices.push(th ? `การสืบทอดตำแหน่งที่นี่${how}แล้ว` : `Succession here now ${how}.`);
+  }
+  return notices;
 }
 
 /** The change, once `validateDelta` has allowed it: this AL unit's OWN succession choice is replaced. */

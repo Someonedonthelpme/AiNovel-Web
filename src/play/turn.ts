@@ -21,7 +21,7 @@ import type { Arena } from './arena.ts';
 import type { Then } from './walker.ts';
 import { priceOf } from '../world/holding.ts';
 import { holderUnder } from './succession.ts';
-import { applyTurn, personRef, validateDelta } from './delta.ts';
+import { applyTurn, lawNotices, personRef, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
 import type { Mode, PlayState, Stop, TurnRecord, WorldDelta } from './state.ts';
@@ -217,7 +217,7 @@ export async function playTurn(
 
   const record = asStored({ ...draft, prose: written.prose }, Boolean(next.combat));
 
-  return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts, notices: [] };
+  return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts, notices: lawNotices(validated.delta, next.world.language) };
 }
 
 /**

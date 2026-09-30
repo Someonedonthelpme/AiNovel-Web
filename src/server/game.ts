@@ -526,6 +526,8 @@ export type TurnOutcomeView = {
   /** Dispositions that shifted, phrased for the player. */
   shifts: string[];
   rejected: string[];
+  /** One sentence per hall verb that took effect this turn (DESIGN 6c 3k-ii). */
+  notices: string[];
   registerFailed: string[];
 };
 
@@ -562,6 +564,7 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
       roll: result.record.roll,
       shifts: describeChanges(result.shifts),
       rejected: result.rejected,
+      notices: result.notices,
       registerFailed: result.writer.checks.filter((c) => !c.check.ok).map((c) => c.person),
     };
   }
@@ -575,6 +578,7 @@ export async function takeTurn(id: string, input: string, mode: Mode): Promise<T
     roll: result.record.roll,
     shifts: describeChanges(result.shifts),
     rejected: result.rejected,
+    notices: result.notices,
     registerFailed: result.writer.checks.filter((c) => !c.check.ok).map((c) => c.person),
   };
 }

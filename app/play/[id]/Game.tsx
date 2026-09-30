@@ -273,7 +273,7 @@ export default function Game({ initial }: { initial: GameView }) {
       if (!response.ok) throw new Error(data.error ?? 'the turn failed');
       setView(data.view);
       setLastShifts(data.shifts);
-      if (data.rejected.length) setNotice(data.rejected.join(' · '));
+      if (data.rejected.length || data.notices.length) setNotice([...data.rejected, ...data.notices].join(' · '));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : String(e));
     } finally {
