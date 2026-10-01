@@ -831,6 +831,14 @@ the place's standing and `reputation` (edges and beliefs only), a bearer with no
 tell nothing and the journey still stands), and any act for a bearer who CAN come. English and Thai sentences; the
 Thai is a first draft for a Thai speaker. Kept only if a stalled bearer's rumour moves the told people's edges and
 beliefs, a bearer who can come tells nobody, and a turn announces it.
+**Result (2026-10-01): BUILT, KEPT** (`rumoursAfter`, `play/journey.ts`; `retellDeed`, `social/deed.ts`; `rumourNotices`,
+`play/delta.ts`). 10 tests pass, red first. **Two refinements the build made to the note above:** (1) the deed a bearer
+tells must have COST the player standing — a kindness is never badmouthed — and ties on severity go by claim key;
+(2) `Journey.rumoured` is set when a rumour BEGINS, not on any stall, so a stalled bearer with no grievance yet may
+still tell later, once they hold one. **Checked and not changed:** folding a rumour turn twice from the same state gives
+the same state, and `foldPlay` reaches it (a throwaway test, not kept); the Postgres replay tests were skipped because
+the database was down. **Not built:** the place's standing and `reputation`, a stall from an unloaded region (only the
+`crossFloors` stall is exercised), and any live Director check (no brief or schema changed).
 
 **Objections recorded:** 60 templates can read alike even when their numbers
 differ — accept, revisit with real worlds. **Open (measured 2026-09-11, 3c-ii):**
