@@ -20,7 +20,7 @@ import { COUNTERS } from './traits.ts';
 import { counterOf, NEED_MAX } from '../character/persona.ts';
 import { formRole } from '../social/roles.ts';
 import { stationOf } from './station.ts';
-import { believes, firsthand } from '../character/belief.ts';
+import { beliefAbout, believes, firsthand } from '../character/belief.ts';
 import { axisOf, nudge, PLAYER } from '../social/edge.ts';
 import { fadeDays, journeysOf, RECOVERY, setOut } from './journey.ts';
 import { clockOf, linkMinutes, travelTime } from '../world/travel.ts';
@@ -30,13 +30,13 @@ import { hearParley, playTurn } from './turn.ts';
 import { hearOf, newestSighting, sightingClaim } from './sighting.ts';
 import { amend, STANDARD } from '../rules/ruleset.ts';
 import type { Ruleset } from '../rules/ruleset.ts';
-import { playState } from './fixtures.ts';
+import { directorOutput, emptyDelta, playState } from './fixtures.ts';
 import { armour, weapon } from '../items/catalogue.ts';
 import { addItem, emptyInventory, equip, equippedAttack } from '../items/types.ts';
 import { armourClassFor, finalAbilities } from '../session/sheet.ts';
 import { mulberry32 } from '../engine/roll.ts';
 import type { SocialRoll } from '../engine/roll.ts';
-import { generatedFloor, groundFloor, world } from '../world/fixtures.ts';
+import { generatedFloor, groundFloor, person, world } from '../world/fixtures.ts';
 import { generateFloor } from '../world/floorgen.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
@@ -814,6 +814,124 @@ test('a journey takes a stair only where the law lets them cross', () => {
   assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', null))), true, 'strike the law and they cross');
   assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', { group: smithsGroup }))), false, 'a law on their kind holds them too');
   assert.equal(smithFights(withRules(far, amend(STANDARD, 'crossFloors', 'player'))), true, 'a law on the player does not bind them');
+});
+
+/*
+ * Step 8, slice 2 (DESIGN 6c, "a grudge that CANNOT come tells people instead", 2026-10-01): a bearer whose
+ * journey has no next hop toward where they last heard the player was re-tells what they firsthand know the
+ * player did — once per journey, as hearsay, to people who did not already hold it — and the turn announces it.
+ * The Thai wording is a first draft for a Thai speaker.
+ */
+
+/** Somebody who cannot cross: the smith is on floor 0 and the player is on floor 2, under STANDARD. */
+const farAway = (state: PlayState): PlayState =>
+  travelling(
+    { ...state, world: { ...state.world, regions: { ...state.world.regions, 'floor-0': groundFloor() } } },
+    'smith', 'floor-0', 'town',
+  );
+
+const deedClaim = (what: string) => ({ kind: 'deed' as const, who: PLAYER, what });
+
+/** The smith firsthand knows the player did these to them, and knows the warden and a clerk. */
+function wronged(state: PlayState, deeds = ['threatened:smith'], holders: string[] = []): PlayState {
+  const smith = state.world.people.smith;
+  const knows = (who: string) => (holders.includes(who) ? deeds.map((d) => firsthand(deedClaim(d))) : []);
+  let edges = nudge(nudge(state.world.edges, 'smith', 'warden', 'familiarity', 2), 'smith', 'clerk', 'familiarity', 2);
+  edges = nudge(edges, 'warden', 'smith', 'familiarity', 1);
+  return {
+    ...state,
+    world: {
+      ...state.world,
+      edges,
+      people: {
+        ...state.world.people,
+        smith: { ...smith, beliefs: [...(smith.beliefs ?? []), ...deeds.map((d) => firsthand(deedClaim(d)))] },
+        warden: { ...state.world.people.warden, beliefs: knows('warden') },
+        clerk: { ...person('clerk'), beliefs: knows('clerk') },
+      },
+    },
+  };
+}
+
+const regardOf = (s: PlayState, who: string) => axisOf(s.world.edges, who, PLAYER, 'regard');
+const heldBy = (s: PlayState, who: string, what: string) => beliefAbout(s.world.people[who]?.beliefs ?? [], deedClaim(what));
+
+test('a bearer who cannot cross stays on the road while the grudge lasts (what the rumour answers)', () => {
+  const s = passTime(farAway(populated()), 60);
+  assert.ok(journeyOf(s, 'smith'), 'the journey stands');
+  assert.equal(foesOf(s).some((f) => f.person === 'smith'), false, 'and nobody arrives');
+});
+
+test('a stalled bearer tells their circle what they saw, as hearsay', () => {
+  const s = passTime(wronged(farAway(populated())), 3);
+  for (const who of ['warden', 'clerk']) {
+    assert.ok(heldBy(s, who, 'threatened:smith'), `${who} now holds it`);
+    assert.ok(regardOf(s, who) < 0, `${who} thinks less of you`);
+  }
+  assert.ok(heldBy(s, 'warden', 'threatened:smith')!.confidence < 1, 'hearsay, not sight');
+  assert.equal(axisOf(s.world.edges, 'smith', PLAYER, 'resentment'), 3, 'the bearer is not nudged again');
+});
+
+test('a bearer who CAN come tells nobody', () => {
+  const s = passTime(withRules(wronged(farAway(populated())), amend(STANDARD, 'crossFloors', null)), 3);
+  assert.equal(heldBy(s, 'warden', 'threatened:smith'), null);
+  assert.equal(regardOf(s, 'warden'), 0);
+});
+
+test('a stalled bearer with no deed belief about the player tells nobody, and the journey stands', () => {
+  const s = passTime(wronged(farAway(populated()), []), 3);
+  assert.equal(heldBy(s, 'warden', 'threatened:smith'), null);
+  assert.equal(regardOf(s, 'clerk'), 0);
+  assert.ok(journeyOf(s, 'smith'));
+});
+
+test('it happens once per journey', () => {
+  const once = passTime(wronged(farAway(populated())), 3);
+  const twice = passTime(once, 3);
+  assert.ok(regardOf(once, 'clerk') < 0);
+  assert.equal(regardOf(twice, 'clerk'), regardOf(once, 'clerk'), 'told once, not every turn');
+  assert.equal(journeyOf(twice, 'smith')?.rumoured, true);
+});
+
+test('only people who did not already hold it are told', () => {
+  const s = passTime(wronged(farAway(populated()), ['threatened:smith'], ['warden']), 3);
+  assert.equal(regardOf(s, 'warden'), 0, 'the warden already knew; no second blow');
+  assert.ok(regardOf(s, 'clerk') < 0, 'the clerk, who did not know, is told');
+});
+
+test('the most severe firsthand deed is the one retold', () => {
+  const s = passTime(wronged(farAway(populated()), ['insulted:smith', 'drewOn:smith']), 3);
+  assert.ok(heldBy(s, 'clerk', 'drewOn:smith'), 'drew on them travels');
+  assert.equal(heldBy(s, 'clerk', 'insulted:smith'), null, 'a mere insult does not');
+});
+
+const turnFor = (state: PlayState) => playTurn(
+  {
+    director: new FakeProvider({ structured: [directorOutput({ delta: { ...emptyDelta(), timeSpent: 3 } })] }),
+    writer: new FakeProvider({ text: ['"ดิฉันไม่ทราบค่ะ คุณลองถามคนอื่นดูค่ะ"'] }),
+    rng: () => 0,
+  },
+  state, 'I wait', 'exploration', [],
+);
+const inEnglish = (state: PlayState): PlayState => ({ ...state, world: { ...state.world, language: 'en' } });
+
+test('the turn it begins announces one rumour naming the bearer, and no later turn repeats it', async () => {
+  const first = await turnFor(inEnglish(wronged(farAway(populated()))));
+  assert.equal(first.notices.length, 1);
+  assert.match(first.notices[0], /Ora the smith/);
+  assert.deepEqual((await turnFor(first.state)).notices, [], 'told once, announced once');
+});
+
+test('a rumour that told nobody new is not announced, though the journey is marked', async () => {
+  const quiet = wronged(farAway(populated()), ['threatened:smith'], ['warden', 'clerk']);
+  const r = await turnFor(inEnglish(quiet));
+  assert.deepEqual(r.notices, []);
+  assert.equal(journeyOf(r.state, 'smith')?.rumoured, true);
+});
+
+test('the announcement follows the world\'s language', async () => {
+  const r = await turnFor(wronged(farAway(populated()))); // the fixture world is Thai
+  assert.match(r.notices[0] ?? '', /[฀-๿]/);
 });
 
 test('a person you killed does not come for you again', () => {

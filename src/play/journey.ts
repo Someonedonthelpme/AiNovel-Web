@@ -30,6 +30,8 @@ export type Journey = {
   progress: number;
   /** The clock tick they may set out. Later than the grudge for someone still recovering. */
   departs: number;
+  /** Set once the bearer, unable to come, has told people what they saw (step 8 slice 2). Stub: nothing sets it yet. */
+  rumoured?: boolean;
 };
 
 /** How long somebody who fled needs before they can set out again: a day (7.1f). */
