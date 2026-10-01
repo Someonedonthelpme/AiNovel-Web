@@ -790,7 +790,7 @@ invents enforces nothing. The model narrates the act; it never picks it.
 | act | what it needs | exists today? |
 |---|---|---|
 | **come themselves** | a sheet, and the law letting them reach you | built (stage 5) |
-| **send their people** | someone they may `command`: six of the eleven role kinds grant it, `power` (master/servant) among them (`social/roles.ts:112`) | the role edges and permission exist; only the Director brief reads `command` (`llm/director.ts:485`), and no fight does |
+| **send their people** | someone they may `command`: six of the eleven role kinds grant it, `power` (master/servant) among them (`social/roles.ts:112`) | BUILT (7.1d): `whoGoes` ([station.ts:101](src/play/station.ts:101)) sends a commanded person or a debtor when the bearer is timid, and `Journey.for` records whose grudge it is. (Was: "only the Director brief reads `command`" — stale since 7.1d.) |
 | **bar you from what they hold** | a place they hold, and a `territory` law with a scope | no: 6c §1 and §3 |
 | **turn people against you** | a deed carried along their edges | the spread exists; a person cannot yet START a deed |
 | **put a price on you** | coin, and people who want it | no: there is no economy (6c §5) |
@@ -808,6 +808,29 @@ invents enforces nothing. The model narrates the act; it never picks it.
 - **Where it goes in THE ORDER.** "Send their people" is buildable right after
   stage 7 on existing role edges. "Bar you" belongs to 6c, and the rest to 6c or
   step 8.
+
+**Step 8, slice 2: a grudge that CANNOT come tells people instead (user, 2026-10-01).** The third closed act
+("turn people against you"), chosen over occupational presence, an `agenda` revival and "bar you" because it is the
+only one whose reader exists today. **Why now:** a bearer whose journey has no next hop toward where they last heard
+the player was — `crossFloors` forbids the stair, or their region is not loaded — keeps a journey that never ends
+while the grudge stays hostile (it ends only on a fight or when the grudge fades, `journey.ts:264`), and while it
+stands they are counted as "on the road" (`catchup.ts:38`) and so gone from their own place. A grudge you cannot be
+reached by looks like a person who has vanished and does nothing. **What changes:** on the turn such a journey is
+first found stalled, the bearer re-tells what they firsthand know the player did — the most severe deed about the
+player they hold from sight (a closed rule: lowest `standing` mark, ties by claim key) — through `spreadOf`, starting
+from the bearer, so everyone told holds it as HEARSAY (confidence falls per hop, as for any rumour) and feels it as an
+onlooker (`onWitness`), never as a victim. Only people who did not already hold that claim are told, and the bearer is
+not re-nudged. **Only when they cannot come:** a bearer whose journey has a next hop does nothing new, and a traveller
+who has reached the player's place fights, as today. **Once per journey**, marked on `Journey.rumoured` (stored, so a
+replay reaches the same state); a later journey from a later grievance may tell again. **Announced:** the turn result
+carries one sentence per rumour begun that told somebody new ("Word is going round: <name> is telling people what you
+did."), in the world's language, on `TurnResult.notices` beside the law announcements — a rumour is an invisible
+cause, and the lesson of the stray `adopt` is that an invisible cause is the failure. **Not built, on purpose:** a
+rumour that is false or embellished (it is a retelling of a held belief, so it can only drift as any retelling does),
+the place's standing and `reputation` (edges and beliefs only), a bearer with no deed belief about the player (they
+tell nothing and the journey still stands), and any act for a bearer who CAN come. English and Thai sentences; the
+Thai is a first draft for a Thai speaker. Kept only if a stalled bearer's rumour moves the told people's edges and
+beliefs, a bearer who can come tells nobody, and a turn announces it.
 
 **Objections recorded:** 60 templates can read alike even when their numbers
 differ — accept, revisit with real worlds. **Open (measured 2026-09-11, 3c-ii):**
