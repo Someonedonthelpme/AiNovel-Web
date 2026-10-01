@@ -21,7 +21,7 @@ import type { Arena } from './arena.ts';
 import type { Then } from './walker.ts';
 import { priceOf } from '../world/holding.ts';
 import { holderUnder } from './succession.ts';
-import { applyTurn, lawNotices, personRef, validateDelta } from './delta.ts';
+import { applyTurn, lawNotices, personRef, rumourNotices, validateDelta } from './delta.ts';
 import { describeChanges } from '../character/drift.ts';
 import type { AxisChange } from '../character/drift.ts';
 import type { Mode, PlayState, Stop, TurnRecord, WorldDelta } from './state.ts';
@@ -217,7 +217,7 @@ export async function playTurn(
 
   const record = asStored({ ...draft, prose: written.prose }, Boolean(next.combat));
 
-  return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts, notices: lawNotices(validated.delta, next.world.language) };
+  return { state: next, record, writer: written, rejected: validated.rejected, shifts: applied.shifts, notices: [...lawNotices(validated.delta, next.world.language), ...rumourNotices(next.world, applied.rumours)] };
 }
 
 /**
@@ -297,7 +297,7 @@ async function walked(deps: TurnDeps, state: PlayState, input: string, mode: Mod
     writer: { prose, checks: [], regenerated: false },
     rejected: [],
     shifts: applied.shifts,
-    notices: [],
+    notices: rumourNotices(applied.state.world, applied.rumours),
   };
 }
 
@@ -401,7 +401,7 @@ async function acted(deps: TurnDeps, state: PlayState, input: string, mode: Mode
     writer: { prose, checks: [], regenerated: false },
     rejected: validated.rejected,
     shifts: applied.shifts,
-    notices: [],
+    notices: rumourNotices(applied.state.world, applied.rumours),
   };
 }
 

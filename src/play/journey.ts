@@ -1,12 +1,16 @@
 import { groupOf, speciesIdFor } from '../character/species.ts';
 import { forbids } from '../rules/ruleset.ts';
+import type { Ruleset } from '../rules/ruleset.ts';
+import { claimKey } from '../character/belief.ts';
+import { beliefsAfter, DEEDS, markOf, retellDeed } from '../social/deed.ts';
+import type { Deed, DeedKind } from '../social/deed.ts';
 import { axisOf, CHASE_THRESHOLD, hostileToward, PLAYER } from '../social/edge.ts';
 import { dispositionOf } from '../character/persona.ts';
 import type { Needs, Temperament } from '../character/persona.ts';
 import { TICKS_PER_DAY } from '../world/calendar.ts';
 import { clockOf, stairCost, travelTime } from '../world/travel.ts';
 import { isFull, regionIdFor } from '../world/types.ts';
-import type { PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
+import type { Person, PersonId, PlaceId, Region, RegionId, World } from '../world/types.ts';
 import { newestSighting } from './sighting.ts';
 import { whoGoes } from './station.ts';
 
@@ -267,4 +271,64 @@ export function fadeGrudges(before: World, after: World): World {
   const turnedBack = journeys.length !== journeysOf(after).length;
   if (!changed && !turnedBack) return after;
   return { ...after, ...(changed ? { edges } : {}), ...(turnedBack ? { journeys } : {}) };
+}
+
+/**
+ * The deed a bearer would tell: the most severe one they hold from SIGHT about the player, and only one that cost
+ * the player standing (a grievance — nobody badmouths you for a kindness). Most severe is the lowest `standing`
+ * mark, ties by claim key, so the choice is the same on a replay.
+ */
+function grievanceOf(bearer: Person): Deed | null {
+  let best: { deed: Deed; standing: number; key: string } | null = null;
+  for (const belief of bearer.beliefs ?? []) {
+    const claim = belief.claim;
+    if (claim.kind !== 'deed' || claim.who !== PLAYER || !belief.holds || belief.drift !== 0) continue;
+    const [kind, toward] = claim.what.split(':');
+    if (!(DEEDS as readonly string[]).includes(kind)) continue;
+    const standing = markOf(kind as DeedKind).standing;
+    if (standing >= 0) continue;
+    const key = claimKey(claim);
+    if (!best || standing < best.standing || (standing === best.standing && key < best.key)) {
+      best = { deed: { kind: kind as DeedKind, doer: PLAYER, ...(toward ? { toward } : {}), at: '' }, standing, key };
+    }
+  }
+  return best?.deed ?? null;
+}
+
+/**
+ * A grudge that CANNOT come tells people instead (step 8 slice 2, DESIGN 6c). A journey that has set out, knows where
+ * the player was last heard of, has not got there, and has no next hop toward it — `crossFloors` forbids the stair,
+ * or their region is not loaded — is stalled; the turn it is found so, the bearer re-tells their grievance through
+ * the spread, once per journey (`rumoured`). Everyone told holds it as hearsay and feels it as an onlooker; a rumour
+ * that told nobody new is still marked, and is not announced. A bearer with no grievance tells nothing and may
+ * tell later. Returns who began one and how many they told, for the turn to announce.
+ */
+export function rumoursAfter(world: World, rules: Ruleset): { world: World; begun: { bearer: PersonId; told: number }[] } {
+  const now = clockOf(world);
+  let edges = world.edges;
+  let people = world.people;
+  const begun: { bearer: PersonId; told: number }[] = [];
+
+  const journeys = journeysOf(world).map((j) => {
+    if (j.rumoured || j.departs > now) return j;
+    const target = heardOf(world, j);
+    if (!target || (j.region === target.region && j.place === target.place)) return j;
+    if (nextHop(world, j, target)) return j;
+    const bearer = people[j.for];
+    const deed = bearer?.alive ? grievanceOf(bearer) : null;
+    if (!deed) return j;
+
+    const claim = { kind: 'deed' as const, who: deed.doer, what: deed.toward ? `${deed.kind}:${deed.toward}` : deed.kind };
+    const holding = new Set(Object.values(people).filter((p) => (p.beliefs ?? []).some((b) => claimKey(b.claim) === claimKey(claim))).map((p) => p.id));
+    const after = retellDeed(edges, deed, bearer.id, holding, rules.knowledge.spreadDepth);
+    edges = after.edges;
+    for (const [who, belief] of after.told) {
+      const person = people[who];
+      if (person) people = { ...people, [who]: { ...person, beliefs: beliefsAfter(person.beliefs, belief) } };
+    }
+    begun.push({ bearer: bearer.id, told: after.told.size });
+    return { ...j, rumoured: true };
+  });
+
+  return begun.length ? { world: { ...world, edges, people, journeys }, begun } : { world, begun };
 }

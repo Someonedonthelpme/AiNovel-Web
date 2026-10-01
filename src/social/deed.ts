@@ -304,6 +304,26 @@ export function witnessDeed(
 }
 
 /**
+ * Somebody re-tells a deed they hold firsthand (step 8 slice 2: a grudge that cannot come tells people instead).
+ *
+ * The spread starts from the TELLER, so everyone reached holds it as hearsay, and they feel it as onlookers
+ * (`onWitness`), never as the victim. People who already hold the claim are not told twice, and the teller is
+ * not touched: they felt it when it happened. Pure, and called from the fold.
+ */
+export function retellDeed(
+  edges: Edges | undefined,
+  deed: Deed,
+  teller: string,
+  alreadyHold: ReadonlySet<string>,
+  depth: number,
+): { edges: Edges; told: Map<string, Belief> } {
+  const told = new Map([...spreadOf(edges, deed, [teller], depth)].filter(([who]) => who !== teller && !alreadyHold.has(who)));
+  let next = edges ?? {};
+  for (const [who, belief] of told) next = nudgeAll(next, who, deed.doer, weighted(MARKS[deed.kind].onWitness, belief.confidence));
+  return { edges: next, told };
+}
+
+/**
  * What somebody holds about another person, said plainly.
  *
  * The READER for `Person.beliefs`, which deeds write and nothing has consulted.

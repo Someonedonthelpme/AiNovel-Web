@@ -35,14 +35,14 @@ import { COLLECTABLE, itemsFor } from './collect.ts';
 import type { Collectable } from './collect.ts';
 import { gearRulesFor } from './body.ts';
 import { arrivalOpens, beginEncounter, concludeCombat, takeCombatAction } from './combat.ts';
-import { advanceJourneys, fadeGrudges, setOut } from './journey.ts';
+import { advanceJourneys, fadeGrudges, rumoursAfter, setOut } from './journey.ts';
 import { isWinter, MINUTES_PER_TICK, TICKS_PER_HOUR } from '../world/calendar.ts';
 import { passSightings, witnessSighting } from './sighting.ts';
 import type { CombatAction, CombatOutcome } from './combat.ts';
 import { canRest, takeRest, useItem } from './rest.ts';
 import type { PlayState, TurnRecord, WorldDelta } from './state.ts';
 import { activeRegion, clockOf, exitsFrom, moveWithinRegion, travelTime } from '../world/travel.ts';
-import type { Fact, Link, PlaceId, RegionId, World } from '../world/types.ts';
+import type { Fact, Link, PersonId, PlaceId, RegionId, World } from '../world/types.ts';
 import { unplaced } from '../world/map.ts';
 
 /**
@@ -309,6 +309,15 @@ export function lawNotices(delta: WorldDelta, language: 'th' | 'en'): string[] {
     notices.push(th ? `การสืบทอดตำแหน่งที่นี่${how}แล้ว` : `Succession here now ${how}.`);
   }
   return notices;
+}
+
+/** One sentence per rumour a grudge that could not come began this turn, naming the bearer. The Thai is a first draft. */
+export function rumourNotices(world: World, bearers: readonly PersonId[]): string[] {
+  const th = world.language === 'th';
+  return bearers.map((id) => {
+    const name = world.people[id]?.name ?? id;
+    return th ? `มีข่าวลือแพร่ออกไปว่า${name}กำลังเล่าให้คนอื่นฟังว่าคุณทำอะไรไว้` : `Word is going round: ${name} is telling people what you did.`;
+  });
 }
 
 /** The change, once `validateDelta` has allowed it: this AL unit's OWN succession choice is replaced. */
@@ -1016,6 +1025,8 @@ export type TurnOutcome = {
   shifts: AxisChange[];
   /** Traits that came true this turn. Announced once, not every turn after. */
   earned: Trait[];
+  /** Bearers who began a rumour that told somebody new this turn: the turn announces each (step 8 slice 2). */
+  rumours: PersonId[];
 };
 
 export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
@@ -1050,7 +1061,7 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
     }
   }
 
-  if (moved.ended) return { state: moved, shifts: [], earned: [] };
+  if (moved.ended) return { state: moved, shifts: [], earned: [], rumours: [] };
 
   const causes = causesFor(moved, record, clockOf(state.world), clockOf(moved.world));
   const rules = rulesOf(moved.world);
@@ -1089,13 +1100,16 @@ export function applyTurn(state: PlayState, record: TurnRecord): TurnOutcome {
   world = fadeGrudges(state.world, world);
   // A grudge fed this turn sets out, once everything that could feed it has.
   world = setOut(state.world, world, fled);
+  // A grudge that cannot come tells people instead, once everything that could set it out has (step 8 slice 2).
+  const told = rumoursAfter(world, rules);
+  world = told.world;
 
   const drifted: PlayState = { ...moved, world, sheet: { ...moved.sheet, ...player.persona } };
   // This world's own traits, not the global catalogue — a replayed log has to
   // earn the same ones at the same moments.
   const awarded = awardTraits(traitsFor(drifted.world.seed, traitOriginOf(drifted)), drifted.sheet, drifted.pc.inventory);
 
-  return { state: { ...drifted, sheet: awarded.sheet }, shifts, earned: awarded.earned };
+  return { state: { ...drifted, sheet: awarded.sheet }, shifts, earned: awarded.earned, rumours: told.begun.filter((r) => r.told > 0).map((r) => r.bearer) };
 }
 
 /**
