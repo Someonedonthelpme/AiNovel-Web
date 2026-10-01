@@ -384,7 +384,8 @@ anything derives from the seed alone.
   so a short walk may cover no whole tick.
 - `journeys` — grudges on the road ([types.ts:360](src/world/types.ts:360),
   [journey.ts:25](src/play/journey.ts:25)): who travels, for whom, where they have
-  got to, and when they may set out. Stored, because where a traveller is must
+  got to, when they may set out, and whether the bearer, unable to come, has already told people
+  (`rumoured`, [journey.ts:38](src/play/journey.ts:38)). Stored, because where a traveller is must
   replay; advanced only by the fold.
 - `echoes` — weighty deeds done on an era floor ([types.ts:362](src/world/types.ts:362)):
   the engine keeps the `ECHOING` ones only ([deed.ts:63](src/social/deed.ts:63)), in the
@@ -955,6 +956,13 @@ traveller walks for the time the turn covered, toward the newest word it or its
 bearer holds ([journey.ts:102](src/play/journey.ts:102)): the cheapest route through
 a region, no further than the entrance of one where fighting is refused, and one
 stair at a time where `crossFloors` allows ([journey.ts:154](src/play/journey.ts:154)).
+A traveller the law holds back, or whose region is not loaded, is STALLED: no next hop toward where the player was
+last heard of. The turn it is found so, the bearer re-tells their most severe firsthand grievance (`grievanceOf`,
+[journey.ts:281](src/play/journey.ts:281)) through the spread (`rumoursAfter`,
+[journey.ts:306](src/play/journey.ts:306), called at [delta.ts:1104](src/play/delta.ts:1104); `retellDeed`,
+[deed.ts:313](src/social/deed.ts:313)); everyone told holds it as hearsay and feels it as an onlooker, once per
+journey (`Journey.rumoured`, [journey.ts:38](src/play/journey.ts:38)), and the turn announces it (`rumourNotices`,
+[delta.ts:315](src/play/delta.ts:315)).
 ARRIVING opens the fight, decided from state so a replay opens the same one
 ([delta.ts:1042](src/play/delta.ts:1042)). Only an arrived traveller fights, and
 only while the bearer's grudge is worth a chase
@@ -1407,7 +1415,8 @@ brief listed what could be adopted but never what already was, and no view reads
 law from a mere remark 2 times in 5 and nothing could show or undo it. Still true: no
 STANDING view shows them (a decision, not an oversight). Since 2026-09-29 a turn that adopts, repeals or changes
 succession ANNOUNCES it (`lawNotices`, [delta.ts:296](src/play/delta.ts:296); `TurnResult.notices`,
-[turn.ts:62](src/play/turn.ts:62)), so a stray one is seen the turn it happens, though not prevented. A remark can still fire a hall verb, and a
+[turn.ts:62](src/play/turn.ts:62), which also carries the rumour sentences, `rumourNotices`,
+[delta.ts:315](src/play/delta.ts:315)), so a stray one is seen the turn it happens, though not prevented. A remark can still fire a hall verb, and a
 decree can carry a stray second one: on the three flat fields a live run saw a stray extra verb on about
 half of the decrees and a hall verb on 2 of 15 remarks. One `hallAction`/`hallValue` pair was TRIED
 (2026-09-29, DESIGN 6c §3k-ii) and REVERSED: it removed the stray verbs (0/15) but a hall verb then fired
@@ -1707,7 +1716,9 @@ NPC, so nobody ever tries."* True until 6b stage 5, when it gained its first
 enforcer: a person with a grudge on another floor came for you only when the law
 did not forbid them. Since 7.1b NPCs MOVE (journeys), and that movement asks the
 law: a traveller takes a stair only where it allows
-([journey.ts:168](src/play/journey.ts:168)). For everything else it is still true
+([journey.ts:168](src/play/journey.ts:168)). One it holds back is stalled, and since 2026-10-01 its bearer
+tells people instead (`rumoursAfter`, [journey.ts:306](src/play/journey.ts:306)), so the law has a consequence beyond
+refusing a move. For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
 and the Director brief ([director.ts:487](src/llm/director.ts:487)) is the only
 check on what gets narrated.

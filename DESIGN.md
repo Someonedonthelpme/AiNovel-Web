@@ -1562,7 +1562,7 @@ AL actually gets wired into floor generation and travel:**
   (`genesis.ts:477`) as free text for the *entire* region. This was already known
   to be too loose for mechanics — habitat deliberately does not match against it,
   *"`Region.biome` is a word the model invented for one floor, so matching it
-  would be matching prose"* (promoted to `ARCHITECTURE.md:1044`) — but that was a
+  would be matching prose"* (promoted to `ARCHITECTURE.md` §9, *What a group is for*, the habitat row) — but that was a
   tolerable looseness when a floor was one dungeon level. At planet scale it stops
   being loose and starts being wrong: one word can't describe a planet with
   several states. Natural fix, not built: `biome`/`culture` move to per-`AlUnit`
@@ -1582,7 +1582,7 @@ AL actually gets wired into floor generation and travel:**
 - **Danger and creature habitat are floor-uniform, not AL-aware.** `Region.danger`
   is one number for the whole floor, no variance by AL unit (a warzone state and a
   peaceful one score identically). Creature/species habitat is picked by
-  TOWER-DEPTH BAND, *"spread across the whole tower"* (`ARCHITECTURE.md:1044`),
+  TOWER-DEPTH BAND, *"spread across the whole tower"* (`ARCHITECTURE.md` §9, *What a group is for*),
   not by anything about a floor's own internal geography — so a planet's entire
   creature roster is fixed by depth, uniform across every continent on it. Same
   root cause as biome: floor-wide values that predate AL's internal structure.
