@@ -4,7 +4,8 @@ import type { Cell } from './map.ts';
 import { pairDraw } from './travel.ts';
 import { isFull } from './types.ts';
 import type { Place, PlaceId, RegionId, World } from './types.ts';
-import type { Building } from './workstation.ts';
+import { isOpen } from './workstation.ts';
+import type { Building, BuildingCategory } from './workstation.ts';
 import { modulesNeeded } from './building.ts';
 
 /**
@@ -24,9 +25,33 @@ export type Caps = { souls: [number, number]; crowd: number; plots: number; radi
 export const CROWD_BANDS = ['deserted', 'quiet', 'busy', 'crowded'] as const;
 export type CrowdBand = (typeof CROWD_BANDS)[number];
 
-/** How crowded a settlement feels, as a word (DESIGN 6c §3i). Stub: filled in by the next commit. */
-export function crowdBand(_world: World, _region: RegionId, _place: PlaceId, _night: boolean): CrowdBand | null {
-  return null;
+// ponytail: every number here is a placeholder, set at build; real values wait on no-rebalance-until-feature-complete.
+/** The share of a place's souls who are about at all, by hour. */
+const SHARE_ABOUT = { day: 0.3, night: 0.005 };
+/** What one OPEN building adds to that share: venues draw customers, work draws its workers, a home draws nobody out. */
+const PULL: Record<BuildingCategory, number> = { amenities: 0.02, production: 0.01, agriculture: 0.01, government: 0.01, residential: 0 };
+/** Headcounts out below which a place reads as deserted, quiet, busy; from the last it is crowded. */
+const BAND_LIMITS = [10, 100, 1000];
+
+/**
+ * How crowded a settlement feels, as a WORD (DESIGN 6c §3i): the headcount out is `soulsOf` times the share for the hour
+ * plus the pull of every building open now, and the band is read off that ABSOLUTE count — a megacity at 01:00 is not
+ * deserted and a hamlet at noon is not crowded. Null where a place has no souls (wild, landmark, gate).
+ */
+export function crowdBand(world: World, region: RegionId, place: PlaceId, night: boolean): CrowdBand | null {
+  const souls = soulsOf(world, region, place);
+  if (souls === null) return null;
+  const open = (placeIn(world, region, place)?.buildings ?? []).filter((b) => isOpen(b, night));
+  const share = SHARE_ABOUT[night ? 'night' : 'day'] + open.reduce((sum, b) => sum + PULL[b.category ?? 'production'], 0);
+  const out = souls * share;
+  return CROWD_BANDS[BAND_LIMITS.filter((limit) => out >= limit).length];
+}
+
+const CROWD_THAI: Record<CrowdBand, string> = { deserted: 'ร้างผู้คน', quiet: 'เงียบ', busy: 'คึกคัก', crowded: 'แน่นขนัด' };
+
+/** The sentence the model is given, in the world's language. The Thai is a first draft for a Thai speaker. */
+export function crowdLine(band: CrowdBand, language: 'th' | 'en'): string {
+  return language === 'th' ? `ผู้คนที่ไม่ได้ระบุชื่อบริเวณนี้: ${CROWD_THAI[band]}` : `Unnamed people about: ${band}.`;
 }
 
 export const CAPS: Record<SettlementTier, Caps> = {

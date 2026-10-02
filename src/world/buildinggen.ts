@@ -9,38 +9,38 @@ import type { Building } from './workstation.ts';
  * reachable in a real world. Not dealt: the general store and armoury (nothing to run yet).
  */
 
-const HALL: Building = { id: 'hall-1', tier: 1, container: {}, workstations: [{ id: 'hall-desk', subkind: 'administrative' }] };
+const HALL: Building = { id: 'hall-1', tier: 1, container: {}, category: 'government', workstations: [{ id: 'hall-desk', subkind: 'administrative' }] };
 
 const PASTURE: Building = {
-  id: 'pasture-1', tier: 1, container: {},
+  id: 'pasture-1', tier: 1, container: {}, category: 'agriculture',
   workstations: [{ id: 'graze', subkind: 'economic', method: { input: [], output: [{ category: 'rations', count: 1 }, { category: 'material', count: 1 }], time: 2 } }],
 };
 
 // ponytail: flat placeholder stock — containers do not move goods between buildings, so a smithy that
 // starts empty would idle forever; real numbers wait on no-rebalance-until-feature-complete.
 const SMITHY: Building = {
-  id: 'smithy-1', tier: 1, container: { material: 4 },
+  id: 'smithy-1', tier: 1, container: { material: 4 }, category: 'production',
   workstations: [{ id: 'anvil', subkind: 'economic', method: { input: [{ category: 'material', count: 1 }], output: [{ category: 'weapon', count: 1 }], time: 1 } }],
 };
 
 const HOME: Building = {
-  id: 'home-1', tier: 1, container: {},
-  workstations: [{ id: 'bed', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 1 }], time: 1 } }],
+  id: 'home-1', tier: 1, container: {}, category: 'residential',
+  workstations: [{ id: 'bed', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 1 }], time: 1 }, shift: 'night' }],
 };
 
 const INN: Building = {
-  id: 'inn-1', tier: 1, container: {},
-  workstations: [{ id: 'hearth', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 3 }], time: 0.3 } }],
+  id: 'inn-1', tier: 1, container: {}, category: 'amenities',
+  workstations: [{ id: 'hearth', subkind: 'service', serviceMethod: { output: [{ need: 'rest', amount: 3 }], time: 0.3 }, shift: 'both' }],
 };
 
 // ponytail: seed has no source yet (no item, unreachable from combat), so the field starts stocked like the smithy.
 const FARMSTEAD: Building = {
-  id: 'farmstead-1', tier: 1, container: { seed: 4 },
+  id: 'farmstead-1', tier: 1, container: { seed: 4 }, category: 'agriculture',
   workstations: [{ id: 'subsistence', subkind: 'economic', method: { input: [{ category: 'seed', count: 1 }], output: [{ category: 'rations', count: 1 }], time: 2 } }],
 };
 
 const TANNERY: Building = {
-  id: 'tannery-1', tier: 1, container: { material: 4 },
+  id: 'tannery-1', tier: 1, container: { material: 4 }, category: 'production',
   workstations: [{ id: 'hand-cure', subkind: 'economic', method: { input: [{ category: 'material', count: 1 }], output: [{ category: 'pack', count: 1 }], time: 1 } }],
 };
 

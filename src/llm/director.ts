@@ -11,7 +11,8 @@ import type { Ability, Combatant, ParleyEffect } from '../combat/types.ts';
 import type { Classification, Mode, PlayState, WorldDelta } from '../play/state.ts';
 import { CLASSES } from '../play/state.ts';
 import { presentHere } from '../play/sighting.ts';
-import { timeLine } from '../world/calendar.ts';
+import { isNight, timeLine } from '../world/calendar.ts';
+import { crowdBand, crowdLine } from '../world/settlement.ts';
 import { activeRegion } from '../world/travel.ts';
 import type { Provider } from './provider.ts';
 import type { WriterBrief } from './redact.ts';
@@ -374,6 +375,7 @@ const REPEAL_CUES_TH = ['ยกเลิก', 'เพิกถอน', 'ไม�
 export function directorContext(state: PlayState, canonFacts: string[], input = ''): string {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  const crowd = region && place ? crowdBand(state.world, region.id, place.id, isNight(state.world)) : null;
   const exits = place?.connections ?? [];
 
   /*
@@ -519,6 +521,8 @@ export function directorContext(state: PlayState, canonFacts: string[], input = 
       + `${here ? `, in ${here.name}` : ''})`,
     `You are at: ${place?.id ?? '?'} "${place?.name ?? '?'}" — ${place?.description ?? ''}${heldBy ? ` (held by ${heldBy})` : ''}`,
     `Time: ${timeLine(state.world, region?.floor)}`,
+    // How crowded the UNNAMED scene is, as a word (DESIGN 6c 3i); nothing for a place with no souls.
+    crowd ? crowdLine(crowd, 'en') : '',
     echoes.length ? `What this land remembers from its past (old stories, not news):\n${echoes.join('\n')}` : '',
     `Things possible here: ${(place?.affordances ?? []).join('; ') || '(none listed)'}`,
     `Connected places (the ONLY legal moveTo values): ${exits.join(', ') || '(none)'}`,

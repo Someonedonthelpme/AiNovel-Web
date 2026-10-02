@@ -3,7 +3,8 @@ import { dispositionOf } from '../character/persona.ts';
 import { describeMental, describePersonality } from '../character/persona.ts';
 import type { PlayState } from '../play/state.ts';
 import { presentHere } from '../play/sighting.ts';
-import { timeLine } from '../world/calendar.ts';
+import { isNight, timeLine } from '../world/calendar.ts';
+import { crowdBand, crowdLine } from '../world/settlement.ts';
 import { activeRegion, signposted as signpostedFrom } from '../world/travel.ts';
 import type { World } from '../world/types.ts';
 import { displayNames, humanise } from '../world/naming.ts';
@@ -70,7 +71,7 @@ export type WriterView = {
   pc: { name: string; selfPronoun: string; bearing: string[]; condition: string[] };
   /** The hour, whether it is dark, the season and the date, in the world's words (7.1e). */
   time?: string;
-  /** How crowded the unnamed scene around the named people is, in the world's words (DESIGN 6c §3i). Stub: not set yet. */
+  /** How crowded the unnamed scene around the named people is, in the world's words (DESIGN 6c §3i). */
   crowd?: string;
   /** Verbatim, because pronoun continuity lives in the surface text. */
   recentTurns: string[];
@@ -106,6 +107,7 @@ export type ViewOptions = {
 export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
   const region = activeRegion(state.world);
   const place = region?.places.find((p) => p.id === state.world.currentPlace);
+  const crowd = region && place ? crowdBand(state.world, region.id, place.id, isNight(state.world)) : null;
 
   /**
    * The Director is handed place ids so it can propose a move, and it echoes
@@ -141,6 +143,7 @@ export function toWriterView(state: PlayState, opts: ViewOptions): WriterView {
     },
     peoplePresent,
     time: timeLine(state.world, region?.floor),
+    ...(crowd ? { crowd: crowdLine(crowd, state.world.language) } : {}),
     pc: {
       name: state.sheet.name,
       selfPronoun: state.sheet.voice.selfPronoun,

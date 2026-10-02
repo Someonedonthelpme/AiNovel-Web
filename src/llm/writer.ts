@@ -103,6 +103,8 @@ function userPrompt(view: WriterView): string {
   const lines = [
     `Place: ${view.place.name}. ${view.place.description}`,
     view.time ? `Time: ${view.time}` : '',
+    // How crowded the unnamed scene is (DESIGN 6c 3i): the Writer knows only what its prompt prints.
+    view.crowd ?? '',
     view.peoplePresent.length
       ? `Present: ${view.peoplePresent.map((p) => {
           const notes = [...p.disposition, ...p.condition];

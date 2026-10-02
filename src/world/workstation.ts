@@ -28,14 +28,17 @@ export type BuildingCategory = 'government' | 'production' | 'agriculture' | 'am
 /** `workedAt` is the clock tick the building was last caught up on (DESIGN 6c §3h): absent until first seen. */
 export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[]; workedAt?: number; category?: BuildingCategory };
 
-/** A building's shift, derived from its stations (DESIGN 6c §3i). Stub: filled in by the next commit. */
-export function shiftOf(_building: Building): Shift {
-  return 'day';
+/** A building's shift, derived from its stations (DESIGN 6c §3i): day and night together, or any `both`, is both. */
+export function shiftOf(building: Building): Shift {
+  const shifts = new Set((building.workstations ?? []).map((w) => w.shift ?? 'day'));
+  if (shifts.has('both') || (shifts.has('day') && shifts.has('night'))) return 'both';
+  return shifts.has('night') ? 'night' : 'day';
 }
 
-/** Whether a building is open at night (`true`) or by day. Stub: filled in by the next commit. */
-export function isOpen(_building: Building, _night: boolean): boolean {
-  return true;
+/** Whether a building is open at night (`true`) or by day. */
+export function isOpen(building: Building, night: boolean): boolean {
+  const shift = shiftOf(building);
+  return shift === 'both' || shift === (night ? 'night' : 'day');
 }
 
 const sumOf = (goods: Good[]): number => goods.reduce((s, { count }) => s + count, 0);
