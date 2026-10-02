@@ -10,7 +10,9 @@ import {
 } from './sessions.ts';
 import { applyDelta, foldPlay } from '../play/delta.ts';
 import { awaitingPlayer, beginEncounter, combatOptions, takeCombatAction } from '../play/combat.ts';
-import { playState } from '../play/fixtures.ts';
+import { playState, stalledGrudge } from '../play/fixtures.ts';
+import { believes } from '../character/belief.ts';
+import { axisOf, PLAYER } from '../social/edge.ts';
 import { sheetRecord } from '../play/sheetaction.ts';
 import { skillTreeFor } from '../play/skilltree.ts';
 import { groundFloor } from '../world/fixtures.ts';
@@ -70,6 +72,45 @@ test('replaying the log reproduces the in-memory fold exactly', { skip: needsDb 
 
   assert.deepEqual(loaded?.state.world, inMemory.world);
   assert.equal(loaded?.lastSeq, log.length, 'seq 0 is the origin, then one per turn');
+});
+
+/*
+ * A grudge that cannot come tells people instead (step 8 slice 2). The fold step was shown deterministic in memory;
+ * these pin the rest — that a stored log and a stored SNAPSHOT of a world carrying `rumoured: true` come back the same.
+ */
+
+const regardOfClerk = (s: PlayState) => axisOf(s.world.edges, 'clerk', PLAYER, 'regard');
+const smithJourney = (s: PlayState) => s.world.journeys?.find((j) => j.who === 'smith');
+
+test('replaying a log that holds a rumour turn reproduces the in-memory fold, and the rumour happened', { skip: needsDb }, async () => {
+  const base = stalledGrudge();
+  const id = await createSession(base.world, base.sheet, 'a grudge that cannot come');
+  created.push(id);
+  const log = [turn({ timeSpent: 3 }), turn({ timeSpent: 3 })]; // the second turn must not tell again
+  for (const record of log) await appendTurn(id, record);
+
+  const inMemory = foldPlay(base, log);
+  assert.deepEqual((await loadSession(id))?.state.world, inMemory.world, 'storage and replay agree');
+  // Not vacuous: it really began, it reached the clerk, and it was told once.
+  assert.equal(smithJourney(inMemory)?.rumoured, true);
+  assert.ok(believes(inMemory.world.people.clerk.beliefs ?? [], { kind: 'deed', who: PLAYER, what: 'threatened:smith' }));
+  assert.ok(regardOfClerk(inMemory) < 0, 'the clerk thinks less of the player');
+  assert.equal(regardOfClerk(foldPlay(base, [log[0]])), regardOfClerk(inMemory), 'told once, not on every turn');
+});
+
+test('a snapshot taken after the rumour restores the same world', { skip: needsDb }, async () => {
+  const base = stalledGrudge();
+  const id = await createSession(base.world, base.sheet, 'a grudge that cannot come');
+  created.push(id);
+  const [first, second] = [turn({ timeSpent: 3 }), turn({ timeSpent: 3 })];
+  await appendTurn(id, first);
+  const afterFirst = foldPlay(base, [first]);
+  assert.equal(smithJourney(afterFirst)?.rumoured, true, 'the snapshot below holds a world that carries the flag');
+  await saveSnapshotAt(id, 1, afterFirst);
+  await appendTurn(id, second);
+
+  // loadSession restores from that snapshot and replays only the second turn.
+  assert.deepEqual((await loadSession(id))?.state.world, foldPlay(base, [first, second]).world);
 });
 
 test('sequence numbers are dense and gap-free', { skip: needsDb }, async () => {
