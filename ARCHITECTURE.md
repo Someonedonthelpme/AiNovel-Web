@@ -576,7 +576,7 @@ come from?"
 | `capacityOf` ([workstation.ts:67](src/world/workstation.ts:67)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
 | `runAt` ([workstation.ts:73](src/world/workstation.ts:73)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
 | `runWorkstation` ([workstation.ts:78](src/world/workstation.ts:78)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
-| `buildingsFor` ([buildinggen.ts:69](src/world/buildinggen.ts:69)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture and home from hamlet, smithy, farmstead and inn from village, tannery from town (the table is `DEALT`, [buildinggen.ts:51](src/world/buildinggen.ts:51)); deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
+| `buildingsFor` ([buildinggen.ts:92](src/world/buildinggen.ts:92)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture and home from hamlet, smithy, farmstead and inn from village, tannery from town (the table is `DEALT`, [buildinggen.ts:74](src/world/buildinggen.ts:74)); deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
 | `caughtUp` ([catchup.ts:31](src/play/catchup.ts:31)) | the world before a turn, the world after it | the world with the place the player just ARRIVED at caught up: a building first seen is only stamped (`workedAt`); after that its economic workstations run for the hours since, staffed by the living people there who are not on the road — one person, one station, best fit first, a sheetless NPC judged at a flat placeholder ability (10). Fold-only, from state alone, so a replay makes the same goods (DESIGN 6c §3h, §3j-i) |
 | `efficiencyOf` ([workstation.ts:91](src/world/workstation.ts:91)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
 | `statFor` ([workstation.ts:110](src/world/workstation.ts:110)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
@@ -1475,11 +1475,11 @@ a building or a workstation, and everything that needs one (`runWorkstation`, th
 the `Stored in` line, `caughtUp`) ran only on a hand-built state. Found while checking whether catch-up
 on arrival would do anything in real play; every earlier "reachable from play" meant wired to the
 Director and the fold, and the live Director checks all ran on hand-built fixtures. Now `buildingsFor`
-([buildinggen.ts:69](src/world/buildinggen.ts:69)) deals them, called after `alUnitsFor` on the ground
+([buildinggen.ts:92](src/world/buildinggen.ts:92)) deals them, called after `alUnitsFor` on the ground
 floor ([genesis.ts:596](src/session/genesis.ts:596)) and on every generated floor
 ([floorgen.ts:525](src/world/floorgen.ts:525)): a hall in every settlement, a pasture and a home from hamlet up, a
 smithy, farmstead and inn from village up, a tannery from town up (`DEALT`,
-[buildinggen.ts:51](src/world/buildinggen.ts:51); every tier fits its plot budget). The home and inn are
+[buildinggen.ts:74](src/world/buildinggen.ts:74); every tier fits its plot budget). The home and inn are
 `service` stations (rest) that nothing drives yet (see the ledger, §12), the rest `economic`. **Still narrow, on purpose:** only seven of the catalogue's
 types exist — no general store or armoury, since buy/sell and `part` items are unbuilt — and each is tier 1;
 nobody but the holder can collect or legislate, and holding means buying — `50 × floor` coin and the
