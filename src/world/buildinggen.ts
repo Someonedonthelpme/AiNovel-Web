@@ -4,7 +4,7 @@ import type { Place, RegionId, World } from './types.ts';
 import type { Building } from './workstation.ts';
 
 /*
- * A slice of DESIGN 6c §3i's catalogue: seven building types, dealt by tier. Nothing generated
+ * A slice of DESIGN 6c §3i's catalogue: eleven building types, dealt by tier. Nothing generated
  * ever had a building, so the station system only ran on hand-built fixtures; this makes it
  * reachable in a real world. Not dealt: the general store and armoury (nothing to run yet).
  */
@@ -44,8 +44,31 @@ const TANNERY: Building = {
   workstations: [{ id: 'hand-cure', subkind: 'economic', method: { input: [{ category: 'material', count: 1 }], output: [{ category: 'pack', count: 1 }], time: 1 } }],
 };
 
-const VILLAGE = [HALL, PASTURE, SMITHY, FARMSTEAD, INN, HOME] as const;
-const TOWN = [...VILLAGE, TANNERY] as const;
+// The night venues (DESIGN 6c §3i): plain service stations, open after dark, that serve a need. The engine supplies only
+// that the place is open and which need it serves; nothing drives them yet, they lift the crowd band at night.
+// ponytail: placeholder amounts and times, real numbers wait on no-rebalance-until-feature-complete.
+const PUB: Building = {
+  id: 'pub-1', tier: 1, container: {}, category: 'amenities',
+  workstations: [{ id: 'taproom', subkind: 'service', serviceMethod: { output: [{ need: 'company', amount: 2 }], time: 0.5 }, shift: 'night' }],
+};
+
+const BROTHEL: Building = {
+  id: 'brothel-1', tier: 1, container: {}, category: 'amenities',
+  workstations: [{ id: 'salon', subkind: 'service', serviceMethod: { output: [{ need: 'company', amount: 3 }], time: 1 }, shift: 'night' }],
+};
+
+const THEATRE: Building = {
+  id: 'theatre-1', tier: 1, container: {}, category: 'amenities',
+  workstations: [{ id: 'stage', subkind: 'service', serviceMethod: { output: [{ need: 'purpose', amount: 2 }], time: 2 }, shift: 'night' }],
+};
+
+const WATCH_HOUSE: Building = {
+  id: 'watch-house-1', tier: 1, container: {}, category: 'government',
+  workstations: [{ id: 'watch', subkind: 'service', serviceMethod: { output: [{ need: 'safety', amount: 2 }], time: 1 }, shift: 'both' }],
+};
+
+const VILLAGE = [HALL, PASTURE, SMITHY, FARMSTEAD, INN, HOME, PUB] as const;
+const TOWN = [...VILLAGE, TANNERY, THEATRE, BROTHEL, WATCH_HOUSE] as const;
 
 /** What a settlement of each tier is dealt. Every settlement has a hall (bare unless it is a seat, §3e). */
 const DEALT: Record<SettlementTier, readonly Building[]> = {
