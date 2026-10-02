@@ -6,7 +6,8 @@ import { applyDelta, applyTurn, foldPlay, lawNotices, validateDelta } from './de
 import { playTurn } from './turn.ts';
 import { FOLK } from '../character/species.ts';
 import { activeRegion, clockOf, linkMinutes, stairCost, travelTime } from '../world/travel.ts';
-import { MINUTES_PER_TICK, TICKS_PER_DAY, TICKS_PER_HOUR } from '../world/calendar.ts';
+import { isNight, MINUTES_PER_TICK, TICKS_PER_DAY, TICKS_PER_HOUR } from '../world/calendar.ts';
+import { toWriterView } from '../llm/redact.ts';
 import { takeRest } from './rest.ts';
 import { NEED_MAX } from '../character/persona.ts';
 import { playState, emptyDelta, directorOutput } from './fixtures.ts';
@@ -1101,6 +1102,48 @@ test('repealLaw is NOT offered on Thai remarks, an opinion, an admiring line or 
 
 test('a Thai cue is not enough: with no law of its own the repeal is still never offered', async () => {
   assert.doesNotMatch(await briefFor(ownLaws([]), 'ข้าพเจ้าขอยกเลิกกฎหมายนี้'), REPEAL_OFFER);
+});
+
+/*
+ * The crowd line (DESIGN 6c 3i, 2026-10-02): the model is told how crowded the unnamed scene is, as a word. The
+ * Director's brief is English whatever the world speaks; the Writer's view speaks the world's language.
+ */
+
+/** The town at this tier, at a clock that is night or day. */
+function crowdedTown(tier: 'hamlet' | 'city', night: boolean): PlayState {
+  const base = playState();
+  const r = base.world.regions['floor-0'] as Region;
+  const places = r.places.map((p) => (p.id === 'town' ? { ...p, tier } : p));
+  for (let clock = 0; clock < TICKS_PER_DAY; clock++) {
+    const world = { ...base.world, clock, regions: { ...base.world.regions, 'floor-0': { ...r, places } } };
+    if (isNight(world) === night) return { ...base, world };
+  }
+  throw new Error('fixture: no tick of the day is ' + (night ? 'night' : 'day'));
+}
+const BRIEF_ONLY = { brief: { intent: '', mustInclude: [], mustNotMention: [], tone: '', length: 'short' as const } };
+
+test("the Director's brief says how crowded a settlement is", async () => {
+  assert.match(await briefFor(crowdedTown('city', false), 'look around'), /Unnamed people about: crowded/);
+  assert.match(await briefFor(crowdedTown('hamlet', true), 'look around'), /Unnamed people about: deserted/);
+});
+
+test('the brief says nothing about a crowd for a place with no souls', async () => {
+  const state = crowdedTown('city', false);
+  const wild = { ...state, world: { ...state.world, currentPlace: 'well' } };
+  assert.doesNotMatch(await briefFor(wild, 'look around'), /Unnamed people about/);
+});
+
+test("the Writer's view carries the same band", () => {
+  const view = toWriterView(crowdedTown('city', false), BRIEF_ONLY);
+  assert.ok(view.crowd, 'the view has a crowd line');
+  assert.match(view.crowd!, /[฀-๿]/, 'the fixture world is Thai, so the line is Thai');
+});
+
+test("the Writer's crowd line follows the world's language", () => {
+  const state = crowdedTown('city', false);
+  const english = toWriterView({ ...state, world: { ...state.world, language: 'en' } }, BRIEF_ONLY);
+  assert.match(english.crowd ?? '', /crowded/i);
+  assert.doesNotMatch(english.crowd ?? '', /[฀-๿]/);
 });
 
 /*

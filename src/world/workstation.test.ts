@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { capacityOf, classFitOf, efficiencyOf, runAt, runMethod, runService, runWorkstation, statFor, statForService } from './workstation.ts';
-import type { Building, ServiceMethod, SubMethod } from './workstation.ts';
+import { capacityOf, classFitOf, efficiencyOf, isOpen, runAt, runMethod, runService, runWorkstation, shiftOf, statFor, statForService } from './workstation.ts';
+import type { Building, ServiceMethod, Shift, SubMethod } from './workstation.ts';
 import { metNeeds } from '../character/persona.ts';
 
 /*
@@ -202,4 +202,27 @@ test('runService does nothing below the time threshold', () => {
 
 test('statForService reads the stat off the output need', () => {
   assert.equal(statForService({ output: [{ need: 'rest', amount: 1 }], time: 1 }), 'vit');
+});
+
+/*
+ * Shifts (DESIGN 6c §3i, 2026-10-02): a workstation is staffed by day, by night or around the clock, absent
+ * meaning day; a building's shift is DERIVED from its stations, so there is one source of truth.
+ */
+
+const stationsOf = (...shifts: (Shift | undefined)[]): Building => ({
+  tier: 1, container: {}, workstations: shifts.map((shift) => ({ subkind: 'economic' as const, ...(shift ? { shift } : {}) })),
+});
+
+test('a building\'s shift is derived from its stations: day by default, night, or both', () => {
+  assert.equal(shiftOf(stationsOf(undefined)), 'day');
+  assert.equal(shiftOf(stationsOf('night')), 'night');
+  assert.equal(shiftOf(stationsOf('day', 'night')), 'both');
+  assert.equal(shiftOf(stationsOf('both')), 'both');
+  assert.equal(shiftOf({ tier: 1, container: {} }), 'day', 'a building with no stations is a day building');
+});
+
+test('isOpen: day by day, night by night, both always', () => {
+  assert.deepEqual([false, true].map((night) => isOpen(stationsOf('day'), night)), [true, false]);
+  assert.deepEqual([false, true].map((night) => isOpen(stationsOf('night'), night)), [false, true]);
+  assert.deepEqual([false, true].map((night) => isOpen(stationsOf('both'), night)), [true, true]);
 });

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildingsFor } from './buildinggen.ts';
+import { shiftOf } from './workstation.ts';
 import { CAPS, occupiedModulesOf, SETTLEMENT_TIERS } from './settlement.ts';
 import { groundFloor, place } from './fixtures.ts';
 import type { Place, World } from './types.ts';
@@ -69,4 +70,13 @@ test('the smithy starts stocked, the pasture empty, and nothing has been visited
   assert.deepEqual(built.find((b) => b.id === 'smithy-1')?.container, { material: 4 });
   assert.deepEqual(built.find((b) => b.id === 'pasture-1')?.container, {});
   for (const b of built) assert.equal((b as { workedAt?: number }).workedAt, undefined, `${b.id} is stamped on first sighting, not at birth`);
+});
+
+test('dealt buildings carry their category and shift', () => {
+  const by = Object.fromEntries(deal([settlementOf('town')])[0].buildings!.map((b) => [b.id, [b.category, shiftOf(b)]]));
+  assert.deepEqual(by, {
+    'hall-1': ['government', 'day'], 'pasture-1': ['agriculture', 'day'], 'smithy-1': ['production', 'day'],
+    'farmstead-1': ['agriculture', 'day'], 'inn-1': ['amenities', 'both'], 'home-1': ['residential', 'night'],
+    'tannery-1': ['production', 'day'],
+  });
 });

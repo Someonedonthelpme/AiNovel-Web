@@ -21,6 +21,14 @@ export const SETTLEMENT_TIERS = ['hamlet', 'village', 'town', 'city', 'metropoli
 export type SettlementTier = (typeof SETTLEMENT_TIERS)[number];
 export type Caps = { souls: [number, number]; crowd: number; plots: number; radius: number; ruler: string };
 
+export const CROWD_BANDS = ['deserted', 'quiet', 'busy', 'crowded'] as const;
+export type CrowdBand = (typeof CROWD_BANDS)[number];
+
+/** How crowded a settlement feels, as a word (DESIGN 6c §3i). Stub: filled in by the next commit. */
+export function crowdBand(_world: World, _region: RegionId, _place: PlaceId, _night: boolean): CrowdBand | null {
+  return null;
+}
+
 export const CAPS: Record<SettlementTier, Caps> = {
   hamlet: { souls: [20, 100], crowd: 12, plots: 3, radius: 12, ruler: 'elder' },
   village: { souls: [100, 1_000], crowd: 24, plots: 8, radius: 18, ruler: 'headman' },

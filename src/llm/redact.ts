@@ -70,6 +70,8 @@ export type WriterView = {
   pc: { name: string; selfPronoun: string; bearing: string[]; condition: string[] };
   /** The hour, whether it is dark, the season and the date, in the world's words (7.1e). */
   time?: string;
+  /** How crowded the unnamed scene around the named people is, in the world's words (DESIGN 6c §3i). Stub: not set yet. */
+  crowd?: string;
   /** Verbatim, because pronoun continuity lives in the surface text. */
   recentTurns: string[];
   /**

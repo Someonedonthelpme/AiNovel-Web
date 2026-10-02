@@ -18,10 +18,25 @@ export type ServiceMethod = { output: NeedOutput[]; time: number };
 
 export const WORKSTATION_SUBKINDS = ['economic', 'service', 'administrative'] as const;
 export type WorkstationSubkind = (typeof WORKSTATION_SUBKINDS)[number];
-export type Workstation = { id?: string; subkind: WorkstationSubkind; method?: SubMethod; serviceMethod?: ServiceMethod };
+/** When a workstation is staffed and open: by day, by night (20:00 to 06:00), or around the clock. Absent means day. */
+export type Shift = 'day' | 'night' | 'both';
+export type Workstation = { id?: string; subkind: WorkstationSubkind; method?: SubMethod; serviceMethod?: ServiceMethod; shift?: Shift };
+
+/** The first half of the catalogue key (DESIGN 6c §3i): what KIND of building draws people out, and when. */
+export type BuildingCategory = 'government' | 'production' | 'agriculture' | 'amenities' | 'residential';
 
 /** `workedAt` is the clock tick the building was last caught up on (DESIGN 6c §3h): absent until first seen. */
-export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[]; workedAt?: number };
+export type Building = { id?: string; tier: number; container: Container; workstations?: Workstation[]; workedAt?: number; category?: BuildingCategory };
+
+/** A building's shift, derived from its stations (DESIGN 6c §3i). Stub: filled in by the next commit. */
+export function shiftOf(_building: Building): Shift {
+  return 'day';
+}
+
+/** Whether a building is open at night (`true`) or by day. Stub: filled in by the next commit. */
+export function isOpen(_building: Building, _night: boolean): boolean {
+  return true;
+}
 
 const sumOf = (goods: Good[]): number => goods.reduce((s, { count }) => s + count, 0);
 const totalOf = (container: Container): number => Object.values(container).reduce((s: number, n) => s + (n ?? 0), 0);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addBuilding, buildingAt, CAPS, freePlotsOf, occupiedModulesOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan, withBuilding } from './settlement.ts';
+import { addBuilding, buildingAt, CAPS, CROWD_BANDS, crowdBand, freePlotsOf, occupiedModulesOf, SETTLEMENT_TIERS, soulsOf, tierOf, townPlan, withBuilding } from './settlement.ts';
 import { modulesNeeded } from './building.ts';
 import { WORKSTATION_SUBKINDS } from './workstation.ts';
 import { bestPath, drawMap, fieldId, hubId, portalsOf } from './map.ts';
@@ -9,7 +9,7 @@ import { groundFloor, place, world } from './fixtures.ts';
 import { populationAt, sizeIn } from '../character/population.ts';
 import { speciesFor } from '../character/species.ts';
 import type { Place, Region, World } from './types.ts';
-import type { Building } from './workstation.ts';
+import type { Building, BuildingCategory, Shift } from './workstation.ts';
 
 /*
  * The town skeleton (DESIGN 6c §3c-ii): a settlement's TIER comes first, and its
@@ -186,4 +186,50 @@ test('a building can be replaced on a place, leaving the others untouched', () =
   const p2 = withBuilding(p1, { id: 'a', tier: 2, container: { material: 5 } });
   assert.equal(buildingAt(p2, 'a')?.tier, 2);
   assert.equal(buildingAt(p2, 'b')?.tier, 1);
+});
+
+/*
+ * How crowded a settlement feels, as a WORD (DESIGN 6c §3i, 2026-10-02): the headcount out is `soulsOf` times a share
+ * for the hour plus the pull of the buildings open now, and the band is read off the ABSOLUTE count — a megacity at
+ * 01:00 is not deserted and a hamlet at noon is not crowded. The numbers are placeholders; these cases are the shape.
+ */
+
+/** An open building of this kind and shift; its one station serves the `company` need. */
+const opening = (id: string, category: BuildingCategory, shift: Shift): Building => ({
+  id, tier: 1, container: {}, category,
+  workstations: [{ id: `${id}-ws`, subkind: 'service', serviceMethod: { output: [{ need: 'company', amount: 1 }], time: 1 }, shift }],
+});
+const bandAt = (tier: (typeof SETTLEMENT_TIERS)[number], buildings: Building[], night: boolean) =>
+  crowdBand(townOfTier(tier, { buildings }), 'floor-0', 'town', night);
+const rank = (band: ReturnType<typeof crowdBand>) => CROWD_BANDS.indexOf(band!);
+
+test('the bands are four ordered words', () => {
+  assert.deepEqual([...CROWD_BANDS], ['deserted', 'quiet', 'busy', 'crowded']);
+});
+
+test('a hamlet at night is deserted, with or without an inn', () => {
+  assert.equal(bandAt('hamlet', [], true), 'deserted');
+  assert.equal(bandAt('hamlet', [opening('inn', 'amenities', 'both')], true), 'deserted');
+});
+
+test('a city at noon is crowded', () => {
+  assert.equal(bandAt('city', [], false), 'crowded');
+});
+
+test('a megacity at night is never deserted (the band reads the absolute count)', () => {
+  assert.notEqual(bandAt('megacity', [], true), 'deserted');
+});
+
+test('a town at night with a pub, a brothel and an inn is at least one band above the same town with none', () => {
+  const venues = [opening('pub', 'amenities', 'night'), opening('brothel', 'amenities', 'night'), opening('inn', 'amenities', 'both')];
+  assert.ok(rank(bandAt('town', venues, true)) >= rank(bandAt('town', [], true)) + 1);
+});
+
+test('a town with only homes at night is unchanged: residential pulls nobody out', () => {
+  const homes = [opening('home-1', 'residential', 'night'), opening('home-2', 'residential', 'night')];
+  assert.equal(bandAt('town', homes, true), bandAt('town', [], true));
+});
+
+test('a place with no souls has no band', () => {
+  assert.equal(crowdBand(townOfTier('town'), 'floor-0', 'well', true), null);
 });
