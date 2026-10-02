@@ -729,10 +729,10 @@ app/new/page.tsx
   │
   └─ POST /api/sessions {language, answers, draft, seed, rules, structure, species}
         draft carries the class id and its WORDS; the server rebuilds the class
-        from classShapesFor(seed) and keeps only the words (genesis.ts:137) —
+        from classShapesFor(seed) and keeps only the words (genesis.ts:185) —
         it believed the whole object, hit die and skills, until aa09fc8.
         Left to the story, it carries the roster's words instead, and the
-        character call picks the class (genesis.ts:153)
+        character call picks the class (genesis.ts:154)
         │
         newGame  (server/game.ts:451)
           startInterview + recordAnswer per stage (blanks get canned defaults)
@@ -743,7 +743,7 @@ app/new/page.tsx
           World assembled IN CODE: floor-0, turn 0, deepestFloor 0,
             the chosen preset IN FULL, the kinds from the seed, and the
             strata — the tower, fixed or living, with a loop band and an
-            era band under it if asked (genesis.ts:757–758)
+            era band under it if asked (genesis.ts:766–767)
           createSession → INSERT sessions + events(seq 0, kind 'start')
           saveSnapshot at seq 0
         │
@@ -767,18 +767,18 @@ rations, because a short rest spends one.
 ```
  0  ENGINE ACTS ──────────────────────── no model call at all
        a typed "go to X" naming a place you can know of is walked tile by
-       tile over the maps along the fewest-step route (turn.ts:145,
-       travel.ts:302, walker.ts:35), stopping on the first tick that brings a
+       tile over the maps along the fewest-step route (turn.ts:149,
+       travel.ts:312, walker.ts:35), stopping on the first tick that brings a
        traveller, somebody NEW in view on the road, a need at its line or
        night on wild ground; the record
        holds where it stopped and WHO it met, so a replay never pathfinds
        and never reads a tile (delta.ts:576, delta.ts:584);
        "rest"/"sleep", "hunt"
-       and "buy X" go through validateDelta as if proposed (turn.ts:341);
-       a hunt that would open no fight says why (turn.ts:365). One record
+       and "buy X" go through validateDelta as if proposed (turn.ts:388);
+       a hunt that would open no fight says why (turn.ts:393). One record
        each, and steps 1-7 never run. A CLICK on the map is the same walk
-       by another door (walk route → walkTarget, game.ts:667 → walkTile,
-       turn.ts:232): checked at the edge, never the model.
+       by another door (walk route → walkTarget, game.ts:671 → walkTile,
+       turn.ts:239): checked at the edge, never the model.
  1  canonFacts   ← pgvector nearest-neighbour over this session's facts
  2  DIRECTOR ────────────────────────────────────── model call #1
        sees: place, affordances, "the ONLY legal moveTo values",
