@@ -1777,7 +1777,7 @@ about how crowded a place is, so it can write a bustling market at midnight in a
 - **Worked cases.** A hamlet at night: deserted, with or without an inn. A town at night with a pub, a brothel and an
   inn: at least one band above the same town with none of them. A town with only homes at night: no change. A city at
   noon: crowded. A megacity at night: never deserted.
-- **Not built, on purpose:** a `day` station stopping at night (it would roughly halve catch-up output and move the
+- **Not built, on purpose:** a `day` station stopping at night (it would cut catch-up by about 40% (14 hours of 24) output and move the
   economy's numbers — add at the rebalance pass); a named person kept up at night to run the inn (follows from `both`
   later); the crowd changing a fight's size; reputation or standing effects of a venue.
 - **Reader, named first:** the model's brief and the Writer — the same kind of reader as the time and season lines.

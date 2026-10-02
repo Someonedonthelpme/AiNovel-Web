@@ -444,7 +444,11 @@ optional, so no world stored before this needs migrating — and, since 2026-09-
 ([workstation.ts:23](src/world/workstation.ts:23), [:29](src/world/workstation.ts:29))
 — the same migration-safety reasoning, one level down. `Building.workedAt`
 ([workstation.ts:29](src/world/workstation.ts:29)) is optional for it too: absent until a building
-is first seen, then the clock tick of its last catch-up (`caughtUp`, below). Module and plot occupancy
+is first seen, then the clock tick of its last catch-up (`caughtUp`, below). So are `Workstation.shift`
+([workstation.ts:22](src/world/workstation.ts:22): day, night or both; absent means day) and `Building.category`
+([workstation.ts:26](src/world/workstation.ts:26): absent counts as production), which `buildingsFor` now sets on
+every building it deals; a building's own shift is never stored but derived from its stations (`shiftOf`,
+[workstation.ts:32](src/world/workstation.ts:32)). Module and plot occupancy
 is read off each building's own workstation count
 ([building.ts:11](src/world/building.ts:11), [settlement.ts:186](src/world/settlement.ts:186)),
 never a hand-fed number.
@@ -559,7 +563,8 @@ come from?"
 | `lowestCommonAlUnit` / `isLocalCrossing` ([al.ts:143](src/world/al.ts:143), [:151](src/world/al.ts:151)) | a region, two AL unit ids | the nearest shared ancestor, and whether it is `district` or deeper — the ordinary walkable scale (DESIGN 6c §3e-ii) |
 | `alUnitsFor` ([al.ts:174](src/world/al.ts:174)) | a region's seed, id, places | the AL tree those places justify — one seat per settlement tier that maps to a rung (DESIGN 6c §3e-i/§3e-ii), chained biggest to smallest; a tower floor never deals past `city`-tier (see `tierOf` above), so this never climbs past `district` today |
 | `alCrossingCost` ([travel.ts:92](src/world/travel.ts:92)) | a seed, two place ids | the same seeded 1–3 hour draw as `stairCost` — no caller yet, see §12 |
-| `soulsOf` ([settlement.ts:98](src/world/settlement.ts:98)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
+| `soulsOf` ([settlement.ts:98](src/world/settlement.ts:98)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated. Read by `crowdBand` (next row), its first reader |
+| `crowdBand` ([settlement.ts:41](src/world/settlement.ts:41)) | a world, a region, a place, whether it is night | how crowded the UNNAMED scene feels, as one of four words (`CROWD_BANDS`, [:25](src/world/settlement.ts:25)): `soulsOf` × a share for the hour plus the pull of every building open now (`isOpen`), read off the ABSOLUTE count, so a megacity at night is not deserted and a hamlet at noon is not crowded. Null where a place has no souls. `crowdLine` ([:53](src/world/settlement.ts:53)) words it for the world's language; it reaches the Director's brief, the Writer's view and the Writer's prompt — the named people are a separate list with their own night rule (DESIGN 6c §3i) |
 | `CAPS[tier].ruler` ([settlement.ts:57](src/world/settlement.ts:57)) | the tier | the title a ruler of a place this size bears, elder to overlord (DESIGN 6c §3c-ii); no reader since `rulerOf` was deleted, see §12 |
 | `townPlan` ([settlement.ts:112](src/world/settlement.ts:112)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
 | `freePlotsOf` ([settlement.ts:169](src/world/settlement.ts:169)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
@@ -1906,6 +1911,7 @@ Every balance number, and where it lives.
 | hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
 | a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:57](src/world/settlement.ts:57), [:23](src/world/settlement.ts:23) |
 | a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:67](src/world/workstation.ts:67) |
+| how crowded a place feels | share of souls about: day 0.3, night 0.005; each open building adds amenities 0.02, work 0.01, residential 0; bands at a headcount out of 10 / 100 / 1000 — all placeholders, the shape is decided | [settlement.ts:30](src/world/settlement.ts:30), [:32](src/world/settlement.ts:32), [:34](src/world/settlement.ts:34) |
 | a workstation worker's efficiency range | flat placeholder `[1, MAX_ABILITY]` (1–20) — ordering decided, magnitudes await no-rebalance | [delta.ts:147](src/play/delta.ts:147), [signetbook.ts:59](src/play/signetbook.ts:59) |
 | workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
 | the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat — a generated farmstead consumes `seed` but is born stocked with it, nothing yields any | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:11](src/world/workstation.ts:11) |
@@ -1968,6 +1974,13 @@ Every balance number, and where it lives.
 ---
 
 ## 14. Known deviations
+
+**A shift gates the crowd, not production.** A workstation's `shift` ([workstation.ts:22](src/world/workstation.ts:22))
+decides whether its building is open at an hour (`isOpen`, [workstation.ts:39](src/world/workstation.ts:39)) and so
+how crowded the place reads; it does not stop anything running. `caughtUp` still runs a `day` workstation for every
+hour since the last visit, night included, so production through the dark is silent and about 70% more than a day-only
+reading would give (24 hours against 14). Left on purpose until the rebalance pass, because stopping it would cut catch-up by about 40% (14 hours of 24)
+output and move the economy's numbers (DESIGN 6c §3i, *Not built*).
 
 **`efficiencyOf`'s off-class curve is an ordering, not real numbers** (referenced
 from §4's function table since before this session, never actually written up
