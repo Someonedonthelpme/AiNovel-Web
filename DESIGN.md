@@ -1734,7 +1734,7 @@ building type names its own rungs too, same as the smithy example already did.
 
 ### 3i. The building catalogue (2026-09-26)
 
-**Smallest slice BUILT 2026-09-29** (`world/buildinggen.ts`): seven of the types below — hall, pasture, smithy, farmstead, inn, home, tannery — dealt by settlement tier at generation, tier 1 only, no randomness. Not dealt: general store and armoury (buy/sell and `part` items unbuilt); tiers 2–4 wait on upgrading.
+**Smallest slice BUILT 2026-09-29** (`world/buildinggen.ts`): eleven of the types below — hall, pasture, smithy, farmstead, inn, home, tannery, and (2026-10-02) the night venues pub, theatre, brothel and watch-house — dealt by settlement tier at generation, tier 1 only, no randomness. Not dealt: general store and armoury (buy/sell and `part` items unbuilt); tiers 2–4 wait on upgrading.
 
 **Live check of the seven (2026-09-29; real held town, old station list against new, local 35B, N=5–8):** no
 regression. A full building-plus-station pair fired smithy 4/5 -> 3/5, pasture 0/5 -> 1/5, farmstead 2/5, tannery 2/5
@@ -1754,11 +1754,11 @@ about how crowded a place is, so it can write a bustling market at midnight in a
   shift is DERIVED from its stations — day and night together, or any `both`, is both — so there is one source of
   truth. Night is 20:00 to 06:00 (`calendar.ts`). Dealt types: hall, pasture, smithy, farmstead, tannery `day`; inn
   `both`; home `night`.
-- **Night venues are catalogue entries, NOT dealt yet — data to add** (the same `(category, tag)` rule; any new pair is
+- **Night venues — DEALT 2026-10-02** (the same `(category, tag)` rule; any new pair is
   a valid building). **pub** `(amenities, company)` · **brothel** `(amenities, company)` · **theatre**
   `(amenities, purpose)` — each `night`, a `service` station serving the `company` or `purpose` need; and a
-  **watch-house** `(government, safety)`, `both`, whose keepers are the guards already out at night. Proposed tiers,
-  to confirm: pub from village, theatre, brothel and watch-house from town. The engine supplies only that such a place
+  **watch-house** `(government, safety)`, `both`, whose keepers are the guards already out at night. Tiers as built:
+  pub from village; theatre, brothel and watch-house from town (a village then has 7 buildings on 8 plots, a town 11 on 16). The engine supplies only that such a place
   is open after dark and which need it serves; what happens inside is narrated as any scene is. Whether a settlement
   licenses, taxes or bans such a venue is a 6c law question and `civil` law is fully blocked (§3k-ii) — not built, and
   no hook is left for it.
@@ -1792,7 +1792,17 @@ about how crowded a place is, so it can write a bustling market at midnight in a
   reader. **Found before the live check, by reading:** the line was on the Writer's VIEW but not in its PROMPT, so the
   Writer never saw it; a test now pins the prompt. **Caveats:** a keyword proxy on four runs; English only — the Thai
   Writer path and the Thai wording are untested. **Not built:** a `day` station stopping at night (production still
-  runs through the dark), a named keeper up at night, the pub, brothel, theatre and watch-house entries.
+  runs through the dark), a named keeper up at night.
+- **Night venues, result (2026-10-02): DEALT, KEPT.** Live, the same held town with the old catalogue and with the new
+  (local 35B): chat and admire remarks 0/8 stray verbs in both arms; decree recall held in both; no station named for the
+  theatre; the new `pub-1/taproom` never named even when it was the only pub id. **A finding the venues did not cause:**
+  the plain remark 'I go into the pub and have a drink with the locals' makes the model FILL EVERY FIELD about a third
+  of the time on a held seat — `adopt=theft`, a smithy `workStation`, a repeal and a complete smithy `collect` together —
+  4 of 12 with the old catalogue and 4 of 12 with the new (6 of 16 against 4 of 16 with the first run), and with the old
+  catalogue it once invented a `pub-1/barrel` that does not exist. That is far above the 4-7% measured on other remarks,
+  and the verbs are accepted on a held seat; `adopt` is now announced but `work` and `collect` are not. It strengthens the
+  case for the deferred engine-side guard (3k-ii): the cue gate failed because hiding a line does not stop the model
+  filling a field. Unmeasured: whether other action remarks that name a place do the same.
 
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
