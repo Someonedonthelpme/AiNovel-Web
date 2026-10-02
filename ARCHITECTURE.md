@@ -693,7 +693,7 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:665](src/llm/director.ts:665)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:95](src/llm/director.ts:95)) and the PLACE a new way out leaves from (`revealWay`, [:72](src/llm/director.ts:72)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:74](src/llm/director.ts:74)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
+| **Director** ([director.ts:665](src/llm/director.ts:665)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:95](src/llm/director.ts:95)) and the PLACE a new way out leaves from (`revealWay`, [:72](src/llm/director.ts:72)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:74](src/llm/director.ts:74)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away. Its lasting effects — a law verb, a collect, a deed — are second-checked against the player's own words before they apply (`confirmLasting`, [director.ts:807](src/llm/director.ts:807), called at [turn.ts:181](src/play/turn.ts:181)) | indirectly — only the validated delta and the refusal reasons |
 | **Parley** ([director.ts:730](src/llm/director.ts:730)) | `PARLEY_SCHEMA` ([:703](src/llm/director.ts:703)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:434](src/play/turn.ts:434)); an answer outside the list is a refusal ([director.ts:727](src/llm/director.ts:727)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:246](src/llm/writer.ts:246)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:263](src/llm/writer.ts:263)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
@@ -790,6 +790,11 @@ rations, because a short rest spends one.
        ENGINE rolls 2d6           ≤6 miss · 7–9 partial · ≥10 hit
        the pre-committed branch is selected and merged — both halves
        spread, so no verb can be dropped (director.ts:322)
+ 3b confirmLasting ────────────── the second look at what lasts
+       a law verb, a collect or a deed the Director proposed is kept only if
+       one small separate call confirms the player's own words clearly do it
+       (director.ts:807, called at turn.ts:181); the rest are dropped and named
+       in `rejected`; fail closed, and no call at all when none is proposed
  4  validateDelta ─────────────── the trust boundary
        refuses: a move to an unconnected place · trust for someone who does
        not exist · revealing an exit that is already known · combat where
@@ -1435,7 +1440,14 @@ brief line did not stop the model filling the field (stray `succession=standing`
 no cue 5 of 5 -> 2 of 5), because `adoptLaw` and `setSuccession` are refused on hall authority alone
 ([delta.ts:230](src/play/delta.ts:230), [:275](src/play/delta.ts:275)), whereas repeal also needs the law to be the
 unit's own ([delta.ts:250](src/play/delta.ts:250)). A quote guard (the decree's exact words must
-appear in the player's input) is proposed, undecided, and now low priority. `successionOf`
+appear in the player's input) was proposed and left undecided. Since 2026-10-02 the strays this paragraph describes
+are caught by a second-pass check instead (`confirmLasting`, [director.ts:807](src/llm/director.ts:807), called at
+[turn.ts:181](src/play/turn.ts:181)): a law verb, a collect or a deed is applied only if one small separate call
+confirms the player's own words clearly do it, the rest are dropped and named in `rejected`, and an unreachable check
+drops them all. Live (local 35B, held seat), 0 of 19 stray effects were confirmed across 25 remarks and greetings —
+a drink at the pub, a greeting the model had read as a threat — and 10 of 11 intended effects were, so "a remark can
+still fire a hall verb" now describes what the Director PROPOSES, not what the engine applies; the quote guard is
+superseded by it. `successionOf`
 ([al.ts:135](src/world/al.ts:135)) was test-only until `holderUnder` ([succession.ts:17](src/play/succession.ts:17)) read
 it, so the choice `setSuccession` writes now governs who holds a settlement that
 nobody bought. `holderUnder` replaced `holderOf` at the play callers that needed a
