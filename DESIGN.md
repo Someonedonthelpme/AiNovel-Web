@@ -2289,6 +2289,18 @@ is not checked. **The check is only as good as the model:** the same family judg
 the stray, which is why it is measured before commit. **Acceptance, live (local 35B):** on remarks that name a place or
 simply greet someone, at most 1 in 24 stray effects confirmed; on clear decrees and clear deeds at least 7 of 8
 confirmed. If the false-yes rate is higher, fall back to the confirm button.
+**Result (2026-10-02): BUILT, KEPT** (`confirmLasting`, `llm/director.ts`; wired in `playTurn`, `TurnDeps.confirm`). 14 tests,
+red first. **Live, local 35B, held seat, English:** across 25 runs on remarks and greetings the Director proposed 19
+lasting effects the player never asked for — `declare a law making theft a crime`, `genuinely help Ora`, `insult Ora`,
+`threaten Ora` — and the check confirmed NONE (bar: at most 1 in 24). The greeting that started this proposed strays in
+4 of its 5 runs. On clear cases it confirmed both decrees (3 of 3 each), real help (3 of 3) and a collect (1 of 1), and
+dropped the two stray `succession=standing` fields that rode along with the decrees: 10 of 11 intended effects
+(bar: 7 of 8). The one miss was the Director saying `insult` for a plain threat, which the check rightly refused — a
+mislabel by the Director, not a failure of the check. **Cost seen:** about half the turns on a held seat carried a
+lasting effect and so made the second call (the strays are that common); each is one short call. **Caveats:** N is
+small (3 to 5 a cell), English only, one model; a real deed the Director never proposes is still lost (the Director
+proposed a deed on only 1 of 3 clear-threat runs), which the check cannot fix. **Not built:** the confirm-button
+fallback (not needed), a check on `work`, `rest` or `moveTo`.
 
 ---
 
