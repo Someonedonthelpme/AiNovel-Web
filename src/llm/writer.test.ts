@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasDialogue, trimSceneSetting } from './writer.ts';
+import { hasDialogue, runWriter, trimSceneSetting } from './writer.ts';
+import { FakeProvider } from './provider.ts';
+import { toWriterView } from './redact.ts';
+import { playState } from '../play/fixtures.ts';
 
 /**
  * A conversation should read as somebody talking to you, not as a novelist's
@@ -51,4 +54,25 @@ test('trimming keeps the gesture nearest the speech, not the scenery before it',
   const trimmed = trimSceneSetting(mixed);
   assert.equal(trimmed.startsWith('She set down the crate.'), true, `got: ${trimmed.slice(0, 40)}`);
   assert.equal(trimmed.includes('Rain hammered'), false);
+});
+
+/*
+ * The crowd line (DESIGN 6c 3i): the view carrying it is not enough — the Writer only knows what its PROMPT prints.
+ * The first cut put the line on the view and nowhere in the prompt, so the Writer never saw it.
+ */
+const withCrowd = (crowd?: string) => ({
+  ...toWriterView(playState(), { brief: { intent: '', mustInclude: [], mustNotMention: [], tone: '', length: 'short' as const } }),
+  crowd,
+});
+
+test("the Writer's prompt carries the crowd line when the view has one", async () => {
+  const provider = new FakeProvider({ text: ['You look around the square.'] });
+  await runWriter(provider, withCrowd('Unnamed people about: crowded.'));
+  assert.match(provider.allSentText(), /Unnamed people about: crowded\./);
+});
+
+test("the Writer's prompt has no crowd line when the view has none", async () => {
+  const provider = new FakeProvider({ text: ['You look around the square.'] });
+  await runWriter(provider, withCrowd());
+  assert.doesNotMatch(provider.allSentText(), /Unnamed people about/);
 });
