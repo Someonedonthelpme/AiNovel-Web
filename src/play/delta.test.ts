@@ -1247,11 +1247,13 @@ test('the stored record holds the delta AFTER the drop, so a replay reaches the 
 test('a stray deed is dropped before it can touch anyone', async () => {
   const start = inEnglish(playState());
   const dropped = await turnWith(start, { deed: 'threatened', deedPerson: 'smith' }, refuses());
-  assert.deepEqual(dropped.state.world.people.smith.beliefs ?? [], [], 'the smith holds nothing about it');
+  // Not "no beliefs at all": whoever is present holds a SIGHTING of the player. It is the deed claim that must be absent.
+  const deedBeliefs = (s: PlayState) => (s.world.people.smith.beliefs ?? []).filter((b) => b.claim.kind === 'deed');
+  assert.deepEqual(deedBeliefs(dropped.state), [], 'the smith holds no deed claim about the player');
   assert.equal(axisOf(dropped.state.world.edges, 'smith', PLAYER, 'fear'), 0);
   // The control: confirmed, the same deed does land, so the assertion above is not vacuous.
   const kept = await turnWith(start, { deed: 'threatened', deedPerson: 'smith' }, new FakeProvider({ structured: [{ confirmed: [1] }] }));
-  assert.ok((kept.state.world.people.smith.beliefs ?? []).length > 0, 'a confirmed deed is believed');
+  assert.ok(deedBeliefs(kept.state).length > 0, 'a confirmed deed is believed');
 });
 
 test('a turn with no lasting effect makes no check call', async () => {
