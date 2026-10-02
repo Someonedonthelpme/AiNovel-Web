@@ -20,7 +20,7 @@ import { capacityOf, efficiencyOf, statFor } from '../world/workstation.ts';
 import { finalAbilities } from '../session/sheet.ts';
 import { MAX_ABILITY } from './signetbook.ts';
 import type { Place, Region } from '../world/types.ts';
-import { DIRECTOR_SCHEMA, runDirector, toWorldDelta } from '../llm/director.ts';
+import { DIRECTOR_SCHEMA, mergeDeltas, runDirector, toWorldDelta } from '../llm/director.ts';
 import type { FlatDelta } from '../llm/director.ts';
 import { FakeProvider } from '../llm/provider.ts';
 import { CRIMINAL_LAWS, setSuccessionLaw } from '../world/al.ts';
@@ -1267,4 +1267,21 @@ test('a failing check drops the effect and says so; the turn is not lost', async
   assert.deepEqual(lawsAfter(r.state), []);
   assert.match(r.rejected.join(' '), /could not be checked/i);
   assert.ok(r.record.prose.length > 0, 'the turn still has its prose');
+});
+
+/*
+ * A fact the Director repeats is ONE fact. It writes `learnFacts` in its top-level delta and again in the tier branch,
+ * often the same ones; `mergeDeltas` concatenates them and the fold only skips facts already in canon, so a live turn
+ * stored four facts for two and halved the canon window the Director is handed.
+ */
+
+test('the same fact twice in one delta is one fact: validateDelta keeps the first and trims', () => {
+  assert.deepEqual(validateDelta(playState(), { learnFacts: ['a', 'a', ' a ', 'b'] }).delta.learnFacts, ['a', 'b']);
+});
+
+test('a fact the Director repeats in its delta and in the chosen branch is stored once', () => {
+  const facts = ["the smithy is Ora's own business", 'a Gate Guard went up the stair'];
+  const merged = mergeDeltas({ learnFacts: facts }, { learnFacts: facts });
+  const stored = applyDelta(playState(), validateDelta(playState(), merged).delta).world.facts.map((f) => f.text);
+  assert.deepEqual(stored, facts);
 });
