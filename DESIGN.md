@@ -2265,6 +2265,31 @@ Thai world that announces in Thai. **Not seen in the app:** a held seat with a h
 browser, so the pass-through to `Game.tsx` is checked by `tsc` only. **Not done:** the stray still happens (about 4-7%
 of held-seat remarks) — it is now visible, not prevented; a player who does not read the notice line can still miss it.
 
+**Lasting effects get a second-pass CHECK before they apply (user, 2026-10-02) — an experiment until a live A/B says
+it works.** Chosen over a cue filter (two unreviewed word lists, a decree without a cue word silently lost), a confirm
+button (a click on every real decree, new state and UI) and a Hall panel (the biggest UX change). **Why:** the Director
+has 25 required delta fields and fills them on remarks that fit no option. Live, "I go into the pub and have a drink"
+set `adopt=theft`, a smithy work station, a repeal and a complete smithy `collect` together about a third of the time on
+a held seat, with the old catalogue and the new alike; and one real greeting to a named NPC returned `deed: "threatened"`
+toward her inside the HIT branch, which the engine applied — she then held a firsthand belief that the player had
+threatened her, and the Writer was handed it. Hiding a brief line does not stop this (the cue gate failed); a deed, a
+law and a collect are all lasting state. **What changes:** after the dice pick a branch and the deltas merge, and BEFORE
+`validateDelta`, the merged delta's LASTING fields are listed — `adoptLaw`, `repealLaw`, `setSuccession`, `collect`,
+and `deed` — and, only if there are any, one tiny separate model call (its own small schema, as `runParley` has) is made
+with the player's own words and one numbered plain sentence per effect ("declare a law making theft a crime here",
+"threaten Ora"), asking for the numbers the player's words CLEARLY do or declare, and to confirm nothing when unsure.
+An effect not confirmed is DROPPED from the delta and named in `rejected` ("not recorded: your words did not clearly do
+that"), so a real decree that is dropped is never silent. **Fail closed:** a call that throws or returns something
+unreadable drops every listed effect and says it could not check — lasting state is never applied on a guess. **Replay
+stays deterministic** because the check runs outside the fold, like the Director, and the turn record stores the delta
+AFTER the drop. **Cost:** nothing on a turn whose delta carries none of those fields; one short call otherwise.
+**Not covered, on purpose:** `workBuilding`/`workStation` (a stray work turn costs little), `rest`, `moveTo`, trust
+numbers and `learnFacts`; a deed the ENGINE resolves (`drewOn`, `killed`, `spared`) is never the Director's to name and
+is not checked. **The check is only as good as the model:** the same family judging its own proposal may say yes to
+the stray, which is why it is measured before commit. **Acceptance, live (local 35B):** on remarks that name a place or
+simply greet someone, at most 1 in 24 stray effects confirmed; on clear decrees and clear deeds at least 7 of 8
+confirmed. If the false-yes rate is higher, fall back to the confirm button.
+
 ---
 
 # THE ORDER — authoritative, re-derived 2026-09-05
