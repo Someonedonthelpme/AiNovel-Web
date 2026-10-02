@@ -80,7 +80,7 @@ the model does not have to produce is a field it cannot get wrong*
 ([schema.ts:13](src/session/schema.ts:13),
 [classnames.ts:11](src/character/classnames.ts:11),
 [floorgen.ts:65](src/world/floorgen.ts:65),
-[director.ts:40](src/llm/director.ts:40)).
+[director.ts:41](src/llm/director.ts:41)).
 
 ---
 
@@ -125,8 +125,8 @@ config ─┐
 - **`redact.ts` is a wall, not a convention.** `WriterView` has no `World`, no
   undiscovered places, no unestablished facts — and because `writer.ts` accepts
   only a `WriterView`, handing it world state is a **compile error**
-  ([redact.ts:21](src/llm/redact.ts:21)). `assertNoLeak`
-  ([redact.ts:226](src/llm/redact.ts:226)) is the runtime backstop, *"because a
+  ([redact.ts:22](src/llm/redact.ts:22)). `assertNoLeak`
+  ([redact.ts:231](src/llm/redact.ts:231)) is the runtime backstop, *"because a
   type only protects the code paths the compiler can see."*
 - **React never mutates locally.** Every panel action goes to the server as an
   event ([Panels.tsx:11](app/play/[id]/Panels.tsx:11)); the whole view comes back.
@@ -205,7 +205,7 @@ places, a loop floor's, nor a floor where you hold a settlement's**, [lod.ts:61]
 `agenda.ts` · `naming.ts` (keeps `warehouse_south` out of prose by arithmetic,
 not persuasion) · `layout.ts` (deterministic positions for the floor map) ·
 `settlement.ts` (what a settlement GREW into, and what follows from it,
-[settlement.ts:52](src/world/settlement.ts:52)) ·
+[settlement.ts:85](src/world/settlement.ts:85)) ·
 `workstation.ts` (a workstation runs its own recipe against a building's container,
 capped by tier-derived capacity and scaled by the runner's class fit — wired into
 play via `worked()`, [delta.ts:151](src/play/delta.ts:151)) ·
@@ -249,7 +249,7 @@ on each of the five axes** ([ruleset.ts:210](src/rules/ruleset.ts:210)), and
 | constraint | axis | checked by |
 |---|---|---|
 | `descendBelowGround` | movement | `descend` ([travel.ts:236](src/world/travel.ts:236)) and the panel's way down ([climb.ts:329](src/play/climb.ts:329)) |
-| `crossFloors` | movement | the Director brief ([director.ts:487](src/llm/director.ts:487)), and whether a journey may take a stair ([journey.ts:168](src/play/journey.ts:168)) — see §12 |
+| `crossFloors` | movement | the Director brief ([director.ts:489](src/llm/director.ts:489)), and whether a journey may take a stair ([journey.ts:168](src/play/journey.ts:168)) — see §12 |
 | `gainLevels` | progression | `grantXp`, asked by both payouts ([climb.ts:293](src/play/climb.ts:293), [combat.ts:968](src/play/combat.ts:968)) |
 | `takeLoot` | economy | `concludeCombat` skips both rolls together ([combat.ts:976](src/play/combat.ts:976)) |
 | `keepMemories` | knowledge | arrival clears the sheet's beliefs, inside the fold ([climb.ts:283](src/play/climb.ts:283)) |
@@ -391,7 +391,7 @@ anything derives from the seed alone.
   the engine keeps the `ECHOING` ones only ([deed.ts:63](src/social/deed.ts:63)), in the
   fold ([delta.ts:974](src/play/delta.ts:974)), as NAMES rather than ids since they are
   history; the Director on a higher era floor of the same band hears them with how many
-  years back they were ([director.ts:360](src/llm/director.ts:360)). Absent is none.
+  years back they were ([director.ts:361](src/llm/director.ts:361)). Absent is none.
 - `calendar` — the world's WORDS for its reckoning, days, months and seasons
   ([types.ts:364](src/world/types.ts:364)). The shape (7-day weeks, 30-day months,
   12 months, 4 seasons) and the start date are the engine's, dealt from the seed
@@ -423,11 +423,11 @@ region because holding is a fact about the floor, with the person themselves in
 because danger and budgets have to answer before that region exists.
 **`Place.tier`** ([types.ts:53](src/world/types.ts:53)) — what a settlement GREW into, one
 of six rungs, stored when it was dealt or upgraded and otherwise dealt from the seed
-([settlement.ts:52](src/world/settlement.ts:52)). It carries TWO kinds of number and they must not be made
+([settlement.ts:85](src/world/settlement.ts:85)). It carries TWO kinds of number and they must not be made
 one: SOULS on the real curve — ten times a rung, up to millions, which is what the
 place says it is — and what the engine actually simulates, which grows gently: the
 crowd it may field, the plots its ground holds, how wide that ground is
-([settlement.ts:22](src/world/settlement.ts:22)). Ten million people cannot be walked past.
+([settlement.ts:23](src/world/settlement.ts:23)). Ten million people cannot be walked past.
 **`Place.holder`** ([types.ts:59](src/world/types.ts:59)) — set only when the PLAYER holds a
 settlement; anybody else's holding is DERIVED from who is there, the highest standing
 first ([holding.ts:14](src/world/holding.ts:14)), so a world stored before ownership has holders and a dead
@@ -438,15 +438,15 @@ The crowd is trimmed to the tier's cap where it is read ([population.ts:121](src
 balance harness pass a narrow shape with no places in it, see no tier, and are
 untouched, which is what the standing no-rebalance rule (DESIGN 6c) wants.
 **`Place.buildings`** ([types.ts:64](src/world/types.ts:64)) — what stands on a
-settlement, each building addressable by a stable id ([settlement.ts:142](src/world/settlement.ts:142));
+settlement, each building addressable by a stable id ([settlement.ts:175](src/world/settlement.ts:175));
 optional, so no world stored before this needs migrating — and, since 2026-09-29, DEALT at generation by `buildingsFor` (§3), not only added by tests, so a newly generated world has them and an older stored one does not. Within it, `Building.id`,
 `Building.workstations` and `Workstation.method` are themselves all optional
-([workstation.ts:21](src/world/workstation.ts:21), [:24](src/world/workstation.ts:24))
+([workstation.ts:23](src/world/workstation.ts:23), [:29](src/world/workstation.ts:29))
 — the same migration-safety reasoning, one level down. `Building.workedAt`
-([workstation.ts:24](src/world/workstation.ts:24)) is optional for it too: absent until a building
+([workstation.ts:29](src/world/workstation.ts:29)) is optional for it too: absent until a building
 is first seen, then the clock tick of its last catch-up (`caughtUp`, below). Module and plot occupancy
 is read off each building's own workstation count
-([building.ts:11](src/world/building.ts:11), [settlement.ts:153](src/world/settlement.ts:153)),
+([building.ts:11](src/world/building.ts:11), [settlement.ts:186](src/world/settlement.ts:186)),
 never a hand-fed number.
 **`Region.alUnits`** ([types.ts:190](src/world/types.ts:190)) and **`Place.alUnit`**
 ([types.ts:66](src/world/types.ts:66)) — the Administrative Layer, one tree per
@@ -547,7 +547,7 @@ come from?"
 | `poolFor` / `costOf` ([pools.ts:37](src/skills/pools.ts:37)) | skill stat + effect | which pool, and how much |
 | `gateFor` / `isOpen` ([pathgen.ts:135](src/play/pathgen.ts:135)) | path + scores + class lean | which paths a spread opens — **monotonic in the score by design** |
 | `stratumAt` / `dangerAt` ([strata.ts:14](src/world/strata.ts:14), [:52](src/world/strata.ts:52)) | `World.strata`, floor | the innermost stratum, and the danger curve — a stratum's own, else its parent's, else the ruleset's |
-| `tierOf` ([settlement.ts:52](src/world/settlement.ts:52)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:36](src/world/settlement.ts:36)) |
+| `tierOf` ([settlement.ts:85](src/world/settlement.ts:85)) | a settlement, the seed | which of six rungs it grew to — stored when dealt or upgraded, else dealt weighted small; a tower floor never deals past `city` ([:69](src/world/settlement.ts:69)) |
 | `ancestorsOf` ([al.ts:41](src/world/al.ts:41)) | a region, an AL unit id | the chain from that unit up to its root, itself first |
 | `rulerSeatOf` ([al.ts:58](src/world/al.ts:58)) | a region, an AL unit id | the nearest ancestor's seat `PlaceId` — an AL unit's ruler is never stored, only derived (DESIGN 6c §3e) |
 | `hallScopeOf` ([al.ts:73](src/world/al.ts:73)) | a region, a place | the AL unit that place's hall may adopt law for — null unless the place IS that unit's own seat; every other settlement inside the unit is "bare, local-only" (DESIGN 6c §3f/§3k) |
@@ -559,23 +559,23 @@ come from?"
 | `lowestCommonAlUnit` / `isLocalCrossing` ([al.ts:143](src/world/al.ts:143), [:151](src/world/al.ts:151)) | a region, two AL unit ids | the nearest shared ancestor, and whether it is `district` or deeper — the ordinary walkable scale (DESIGN 6c §3e-ii) |
 | `alUnitsFor` ([al.ts:174](src/world/al.ts:174)) | a region's seed, id, places | the AL tree those places justify — one seat per settlement tier that maps to a rung (DESIGN 6c §3e-i/§3e-ii), chained biggest to smallest; a tower floor never deals past `city`-tier (see `tierOf` above), so this never climbs past `district` today |
 | `alCrossingCost` ([travel.ts:92](src/world/travel.ts:92)) | a seed, two place ids | the same seeded 1–3 hour draw as `stairCost` — no caller yet, see §12 |
-| `soulsOf` ([settlement.ts:65](src/world/settlement.ts:65)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
-| `CAPS[tier].ruler` ([settlement.ts:24](src/world/settlement.ts:24)) | the tier | the title a ruler of a place this size bears, elder to overlord (DESIGN 6c §3c-ii); no reader since `rulerOf` was deleted, see §12 |
-| `townPlan` ([settlement.ts:79](src/world/settlement.ts:79)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
-| `freePlotsOf` ([settlement.ts:136](src/world/settlement.ts:136)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
-| `buildingAt` ([settlement.ts:142](src/world/settlement.ts:142)) | a place, a building id | the building standing there, or null |
-| `addBuilding` ([settlement.ts:147](src/world/settlement.ts:147)) | a place, a building | the place with it added — a no-op on a taken id, never a silent overwrite |
-| `withBuilding` ([settlement.ts:153](src/world/settlement.ts:153)) | a place, a building | the place with that building's id replaced by it — a no-op if no building there has that id |
-| `occupiedModulesOf` ([settlement.ts:153](src/world/settlement.ts:153)) | every building on a place | modules occupied, summed |
-| `runMethod` ([workstation.ts:38](src/world/workstation.ts:38)) | a container, a sub-method, hours worked, an optional capacity | batches completed and the container after — capped by whichever of time, input or space runs out first |
-| `capacityOf` ([workstation.ts:49](src/world/workstation.ts:49)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
-| `runAt` ([workstation.ts:55](src/world/workstation.ts:55)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
-| `runWorkstation` ([workstation.ts:60](src/world/workstation.ts:60)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
+| `soulsOf` ([settlement.ts:98](src/world/settlement.ts:98)) | tier, the seed | how many people the place SAYS it holds: the real curve, ten times a rung. Never the number simulated |
+| `CAPS[tier].ruler` ([settlement.ts:57](src/world/settlement.ts:57)) | the tier | the title a ruler of a place this size bears, elder to overlord (DESIGN 6c §3c-ii); no reader since `rulerOf` was deleted, see §12 |
+| `townPlan` ([settlement.ts:112](src/world/settlement.ts:112)) | the drawn hub, the tier | its square, the streets from every way in, and the plots along them — derived, never drawn: a plot is where a footprint may go |
+| `freePlotsOf` ([settlement.ts:169](src/world/settlement.ts:169)) | a settlement's town plan, occupied modules | free plots — null off a non-settlement place, same as `townPlan` |
+| `buildingAt` ([settlement.ts:175](src/world/settlement.ts:175)) | a place, a building id | the building standing there, or null |
+| `addBuilding` ([settlement.ts:180](src/world/settlement.ts:180)) | a place, a building | the place with it added — a no-op on a taken id, never a silent overwrite |
+| `withBuilding` ([settlement.ts:186](src/world/settlement.ts:186)) | a place, a building | the place with that building's id replaced by it — a no-op if no building there has that id |
+| `occupiedModulesOf` ([settlement.ts:186](src/world/settlement.ts:186)) | every building on a place | modules occupied, summed |
+| `runMethod` ([workstation.ts:56](src/world/workstation.ts:56)) | a container, a sub-method, hours worked, an optional capacity | batches completed and the container after — capped by whichever of time, input or space runs out first |
+| `capacityOf` ([workstation.ts:67](src/world/workstation.ts:67)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
+| `runAt` ([workstation.ts:73](src/world/workstation.ts:73)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
+| `runWorkstation` ([workstation.ts:78](src/world/workstation.ts:78)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
 | `buildingsFor` ([buildinggen.ts:69](src/world/buildinggen.ts:69)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture and home from hamlet, smithy, farmstead and inn from village, tannery from town (the table is `DEALT`, [buildinggen.ts:51](src/world/buildinggen.ts:51)); deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
 | `caughtUp` ([catchup.ts:31](src/play/catchup.ts:31)) | the world before a turn, the world after it | the world with the place the player just ARRIVED at caught up: a building first seen is only stamped (`workedAt`); after that its economic workstations run for the hours since, staffed by the living people there who are not on the road — one person, one station, best fit first, a sheetless NPC judged at a flat placeholder ability (10). Fold-only, from state alone, so a replay makes the same goods (DESIGN 6c §3h, §3j-i) |
-| `efficiencyOf` ([workstation.ts:73](src/world/workstation.ts:73)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
-| `statFor` ([workstation.ts:92](src/world/workstation.ts:92)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
-| `classFitOf` ([workstation.ts:97](src/world/workstation.ts:97)) | two `LifeClass` values | same id → on-class; same stat, different id → shares-stat; else → raw-stat. No caller yet outside its own tests — see §12 |
+| `efficiencyOf` ([workstation.ts:91](src/world/workstation.ts:91)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
+| `statFor` ([workstation.ts:110](src/world/workstation.ts:110)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
+| `classFitOf` ([workstation.ts:115](src/world/workstation.ts:115)) | two `LifeClass` values | same id → on-class; same stat, different id → shares-stat; else → raw-stat. No caller yet outside its own tests — see §12 |
 | `modulesNeeded` ([building.ts:11](src/world/building.ts:11)) | a workstation count | modules needed to hold them, 1–3 each |
 | `canUpgrade` ([building.ts:16](src/world/building.ts:16)) | current modules, next modules, free plots | whether the DELTA fits — not the whole new total |
 | `holderOf` ([holding.ts:14](src/world/holding.ts:14)) | a place, `World.people` | who holds a settlement: the player if stored, else the highest standing present — the `standing` law; play calls `holderUnder` below, which delegates here for it |
@@ -688,10 +688,10 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
-| **Director** ([director.ts:661](src/llm/director.ts:661)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:94](src/llm/director.ts:94)) and the PLACE a new way out leaves from (`revealWay`, [:71](src/llm/director.ts:71)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:73](src/llm/director.ts:73)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:726](src/llm/director.ts:726)) | `PARLEY_SCHEMA` ([:699](src/llm/director.ts:699)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:429](src/play/turn.ts:429)); an answer outside the list is a refusal ([director.ts:723](src/llm/director.ts:723)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
-| **Writer** ([writer.ts:244](src/llm/writer.ts:244)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
-| **Writer retry** ([writer.ts:261](src/llm/writer.ts:261)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
+| **Director** ([director.ts:665](src/llm/director.ts:665)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:95](src/llm/director.ts:95)) and the PLACE a new way out leaves from (`revealWay`, [:72](src/llm/director.ts:72)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:74](src/llm/director.ts:74)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
+| **Parley** ([director.ts:730](src/llm/director.ts:730)) | `PARLEY_SCHEMA` ([:703](src/llm/director.ts:703)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:429](src/play/turn.ts:429)); an answer outside the list is a refusal ([director.ts:727](src/llm/director.ts:727)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Writer** ([writer.ts:246](src/llm/writer.ts:246)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
+| **Writer retry** ([writer.ts:263](src/llm/writer.ts:263)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:369](src/world/floorgen.ts:369)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture (at least the budget minimum of people, [floorgen.ts:130](src/world/floorgen.ts:130); shown the last four floors, [:299](src/world/floorgen.ts:299); a name per place, [:325](src/world/floorgen.ts:325)) — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:142](src/world/floorgen.ts:142)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:596](src/world/floorgen.ts:596)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:144](src/world/floorgen.ts:144)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:146](src/world/floorgen.ts:146)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:663](src/world/floorgen.ts:663), [:669](src/world/floorgen.ts:669)) | **yes, in full** — inside `ClimbRecord.built` |
 | **Character** ([genesis.ts:193](src/session/genesis.ts:193)) | `characterSchema(...)` ([schema.ts:124](src/session/schema.ts:124)), t=0.8 | name, background, voice, proposed scores — and, when no class was picked, `classShape`: one of this world's roster ids ([genesis.ts:198](src/session/genesis.ts:198)) | once, into `sessions.sheet` |
 | **Ground floor** ([genesis.ts:388](src/session/genesis.ts:388)) | `GROUND_FLOOR_SCHEMA`, t=0.9 | floor 0 and its people | once, into the origin event |
@@ -998,8 +998,8 @@ The clock reads as a date from the world's start
 given the hour, the dark, the season and the date in the world's words — the floor's
 own year on an era floor, "N years before" the reckoning behind year 1
 ([calendar.ts:184](src/world/calendar.ts:184), [:191](src/world/calendar.ts:191); passed
-the floor at [director.ts:521](src/llm/director.ts:521) and
-[redact.ts:141](src/llm/redact.ts:141)) — which genesis asks for last, so the
+the floor at [director.ts:523](src/llm/director.ts:523) and
+[redact.ts:145](src/llm/redact.ts:145)) — which genesis asks for last, so the
 game does without them ([calendar.ts:131](src/world/calendar.ts:131)). Needs drain
 by the hour marks a turn crossed ([delta.ts:778](src/play/delta.ts:778)), faster in
 winter outside a settlement ([delta.ts:787](src/play/delta.ts:787)); winter
@@ -1016,11 +1016,11 @@ advantage ([conditions.ts:124](src/combat/conditions.ts:124)).
 **Eras** (6c). The deeds `ECHOING` names — helped, killed, spared — done on an era floor
 are kept as echoes ([delta.ts:974](src/play/delta.ts:974)) and told on the era floors
 ABOVE it in the same band, the five most recent, with the years between
-([director.ts:360](src/llm/director.ts:360)); never below — the past does not remember
+([director.ts:361](src/llm/director.ts:361)); never below — the past does not remember
 its future. When an era floor above the band's first is built, one or two of its new
 people are dealt a `line`: an ancestor among the LIVING people of the era floor below
 ([floorgen.ts:553](src/world/floorgen.ts:553)); the Director is told whose line
-somebody is ([director.ts:442](src/llm/director.ts:442)).
+somebody is ([director.ts:444](src/llm/director.ts:444)).
 
 **Defeat is not death** (6b stage 6). A character foe carries a BREAK LINE
 ([types.ts:183](src/combat/types.ts:183)), set where it is built
@@ -1084,7 +1084,7 @@ it DOES carry are not stat math:
 | **body plan** | which of the world's slots this shape has: `beastly` has no hands or feet, `winged` has no back (wings fill it, so no pack), `serpentine` no legs | [bodyplan.ts:24](src/character/bodyplan.ts:24), narrowed for a creature at [body.ts:19](src/play/body.ts:19) |
 | **habitat** | a DEPTH band, not a biome — `Region.biome` is a word the model invented for one floor, so matching it would be matching prose. Bands are spread across the tower so every floor has something that really lives there | [habitat.ts:37](src/character/habitat.ts:37) |
 | **kinship** | same group is kin (`familiarity +1, trust +1`), another group of the same TYPE is a neighbour (nothing — people are people), another type starts cooler. **Applied once, to the town born at world creation** ([genesis.ts:607](src/session/genesis.ts:607)): a generated floor's arrivals get plain opening edges ([floorgen.ts:533](src/world/floorgen.ts:533)), so people met deeper meet you as nobody in particular, and kin there do not know each other for rumour to run through | [kinship.ts:25](src/character/kinship.ts:25) |
-| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:347](src/rules/ruleset.ts:347)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:287](src/llm/director.ts:287)) | [ruleset.ts:259](src/rules/ruleset.ts:259) |
+| **law** | a law may bind `{ group }`, and it binds whoever IS one, player or resident: a rule about what somebody is, not where they were born. **No world is born with one**: `STANDARD`'s two laws bind `all` and `residents` ([ruleset.ts:347](src/rules/ruleset.ts:347)), and the only writer of a group binding is the Director's `amendGroup` ([director.ts:288](src/llm/director.ts:288)) | [ruleset.ts:259](src/rules/ruleset.ts:259) |
 | **prey** | about one group in three hunts one other, of another type; a hunter attacks its quarry with ADVANTAGE — 46% to 79% between otherwise identical fighters, which is more than any template can say | [prey.ts:22](src/character/prey.ts:22), read at [conditions.ts:117](src/combat/conditions.ts:117) |
 
 A species below it gets one signature skill from `composeSkill`, and a subspecies
@@ -1235,7 +1235,7 @@ where a road goes: `revealWay` names the place a way leaves FROM and the engine
 mints the far side ([state.ts:102](src/play/state.ts:102)).
 
 **5. The redaction wall is a type, with a runtime backstop.** A place is hidden unless you have DISCOVERED it, on every floor
-([redact.ts:208](src/llm/redact.ts:208)) — *"everything on another floor is hidden, discovered or not"* was
+([redact.ts:213](src/llm/redact.ts:213)) — *"everything on another floor is hidden, discovered or not"* was
 true until `8dc4c32`, and refused every turn that mentioned the stair just climbed. Which
 names you may WALK to is the same rule ([travel.ts:287](src/world/travel.ts:287)), and so is
 the label on a door in the centre view ([grid.ts:41](src/server/grid.ts:41)). A journey is the engine's
@@ -1286,35 +1286,35 @@ refuses unless the player stands there AND holds the settlement.
 
 **12. A verb the model cannot legally use is a verb the model never sees.** The
 brief lists only `moveTo` values that are real exits
-([director.ts:524](src/llm/director.ts:524)), only `useItem`/`equipItem` ids
-actually carried ([director.ts:549](src/llm/director.ts:549)), and only
+([director.ts:528](src/llm/director.ts:528)), only `useItem`/`equipItem` ids
+actually carried ([director.ts:553](src/llm/director.ts:553)), and only
 `workBuilding`/`workStation` ids naming a workstation that HAS a method to run
-([director.ts:386](src/llm/director.ts:386)-[388](src/llm/director.ts:388),
-[:550](src/llm/director.ts:550)) — an `administrative` workstation, which never has
+([director.ts:388](src/llm/director.ts:388)-[390](src/llm/director.ts:390),
+[:554](src/llm/director.ts:554)) — an `administrative` workstation, which never has
 one, is silently absent rather than validated and refused later. `adoptLaw` AND
 `setSuccession` options are listed behind the same single gate: only when the
 player holds the settlement, a real hall stands there, and its AL unit has scope
-([director.ts:411](src/llm/director.ts:411)-[412](src/llm/director.ts:412),
-[:551](src/llm/director.ts:551)-[552](src/llm/director.ts:552)) — every condition
+([director.ts:413](src/llm/director.ts:413)-[414](src/llm/director.ts:414),
+[:555](src/llm/director.ts:555)-[556](src/llm/director.ts:556)) — every condition
 `hallAuthorityHere` would otherwise refuse either verb for. `repealLaw` is offered
 under the same gate AND only when the unit has laws of its own AND the player's own words carry a
 repeal cue — repeal, revoke, lift, abolish, rescind, overturn, "no longer", or one of four Thai substrings
-(`REPEAL_CUES_TH`, [director.ts:372](src/llm/director.ts:372); Thai has no word boundaries, so `\b` cannot see them)
-([director.ts:420](src/llm/director.ts:420), the line at [:558](src/llm/director.ts:558)) — an
+(`REPEAL_CUES_TH`, [director.ts:373](src/llm/director.ts:373); Thai has no word boundaries, so `\b` cannot see them)
+([director.ts:422](src/llm/director.ts:422), the line at [:562](src/llm/director.ts:562)) — an
 inherited law would be refused, so it is never shown, and an option that is not shown never fires. The same gate also shows what is IN FORCE, own and inherited, and the
-effective succession law ([director.ts:556](src/llm/director.ts:556)-[557](src/llm/director.ts:557)).
+effective succession law ([director.ts:560](src/llm/director.ts:560)-[561](src/llm/director.ts:561)).
 `collect` is its own block in the workstation shape — both field names in the header, the
 building beside its goods — offered only where the player holds the place and the category is
-in `COLLECTABLE` ([director.ts:555](src/llm/director.ts:555)); what is STORED is stated whether
-held or not ([director.ts:394](src/llm/director.ts:394)), since seeing it is harmless.
+in `COLLECTABLE` ([director.ts:559](src/llm/director.ts:559)); what is STORED is stated whether
+held or not ([director.ts:396](src/llm/director.ts:396)), since seeing it is harmless.
 
 **13. A delta merge spreads fields, never lists them.** `mergeDeltas` folds the
 unconditional and dice-selected halves with `...base, ...outcome`
-([director.ts:313](src/llm/director.ts:313), the spread at
-[:322](src/llm/director.ts:322)-[323](src/llm/director.ts:323)), specifically so a
+([director.ts:314](src/llm/director.ts:314), the spread at
+[:323](src/llm/director.ts:323)-[324](src/llm/director.ts:324)), specifically so a
 verb added to `WorldDelta` cannot be dropped here the way a listed version once
 silently dropped `amendLaw` and `revealWay`, on every checked turn
-([director.ts:321](src/llm/director.ts:321)). `runWorkstation` inherited this for
+([director.ts:322](src/llm/director.ts:322)). `runWorkstation` inherited this for
 free — no merge-side change was needed to carry it.
 
 ---
@@ -1368,7 +1368,7 @@ or caller yet, by decision, not oversight (DESIGN 6c §3j-i, 2026-09-27): the on
 actor who can currently trigger `runWorkstation` is the PLAYER, who structurally
 cannot hold a `LifeClass` (§3b: life classes are NPC-only) — so `workerEfficiency`
 ([delta.ts:145](src/play/delta.ts:145)) always resolves `raw-stat` directly and
-never needs `classFitOf` ([workstation.ts:97](src/world/workstation.ts:97)) or a
+never needs `classFitOf` ([workstation.ts:115](src/world/workstation.ts:115)) or a
 `Person`'s own `lifeClass` ([types.ts:276](src/world/types.ts:276)). Both wait on a
 real staffing/ownership answer — three other candidates §3j-i laid out and did not
 pick.
@@ -1394,10 +1394,10 @@ calls `hallScopeOf` ([al.ts:73](src/world/al.ts:73)). `adoptLaw`
 ([al.ts:122](src/world/al.ts:122)) are each wired through `validateDelta`
 ([delta.ts:486](src/play/delta.ts:486), [:506](src/play/delta.ts:506)), the fold
 ([delta.ts:735](src/play/delta.ts:735), [:739](src/play/delta.ts:739)) and the
-Director (schema [director.ts:105](src/llm/director.ts:105),
-[:107](src/llm/director.ts:107); brief gate — one `alScope` check offers both —
-[:412](src/llm/director.ts:412), [:551](src/llm/director.ts:551)-
-[552](src/llm/director.ts:552)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
+Director (schema [director.ts:106](src/llm/director.ts:106),
+[:108](src/llm/director.ts:108); brief gate — one `alScope` check offers both —
+[:414](src/llm/director.ts:414), [:555](src/llm/director.ts:555)-
+[556](src/llm/director.ts:556)). `isBoundBy` ([al.ts:117](src/world/al.ts:117)) and `rulerSeatOf`
 ([al.ts:58](src/world/al.ts:58)) are called by `lawEnforcementAfter`
 ([delta.ts:1013](src/play/delta.ts:1013), [:1014](src/play/delta.ts:1014)), wired into
 the fold at [delta.ts:1083](src/play/delta.ts:1083) (DESIGN 6c §3k-ii).
@@ -1411,7 +1411,7 @@ engine can detect — a law with a writer and no trigger, deferred by DESIGN 6c
 §3k-ii, not an oversight. Adopted laws were invisible to everyone — the Director's
 brief listed what could be adopted but never what already was, and no view reads
 `AlUnit.laws` — until `repealLaw`'s stage added the "in force" line
-([director.ts:556](src/llm/director.ts:556)); found when a live run on the local 35B model adopted a
+([director.ts:560](src/llm/director.ts:560)); found when a live run on the local 35B model adopted a
 law from a mere remark 2 times in 5 and nothing could show or undo it. Still true: no
 STANDING view shows them (a decision, not an oversight). Since 2026-09-29 a turn that adopts, repeals or changes
 succession ANNOUNCES it (`lawNotices`, [delta.ts:296](src/play/delta.ts:296); `TurnResult.notices`,
@@ -1445,16 +1445,16 @@ read `holderOf`, where the fold nudges through `holderUnder`, and `world/` canno
 `holderUnder` from `play/`, so it could not be rewired without a layering break; nothing called
 it, so it was deleted rather than left to name a different ruler than the fold. That leaves its
 only output beyond the holder, the title `CAPS[tier].ruler`
-([settlement.ts:25](src/world/settlement.ts:25) onward), with **no reader**: dead until a brief or
+([settlement.ts:58](src/world/settlement.ts:58) onward), with **no reader**: dead until a brief or
 a view names a ruler by rank. Found while wiring `holderUnder`, not from that stage's brief.
 
 **Cleared: `Building.container` had writers and no reader.** What a workstation makes
-lands in the building's `container` — `runMethod` ([workstation.ts:39](src/world/workstation.ts:39))
+lands in the building's `container` — `runMethod` ([workstation.ts:57](src/world/workstation.ts:57))
 computes it, the fold stores it ([delta.ts:166](src/play/delta.ts:166)) — and until
 2026-09-29 nothing read it: no verb took from it, the Director's brief did not show it, no
 view did, so `runWorkstation` produced goods nobody could see or collect. Found before any
 off-screen production was built on top of it. Now the brief states what each building has
-stored ([director.ts:394](src/llm/director.ts:394)) and the holder can `collect` a whole
+stored ([director.ts:396](src/llm/director.ts:396)) and the holder can `collect` a whole
 category as items (`refusalToCollect`/`collected`, [delta.ts:177](src/play/delta.ts:177),
 [:191](src/play/delta.ts:191); items from `itemsFor`, [collect.ts:21](src/play/collect.ts:21)).
 **Still open:** a container holds category COUNTS, and only six categories have an item to
@@ -1464,7 +1464,7 @@ kinds can be made and never collected (refused with a reason, not faked). And `D
 §3c-i's other v1 verbs, buy, sell and steal, are still unbuilt.
 
 **Cleared: `Place.buildings` had a writer and no generator — the whole station system was unreachable
-in a real world.** Until 2026-09-29 `addBuilding` ([settlement.ts:147](src/world/settlement.ts:147)) had
+in a real world.** Until 2026-09-29 `addBuilding` ([settlement.ts:180](src/world/settlement.ts:180)) had
 no caller outside tests and neither genesis nor floorgen set `Place.buildings`, so no generated place had
 a building or a workstation, and everything that needs one (`runWorkstation`, the hall verbs, `collect`,
 the `Stored in` line, `caughtUp`) ran only on a hand-built state. Found while checking whether catch-up
@@ -1526,9 +1526,9 @@ see `crossFloors` under *Enforced by construction*.
 **Dealt but not driven: the `service` stations.** `buildingsFor` gives every hamlet and up a home (`bed`,
 [buildinggen.ts:27](src/world/buildinggen.ts:27)) and every village and up an inn (`hearth`,
 [buildinggen.ts:32](src/world/buildinggen.ts:32)). The Director is offered them like any station
-([director.ts:387](src/llm/director.ts:387)) and `worked` would run one ([delta.ts:158](src/play/delta.ts:158)), but the
+([director.ts:389](src/llm/director.ts:389)) and `worked` would run one ([delta.ts:158](src/play/delta.ts:158)), but the
 model never names them: live, 0 of 26 trials. It sets the basic `rest` action instead (home 8 of 8, inn 6 of 8;
-[director.ts:581](src/llm/director.ts:581), [delta.ts:749](src/play/delta.ts:749)). That is correct, not a fault: a
+[director.ts:585](src/llm/director.ts:585), [delta.ts:749](src/play/delta.ts:749)). That is correct, not a fault: a
 service station only earns its place worked by an NPC innkeeper, which is step 8. Until then nothing drives them.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
@@ -1720,7 +1720,7 @@ law: a traveller takes a stair only where it allows
 tells people instead (`rumoursAfter`, [journey.ts:306](src/play/journey.ts:306)), so the law has a consequence beyond
 refusing a move. For everything else it is still true
 by construction: `Person.homeRegion` is written at generation and never updated,
-and the Director brief ([director.ts:487](src/llm/director.ts:487)) is the only
+and the Director brief ([director.ts:489](src/llm/director.ts:489)) is the only
 check on what gets narrated.
 
 **`Person.line` is always a real id** ([types.ts:266](src/world/types.ts:266)) — by
@@ -1748,7 +1748,7 @@ rather than on the nose.
 **Per-NPC rule knowledge** has no writer for the same reason. The only
 `ruleClaim` writer is the player's refused crossing
 ([climb.ts:116](src/play/climb.ts:116)); the Director is shown the PLAYER's
-beliefs about the law ([director.ts:496](src/llm/director.ts:496)).
+beliefs about the law ([director.ts:498](src/llm/director.ts:498)).
 
 ---
 
@@ -1903,9 +1903,9 @@ Every balance number, and where it lives.
 | a place link / a stair | 6–42 min (each end by kind 3/5/7/9, seed 0–10, biome ×1/×1.25/×1.5 by keyword), charged in whole ticks / 1–3 hours, seeded per pair; a wild link +50% in winter | [travel.ts:36](src/world/travel.ts:36), [:45](src/world/travel.ts:45), [:82](src/world/travel.ts:82), [:73](src/world/travel.ts:73) |
 | a field's band | legs 8 columns apart (three walls between them), 2 tiles either side of the centreline, a straight run of at least 6 at the end, one-tile spurs 4–8 long off the band | [map.ts:176](src/world/map.ts:176), [:178](src/world/map.ts:178), [:181](src/world/map.ts:181) | [map.ts:176](src/world/map.ts:176), [:181](src/world/map.ts:181) |
 | rough ground on a field | 5% / 20% / 35% of the band, by W1's biome keywords | [map.ts:213](src/world/map.ts:213) |
-| hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:22](src/world/settlement.ts:22), [map.ts:298](src/world/map.ts:298) |
-| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:24](src/world/settlement.ts:24), [:22](src/world/settlement.ts:22) |
-| a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:49](src/world/workstation.ts:49) |
+| hub radius | a settlement's is its TIER's (12/18/26/34/42/50); anything untiered is its kind's — wild 18, landmark and dungeon 14, gate 10 | [settlement.ts:23](src/world/settlement.ts:23), [map.ts:298](src/world/map.ts:298) |
+| a settlement's tier | six rungs: souls 20–100 · 100–1k · 1k–20k · 20k–100k · 100k–1M · 1M+, against crowd 12/24/40/60/80/100 and plots 3/8/16/28/40/52 | [settlement.ts:57](src/world/settlement.ts:57), [:23](src/world/settlement.ts:23) |
+| a building's container capacity | flat placeholder, tier × 20 — ordering decided, magnitudes await no-rebalance | [workstation.ts:67](src/world/workstation.ts:67) |
 | a workstation worker's efficiency range | flat placeholder `[1, MAX_ABILITY]` (1–20) — ordering decided, magnitudes await no-rebalance | [delta.ts:147](src/play/delta.ts:147), [signetbook.ts:59](src/play/signetbook.ts:59) |
 | workstations packed per module | 1–3 each, `ceil(count / 3)` | [building.ts:8](src/world/building.ts:8), [:11](src/world/building.ts:11) |
 | the goods vocabulary | 11 categories, not 8 — `rollLoot` only ever rolls the original 8 by name; `seed`/`tool`/`ingredient` exist for station recipes only, unreachable from combat — a generated farmstead consumes `seed` but is born stocked with it, nothing yields any | [catalogue.ts:235](src/items/catalogue.ts:235), [workstation.ts:11](src/world/workstation.ts:11) |
@@ -1948,7 +1948,7 @@ Every balance number, and where it lives.
 | what a wing is known for | ×3 on up to two named categories, ×0.5 on the rest | [floorgen.ts:638](src/world/floorgen.ts:638) |
 | era gap | 10–100 years a floor, dealt per floor; the top floor is one gap back | [strata.ts:90](src/world/strata.ts:90) |
 | era band | floors 21–30 | [genesis.ts:661](src/session/genesis.ts:661) |
-| echoes told | the five most recent, from the era floors below in the same band | [director.ts:366](src/llm/director.ts:366) |
+| echoes told | the five most recent, from the era floors below in the same band | [director.ts:367](src/llm/director.ts:367) |
 | descendants per era floor | 1–2, from the living people of the floor below | [floorgen.ts:557](src/world/floorgen.ts:557) |
 | settlement price | 50 × floor (floor 0 counts as 1) — about ten won fights on floor 1, measured live | [holding.ts:24](src/world/holding.ts:24) |
 | trust to sell | 2 | [holding.ts:27](src/world/holding.ts:27) |
@@ -1973,7 +1973,7 @@ Every balance number, and where it lives.
 from §4's function table since before this session, never actually written up
 until now). `on-class > shares-stat > raw-stat`, both off-class tiers scaling with
 the stat, is decided; the exact multipliers are a placeholder
-([workstation.ts:72](src/world/workstation.ts:72), ponytail-marked) pending
+([workstation.ts:90](src/world/workstation.ts:90), ponytail-marked) pending
 no-rebalance-until-feature-complete. Concretely harsh at today's numbers: raw-stat
 tops out at 0.5 efficiency, which cannot clear a `time: 1` recipe in one
 `WORK_HOURS_PER_TURN`-hour turn regardless of stat — proven by test, not asserted
@@ -2049,8 +2049,8 @@ would be a word with no reader — the signature bug, introduced on purpose. It
 arrives with quests (DESIGN step 7).
 
 *Echoes reach the Director, not the Writer.* The Director's context carries them
-([director.ts:522](src/llm/director.ts:522)); the Writer's view gets the era's time line
-([redact.ts:141](src/llm/redact.ts:141)) and no echoes. Add when the prose never mentions one.
+([director.ts:526](src/llm/director.ts:526)); the Writer's view gets the era's time line
+([redact.ts:145](src/llm/redact.ts:145)) and no echoes. Add when the prose never mentions one.
 
 *A descendant outlives an ancestor killed after you met them.* Lines are dealt when a
 floor is built ([floorgen.ts:553](src/world/floorgen.ts:553)); a later killing changes
@@ -2122,8 +2122,8 @@ refused climb target.
 should be a read-out from workstation and footprint counts.** No formula for that
 derivation is decided, and no-rebalance-until-feature-complete means it would be
 placeholder numbers regardless — `capacityOf` reads tier directly
-([workstation.ts:49](src/world/workstation.ts:49)) rather than computing it from
-`Building.workstations.length` ([workstation.ts:24](src/world/workstation.ts:24)).
+([workstation.ts:67](src/world/workstation.ts:67)) rather than computing it from
+`Building.workstations.length` ([workstation.ts:29](src/world/workstation.ts:29)).
 Flagged in DESIGN.md §3f and HANDOFF.md rather than fixed quietly.
 
 ---
