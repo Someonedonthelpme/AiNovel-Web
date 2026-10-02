@@ -694,7 +694,7 @@ Nine calls, all behind `Provider` ([llm/provider.ts:34](src/llm/provider.ts:34))
 | call | schema | may decide | reaches the log? |
 |---|---|---|---|
 | **Director** ([director.ts:665](src/llm/director.ts:665)) | `DIRECTOR_SCHEMA`, t=0.7 | what your text *means*: a check, who you addressed, a proposed delta — with **all three tier branches pre-committed before any dice exist**. The delta may now name a law change from the closed lists (`amendLaw`, [director.ts:95](src/llm/director.ts:95)) and the PLACE a new way out leaves from (`revealWay`, [:72](src/llm/director.ts:72)) — never where it goes — and the settlement a purchase is for (`acquirePlace`, [director.ts:74](src/llm/director.ts:74)). Every person it names is resolved by `personRef` ([delta.ts:72](src/play/delta.ts:72)): live, it wrote names where ids were asked, and nine "helped" deeds in ten were thrown away | indirectly — only the validated delta and the refusal reasons |
-| **Parley** ([director.ts:730](src/llm/director.ts:730)) | `PARLEY_SCHEMA` ([:703](src/llm/director.ts:703)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:429](src/play/turn.ts:429)); an answer outside the list is a refusal ([director.ts:727](src/llm/director.ts:727)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
+| **Parley** ([director.ts:730](src/llm/director.ts:730)) | `PARLEY_SCHEMA` ([:703](src/llm/director.ts:703)), t=0.7 | mid-fight, which ability the player's words lean on and what ONE foe does on each of hit / partial / miss — `yields`, `withdraws` or `refuses`, all committed before the engine rolls ([turn.ts:434](src/play/turn.ts:434)); an answer outside the list is a refusal ([director.ts:727](src/llm/director.ts:727)). Deliberately not `DIRECTOR_SCHEMA`: a `moveTo` mid-fight would pass `validateDelta` | **yes** — the verdict and roll, inside `combatActions` |
 | **Writer** ([writer.ts:246](src/llm/writer.ts:246)) | text, t=0.85 | prose only, from a redacted view | yes — `TurnRecord.prose`, never regenerated |
 | **Writer retry** ([writer.ts:263](src/llm/writer.ts:263)) | text, t=0.7 | one regeneration on register drift; a second failure is accepted | same field |
 | **Floor** ([floorgen.ts:369](src/world/floorgen.ts:369)) | `floorSchema(floor)`, t=0.9 | a region's places, people, culture (at least the budget minimum of people, [floorgen.ts:130](src/world/floorgen.ts:130); shown the last four floors, [:299](src/world/floorgen.ts:299); a name per place, [:325](src/world/floorgen.ts:325)) — inside a stratum's theme when it has one — and optionally that it opens a WING (`wingName`, [floorgen.ts:142](src/world/floorgen.ts:142)); the engine decides where the wing hangs, how far it runs (1–6 floors) and that it is frozen ([floorgen.ts:596](src/world/floorgen.ts:596)); it may name up to two `LOOT_CATEGORIES` the wing is known for (`wingKnownFor`, [floorgen.ts:144](src/world/floorgen.ts:144)); on a landmark or loop floor it NAMES the holder (`bossName`, `bossOneLine`, [floorgen.ts:146](src/world/floorgen.ts:146)) and the engine decides what they are — lineage from the floor's pack, a veteran's sheet — and returns an existing holder rather than remaking one ([floorgen.ts:663](src/world/floorgen.ts:663), [:669](src/world/floorgen.ts:669)) | **yes, in full** — inside `ClimbRecord.built` |
@@ -1147,8 +1147,8 @@ log's length seeds every roll, so a first-option picker like the harness must ne
 reach one. The server hears it where a provider exists
 ([game.ts:756](src/server/game.ts:756)): `hearParley` DISCARDS whatever roll and
 verdict the client sent, asks the model, rolls in the engine and writes the tier's
-answer into the action ([turn.ts:418](src/play/turn.ts:418)); a foe that cannot hear
-costs no call ([:421](src/play/turn.ts:421)). The fold only carries the verdict out
+answer into the action ([turn.ts:423](src/play/turn.ts:423)); a foe that cannot hear
+costs no call ([:426](src/play/turn.ts:426)). The fold only carries the verdict out
 ([combat/combat.ts:92](src/combat/combat.ts:92)): `yields` and `withdraws` are stage
 6's `yielded` and `fled` ([:100](src/combat/combat.ts:100)), so a fate, a survivor and
 a deed need nothing new, and `refuses` changes nothing. A foe still standing is above
@@ -1169,7 +1169,7 @@ Rest and hunting are recognised by the engine from what you type (§9 step 0).
 
 **Walk by clicking** (W4a) — `POST /walk { map, x, y }` is checked twice: its
 shape at the route ([game.ts:671](src/server/game.ts:671)), then that the tile is on
-your map, inside it and not a wall ([turn.ts:234](src/play/turn.ts:234)); a bad one is
+your map, inside it and not a wall ([turn.ts:239](src/play/turn.ts:239)); a bad one is
 refused with a reason and nothing is logged. The walk is logged as its own turn
 FIRST, then a stair or a way out is taken ([game.ts:594](src/server/game.ts:594)), so a
 climb that fails leaves you standing on the stair.
@@ -1226,7 +1226,7 @@ the rules.
 **2. Dice are recorded, never re-rolled.** Where a roll can be derived from
 state instead, it is — which is why a whole fight stores only decisions — except a
 parley's roll, which comes from the live path and is recorded
-([turn.ts:418](src/play/turn.ts:418)).
+([turn.ts:423](src/play/turn.ts:423)).
 
 **3. The model never decides an outcome.** It proposes; the engine validates and
 resolves.
@@ -1255,7 +1255,7 @@ dropped on reload. This has already happened once, to panel actions.
 
 **8. A step with one right answer never reaches the model.** Walking, resting,
 hunting and buying are recognised whole and applied by the engine
-([turn.ts:147](src/play/turn.ts:147), [:344](src/play/turn.ts:344)): live, the Director refused an adjacent stair three
+([turn.ts:149](src/play/turn.ts:149), [:349](src/play/turn.ts:349)): live, the Director refused an adjacent stair three
 times, started no fight on five "attack" turns in six, and rested only when it chose
 to. Speech that merely contains the words ("rest assured", "attack the warden")
 is still the Director's.
@@ -1420,7 +1420,7 @@ brief listed what could be adopted but never what already was, and no view reads
 law from a mere remark 2 times in 5 and nothing could show or undo it. Still true: no
 STANDING view shows them (a decision, not an oversight). Since 2026-09-29 a turn that adopts, repeals or changes
 succession ANNOUNCES it (`lawNotices`, [delta.ts:296](src/play/delta.ts:296); `TurnResult.notices`,
-[turn.ts:62](src/play/turn.ts:62), which also carries the rumour sentences, `rumourNotices`,
+[turn.ts:64](src/play/turn.ts:64), which also carries the rumour sentences, `rumourNotices`,
 [delta.ts:315](src/play/delta.ts:315)), so a stray one is seen the turn it happens, though not prevented. A remark can still fire a hall verb, and a
 decree can carry a stray second one: on the three flat fields a live run saw a stray extra verb on about
 half of the decrees and a hall verb on 2 of 15 remarks. One `hallAction`/`hallValue` pair was TRIED
@@ -2076,8 +2076,8 @@ floor is built ([floorgen.ts:553](src/world/floorgen.ts:553)); a later killing c
 nothing on the floor above. Open in DESIGN *Stratum knobs*.
 
 *A walk arrives in a fixed line, not prose.* "You walk to the covered market." — the
-engine walks and no model narrates the arrival ([turn.ts:281](src/play/turn.ts:281)). **W3 decided:** every
-stop gets a fixed line, by why it stopped ([turn.ts:272](src/play/turn.ts:272)); the Director on stops waits
+engine walks and no model narrates the arrival ([turn.ts:286](src/play/turn.ts:286)). **W3 decided:** every
+stop gets a fixed line, by why it stopped ([turn.ts:277](src/play/turn.ts:277)); the Director on stops waits
 for W5, when a stop can mean someone in view (DESIGN 6c §2c).
 
 *There is no way down in the web app.* `godown` exists ([climb.ts:309](src/play/climb.ts:309)) and the view
