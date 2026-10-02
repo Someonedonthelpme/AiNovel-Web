@@ -1743,6 +1743,47 @@ not run. The inn `hearth` and home `bed` were never named (0/26): sleep goes to 
 6/8), which is right — a service station is for an NPC innkeeper to work (step 8), not for the player. The general
 store and armoury stay undealt.
 
+**Shifts: when a building is open, and how crowded a place feels (user, 2026-10-02) — an experiment until a live A/B
+says the prose follows it.** Step 8's presence slice, re-scoped from "the smith is at the smithy by day" (there is no
+"at the smithy": buildings sit INSIDE a settlement place, presence is per place, and no NPC has an occupation —
+`Person.lifeClass` has no writer, by decision). What exists today is a binary NIGHT rule for NAMED people (guards and
+night kinds only, `presentHere`), and a crowd that is abstract: cohorts capped at 12–100 by tier, read only by combat
+and the road view, and `soulsOf` — the real headcount, 20 to 12 million — read by nothing. The model is told nothing
+about how crowded a place is, so it can write a bustling market at midnight in a hamlet.
+- **`Workstation.shift?: 'day' | 'night' | 'both'`, default `day`** (so stored worlds need no migration). A building's
+  shift is DERIVED from its stations — day and night together, or any `both`, is both — so there is one source of
+  truth. Night is 20:00 to 06:00 (`calendar.ts`). Dealt types: hall, pasture, smithy, farmstead, tannery `day`; inn
+  `both`; home `night`.
+- **Night venues are catalogue entries, NOT dealt yet — data to add** (the same `(category, tag)` rule; any new pair is
+  a valid building). **pub** `(amenities, company)` · **brothel** `(amenities, company)` · **theatre**
+  `(amenities, purpose)` — each `night`, a `service` station serving the `company` or `purpose` need; and a
+  **watch-house** `(government, safety)`, `both`, whose keepers are the guards already out at night. Proposed tiers,
+  to confirm: pub from village, theatre, brothel and watch-house from town. The engine supplies only that such a place
+  is open after dark and which need it serves; what happens inside is narrated as any scene is. Whether a settlement
+  licenses, taxes or bans such a venue is a 6c law question and `civil` law is fully blocked (§3k-ii) — not built, and
+  no hook is left for it.
+- **An open building PULLS people out, by kind.** An amenities venue draws customers, strongly; a work building
+  (production, agriculture, government) draws its workers out by day; a RESIDENTIAL building draws nobody out — open
+  means its people are IN, asleep. That is why `home` is `night` yet adds nothing to the crowd.
+- **`crowdBand(world, place)` — a WORD, not a number.** Headcount out = `soulsOf` × a share, where the share is a base
+  for the hour (day high, night very low) plus the pulls of the buildings open now. The band is read off the ABSOLUTE
+  count — deserted, quiet, busy, crowded — because a megacity at 01:00 is not deserted and a hamlet at noon is not
+  crowded; **a band relative to the share alone was the first proposal and is wrong for exactly that reason.** This
+  gives `soulsOf` its first reader. The numbers are placeholders (no rebalance until feature-complete), set at build
+  and marked `ponytail:` in code. A place with no souls (wild, landmark, gate) has no band and no line.
+- **The line** — "Unnamed people about: quiet." — goes in the Director's brief and in the Writer's view beside the
+  time line, in the world's language, and is kept apart from the named list, whose night rule is unchanged: the named
+  are who you can meet, the unnamed are the scene around them.
+- **Worked cases.** A hamlet at night: deserted, with or without an inn. A town at night with a pub, a brothel and an
+  inn: at least one band above the same town with none of them. A town with only homes at night: no change. A city at
+  noon: crowded. A megacity at night: never deserted.
+- **Not built, on purpose:** a `day` station stopping at night (it would roughly halve catch-up output and move the
+  economy's numbers — add at the rebalance pass); a named person kept up at night to run the inn (follows from `both`
+  later); the crowd changing a fight's size; reputation or standing effects of a venue.
+- **Reader, named first:** the model's brief and the Writer — the same kind of reader as the time and season lines.
+  Because it changes a Director brief it needs a LIVE A/B before commit (the model must not start naming crowd verbs,
+  and the prose should follow the band). Kept only if that holds.
+
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
 building without a new hardcoded type. The tag can't be a `LootCategory` directly — the
