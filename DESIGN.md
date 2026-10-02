@@ -1783,6 +1783,16 @@ about how crowded a place is, so it can write a bustling market at midnight in a
 - **Reader, named first:** the model's brief and the Writer — the same kind of reader as the time and season lines.
   Because it changes a Director brief it needs a LIVE A/B before commit (the model must not start naming crowd verbs,
   and the prose should follow the band). Kept only if that holds.
+- **Result (2026-10-02): BUILT, KEPT** (`shiftOf`/`isOpen`, `workstation.ts`; `crowdBand`/`crowdLine`, `settlement.ts`;
+  the line in `directorContext`, `toWriterView` and the Writer's prompt). Live, local models, N=4 a cell. **Director,
+  with and without the line:** stray hall verbs on plain remarks 0/8 either way; decree recall 8/8 either way; the
+  brief for a look-around used crowd words 1/4 -> 3/4 for a city at noon (weak for a hamlet at night, 0/4 -> 0/4).
+  **Writer, English world, with and without:** city at noon crowd words 3/4 -> 4/4; hamlet at night empty words
+  2/4 -> 4/4 — the prose follows the band, most where the model's own default was weakest. `soulsOf` has its first
+  reader. **Found before the live check, by reading:** the line was on the Writer's VIEW but not in its PROMPT, so the
+  Writer never saw it; a test now pins the prompt. **Caveats:** a keyword proxy on four runs; English only — the Thai
+  Writer path and the Thai wording are untested. **Not built:** a `day` station stopping at night (production still
+  runs through the dark), a named keeper up at night, the pub, brothel, theatre and watch-house entries.
 
 **The type key is `(category, tag)`, not a bespoke proper noun per type.** A hand-named
 list of ten types doesn't generalise; any new `(category, tag)` pair should be a valid
