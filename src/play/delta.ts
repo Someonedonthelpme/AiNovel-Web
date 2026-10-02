@@ -446,7 +446,8 @@ export function validateDelta(state: PlayState, proposed: WorldDelta): Validated
     }
   }
 
-  const facts = (proposed.learnFacts ?? []).map((f) => f.trim()).filter(Boolean);
+  // One fact once: the Director repeats the same facts in its delta and in the branch the dice chose.
+  const facts = [...new Set((proposed.learnFacts ?? []).map((f) => f.trim()).filter(Boolean))];
   if (facts.length) delta.learnFacts = facts;
 
   if (proposed.flags && Object.keys(proposed.flags).length) delta.flags = { ...proposed.flags };
