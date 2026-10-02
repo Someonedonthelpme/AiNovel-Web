@@ -755,15 +755,89 @@ export async function runParley(provider: Provider, state: PlayState, foe: Comba
   };
 }
 
+/*
+ * The second-pass CHECK on lasting effects (DESIGN 6c 3k-ii, 2026-10-02).
+ *
+ * The Director has 25 required delta fields and fills them on remarks that fit no option: live, a drink at the pub
+ * set a law, a work station and a collect together, and a greeting returned `deed: "threatened"`. Hiding a brief
+ * line did not stop it, and a law, a collect and a deed are lasting state. So each is applied only if one tiny
+ * separate call confirms the player's OWN words clearly do it, as `runParley` is a small call of its own.
+ */
+const LASTING_SCHEMA = obj({ confirmed: { type: 'array', items: { type: 'integer' } } }, ['confirmed']);
+
+const LASTING_SYSTEM = [
+  "You check a game engine's proposed LASTING effects against what a player actually said.",
+  "The player's words are the only evidence. Confirm an effect ONLY if the player's own words clearly do or declare it:",
+  "a decree for a law, a plain act of taking for collecting goods, an unmistakable threat, insult, humiliation or real",
+  "help for a deed. Politeness, questions, small talk, remarks about the world and anything merely plausible confirm",
+  "nothing. When unsure, do not confirm. Answer with JSON: the numbers of the effects confirmed, which may be none.",
+].join('\n');
+
+const DEED_VERB: Record<DirectorDeed, string> = { helped: 'genuinely help', insulted: 'insult', humiliated: 'humiliate', threatened: 'threaten' };
+
+type Lasting = { text: string; drop: (delta: WorldDelta) => WorldDelta };
+const without = (delta: WorldDelta, key: keyof WorldDelta): WorldDelta => {
+  const { [key]: _gone, ...rest } = delta;
+  return rest;
+};
+
+/** The lasting effects a delta carries, each as one plain sentence and a way to remove it. */
+function lastingEffects(state: PlayState, delta: WorldDelta): Lasting[] {
+  const named = (id: string) => state.world.people[id]?.name ?? id;
+  const found: Lasting[] = [];
+  if (delta.adoptLaw) found.push({ text: `declare a law making ${delta.adoptLaw} a crime here`, drop: (d) => without(d, 'adoptLaw') });
+  if (delta.repealLaw) found.push({ text: `repeal the law against ${delta.repealLaw} here`, drop: (d) => without(d, 'repealLaw') });
+  if (delta.setSuccession) {
+    found.push({ text: `change how this settlement picks its next holder to "${delta.setSuccession}"`, drop: (d) => without(d, 'setSuccession') });
+  }
+  if (delta.collect) {
+    found.push({ text: `take the ${delta.collect.category} stored in ${delta.collect.building}`, drop: (d) => without(d, 'collect') });
+  }
+  if (delta.deed) found.push({ text: `${DEED_VERB[delta.deed.kind]} ${named(delta.deed.toward)}`, drop: (d) => without(d, 'deed') });
+  return found;
+}
+
 /**
- * The second-pass CHECK on lasting effects (DESIGN 6c 3k-ii, 2026-10-02): a law verb, a collect or a deed the Director
- * proposed is applied only if the player's own words clearly do it. Stub: a no-op, filled in by the next commit.
+ * Keep a lasting effect only if the check confirms it; drop the rest and name each in `refused`, so a real decree
+ * that is dropped is never silent. FAIL CLOSED: a call that throws or an answer that is not a list of numbers drops
+ * every effect and says it could not check — lasting state is never applied on a guess. A turn with no lasting
+ * effect makes no call. The check runs outside the fold and the record stores the delta after the drop, so a replay
+ * reaches the same state.
  */
 export async function confirmLasting(
-  _provider: Provider,
-  _state: PlayState,
-  _input: string,
+  provider: Provider,
+  state: PlayState,
+  input: string,
   delta: WorldDelta,
 ): Promise<{ delta: WorldDelta; refused: string[] }> {
-  return { delta, refused: [] };
+  const effects = lastingEffects(state, delta);
+  if (effects.length === 0) return { delta, refused: [] };
+
+  let confirmed: Set<number> | null = null;
+  try {
+    const raw = await provider.structured<{ confirmed?: unknown }>({
+      schemaName: 'lasting_check',
+      schema: LASTING_SCHEMA,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: LASTING_SYSTEM },
+        { role: 'user', content: `Player's words: "${input}"\n\nProposed effects:\n${effects.map((e, i) => `${i + 1}. ${e.text}`).join('\n')}` },
+      ],
+    });
+    if (Array.isArray(raw?.confirmed)) confirmed = new Set(raw.confirmed.filter((n): n is number => Number.isInteger(n)));
+  } catch {
+    // Deliberate degrade, stated to the player below: an unreachable check drops the effects, it never applies them.
+    confirmed = null;
+  }
+
+  let next = delta;
+  const refused: string[] = [];
+  effects.forEach((effect, i) => {
+    if (confirmed?.has(i + 1)) return;
+    next = effect.drop(next);
+    refused.push(confirmed
+      ? `not recorded: ${effect.text} — your words did not clearly do that`
+      : `could not be checked, so not recorded: ${effect.text}`);
+  });
+  return { delta: next, refused };
 }
