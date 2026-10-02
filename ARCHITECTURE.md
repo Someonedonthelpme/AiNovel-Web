@@ -576,7 +576,7 @@ come from?"
 | `capacityOf` ([workstation.ts:67](src/world/workstation.ts:67)) | a building's tier | its container's capacity — flat placeholder, tier × 20 |
 | `runAt` ([workstation.ts:73](src/world/workstation.ts:73)) | a building, a sub-method, hours worked | `runMethod` against the building's own container, capped by its tier |
 | `runWorkstation` ([workstation.ts:78](src/world/workstation.ts:78)) | a building, a workstation id, hours worked, an optional efficiency | `runAt` using that workstation's OWN stored method — null if it has none, or isn't there |
-| `buildingsFor` ([buildinggen.ts:92](src/world/buildinggen.ts:92)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture and home from hamlet, smithy, farmstead and inn from village, tannery from town (the table is `DEALT`, [buildinggen.ts:74](src/world/buildinggen.ts:74)); deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
+| `buildingsFor` ([buildinggen.ts:92](src/world/buildinggen.ts:92)) | a world-ish (seed, regions), a region id, its places | the places with every settlement dealt its buildings by its tier — hall always, pasture and home from hamlet, smithy, farmstead, inn and pub from village, tannery, theatre, brothel and watch-house from town (the table is `DEALT`, [buildinggen.ts:74](src/world/buildinggen.ts:74)); deterministic (no draw), engine-only, a place that already has buildings is left alone, `workedAt` unset so the first visit stamps (DESIGN 6c §3i, smallest slice) |
 | `caughtUp` ([catchup.ts:31](src/play/catchup.ts:31)) | the world before a turn, the world after it | the world with the place the player just ARRIVED at caught up: a building first seen is only stamped (`workedAt`); after that its economic workstations run for the hours since, staffed by the living people there who are not on the road — one person, one station, best fit first, a sheetless NPC judged at a flat placeholder ability (10). Fold-only, from state alone, so a replay makes the same goods (DESIGN 6c §3h, §3j-i) |
 | `efficiencyOf` ([workstation.ts:91](src/world/workstation.ts:91)) | a class fit, a stat, its range | an efficiency multiplier — on-class full, off-class an ordering only (§14) |
 | `statFor` ([workstation.ts:110](src/world/workstation.ts:110)) | a sub-method | the `Ability` its primary output good calls for (DESIGN 6c §3j) — `LootCategory` → stat, 11 rows, exhaustive |
@@ -1478,10 +1478,11 @@ Director and the fold, and the live Director checks all ran on hand-built fixtur
 ([buildinggen.ts:92](src/world/buildinggen.ts:92)) deals them, called after `alUnitsFor` on the ground
 floor ([genesis.ts:596](src/session/genesis.ts:596)) and on every generated floor
 ([floorgen.ts:525](src/world/floorgen.ts:525)): a hall in every settlement, a pasture and a home from hamlet up, a
-smithy, farmstead and inn from village up, a tannery from town up (`DEALT`,
-[buildinggen.ts:74](src/world/buildinggen.ts:74); every tier fits its plot budget). The home and inn are
-`service` stations (rest) that nothing drives yet (see the ledger, §12), the rest `economic`. **Still narrow, on purpose:** only seven of the catalogue's
-types exist — no general store or armoury, since buy/sell and `part` items are unbuilt — and each is tier 1;
+smithy, farmstead, inn and pub from village up, and from town up a tannery, a theatre, a brothel and a watch-house
+(`DEALT`, [buildinggen.ts:74](src/world/buildinggen.ts:74); every tier fits its plot budget: a village 7 buildings on
+8 plots, a town 11 on 16). The home, inn and the four night venues are `service` stations that nothing drives yet (see
+the ledger, §12); the smithy, pasture, farmstead and tannery are `economic`; the hall is `administrative`. **Still
+narrow, on purpose:** only eleven of the catalogue's types exist — no general store or armoury, since buy/sell and `part` items are unbuilt — and each is tier 1;
 nobody but the holder can collect or legislate, and holding means buying — `50 × floor` coin and the
 holder's trust of 2 or more; and only about 35% of settlements are a seat (town or city, dealt 20% and
 15%), so a hall with legislative scope is the minority case — the rest are bare, local-only halls. The
@@ -1535,6 +1536,11 @@ see `crossFloors` under *Enforced by construction*.
 model never names them: live, 0 of 26 trials. It sets the basic `rest` action instead (home 8 of 8, inn 6 of 8;
 [director.ts:585](src/llm/director.ts:585), [delta.ts:749](src/play/delta.ts:749)). That is correct, not a fault: a
 service station only earns its place worked by an NPC innkeeper, which is step 8. Until then nothing drives them.
+The four night venues dealt on 2026-10-02 are the same case: a pub (`taproom`, [buildinggen.ts:51](src/world/buildinggen.ts:51)),
+a brothel (`salon`, [:56](src/world/buildinggen.ts:56)), a theatre (`stage`, [:61](src/world/buildinggen.ts:61)) and a
+watch-house (`watch`, [:66](src/world/buildinggen.ts:66)), each a `service` station on `company`, `company`, `purpose`
+and `safety`. Live, the model never named the pub's `taproom`, even where it was the only pub id on offer. Their one
+reader is `crowdBand` ([settlement.ts:41](src/world/settlement.ts:41)), which an open venue lifts at night.
 
 `Signet.augments` (display-only; nothing resolves the reference) ·
 `Signet.hint` · `Gazetteer.openThreads` (read by the rehydration prompt, written
