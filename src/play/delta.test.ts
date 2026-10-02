@@ -1180,11 +1180,16 @@ test('several verbs in one turn give one sentence each', () => {
 
 // The fixture world is Thai; the English assertions below ask for English explicitly.
 const inEnglish = (state: PlayState): PlayState => ({ ...state, world: { ...state.world, language: 'en' } });
-const turnWith = (state: PlayState, delta: Partial<FlatDelta>) => playTurn(
+// Respecified: this built deps with no check provider. Lasting effects are now checked against the player's words
+// before they apply (DESIGN 6c 3k-ii, 2026-10-02), so a turn that carries one needs an answer; by default the check
+// here confirms every effect (numbers 1-5), keeping each test below about what it was about.
+const confirmAll = () => new FakeProvider({ structured: [{ confirmed: [1, 2, 3, 4, 5] }] });
+const turnWith = (state: PlayState, delta: Partial<FlatDelta>, confirm: FakeProvider = confirmAll()) => playTurn(
   {
     director: new FakeProvider({ structured: [directorOutput({ delta: { ...emptyDelta(), ...delta } })] }),
     writer: new FakeProvider({ text: ['You raise your voice.'] }),
     rng: () => 0,
+    confirm,
   },
   state, 'I speak', 'exploration', [],
 );
@@ -1213,4 +1218,51 @@ test('repealing a law the unit does not own is refused and announces nothing', a
 
 test('a turn with no hall verb has no notices', async () => {
   assert.deepEqual((await turnWith(inEnglish(withHall(playState())), { learnFacts: ['x'] })).notices, []);
+});
+
+/*
+ * Lasting effects are CHECKED against the player's own words before they apply (DESIGN 6c 3k-ii, 2026-10-02): a law
+ * verb, a collect or a deed the Director proposed is kept only if the check confirms it. The real model is judged by
+ * the live A/B; these pin what the engine does with the answer.
+ */
+
+const refuses = () => new FakeProvider({ structured: [{ confirmed: [] }] });
+const lawsAfter = (s: PlayState) => ((s.world.regions['floor-0'] as Region).alUnits?.d1 as { laws?: string[] } | undefined)?.laws ?? [];
+
+test('a hall verb the check does not confirm is dropped and the turn says so', async () => {
+  const r = await turnWith(inEnglish(withHall(playState())), { adoptLaw: 'theft' }, refuses());
+  assert.deepEqual(lawsAfter(r.state), [], 'no law was adopted');
+  assert.deepEqual(r.notices, [], 'nothing is announced as having happened');
+  assert.match(r.rejected.join(' '), /not recorded/i);
+  assert.match(r.rejected.join(' '), /theft/i);
+});
+
+test('the stored record holds the delta AFTER the drop, so a replay reaches the same state', async () => {
+  const start = inEnglish(withHall(playState()));
+  const r = await turnWith(start, { adoptLaw: 'theft' }, refuses());
+  assert.equal(r.record.delta.adoptLaw, undefined);
+  assert.deepEqual(foldPlay(start, [r.record]).world.regions, r.state.world.regions);
+});
+
+test('a stray deed is dropped before it can touch anyone', async () => {
+  const start = inEnglish(playState());
+  const dropped = await turnWith(start, { deed: 'threatened', deedPerson: 'smith' }, refuses());
+  assert.deepEqual(dropped.state.world.people.smith.beliefs ?? [], [], 'the smith holds nothing about it');
+  assert.equal(axisOf(dropped.state.world.edges, 'smith', PLAYER, 'fear'), 0);
+  // The control: confirmed, the same deed does land, so the assertion above is not vacuous.
+  const kept = await turnWith(start, { deed: 'threatened', deedPerson: 'smith' }, new FakeProvider({ structured: [{ confirmed: [1] }] }));
+  assert.ok((kept.state.world.people.smith.beliefs ?? []).length > 0, 'a confirmed deed is believed');
+});
+
+test('a turn with no lasting effect makes no check call', async () => {
+  const confirm = refuses();
+  await turnWith(inEnglish(withHall(playState())), { learnFacts: ['x'] }, confirm);
+  assert.equal(confirm.calls.length, 0);
+});
+
+test('a failing check drops the effect and says so; the turn is not lost', async () => {
+  const r = await turnWith(inEnglish(withHall(playState())), { adoptLaw: 'theft' }, new FakeProvider({})); // throws: nothing scripted
+  assert.deepEqual(lawsAfter(r.state), []);
+  assert.match(r.rejected.join(' '), /could not be checked/i);
+  assert.ok(r.record.prose.length > 0, 'the turn still has its prose');
 });

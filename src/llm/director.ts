@@ -754,3 +754,16 @@ export async function runParley(provider: Provider, state: PlayState, foe: Comba
     onMiss: effectOf(raw.onMiss?.effect),
   };
 }
+
+/**
+ * The second-pass CHECK on lasting effects (DESIGN 6c 3k-ii, 2026-10-02): a law verb, a collect or a deed the Director
+ * proposed is applied only if the player's own words clearly do it. Stub: a no-op, filled in by the next commit.
+ */
+export async function confirmLasting(
+  _provider: Provider,
+  _state: PlayState,
+  _input: string,
+  delta: WorldDelta,
+): Promise<{ delta: WorldDelta; refused: string[] }> {
+  return { delta, refused: [] };
+}

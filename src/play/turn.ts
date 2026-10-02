@@ -4,7 +4,7 @@ import { edgeFor } from '../skills/active.ts';
 import { activeSkills } from '../session/sheet.ts';
 import type { Rng } from '../engine/roll.ts';
 import { roll } from '../engine/roll.ts';
-import { mergeDeltas, runDirector, runParley, toWorldDelta } from '../llm/director.ts';
+import { confirmLasting, mergeDeltas, runDirector, runParley, toWorldDelta } from '../llm/director.ts';
 import type { DirectorOutput } from '../llm/director.ts';
 import type { Provider } from '../llm/provider.ts';
 import { assertNoLeak, toWriterView } from '../llm/redact.ts';
@@ -46,6 +46,8 @@ export type TurnDeps = {
    * tests run without the embedding endpoint.
    */
   retrieveFacts?: (state: PlayState, input: string) => Promise<string[]>;
+  /** Who checks lasting effects against the player's words (DESIGN 6c 3k-ii). Defaults to the Director's provider. */
+  confirm?: Provider;
   /** The map a walk crosses: the session's stored copy (W3). Defaults to drawing it from the seed. */
   mapOf?: (id: MapId) => GameMap | Promise<GameMap>;
 };
@@ -175,8 +177,11 @@ export async function playTurn(
     narrate = chosen.narrate;
   }
 
-  // --- the engine decides what is allowed -----------------------------------
+  // --- lasting effects are checked against the player's own words, then the engine decides what is allowed ----
+  const checked = await confirmLasting(deps.confirm ?? deps.director, state, input, delta);
+  delta = checked.delta;
   const validated = validateDelta(state, delta);
+  validated.rejected.push(...checked.refused);
   // Resolved like any person the model names; an unknown one is nobody, not a string.
   const addressedRef = output.addressedPerson?.trim() ? personRef(state, output.addressedPerson.trim()) : null;
   const addressed = addressedRef && 'id' in addressedRef ? addressedRef.id : null;
