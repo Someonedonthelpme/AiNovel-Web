@@ -24,7 +24,7 @@ instruction. Status below was verified against the source tree on 2026-09-06,
 | 6c | The persistent world — ownership, maps, building, crowds | **in progress** (user's call, 2026-09-11) | §1 ownership O1 shipped and verified live 2026-09-19 (`91f2030`, `2de335f`); §2 maps and §4 building redesigned 2026-09-19 — walkable space, stages W1–W8, typed walking shipped (`c7c4ba1`), **W1–W5 and W7 shipped 2026-09-19/20** (`d9ed7b3`, `07207b3`, `205c1bb`, `79be367`, `4662106`, `b46586a`, `53067fd`); stratum laws (loop, era) shipped alongside; design in [The persistent world](#the-persistent-world--decided-not-built) |
 | 7 | Quests | **not started** | no quest module; `openThreads` still has readers only (`world/floorgen.ts:237`) — it remains a dead field |
 | 7b | The kin tree — species rarity, kin quests, species change, mutation, gear skills | **planned, waits on 7** (brainstormed 2026-09-13/14) | nothing built; design in [The kin tree](#the-kin-tree--decided-in-part-not-built) |
-| 8 | NPC agency | **started — three slices, still no scheduler** | **slice 1** (2026-09-29): `play/catchup.ts` catches a building's workstations up when the player ARRIVES; reachable in a generated world since `buildingsFor` deals buildings, but only where the player holds the settlement (`ARCHITECTURE.md` §12). **Slice 2** (2026-10-01): a grudge that CANNOT come — a stalled journey — tells people instead, `rumoursAfter` (`ARCHITECTURE.md` §9, §12; DESIGN 6c). **Slice 3** (2026-10-02): a workstation has a shift and a building's is derived; `crowdBand` tells the Director and the Writer how crowded the UNNAMED scene is, and the night venues (pub, theatre, brothel, watch-house) are dealt (`ARCHITECTURE.md` §3, §14; DESIGN 6c §3i). Each had a named reader before it was built. **Not started:** a general scheduler, promotion by proximity, spawning and crowds individuating; `world/agenda.ts` is still a pure function nothing imports and `Person.agenda` has no writer (`ARCHITECTURE.md` §12) |
+| 8 | NPC agency | **started — three slices, still no scheduler** | **slice 1** (2026-09-29): `play/catchup.ts` catches a building's workstations up when the player ARRIVES; reachable in a generated world since `buildingsFor` deals buildings, but only where the player holds the settlement (`ARCHITECTURE.md` §12). **Slice 2** (2026-10-01): a grudge that CANNOT come — a stalled journey — tells people instead, `rumoursAfter` (`ARCHITECTURE.md` §9, §12; DESIGN 6c). **Slice 3** (2026-10-02): a workstation has a shift and a building's is derived; `crowdBand` tells the Director and the Writer how crowded the UNNAMED scene is, and the night venues (pub, theatre, brothel, watch-house) are dealt (`ARCHITECTURE.md` §3, §14; DESIGN 6c §3i). Each had a named reader before it was built. **Decided 2026-10-13:** no general scheduler; the mechanism is stored acts in closed form, first act an NPC `project` after the player's `build` verb (§4). **Not started:** promotion by proximity, spawning and crowds individuating; `world/agenda.ts` is still a pure function nothing imports and `Person.agenda` has no writer (`ARCHITECTURE.md` §12) |
 | 9 | Companions, summon, shared combat machinery | **not started** | no matching module; **unblocks the rest of 6b stage 3o** (combat balance, deferred 2026-09-13) |
 | 10 | The creation page | **partial** | `app/new/page.tsx` has point buy and the interview; not the two-phase redesign with presets and a rules view |
 | 11 | The long tail | **not started** | — |
@@ -1945,6 +1945,24 @@ compression gone first.
    but the types should let an NPC use the same verbs.
 5. Decay and loss — wear, fire, conquest. Without loss, building is accumulation.
 
+**Decided 2026-10-13 (user; answers 3 and 4, and what "step 8's scheduler" means).**
+- **No general scheduler.** Step 8's mechanism is the one slices 1–3 already use: a STORED ACT (state the fold owns;
+  `Journey` is one) that ADVANCES IN CLOSED FORM from the clock (`advanceJourneys`, `caughtUp`) and is settled when the
+  player arrives or acts. Deterministic under replay, nothing ticks for people who are far away. The tiers
+  (static/reactive/live) and promotion by proximity are NOT built; they are re-opened only by an act that cannot be
+  written in closed form. **Why:** three slices shipped on this pattern with no scheduler, each with a named reader; a
+  tick loop with no reader is the dead-field bug at system scale (§5's objection). **Weakest point:** two NPC acts that
+  contend for the same thing off-screen (two builders, one plot) need an ordering rule closed form does not give; none
+  exists yet, so none is designed.
+- **Answer to 3: a `project` is a stored act**, created by the build verb, with the cost paid up front and a finish
+  clock tick; it completes in the fold when the clock passes it and the place is next touched (arrival or act).
+- **Answer to 4: yes, NPCs build, with the SAME verb.** The first new act type of step 8 is an NPC `project`.
+- **Dependency the decision exposes:** NO build verb exists in the code (verified 2026-10-13: nothing founds or
+  upgrades). So the order is (a) the `build` verb for the player (§4), which creates a `project`; (b) the closed-form
+  completion of a `project`; (c) an NPC proposing a `project` through the same verb. **Done means:** a town the player
+  has not visited for N days has gained a building whose owner is an NPC, the Writer is told on arrival, and a replay of
+  the same turns produces the same building.
+
 ### 5. Crowds, markets and government — the Victoria model
 - **The crowd is the compressed form of people** — a population group (species,
   profession, size, pooled needs) per province. A named person is drawn out of a
@@ -2541,10 +2559,12 @@ danger decoupled from depth · wire `descend`.
 **7 · Quests.** The step graph on `TraitCondition[]`; stratum arcs, NPC
 purposes, tower trials, PC-authored tasks. `openThreads` gets a writer.
 
-**8 · NPC agency.** The static/reactive/live scheduler, promoted by proximity,
-stakes and contact within degrees of separation · decisions logged, not
-recomputed · spawning as a standing cast plus arrivals · crowds individuating on
-contact · `agenda.ts` revived.
+**8 · NPC agency.** DECIDED 2026-10-13 (§4): stored acts advanced in closed form,
+settled on contact; no general scheduler. First new act: an NPC `project`, after the
+player's `build` verb exists. Still open and not built: the static/reactive/live
+tiers, promotion by proximity, stakes and contact within degrees of separation ·
+decisions logged, not recomputed · spawning as a standing cast plus arrivals ·
+crowds individuating on contact · `agenda.ts` revived or deleted.
 
 **9 · Companions, summon and the combat machinery they share** — a non-player
 combatant on your side, ally AI, mid-fight initiative insertion, the `guard`
