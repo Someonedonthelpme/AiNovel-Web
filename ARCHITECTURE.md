@@ -15,7 +15,8 @@ yet — it belongs in `HANDOFF.md` until it settles.
 **`scripts/check-citations.ts` does NOT tell you a citation is right.** It
 catches a line number landing on `*/`, on a blank line or past the end of a
 file, and nothing else — a citation that points at plausible but unrelated code
-passes silently. 3n-ii moved lines in eight files and left five citations wrong
+passes silently. Since 2026-10-02 it reads plain-text `file.ts:N` in the diagrams as
+well as linked citations; a bare `:N` with no file name it still cannot see. 3n-ii moved lines in eight files and left five citations wrong
 that the checker was happy with: `regionIdFor` pointed at `facts: Fact[]`,
 `gainLevels` at `settleCast`, the static-stratum freeze at a local variable. So
 after any edit that inserts or removes lines, grep this file for each touched
